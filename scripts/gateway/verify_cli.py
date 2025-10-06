@@ -37,9 +37,9 @@ def merkle_root(leaves):
 def verify_ots(ots_path: Path) -> bool:
     try:
         # Try to call ots verify (requires ots client installed)
-        result = subprocess.run([
-            "ots", "verify", str(ots_path)
-        ], capture_output=True, text=True)
+        result = subprocess.run(
+            ["ots", "verify", str(ots_path)], capture_output=True, text=True
+        )
         return result.returncode == 0
     except Exception:
         # Fallback: check for placeholder
@@ -47,8 +47,12 @@ def verify_ots(ots_path: Path) -> bool:
 
 
 def main(argv=None) -> int:
-    p = argparse.ArgumentParser(description="Verify Merkle root and OTS proof for a day")
-    p.add_argument("--root", type=Path, required=True, help="Path to out/site_demo root directory")
+    p = argparse.ArgumentParser(
+        description="Verify Merkle root and OTS proof for a day"
+    )
+    p.add_argument(
+        "--root", type=Path, required=True, help="Path to out/site_demo root directory"
+    )
     args = p.parse_args(argv)
 
     root_dir = args.root
@@ -87,7 +91,9 @@ def main(argv=None) -> int:
 
     # Verify root matches
     if recomputed_root != recorded_root:
-        print(f"ERROR: Merkle root mismatch. Computed: {recomputed_root}, Recorded: {recorded_root}")
+        print(
+            f"ERROR: Merkle root mismatch. Computed: {recomputed_root}, Recorded: {recorded_root}"
+        )
         return 2
 
     # Verify OTS proof
