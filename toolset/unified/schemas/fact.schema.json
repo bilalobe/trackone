@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/schemas/fact.schema.json",
+  "title": "Telemetry Fact",
+  "type": "object",
+  "description": "Atomic telemetry fact produced by a pod device before batching/anchoring.",
+  "properties": {
+    "device_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "nonce": {
+      "type": "string",
+      "description": "Monotonic or random 96+ bit nonce encoded as hex/base64."
+    },
+    "payload": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "signature": {
+      "type": "string",
+      "description": "Detached Ed25519 signature (hex/base64)."
+    }
+  },
+  "required": [
+    "device_id",
+    "timestamp",
+    "nonce",
+    "payload"
+  ],
+  "additionalProperties": false
+}

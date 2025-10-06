@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/schemas/day_record.schema.json",
+  "title": "Day Record",
+  "type": "object",
+  "description": "Daily record referencing one or more batch headers, chain linkage, and day-level Merkle root.",
+  "properties": {
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Schema version (currently 1)."
+    },
+    "site_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Site identifier."
+    },
+    "date": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "description": "UTC date (YYYY-MM-DD)."
+    },
+    "prev_day_root": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "Merkle root of previous day (chain linkage); 64 zeros if first day."
+    },
+    "batches": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "site_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "day": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "batch_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "merkle_root": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "leaf_hashes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          },
+          "ots_proof": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "version",
+          "site_id",
+          "day",
+          "batch_id",
+          "merkle_root",
+          "count",
+          "leaf_hashes"
+        ],
+        "additionalProperties": false
+      },
+      "description": "Array of block headers for this day."
+    },
+    "day_root": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "Aggregate Merkle root for the entire day."
+    }
+  },
+  "required": [
+    "version",
+    "site_id",
+    "date",
+    "prev_day_root",
+    "batches",
+    "day_root"
+  ],
+  "additionalProperties": false
+}
