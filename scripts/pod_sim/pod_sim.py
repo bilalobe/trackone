@@ -43,7 +43,7 @@ def main(argv: List[str] | None = None) -> int:
     try:
         for i in range(args.count):
             fact = emit_fact(args.device_id, i)
-            line = json.dumps(fact, separators=(',', ':'))
+            line = json.dumps(fact, separators=(",", ":"))
             if out_fh:
                 out_fh.write(line + "\n")
             else:
