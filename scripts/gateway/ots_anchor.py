@@ -15,7 +15,9 @@ def ots_stamp(day_bin_path: Path, ots_path: Path) -> None:
     """Stamp the day blob using OpenTimestamps CLI, or write a placeholder if not available."""
     try:
         # Try to call ots stamp (requires ots client installed)
-        subprocess.run(["ots", "stamp", str(day_bin_path)], check=True)
+        subprocess.run([
+            "ots", "stamp", str(day_bin_path)
+        ], check=True)
         # OTS client writes .ots file next to .bin
         if not ots_path.exists():
             # Fallback: create a dummy .ots file
@@ -26,9 +28,7 @@ def ots_stamp(day_bin_path: Path, ots_path: Path) -> None:
 
 
 def main(argv=None) -> int:
-    p = argparse.ArgumentParser(
-        description="Anchor a day blob using OpenTimestamps (OTS)"
-    )
+    p = argparse.ArgumentParser(description="Anchor a day blob using OpenTimestamps (OTS)")
     p.add_argument("day_bin", type=Path, help="Path to day/YYYY-MM-DD.bin blob")
     args = p.parse_args(argv)
 
