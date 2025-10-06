@@ -1,0 +1,60 @@
+{
+  "description": "Test vectors for Track 1 telemetry cryptography",
+  "note": "These are placeholder vectors for testing fact schema validation and canonical hashing. Real crypto implementation (X25519, HKDF, XChaCha20-Poly1305) will be added in Track 1 phase.",
+  "canonical_hash_vectors": [
+    {
+      "description": "Simple fact with minimal payload",
+      "fact": {
+        "device_id": "pod-001",
+        "timestamp": "2025-09-15T00:00:01Z",
+        "nonce": "aabbccddeeff001122334455",
+        "payload": {
+          "temperature": 22,
+          "humidity": 45
+        }
+      },
+      "expected_canonical_json": "{\"device_id\":\"pod-001\",\"nonce\":\"aabbccddeeff001122334455\",\"payload\":{\"humidity\":45,\"temperature\":22},\"timestamp\":\"2025-09-15T00:00:01Z\"}",
+      "expected_sha256": "computed_by_test"
+    },
+    {
+      "description": "Fact with complex nested payload",
+      "fact": {
+        "device_id": "pod-002",
+        "timestamp": "2025-09-15T00:01:01Z",
+        "nonce": "bbccddeeff00112233445566",
+        "payload": {
+          "temperature": 23,
+          "humidity": 44,
+          "sensors": {
+            "pressure": 1013.25,
+            "battery": 95
+          }
+        }
+      },
+      "expected_canonical_json": "{\"device_id\":\"pod-002\",\"nonce\":\"bbccddeeff00112233445566\",\"payload\":{\"humidity\":44,\"sensors\":{\"battery\":95,\"pressure\":1013.25},\"temperature\":23},\"timestamp\":\"2025-09-15T00:01:01Z\"}",
+      "expected_sha256": "computed_by_test"
+    },
+    {
+      "description": "Fact with signature field",
+      "fact": {
+        "device_id": "pod-003",
+        "timestamp": "2025-09-15T00:02:01Z",
+        "nonce": "ccddeeff0011223344556677",
+        "payload": {
+          "temperature": 21,
+          "humidity": 46
+        },
+        "signature": "deadbeef00112233445566778899aabbccddeeff"
+      },
+      "expected_canonical_json": "{\"device_id\":\"pod-003\",\"nonce\":\"ccddeeff0011223344556677\",\"payload\":{\"humidity\":46,\"temperature\":21},\"signature\":\"deadbeef00112233445566778899aabbccddeeff\",\"timestamp\":\"2025-09-15T00:02:01Z\"}",
+      "expected_sha256": "computed_by_test"
+    }
+  ],
+  "future_crypto_vectors": {
+    "note": "These will be populated when X25519/HKDF/XChaCha20-Poly1305 implementation is added",
+    "x25519_key_exchange": [],
+    "hkdf_derivation": [],
+    "xchacha20_poly1305_encryption": [],
+    "ed25519_signatures": []
+  }
+}
