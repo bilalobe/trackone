@@ -1,0 +1,12 @@
+.idea
+.venv
+.out/
+__pycache__/
+.pytest_cache/
+*.pyc
+*.bin
+*.bin.ots
+*.sha256
+.env
+.DS_Store
+*.log
