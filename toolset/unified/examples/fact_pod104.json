@@ -1,0 +1,11 @@
+{
+  "device_id": "pod-104",
+  "timestamp": "2025-10-07T02:45:00Z",
+  "nonce": "d4e5f60123456789ab0c1d2e",
+  "payload": {
+    "temperature": 24.3,
+    "humidity": 43,
+    "battery": 88,
+    "vibration": 0.01
+  }
+}
