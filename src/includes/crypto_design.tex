@@ -1,0 +1,11 @@
+\section{Cryptographic Design (ADR-001, ADR-002)}
+Primitives: X25519 + HKDF + XChaCha20-Poly1305; Ed25519; SHA-256.
+
+\subsection{Provisioning}
+Ephemeral ECDH; salt = $H(N_g \| N_p \| T_{pod} \| B)$. Derive $CK_{\uparrow}$, $CK_{\downarrow}$.
+
+\subsection{Telemetry frame}
+Header: dev\_id, msg\_type, fc, flags; AEAD payload; 24B nonce = $\mathrm{salt}_8 \| \mathrm{fc}_8 \| \mathrm{rand}_8$; AAD = $\text{dev\_id} \| \text{msg\_type}$.
+
+\subsection{Replay policy}
+Gateway window on $(fc)$; rotate via signed command.
