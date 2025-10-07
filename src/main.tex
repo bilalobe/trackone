@@ -1,17 +1,34 @@
-%! Author = beb
-%! Date = 10/6/25
+\documentclass[11pt,a4paper]{article}
 
-% Preamble
-\documentclass[11pt]{article}
+% Basic packages
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{amsmath,amssymb}
+\usepackage{enumitem}
 
-% Packages
-\usepackage{amsmath}
+\title{Ultra--Low-Power, Verifiable Telemetry for Heritage Sensors (Track~1)}
+\author{BILAL}
+\date{\today}
 
-% Document
 \begin{document}
+    \maketitle
+    \tableofcontents
 
+    \input{includes/intro}
+    \input{includes/requirements_threat}
+    \input{includes/architecture}
+    \input{includes/crypto_design}
+    \input{includes/pipeline_impl}
+    \input{includes/schemas_merkle_ots}
+    \input{includes/experiments}
+    \input{includes/results}
+    \input{includes/discussion_ethics}
+    \input{includes/conclusion}
 
-    \bibliography{main}
     \bibliographystyle{plain}
-
+    \bibliography{main}
 \end{document}
