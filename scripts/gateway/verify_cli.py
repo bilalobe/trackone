@@ -53,10 +53,16 @@ def main(argv=None) -> int:
     p.add_argument(
         "--root", type=Path, required=True, help="Path to out/site_demo root directory"
     )
+    p.add_argument(
+        "--facts",
+        type=Path,
+        default=Path("toolset/unified/examples"),
+        help="Directory with fact JSON files to recompute the Merkle root",
+    )
     args = p.parse_args(argv)
 
     root_dir = args.root
-    facts_dir = Path("toolset/unified/examples")
+    facts_dir = args.facts
     blocks_dir = root_dir / "blocks"
     day_dir = root_dir / "day"
 

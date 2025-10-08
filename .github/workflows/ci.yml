@@ -2,12 +2,12 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, master ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, master ]
 
 jobs:
-  test:
+  build-test:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -16,15 +16,16 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.13'
-
-      - name: Install uv
-        run: pip install uv
+          python-version: '3.11'
 
       - name: Install dependencies
         run: |
-          uv pip install -r requirements.txt || true
-          uv pip install pytest jsonschema
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
-      - name: Run tests
+      - name: Run unit tests
         run: pytest -q
+
+      - name: Run framed ingest pipeline (M#1)
+        run: make run
+

@@ -1,0 +1,82 @@
+% Pipeline implementation notes
+\section{Gateway Pipeline Implementation}
+
+\subsection{Framed ingest (M\#1, stubbed)}
+This milestone wires a simulated device (pod) producing framed telemetry to a gateway that performs basic validation and emits canonical facts suitable for Merkle batching and OpenTimestamps (OTS) anchoring.
+
+\paragraph{Transport and frame shape}
+Frames are emitted as NDJSON (one JSON object per line) for readability and ease of testing. Each frame has the following fields:
+\begin{verbatim}
+{
+  "hdr":   { "dev_id": u16, "msg_type": u8, "fc": u32, "flags": u8 },
+  "nonce": base64(24 bytes),
+  "ct":    base64(utf8(JSON payload)),
+  "tag":   base64(16 bytes placeholder)
+}
+\end{verbatim}
+For M\#1, confidentiality/authenticity are stubbed: the ciphertext (ct) is simply the UTF-8 JSON payload bytes, and the tag is random placeholder.
+
+\paragraph{Replay window policy}
+For each device, the gateway maintains a device table recording the highest frame counter (\texttt{highest\_fc\_seen}) and last-seen time. A frame is accepted if and only if:
+\begin{itemize}
+  \item First frame for the device: \(\texttt{fc} \ge 0\) is accepted.
+  \item Otherwise: \(0 < \texttt{fc} - \texttt{highest\_fc\_seen} \le \texttt{window}\) (default window = 64).
+\end{itemize}
+Duplicate or stale frames (\(\le 0\) delta) and jumps beyond the window are rejected. In M\#1 we treat \texttt{fc} as 32-bit; extending to fc64 is straightforward by tracking high bits per device.
+
+\paragraph{Device table (gateway state)}
+The device table is persisted as JSON (one map entry per device id):
+\begin{verbatim}
+{
+  "1": {
+    "highest_fc_seen": 42,
+    "last_seen": "2025-10-08T12:34:56Z",
+    "msg_type": 1,
+    "flags": 0
+  },
+  ...
+}
+\end{verbatim}
+
+\paragraph{Canonical facts}
+Accepted frames are “decrypted” (ct base64-decoded to JSON) and written as canonical fact JSON files:
+\begin{verbatim}
+{
+  "device_id": "pod-001",
+  "timestamp": "<gateway-utc-iso>",
+  "nonce": "<base64-24B>",
+  "payload": { ... original payload JSON ... }
+}
+\end{verbatim}
+Facts are validated against \texttt{toolset/unified/schemas/fact.schema.json} (warning-only in M\#1). Canonicalization for Merkle leaves uses sorted keys and no whitespace.
+
+\paragraph{Batching and daily artifacts}
+Canonical facts are batched deterministically:
+\begin{enumerate}
+  \item Compute SHA-256 of each canonical fact; sort leaf hashes lexicographically.
+  \item Build a binary Merkle tree (duplicate last when odd); the root is \(\texttt{merkle\_root}\).
+  \item Emit a block header JSON with fields \texttt{version, site\_id, day, batch\_id, merkle\_root, count, leaf\_hashes}.
+  \item Build a day record JSON containing \texttt{version, site\_id, date, prev\_day\_root, batches[], day\_root}.
+  \item Write a canonical day blob (JSON, canonicalized) to \texttt{day/YYYY-MM-DD.bin} and a human-readable \texttt{.json} peer.
+\end{enumerate}
+Both the block header and the day record are validated against their schemas when \texttt{--validate-schemas} is passed.
+
+\paragraph{Anchoring and verification}
+The day blob is anchored with OTS (a placeholder is written if the OTS client is not available). Verification recomputes the Merkle root from the facts directory and compares it to the recorded block header, then verifies the OTS proof.
+
+\paragraph{Quick start}
+M\#0 (examples only):
+\begin{verbatim}
+python scripts/gateway/merkle_batcher.py \
+  --facts toolset/unified/examples \
+  --out out/site_demo --site an-001 --date 2025-10-07 --validate-schemas
+python scripts/gateway/ots_anchor.py out/site_demo/day/2025-10-07.bin
+python scripts/gateway/verify_cli.py --root out/site_demo
+\end{verbatim}
+M\#1 (framed ingest end-to-end):
+\begin{verbatim}
+make run         # alias: make run-m1
+make run-examples# alias: make run-m0
+\end{verbatim}
+The M\#1 pipeline executes: \texttt{pod\_sim --framed → frame\_verifier → merkle\_batcher --validate-schemas → ots\_anchor → verify\_cli} and will fail if verification does not succeed.
+

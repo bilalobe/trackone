@@ -19,7 +19,7 @@ python scripts/gateway/merkle_batcher.py \
 python scripts/gateway/ots_anchor.py out/site_demo/day/2025-10-07.bin  
 3) Verify recomputed root matches and OTS proof verifies  
 python scripts/gateway/verify_cli.py --root out/site_demo  
-```  
+```
 
 Artifacts:
 
@@ -28,13 +28,31 @@ Artifacts:
 - `out/site_demo/day/2025-10-07.bin.ots` — OTS proof
 - `out/site_demo/day/2025-10-07.json` — human‑readable day record
 
+## Quick start (Milestone#1 — framed ingest)
+
+Simulate framed telemetry, verify/decrypt (stub), batch, anchor, and verify in one go:
+
+```bash
+bash scripts/gateway/run_pipeline.sh
+```
+
+This runs:
+- `pod_sim --framed` to produce NDJSON frames with `{hdr, nonce, ct, tag}` fields
+- `frame_verifier.py` to enforce a replay window and emit canonical facts
+- `merkle_batcher.py --validate-schemas` to build Merkle/Day artifacts
+- `ots_anchor.py` to create an OTS proof (placeholder if client missing)
+- `verify_cli.py --facts` to recompute and check the Merkle root and proof
+
+Outputs land in `out/site_demo/`.
+
 ## What’s in here
 
 - `scripts/gateway/`
-- `merkle_batcher.py` — canonicalization → Merkle → block/day files
-- `ots_anchor.py` — stamps day blob via OpenTimestamps
-- `verify_cli.py` — recompute root and verify OTS proof
-- `scripts/pod_sim/` — simulators and crypto test vectors (to be expanded in M#1)
+  - `frame_verifier.py` — framed ingest + replay window (stub decrypt)
+  - `merkle_batcher.py` — canonicalization → Merkle → block/day files
+  - `ots_anchor.py` — stamps day blob via OpenTimestamps
+  - `verify_cli.py` — recompute root and verify OTS proof
+- `scripts/pod_sim/` — simulators and crypto test vectors (M#1 adds `--framed`)
 - `toolset/unified/schemas/` — JSON Schemas for facts, block headers, day records
 - `adr/` — Architecture Decision Records (see index below)
 - `src/` — report/manuscript files (if applicable)
@@ -50,9 +68,9 @@ See `adr/README.md` for summaries and guidance.
 
 ## Tests
 
-```bash  
+```bash
 pytest -q
-```  
+```
 
 Current coverage includes:
 
@@ -61,6 +79,7 @@ Current coverage includes:
 - Schema validation (fact, block, day)
 - Day chaining (prev_day_root)
 - End‑to‑end batch/verify workflow
+- Framed ingest: parsing, replay windowing, and E2E pipeline
 
 ## Roadmap
 
@@ -71,21 +90,21 @@ Current coverage includes:
 
 ## Requirements
 
-- Python 3.13+
+- Python 3.11.x
 - Pytest, jsonschema, OpenTimestamps client (optional for real proofs)
 
 Install:
 
-```bash  
-uv pip install -r requirements.txt || true  
+```bash
+uv pip install -r requirements.txt || true
 uv pip install jsonschema pytest
-```  
+```
 
 OpenTimestamps client (system package or pip):
 
-```bash  
+```bash
 pip install opentimestamps-client
-```  
+```
 
 ## Contributing
 
