@@ -68,6 +68,7 @@ def emit_framed(device_id: str, counter: int, payload: dict) -> dict:
     msg_type = 1  # stub: measurement
     fc_u32 = counter
     flags = 0
+    hdr = build_header(dev_id_u16, msg_type, fc_u32, flags)
 
     # Nonce and tag placeholders
     nonce = secrets.token_bytes(24)
@@ -78,11 +79,8 @@ def emit_framed(device_id: str, counter: int, payload: dict) -> dict:
         "utf-8"
     )
 
-    # Emit human-readable header object instead of base64-encoded bytes
-    hdr_obj = {"dev_id": dev_id_u16, "msg_type": msg_type, "fc": fc_u32, "flags": flags}
-
     return {
-        "hdr": hdr_obj,
+        "hdr": b64(hdr),
         "nonce": b64(nonce),
         "ct": b64(ct_bytes),
         "tag": b64(tag),
