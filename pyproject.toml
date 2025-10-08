@@ -2,7 +2,7 @@
 name = "trackone"
 version = "0.0.1"
 description = "secure telemetry + OTS"
-requires-python = ">=3.13"
+requires-python = ">=3.11,<3.12"
 dependencies = [
     "jsonschema>=4.23.0",
     "pytest>=8.4.2",
