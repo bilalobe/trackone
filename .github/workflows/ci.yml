@@ -6,10 +6,6 @@ on:
   pull_request:
     branches: [ main, master ]
 
-defaults:
-  run:
-    working-directory: ${{ github.workspace }}
-
 jobs:
   build-test:
     runs-on: ubuntu-latest
