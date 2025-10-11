@@ -202,7 +202,7 @@ def process(argv=None) -> int:
 
     # Cross-check accepted count from disk to guard against counter drift
     try:
-        accepted_files = len(list((out_dir).glob("*.json")))
+        accepted_files = len(list(out_dir.glob("*.json")))
     except Exception:
         accepted_files = accepted
 
