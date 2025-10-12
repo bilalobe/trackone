@@ -1,6 +1,6 @@
 [project]
 name = "trackone"
-version = "0.0.1-m1"
+version = "0.0.1"
 description = "Ultra-Low-Power, Verifiable Telemetry (Barnacle Sentinel)"
 authors = [{ name = "BILAL", email = "elkhatabibilal@gmail.com" }]
 license = { text = "MIT" }
@@ -20,3 +20,99 @@ Changelog = "https://github.com/bilalobe/trackone/blob/main/CHANGELOG.md"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+# Hatchling build configuration
+[tool.hatch.build.targets.wheel]
+packages = ["scripts"]
+# Include only the source code, not test directories
+exclude = [
+    "scripts/tests",
+    "scripts/**/__pycache__",
+    "scripts/**/*.pyc",
+]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/scripts",
+    "/toolset",
+    "/adr",
+    "/requirements.txt",
+    "/requirements-dev.txt",
+    "/LICENSE",
+    "/README.md",
+    "/CHANGELOG.md",
+    "/Makefile",
+]
+exclude = [
+    "*.pyc",
+    "__pycache__",
+    "/.git",
+    "/out",
+]
+
+# Black configuration for Track1 project
+[tool.black]
+line-length = 88
+target-version = ['py311']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.git
+  | \.pytest_cache
+  | __pycache__
+  | build
+  | dist
+  | out
+)/
+'''
+
+# Ruff configuration for Track1 project
+# https://docs.astral.sh/ruff/
+[tool.ruff]
+# Exclude common directories
+exclude = [
+    ".git",
+    ".pytest_cache",
+    "__pycache__",
+    "*.egg-info",
+    ".venv",
+    "venv",
+    "build",
+    "dist",
+    "out",
+]
+
+[tool.ruff.lint]
+select = [
+    "E", # pycodestyle errors
+    "W", # pycodestyle warnings
+    "F", # pyflakes
+    "I", # isort
+    "N", # pep8-naming
+    "UP", # pyupgrade
+    "B", # flake8-bugbear
+    "C4", # flake8-comprehensions
+    "SIM", # flake8-simplify
+]
+
+ignore = [
+    "E501", # line too long (black handles this)
+    "B008", # do not perform function call in argument defaults
+]
+
+# Allow autofix for all enabled rules (when running with --fix)
+fixable = ["ALL"]
+unfixable = []
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]  # Allow unused imports in __init__.py files
+
+[tool.ruff.format]
+# Use black-compatible formatting
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
+
+[tool.ruff.lint.isort]
+known-first-party = ["scripts"]

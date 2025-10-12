@@ -12,6 +12,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - MIT License for open source distribution
 - Citation information in README.md
 - Contact section with GitHub links
+- **CI lint step** with ruff and black for code quality
+- `requirements-dev.txt` for development dependencies
+- `make format` and `make lint-fix` targets for auto-fixing issues
+
+### Changed
+
+- CI workflow now runs lint checks before tests
+- Makefile lint target improved with better error messages
 
 ### Planned for M#2
 

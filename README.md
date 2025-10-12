@@ -260,13 +260,36 @@ Running `merkle_batcher.py` twice on the same facts/ yields:
 Install dependencies:
 
 ```bash
-# Using uv (recommended)
+# Production dependencies
+pip install -r requirements.txt
+
+# Development dependencies (includes linting tools)
+pip install -r requirements-dev.txt
+
+# Or using uv (recommended)
 pip install uv
 uv pip install -r requirements.txt
-
-# Or using pip directly
-pip install pytest jsonschema
+uv pip install -r requirements-dev.txt
 ```
+
+## Development Workflow
+
+### Linting and Formatting
+
+Before committing code, run linting checks:
+
+```bash
+# Check code quality and formatting
+make lint
+
+# Auto-format code with black
+make format
+
+# Auto-fix linting issues
+make lint-fix
+```
+
+The CI will automatically run these checks on every push/PR.
 
 ## Contributing
 

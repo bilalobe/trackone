@@ -13,7 +13,7 @@ COUNT ?= 10
 OUT_DIR ?= out/site_demo
 
 # Targets
-.PHONY: help run run-m1 run-m0 run-examples test clean tag tag-m1 lint
+.PHONY: help run run-m1 run-m0 run-examples test clean tag tag-m1 lint format lint-fix
 
 help: ## Show this help message
 	@echo "Track1 Make Targets:"
@@ -75,14 +75,34 @@ tag-m1: ## Quick tag for M#1: v0.0.1-m1
 lint: ## Run basic Python linting (if ruff/black available)
 	@echo "[make] Running linting..."
 	@if command -v ruff >/dev/null 2>&1; then \
-		ruff check scripts/ || true; \
+		ruff check scripts/; \
 	else \
-		echo "[make] ruff not installed, skipping"; \
+		echo "[make] ruff not installed, skipping. Install with: pip install ruff"; \
 	fi
 	@if command -v black >/dev/null 2>&1; then \
-		black --check scripts/ || true; \
+		black --check scripts/; \
 	else \
-		echo "[make] black not installed, skipping"; \
+		echo "[make] black not installed, skipping. Install with: pip install black"; \
 	fi
+
+format: ## Auto-format code with black
+	@echo "[make] Auto-formatting code..."
+	@if command -v black >/dev/null 2>&1; then \
+		black scripts/; \
+	else \
+		echo "[ERROR] black not installed. Install with: pip install black"; \
+		exit 1; \
+	fi
+	@echo "[make] ✓ Code formatted"
+
+lint-fix: ## Run ruff with auto-fix
+	@echo "[make] Running ruff with auto-fix..."
+	@if command -v ruff >/dev/null 2>&1; then \
+		ruff check scripts/ --fix; \
+	else \
+		echo "[ERROR] ruff not installed. Install with: pip install ruff"; \
+		exit 1; \
+	fi
+	@echo "[make] ✓ Fixed"
 
 .DEFAULT_GOAL := help
