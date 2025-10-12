@@ -80,7 +80,6 @@ def emit_framed(device_id: str, counter: int, payload: dict) -> dict:
     msg_type = HDR_MSG_TYPE_MEASUREMENT  # stub: measurement
     fc_u32 = counter
     flags = 0
-    hdr = build_header(dev_id_u16, msg_type, fc_u32, flags)
 
     # Nonce and tag placeholders
     nonce = secrets.token_bytes(NONCE_SIZE)

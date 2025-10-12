@@ -19,13 +19,12 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "gateway"))
 from merkle_batcher import (
     canonical_json,
     merkle_root_from_leaves,
-    load_facts,
     BlockHeader,
     load_schemas,
     validate_against_schema,
     main as batcher_main,
 )
-from verify_cli import merkle_root as verify_merkle_root, main as verify_main
+from verify_cli import merkle_root as verify_merkle_root
 
 
 @pytest.fixture
@@ -42,7 +41,7 @@ def temp_workspace(tmp_path):
 
     # Copy schemas from toolset/unified/schemas
     schema_src = (
-        Path(__file__).parent.parent.parent.parent / "toolset" / "unified" / "schemas"
+            Path(__file__).parent.parent.parent.parent / "toolset" / "unified" / "schemas"
     )
     for schema_file in [
         "fact.schema.json",

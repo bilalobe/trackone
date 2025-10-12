@@ -21,7 +21,7 @@ def merkle_root(leaves):
     # Mirror merkle_batcher: if empty -> sha256(""); else hash leaves, sort by hex, then build tree
     if not leaves:
         return sha256(b"").hexdigest()
-    leaf_hashes = [sha256(l).hexdigest() for l in leaves]
+    leaf_hashes = [sha256(leaf).hexdigest() for leaf in leaves]
     leaf_hashes_sorted = sorted(leaf_hashes)
     layer = [bytes.fromhex(hx) for hx in leaf_hashes_sorted]
     while len(layer) > 1:
