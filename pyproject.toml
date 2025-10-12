@@ -1,9 +1,22 @@
 [project]
 name = "trackone"
-version = "0.0.1"
-description = "secure telemetry + OTS"
-requires-python = ">=3.11,<3.12"
+version = "0.0.1-m1"
+description = "Ultra-Low-Power, Verifiable Telemetry (Barnacle Sentinel)"
+authors = [{ name = "BILAL", email = "elkhatabibilal@gmail.com" }]
+license = { text = "MIT" }
+readme = "README.md"
+requires-python = ">=3.11"
 dependencies = [
     "jsonschema>=4.23.0",
     "pytest>=8.4.2",
 ]
+
+[project.urls]
+Homepage = "https://github.com/bilalobe/trackone"
+Repository = "https://github.com/bilalobe/trackone"
+Documentation = "https://github.com/bilalobe/trackone/blob/main/README.md"
+Changelog = "https://github.com/bilalobe/trackone/blob/main/CHANGELOG.md"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
