@@ -33,10 +33,9 @@ import argparse
 import json
 import re
 import sys
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from hashlib import sha256
 from pathlib import Path
-from typing import List, Tuple
 
 try:
     import jsonschema
@@ -61,7 +60,7 @@ class BlockHeader:
     batch_id: str
     merkle_root: str  # hex sha256
     count: int
-    leaf_hashes: List[str]  # optional aid for auditors
+    leaf_hashes: list[str]  # optional aid for auditors
     ots_proof: str | None = None
 
     def to_dict(self) -> dict:
@@ -73,7 +72,7 @@ def _h(x: bytes) -> bytes:
     return sha256(x).digest()
 
 
-def merkle_root_from_leaves(leaves: List[bytes]) -> Tuple[str, List[str]]:
+def merkle_root_from_leaves(leaves: list[bytes]) -> tuple[str, list[str]]:
     """Return (root_hex, leaf_hexes) for canonicalized leaves."""
     if not leaves:
         empty = sha256(b"").hexdigest()
@@ -83,7 +82,7 @@ def merkle_root_from_leaves(leaves: List[bytes]) -> Tuple[str, List[str]]:
     leaf_hashes_sorted = sorted(leaf_hashes)
     layer = [bytes.fromhex(hx) for hx in leaf_hashes_sorted]
     while len(layer) > 1:
-        nxt: List[bytes] = []
+        nxt: list[bytes] = []
         for i in range(0, len(layer), 2):
             a = layer[i]
             b = layer[i + 1] if i + 1 < len(layer) else layer[i]
@@ -119,9 +118,9 @@ def validate_against_schema(obj: dict, schema: dict, label: str) -> None:
         print(f"[WARN] {label} schema validation error: {e}", file=sys.stderr)
 
 
-def load_facts(facts_dir: Path) -> List[bytes]:
+def load_facts(facts_dir: Path) -> list[bytes]:
     fact_files = sorted(facts_dir.glob("*.json"))
-    leaves: List[bytes] = []
+    leaves: list[bytes] = []
     for fpath in fact_files:
         try:
             obj = json.loads(fpath.read_text(encoding="utf-8"))
@@ -148,7 +147,7 @@ def prev_day_root_or_zero(out_dir: Path, site: str, day: str) -> str:
         return "00" * 32
 
 
-def main(argv: List[str] | None = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         description="Batch facts into Merkle root; emit block header and canonical day blob."
     )

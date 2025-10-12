@@ -24,9 +24,9 @@ import argparse
 import base64
 import json
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Dict, Set, Any
+from typing import Any
 
 # Constants for maintainability
 DEFAULT_REPLAY_WINDOW = 64
@@ -51,8 +51,8 @@ class ReplayWindow:
 
     def __init__(self, window_size: int = DEFAULT_REPLAY_WINDOW):
         self.window_size = window_size
-        self.highest_fc: Dict[str, int] = {}
-        self.seen: Dict[str, Set[int]] = {}
+        self.highest_fc: dict[str, int] = {}
+        self.seen: dict[str, set[int]] = {}
 
     def check_and_update(self, dev_id: str, fc: int) -> tuple[bool, str]:
         """
@@ -122,7 +122,7 @@ def validate_fact(obj: dict, schema: dict | None) -> None:
         print(f"[WARN] Fact validation: {e}", file=sys.stderr)
 
 
-def load_device_table(path: Path) -> Dict[str, Dict[str, Any]]:
+def load_device_table(path: Path) -> dict[str, dict[str, Any]]:
     """Load device table from disk, or return empty dict."""
     if not path.exists():
         return {}
@@ -221,7 +221,7 @@ def frame_to_fact(frame: dict, payload: dict) -> dict:
 
     return {
         "device_id": dev_id_str,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "nonce": frame.get("nonce", ""),
         "payload": payload,
     }
@@ -290,7 +290,7 @@ def process(argv=None) -> int:
     rejected = 0
 
     try:
-        for line_num, line in enumerate(frames_fh, start=1):
+        for _line_num, line in enumerate(frames_fh, start=1):
             line = line.strip()
             if not line:
                 continue
@@ -341,7 +341,7 @@ def process(argv=None) -> int:
             dev_key = str(hdr["dev_id"])
             device_table[dev_key] = {
                 "highest_fc_seen": fc,
-                "last_seen": datetime.now(timezone.utc).isoformat(),
+                "last_seen": datetime.now(UTC).isoformat(),
                 "msg_type": hdr["msg_type"],
                 "flags": hdr["flags"],
             }

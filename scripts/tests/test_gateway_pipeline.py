@@ -7,6 +7,7 @@ Tests schema compliance, Merkle root computation, and end-to-end workflow.
 """
 import json
 import shutil
+
 # Import the gateway modules
 import sys
 from hashlib import sha256
@@ -17,11 +18,13 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent / "gateway"))
 
 from merkle_batcher import (
-    canonical_json,
-    merkle_root_from_leaves,
     BlockHeader,
+    canonical_json,
     load_schemas,
+    merkle_root_from_leaves,
     validate_against_schema,
+)
+from merkle_batcher import (
     main as batcher_main,
 )
 from verify_cli import merkle_root as verify_merkle_root

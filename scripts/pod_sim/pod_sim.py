@@ -35,13 +35,12 @@ import random
 import secrets
 import struct
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import List
 
 
 def emit_fact(device_id: str, counter: int) -> dict:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     payload = {
         "counter": counter,
         "bioimpedance": round(random.uniform(50.0, 120.0), 3),
@@ -129,7 +128,7 @@ def write_plain_fact(path: Path, counter: int, fact: dict) -> None:
         fh.write("\n")
 
 
-def main(argv: List[str] | None = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(
         description="Emit NDJSON facts or framed records for testing"
     )
