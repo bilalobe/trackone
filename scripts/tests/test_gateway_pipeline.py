@@ -7,7 +7,6 @@ Tests schema compliance, Merkle root computation, and end-to-end workflow.
 """
 import json
 import shutil
-
 # Import the gateway modules
 import sys
 from hashlib import sha256
