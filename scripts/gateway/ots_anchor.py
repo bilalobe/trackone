@@ -2,7 +2,35 @@
 """
 ots_anchor.py
 
-Anchor a day blob using OpenTimestamps (OTS). Produces a .ots proof file for the input .bin blob.
+Anchor a day blob using OpenTimestamps (OTS) for public verifiability.
+
+This script creates a cryptographic timestamp proof by submitting the day.bin
+SHA-256 hash to Bitcoin blockchain via OpenTimestamps attestation servers.
+
+The OTS proof allows anyone to independently verify that the day blob existed
+at a specific time, without trusting the gateway operator.
+
+Workflow:
+1. stamp: Submit day.bin to OTS servers → creates .ots proof (pending)
+2. upgrade: Poll OTS servers to update pending → confirmed (with Bitcoin block)
+3. verify: Independently verify that proof anchors the day.bin hash
+
+For M#1, this script gracefully degrades to a placeholder if the OTS client
+is not installed, allowing development/testing without Bitcoin dependencies.
+
+References:
+- ADR-003: Daily OTS Anchoring
+- OpenTimestamps: https://opentimestamps.org/
+
+Usage:
+    # Stamp a day blob
+    python ots_anchor.py out/site_demo/day/2025-10-07.bin
+
+    # Later, upgrade pending proofs
+    ots upgrade out/site_demo/day/2025-10-07.bin.ots
+
+    # Verify proof
+    ots verify out/site_demo/day/2025-10-07.bin.ots
 """
 from __future__ import annotations
 
