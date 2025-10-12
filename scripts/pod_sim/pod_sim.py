@@ -2,8 +2,29 @@
 """
 pod_sim.py
 
-Pod simulator that emits NDJSON facts or framed records to stdout or a file.
-This is used for early pipeline testing.
+Pod simulator that emits NDJSON facts or framed records for testing.
+
+This simulator supports two modes:
+
+1. **Plain mode** (M#0): Emits canonical fact JSON (device_id, timestamp, nonce, payload)
+   Usage: python pod_sim.py --device-id pod-001 --count 10
+
+2. **Framed mode** (M#1): Emits NDJSON frames with {hdr, nonce, ct, tag} fields
+   Usage: python pod_sim.py --framed --device-id pod-003 --count 10 --out frames.ndjson
+
+Frame structure (M#1 stub):
+- hdr: dict with {dev_id: u16, msg_type: u8, fc: u32, flags: u8}
+- nonce: base64 string (24 random bytes)
+- ct: base64 string (JSON payload in plaintext for M#1)
+- tag: base64 string (16 random bytes placeholder)
+
+For M#1, encryption is stubbed: the ciphertext contains base64-encoded JSON payload.
+Real AEAD (XChaCha20-Poly1305) will be implemented in M#2 with proper key derivation.
+
+Optional --facts-out writes plain facts alongside framed output for cross-checking.
+
+References:
+- ADR-002: Telemetry Framing, Nonce/Replay Policy
 """
 from __future__ import annotations
 
@@ -63,12 +84,20 @@ def b64(data: bytes) -> str:
 
 
 def emit_framed(device_id: str, counter: int, payload: dict) -> dict:
-    # Header fields
+    """
+    Emit a framed record with header dict and base64-encoded fields.
+
+    For M#1, this creates frames matching the format expected by frame_verifier.py:
+    - hdr: dict with {dev_id, msg_type, fc, flags}
+    - nonce: base64 string (24 bytes)
+    - ct: base64 string (JSON payload for now)
+    - tag: base64 string (16 bytes placeholder)
+    """
+    # Header fields as dict (not packed binary)
     dev_id_u16 = parse_dev_id_u16(device_id)
     msg_type = 1  # stub: measurement
     fc_u32 = counter
     flags = 0
-    hdr = build_header(dev_id_u16, msg_type, fc_u32, flags)
 
     # Nonce and tag placeholders
     nonce = secrets.token_bytes(24)
@@ -80,7 +109,12 @@ def emit_framed(device_id: str, counter: int, payload: dict) -> dict:
     )
 
     return {
-        "hdr": b64(hdr),
+        "hdr": {
+            "dev_id": dev_id_u16,
+            "msg_type": msg_type,
+            "fc": fc_u32,
+            "flags": flags,
+        },
         "nonce": b64(nonce),
         "ct": b64(ct_bytes),
         "tag": b64(tag),
