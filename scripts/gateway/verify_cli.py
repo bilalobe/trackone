@@ -53,10 +53,13 @@ def main(argv=None) -> int:
     p.add_argument(
         "--root", type=Path, required=True, help="Path to out/site_demo root directory"
     )
+    p.add_argument(
+        "--facts", type=Path, required=False, help="Path to facts directory (defaults to toolset/unified/examples)"
+    )
     args = p.parse_args(argv)
 
     root_dir = args.root
-    facts_dir = Path("toolset/unified/examples")
+    facts_dir = args.facts if args.facts is not None else Path("toolset/unified/examples")
     blocks_dir = root_dir / "blocks"
     day_dir = root_dir / "day"
 
