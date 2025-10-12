@@ -19,8 +19,8 @@ For M\#1, confidentiality/authenticity are stubbed: the ciphertext (ct) is simpl
 \paragraph{Replay window policy}
 For each device, the gateway maintains a device table recording the highest frame counter (\texttt{highest\_fc\_seen}) and last-seen time. A frame is accepted if and only if:
 \begin{itemize}
-  \item First frame for the device: \(\texttt{fc} \ge 0\) is accepted.
-  \item Otherwise: \(0 < \texttt{fc} - \texttt{highest\_fc\_seen} \le \texttt{window}\) (default window = 64).
+    \item First frame for the device: \(\texttt{fc} \ge 0\) is accepted.
+    \item Otherwise: \(0 < \texttt{fc} - \texttt{highest\_fc\_seen} \le \texttt{window}\) (default window = 64).
 \end{itemize}
 Duplicate or stale frames (\(\le 0\) delta) and jumps beyond the window are rejected. In M\#1 we treat \texttt{fc} as 32-bit; extending to fc64 is straightforward by tracking high bits per device.
 
@@ -53,11 +53,11 @@ Facts are validated against \texttt{toolset/unified/schemas/fact.schema.json} (w
 \paragraph{Batching and daily artifacts}
 Canonical facts are batched deterministically:
 \begin{enumerate}
-  \item Compute SHA-256 of each canonical fact; sort leaf hashes lexicographically.
-  \item Build a binary Merkle tree (duplicate last when odd); the root is \(\texttt{merkle\_root}\).
-  \item Emit a block header JSON with fields \texttt{version, site\_id, day, batch\_id, merkle\_root, count, leaf\_hashes}.
-  \item Build a day record JSON containing \texttt{version, site\_id, date, prev\_day\_root, batches[], day\_root}.
-  \item Write a canonical day blob (JSON, canonicalized) to \texttt{day/YYYY-MM-DD.bin} and a human-readable \texttt{.json} peer.
+    \item Compute SHA-256 of each canonical fact; sort leaf hashes lexicographically.
+    \item Build a binary Merkle tree (duplicate last when odd); the root is \(\texttt{merkle\_root}\).
+    \item Emit a block header JSON with fields \texttt{version, site\_id, day, batch\_id, merkle\_root, count, leaf\_hashes}.
+    \item Build a day record JSON containing \texttt{version, site\_id, date, prev\_day\_root, batches[], day\_root}.
+    \item Write a canonical day blob (JSON, canonicalized) to \texttt{day/YYYY-MM-DD.bin} and a human-readable \texttt{.json} peer.
 \end{enumerate}
 Both the block header and the day record are validated against their schemas when \texttt{--validate-schemas} is passed.
 
