@@ -27,7 +27,9 @@ merkle_batcher = load_module("merkle_batcher", GW_DIR / "merkle_batcher.py")
 verify_cli = load_module("verify_cli", GW_DIR / "verify_cli.py")
 
 
-def write_frames(device_id: str, count: int, out_path: Path, facts_out: Path | None = None):
+def write_frames(
+        device_id: str, count: int, out_path: Path, facts_out: Path | None = None
+):
     """Use pod_sim to write framed NDJSON to out_path."""
     import subprocess
 

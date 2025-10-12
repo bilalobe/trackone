@@ -271,9 +271,7 @@ def process(argv=None) -> int:
 
     # Open input (file or stdin)
     frames_fh = (
-        args.input_file.open("r", encoding="utf-8")
-        if args.input_file
-        else sys.stdin
+        args.input_file.open("r", encoding="utf-8") if args.input_file else sys.stdin
     )
 
     # Create output directory
