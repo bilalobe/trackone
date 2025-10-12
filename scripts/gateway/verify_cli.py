@@ -2,7 +2,32 @@
 """
 verify_cli.py
 
-Verify Merkle root and OTS proof for a day. Accepts --root out/site_demo, recomputes root from facts, compares to block header and day record, verifies OTS proof.
+Verify Merkle root and OTS proof for a day's telemetry batch.
+
+This script provides independent verification of the batching and anchoring process:
+1. Recomputes Merkle root from canonical fact files
+2. Compares recomputed root against block header (authoritative)
+3. Verifies OTS proof anchors the day.bin blob
+
+Exit codes:
+- 0: Success (root matches and OTS verified)
+- 1: Block header not found or invalid day field
+- 2: Merkle root mismatch
+- 3: OTS proof file not found
+- 4: OTS proof verification failed
+
+This enables auditors to independently verify the gateway's claims without
+trusting the gateway operator or database.
+
+References:
+- ADR-003: Canonicalization, Merkle Policy, Daily OTS Anchoring
+
+Usage:
+    # Verify using facts from default location
+    python verify_cli.py --root out/site_demo
+
+    # Verify using custom facts directory
+    python verify_cli.py --root out/site_demo --facts out/site_demo/facts
 """
 from __future__ import annotations
 
@@ -54,12 +79,15 @@ def main(argv=None) -> int:
         "--root", type=Path, required=True, help="Path to out/site_demo root directory"
     )
     p.add_argument(
-        "--facts", type=Path, required=False, help="Path to facts directory (defaults to toolset/unified/examples)"
+        "--facts",
+        type=Path,
+        default=Path("toolset/unified/examples"),
+        help="Directory with fact JSON files to recompute the Merkle root",
     )
     args = p.parse_args(argv)
 
     root_dir = args.root
-    facts_dir = args.facts if args.facts is not None else Path("toolset/unified/examples")
+    facts_dir = args.facts
     blocks_dir = root_dir / "blocks"
     day_dir = root_dir / "day"
 

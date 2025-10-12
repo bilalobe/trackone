@@ -2,11 +2,30 @@
 """
 merkle_batcher.py
 
-Batch device facts into a Merkle tree and emit:
-- blocks/<day>-00.block.json
-- day/<day>.bin (canonical day blob for OTS)
-- day/<day>.json (human-readable)
-Also writes day/<day>.bin.sha256 for convenience.
+Batch device facts into a Merkle tree and emit deterministic artifacts.
+
+This script implements the core batching logic for Track1 telemetry, producing:
+- blocks/<day>-00.block.json — signed-ready block header with merkle_root
+- day/<day>.bin — canonical day blob (for OpenTimestamps anchoring)
+- day/<day>.json — human-readable day record
+- day/<day>.bin.sha256 — SHA-256 hash (for convenience)
+
+Determinism guarantees (ADR-003):
+1. Canonical JSON: sorted keys, UTF-8, no whitespace via json.dumps(sort_keys=True)
+2. Hash-sorted Merkle leaves: sorts leaf hashes before building tree (order-independent)
+3. Day chaining: includes prev_day_root (32 zero bytes for genesis day)
+4. Reproducible across runs: same facts/ → identical merkle_root and day.bin SHA-256
+
+References:
+- ADR-003: Canonicalization, Merkle Policy, Daily OTS Anchoring
+
+Usage:
+    python merkle_batcher.py \\
+        --facts out/site_demo/facts \\
+        --out out/site_demo \\
+        --site an-001 \\
+        --date 2025-10-07 \\
+        --validate-schemas
 """
 from __future__ import annotations
 
