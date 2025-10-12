@@ -24,13 +24,21 @@ import argparse
 import base64
 import json
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, Set
+from typing import Dict, Set, Any
 
 # Constants for maintainability
 DEFAULT_REPLAY_WINDOW = 64
 MAX_FRAME_COUNTER = 2 ** 32 - 1
 HEADER_FIELDS = {"dev_id", "msg_type", "fc", "flags"}
+
+try:
+    import jsonschema
+
+    JSONSCHEMA_AVAILABLE = True
+except ImportError:
+    JSONSCHEMA_AVAILABLE = False
 
 
 class ReplayWindow:
@@ -66,8 +74,12 @@ class ReplayWindow:
         if fc in seen_set:
             return False, "duplicate"
 
-        # Check if too old (outside window)
+        # Check if too old (outside window behind)
         if fc < highest and (highest - fc) > self.window_size:
+            return False, "out_of_window"
+
+        # Check if too far ahead (outside window forward)
+        if fc > highest and (fc - highest) > self.window_size:
             return False, "out_of_window"
 
         # Accept and update
@@ -81,6 +93,49 @@ class ReplayWindow:
             seen_set.add(fc)
 
         return True, "ok"
+
+
+def load_fact_schema() -> dict | None:
+    """Load fact.schema.json for optional validation."""
+    schema_path = (
+            Path(__file__).parent.parent.parent
+            / "toolset"
+            / "unified"
+            / "schemas"
+            / "fact.schema.json"
+    )
+    if schema_path.exists():
+        try:
+            return json.loads(schema_path.read_text(encoding="utf-8"))
+        except Exception as e:
+            print(f"[WARN] Failed to load fact schema: {e}", file=sys.stderr)
+    return None
+
+
+def validate_fact(obj: dict, schema: dict | None) -> None:
+    """Validate fact against schema if available."""
+    if not (schema and JSONSCHEMA_AVAILABLE):
+        return
+    try:
+        jsonschema.validate(instance=obj, schema=schema)
+    except Exception as e:
+        print(f"[WARN] Fact validation: {e}", file=sys.stderr)
+
+
+def load_device_table(path: Path) -> Dict[str, Dict[str, Any]]:
+    """Load device table from disk, or return empty dict."""
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def save_device_table(path: Path, tbl: dict) -> None:
+    """Persist device table to disk."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(tbl, indent=2) + "\n", encoding="utf-8")
 
 
 def parse_frame(line: str) -> tuple[dict | None, str]:
@@ -166,7 +221,7 @@ def frame_to_fact(frame: dict, payload: dict) -> dict:
 
     return {
         "device_id": dev_id_str,
-        "timestamp": payload.get("timestamp", ""),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "nonce": frame.get("nonce", ""),
         "payload": payload,
     }
@@ -189,8 +244,7 @@ def process(argv=None) -> int:
         "--in",
         dest="input_file",
         type=Path,
-        required=True,
-        help="Input NDJSON file with framed records",
+        help="Input NDJSON file with framed records (or stdin if omitted)",
     )
     p.add_argument(
         "--out-facts",
@@ -204,7 +258,7 @@ def process(argv=None) -> int:
         dest="device_table",
         type=Path,
         required=True,
-        help="Device table JSON (for key lookup in M#2)",
+        help="Device table JSON (for key lookup in M#2, persisted state)",
     )
     p.add_argument(
         "--window",
@@ -215,8 +269,19 @@ def process(argv=None) -> int:
 
     args = p.parse_args(argv)
 
+    # Open input (file or stdin)
+    frames_fh = (
+        args.input_file.open("r", encoding="utf-8")
+        if args.input_file
+        else sys.stdin
+    )
+
     # Create output directory
     args.out_facts.mkdir(parents=True, exist_ok=True)
+
+    # Load device table and schema
+    device_table = load_device_table(args.device_table)
+    fact_schema = load_fact_schema()
 
     # Initialize replay window
     replay = ReplayWindow(window_size=args.window)
@@ -227,64 +292,85 @@ def process(argv=None) -> int:
     rejected = 0
 
     try:
-        with args.input_file.open("r", encoding="utf-8") as fh:
-            for line_num, line in enumerate(fh, start=1):
-                line = line.strip()
-                if not line:
-                    continue
+        for line_num, line in enumerate(frames_fh, start=1):
+            line = line.strip()
+            if not line:
+                continue
 
-                total += 1
+            total += 1
 
-                # Parse frame
-                frame, err = parse_frame(line)
-                if frame is None:
-                    rejected += 1
-                    print(f"[WARN] {err}", file=sys.stderr)
-                    continue
+            # Parse frame
+            frame, err = parse_frame(line)
+            if frame is None:
+                rejected += 1
+                print(f"[WARN] {err}", file=sys.stderr)
+                continue
 
-                hdr = frame["hdr"]
-                dev_id_str = f"pod-{hdr['dev_id']:03d}"
-                fc = hdr["fc"]
+            hdr = frame["hdr"]
+            dev_id_str = f"pod-{hdr['dev_id']:03d}"
+            fc = hdr["fc"]
 
-                # Check replay window
-                ok, reason = replay.check_and_update(dev_id_str, fc)
-                if not ok:
-                    rejected += 1
-                    print(
-                        f"[WARN] Rejected {dev_id_str} fc={fc}: {reason}",
-                        file=sys.stderr,
-                    )
-                    continue
+            # Check replay window
+            ok, reason = replay.check_and_update(dev_id_str, fc)
+            if not ok:
+                rejected += 1
+                print(
+                    f"[WARN] Rejected {dev_id_str} fc={fc}: {reason}", file=sys.stderr
+                )
+                continue
 
-                # Stub decrypt
-                payload = stub_decrypt(frame)
-                if payload is None:
-                    rejected += 1
-                    print(
-                        f"[WARN] Decrypt failed for {dev_id_str} fc={fc}",
-                        file=sys.stderr,
-                    )
-                    continue
+            # Stub decrypt
+            payload = stub_decrypt(frame)
+            if payload is None:
+                rejected += 1
+                print(
+                    f"[WARN] Decrypt failed for {dev_id_str} fc={fc}", file=sys.stderr
+                )
+                continue
 
-                # Convert to fact
-                fact = frame_to_fact(frame, payload)
+            # Convert to fact
+            fact = frame_to_fact(frame, payload)
 
-                # Write fact file
-                fact_file = args.out_facts / f"{dev_id_str}-{fc:08d}.json"
-                with fact_file.open("w", encoding="utf-8") as out_fh:
-                    json.dump(fact, out_fh, indent=2, sort_keys=True)
+            # Validate against schema
+            validate_fact(fact, fact_schema)
 
-                accepted += 1
+            # Write fact file
+            fact_file = args.out_facts / f"{dev_id_str}-{fc:08d}.json"
+            with fact_file.open("w", encoding="utf-8") as out_fh:
+                json.dump(fact, out_fh, indent=2, sort_keys=True)
 
-    except FileNotFoundError:
-        print(f"[ERROR] Input file not found: {args.input_file}", file=sys.stderr)
+            # Update device table for persistence
+            dev_key = str(hdr["dev_id"])
+            device_table[dev_key] = {
+                "highest_fc_seen": fc,
+                "last_seen": datetime.now(timezone.utc).isoformat(),
+                "msg_type": hdr["msg_type"],
+                "flags": hdr["flags"],
+            }
+
+            accepted += 1
+
+    except KeyboardInterrupt:
+        print("\n[INFO] Interrupted by user", file=sys.stderr)
         return 1
     except Exception as e:
         print(f"[ERROR] Unexpected error: {e}", file=sys.stderr)
         return 1
+    finally:
+        if frames_fh is not sys.stdin:
+            frames_fh.close()
+
+    # Save device table
+    save_device_table(args.device_table, device_table)
+
+    # Cross-check accepted count from disk to guard against counter drift
+    try:
+        accepted_files = len(list(args.out_facts.glob("*.json")))
+    except Exception:
+        accepted_files = accepted
 
     print(
-        f"[frame_verifier] total={total} accepted={accepted} rejected={rejected} window={args.window}"
+        f"[frame_verifier] total={total} accepted={accepted_files} rejected={rejected} window={args.window}"
     )
     return 0
 
