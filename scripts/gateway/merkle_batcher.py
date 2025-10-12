@@ -78,7 +78,7 @@ def merkle_root_from_leaves(leaves: List[bytes]) -> Tuple[str, List[str]]:
     if not leaves:
         empty = sha256(b"").hexdigest()
         return empty, []
-    leaf_hashes = [sha256(l).hexdigest() for l in leaves]
+    leaf_hashes = [sha256(leaf).hexdigest() for leaf in leaves]
     # Deterministic: sort by hash, not filename
     leaf_hashes_sorted = sorted(leaf_hashes)
     layer = [bytes.fromhex(hx) for hx in leaf_hashes_sorted]
