@@ -62,7 +62,7 @@ def parse_dev_id_u16(device_id: str) -> int:
     i = len(device_id) - 1
     while i >= 0 and device_id[i].isdigit():
         i -= 1
-    digits = device_id[i + 1:]
+    digits = device_id[i + 1 :]
     if digits:
         try:
             num = int(digits, 10)

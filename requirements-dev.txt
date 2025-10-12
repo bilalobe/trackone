@@ -1,8 +1,8 @@
 # Development dependencies (linting and formatting)
 ruff>=0.1.0
 black>=23.0.0
+pre-commit>=3.0.0
 
 # Project dependencies
 jsonschema>=4.23.0
 pytest>=8.4.2
-

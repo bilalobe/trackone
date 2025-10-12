@@ -5,14 +5,15 @@ test_merkle_repro.py
 Tests for Merkle tree reproduction and determinism.
 Verifies that the same facts always produce the same Merkle root.
 """
+
 import sys
-from hashlib import sha256
 from pathlib import Path
 
-import pytest
-
-# Import merkle_batcher functions
 sys.path.insert(0, str(Path(__file__).parent.parent / "gateway"))
+
+from hashlib import sha256
+
+import pytest
 from merkle_batcher import canonical_json, merkle_root_from_leaves
 
 

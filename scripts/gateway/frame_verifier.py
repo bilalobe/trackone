@@ -30,7 +30,7 @@ from typing import Any
 
 # Constants for maintainability
 DEFAULT_REPLAY_WINDOW = 64
-MAX_FRAME_COUNTER = 2 ** 32 - 1
+MAX_FRAME_COUNTER = 2**32 - 1
 HEADER_FIELDS = {"dev_id", "msg_type", "fc", "flags"}
 
 try:
@@ -98,11 +98,11 @@ class ReplayWindow:
 def load_fact_schema() -> dict | None:
     """Load fact.schema.json for optional validation."""
     schema_path = (
-            Path(__file__).parent.parent.parent
-            / "toolset"
-            / "unified"
-            / "schemas"
-            / "fact.schema.json"
+        Path(__file__).parent.parent.parent
+        / "toolset"
+        / "unified"
+        / "schemas"
+        / "fact.schema.json"
     )
     if schema_path.exists():
         try:

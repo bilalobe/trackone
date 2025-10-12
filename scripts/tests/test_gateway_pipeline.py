@@ -5,16 +5,17 @@ test_gateway_pipeline.py
 Comprehensive tests for the gateway pipeline: merkle_batcher, ots_anchor, verify_cli.
 Tests schema compliance, Merkle root computation, and end-to-end workflow.
 """
-import json
-import shutil
-import sys
-from hashlib import sha256
-from pathlib import Path
 
-import pytest
+import sys
+from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "gateway"))
 
+import json
+import shutil
+from hashlib import sha256
+
+import pytest
 from merkle_batcher import (
     BlockHeader,
     canonical_json,
@@ -42,7 +43,7 @@ def temp_workspace(tmp_path):
 
     # Copy schemas from toolset/unified/schemas
     schema_src = (
-            Path(__file__).parent.parent.parent.parent / "toolset" / "unified" / "schemas"
+        Path(__file__).parent.parent.parent.parent / "toolset" / "unified" / "schemas"
     )
     for schema_file in [
         "fact.schema.json",

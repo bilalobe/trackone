@@ -1,6 +1,6 @@
 # ADR-001: Cryptographic Primitives and Framing for Track 1`
 
-**Status:** Accepted  
+**Status:** Accepted
 **Date:** 2025-10-06
 
 ## Context

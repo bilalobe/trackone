@@ -15,21 +15,21 @@ reproducible.
 
 1) Create a feature branch:
 
-```bash 
-git checkout -b feat/<short-topic>``` 
+```bash
+git checkout -b feat/<short-topic>```
 ```
 
 2) Set up environment:
 
-```bash 
-uv pip install -r requirements.txt || true uv pip install pytest jsonschema``` 
+```bash
+uv pip install -r requirements.txt || true uv pip install pytest jsonschema```
 ```
 
 3) Run tests:
 
-```bash 
+```bash
 pytest -q
-``` 
+```
 
 ## Code structure
 
@@ -73,8 +73,8 @@ feat(gateway): add canonical batcher and day chaining (ADR‑003) fix(ci): pin P
 
 - Tag milestones:
 
-```bash 
-git tag -a v0.0.1-m0 -m "Milestone 0: batcher + OTS + schemas + ADRs" git push origin --tags``` 
+```bash
+git tag -a v0.0.1-m0 -m "Milestone 0: batcher + OTS + schemas + ADRs" git push origin --tags```
 ```
 
 ## Contact

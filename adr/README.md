@@ -7,16 +7,16 @@ Each ADR captures context, the decision, consequences, and alternatives.
 
 ### Core Cryptography & Framing
 
-- **ADR‑001: Cryptographic Primitives and Framing**  
-  Status: Accepted (M#0)  
+- **ADR‑001: Cryptographic Primitives and Framing**
+  Status: Accepted (M#0)
   Summary: Establishes modern, efficient primitives for provisioning and AEAD telemetry:
     - X25519 + HKDF for key derivation
     - XChaCha20‑Poly1305 for AEAD (M#2 implementation)
     - Ed25519 for identity/config/firmware signatures
     - SHA‑256 for Merkle trees and hashing
 
-- **ADR‑002: Telemetry Framing, Nonce/Replay Policy, and Device Table**  
-  Status: Accepted (M#1 stub)  
+- **ADR‑002: Telemetry Framing, Nonce/Replay Policy, and Device Table**
+  Status: Accepted (M#1 stub)
   Summary: Defines compact frame layout and gateway security policies:
     - Frame header: dev_id(u16), msg_type(u8), fc(u32), flags(u8)
     - 24‑byte XChaCha nonce construction: salt(8)||fc(8)||rand(8)
@@ -24,8 +24,8 @@ Each ADR captures context, the decision, consequences, and alternatives.
     - Device table for per-device state tracking (highest_fc_seen, last_seen)
     - M#1 implementation: stub decryption (base64 JSON), real AEAD in M#2
 
-- **ADR‑003: Canonicalization, Merkle Policy, and Daily OpenTimestamps Anchoring**  
-  Status: Accepted (M#0, M#1)  
+- **ADR‑003: Canonicalization, Merkle Policy, and Daily OpenTimestamps Anchoring**
+  Status: Accepted (M#0, M#1)
   Summary: Ensures deterministic, verifiable data integrity:
     - Canonical JSON: sorted keys, UTF-8, no whitespace
     - Hash-sorted Merkle leaves for order independence
@@ -69,7 +69,7 @@ Each ADR captures context, the decision, consequences, and alternatives.
 ```markdown
 # ADR-XYZ: Title
 
-**Status**: Proposed | Accepted | Superseded  
+**Status**: Proposed | Accepted | Superseded
 **Date**: YYYY-MM-DD
 
 ## Context

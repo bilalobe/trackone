@@ -1,6 +1,6 @@
 # ADR-003: Canonicalization, Merkle Policy, and Daily OpenTimestamps Anchoring
 
-**Status:** Accepted  
+**Status:** Accepted
 **Date:** 2025-10-06
 
 ## Context
@@ -16,7 +16,7 @@
 ### 1. Canonicalization (facts, blocks, day)
 
 - **Encoding:** JSON, UTF‑8 bytes.
-- **Canonicalization function:**  
+- **Canonicalization function:**
   `json.dumps(obj, sort_keys=True, separators=(",", ":")).encode("utf‑8")`
     - No whitespace, no pretty print; sorted keys at all nesting levels.
 - **Numbers:** use JSON default encoding; determinism is guaranteed by value equality and sort_keys.

@@ -6,15 +6,15 @@ Tests for cryptographic operations and test vectors.
 Currently tests canonical JSON serialization and fact schema validation.
 Full crypto implementation (X25519, HKDF, XChaCha20-Poly1305) will be added in Track 1 phase.
 """
-import json
 import sys
-from hashlib import sha256
 from pathlib import Path
 
-import pytest
-
-# Import merkle_batcher functions
 sys.path.insert(0, str(Path(__file__).parent.parent / "gateway"))
+
+import json
+from hashlib import sha256
+
+import pytest
 from merkle_batcher import canonical_json, load_schemas, validate_against_schema
 
 # Load test vectors

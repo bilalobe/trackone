@@ -1,6 +1,6 @@
 # ADR-004: Framed Ingest Stub for M#1 (Plaintext CT for Pipeline Bring‑up)
 
-Status: Accepted  
+Status: Accepted
 Date: 2025-10-08
 
 ## Context
@@ -15,7 +15,7 @@ This ADR documents the temporary choices so reviewers don’t confuse the M#1 st
 
 For M#1 only:
 
-- **Frame shape (transport/NDJSON)**  
+- **Frame shape (transport/NDJSON)**
   Each line is a JSON object:
   ```json
   {
@@ -25,21 +25,21 @@ For M#1 only:
     "tag":   "base64(16B)"      // placeholder random
   }
   ```
-- **Replay window (enforced):**  
+- **Replay window (enforced):**
   Gateway maintains `highest_fc_seen` per `dev_id` and accepts a frame iff `0 < fc - highest_fc_seen ≤ window` (default
   64). First frame for a device is accepted if `fc ≥ 0`.
 
-- **Decryption (stub):**  
+- **Decryption (stub):**
   Gateway decodes `ct` as UTF‑8 and parses JSON into the `payload`. No cryptographic verification is performed in M#1.
 
-- **Canonical facts:**  
+- **Canonical facts:**
   Gateway writes canonical fact JSON:
   ```json
   { "device_id": "pod-XYZ", "timestamp": "<gateway-utc-iso>", "nonce": "<base64-24B>", "payload": {...} }
   ```
   Facts are validated against `fact.schema.json` (warn‑only by default).
 
-- **Batch/anchor/verify:**  
+- **Batch/anchor/verify:**
   `merkle_batcher.py --validate-schemas` builds block/day artifacts; `ots_anchor.py` stamps the day blob (placeholder
   proof allowed); `verify_cli.py` recomputes root and checks the proof.
 
@@ -64,9 +64,9 @@ For M#1 only:
 
 ## Alternatives Considered
 
-- Implement AEAD immediately in M#1  
+- Implement AEAD immediately in M#1
   Pros: early security; Cons: longer bring‑up, more moving parts to debug simultaneously.
-- Use binary CBOR framing in M#1  
+- Use binary CBOR framing in M#1
   Pros: compact; Cons: less readable for tests; JSON NDJSON is faster for iteration.
 
 ## Testing
