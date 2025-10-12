@@ -84,7 +84,8 @@ echo ""
 # Step 5: Verify Merkle root and OTS proof
 echo "[pipeline] Step 5: Verifying Merkle root and OTS proof..."
 python scripts/gateway/verify_cli.py \
-  --root "${OUT_DIR}"
+  --root "${OUT_DIR}" \
+  --facts "${FACTS_DIR}"
 
 echo ""
 echo "[pipeline] ✓ Pipeline completed successfully!"
@@ -94,4 +95,3 @@ echo "[pipeline]   - Facts: ${FACTS_DIR}/"
 echo "[pipeline]   - Blocks: ${OUT_DIR}/blocks/"
 echo "[pipeline]   - Day: ${OUT_DIR}/day/"
 echo "[pipeline]   - OTS proof: ${DAY_BIN}.ots"
-
