@@ -17,6 +17,7 @@ def load_module(name: str, path: Path):
     if spec is None or spec.loader is None:
         raise ImportError(f"Cannot load module {name} from {path}")
     mod = importlib.util.module_from_spec(spec)
+    sys.modules[name] = mod  # Register in sys.modules before exec to fix dataclass
     spec.loader.exec_module(mod)  # type: ignore
     return mod
 
@@ -28,9 +29,13 @@ verify_cli = load_module("verify_cli", GW_DIR / "verify_cli.py")
 
 
 def write_frames(
-    device_id: str, count: int, out_path: Path, facts_out: Path | None = None
+    device_id: str,
+    count: int,
+    out_path: Path,
+    facts_out: Path | None = None,
+    device_table: Path | None = None,
 ):
-    """Use pod_sim to write framed NDJSON to out_path."""
+    """Use pod_sim to write framed NDJSON to out_path, sharing device_table for AEAD keys."""
     import subprocess
 
     cmd = [
@@ -44,6 +49,8 @@ def write_frames(
         "--out",
         str(out_path),
     ]
+    if device_table:
+        cmd += ["--device-table", str(device_table)]
     if facts_out:
         cmd += ["--facts-out", str(facts_out)]
     subprocess.run(cmd, check=True)
@@ -67,7 +74,7 @@ def temp_dirs(tmp_path):
 
 def test_accept_increasing_fc(temp_dirs):
     temp_dirs["root"].mkdir(parents=True, exist_ok=True)
-    write_frames("pod-001", 5, temp_dirs["frames"], None)
+    write_frames("pod-001", 5, temp_dirs["frames"], None, temp_dirs["device_table"])
 
     # Verify frames
     args = [
@@ -89,7 +96,9 @@ def test_accept_increasing_fc(temp_dirs):
 
 def test_reject_duplicate_and_out_of_window(temp_dirs):
     temp_dirs["root"].mkdir(parents=True, exist_ok=True)
-    write_frames("pod-002", 3, temp_dirs["frames"], None)  # fc: 0,1,2
+    write_frames(
+        "pod-002", 3, temp_dirs["frames"], None, temp_dirs["device_table"]
+    )  # fc: 0,1,2
 
     # Append a duplicate of the last frame and an out-of-window jump
     lines = temp_dirs["frames"].read_text(encoding="utf-8").strip().splitlines()
@@ -121,7 +130,7 @@ def test_reject_duplicate_and_out_of_window(temp_dirs):
 
 def test_end_to_end_pipeline(temp_dirs):
     temp_dirs["root"].mkdir(parents=True, exist_ok=True)
-    write_frames("pod-003", 7, temp_dirs["frames"], None)
+    write_frames("pod-003", 7, temp_dirs["frames"], None, temp_dirs["device_table"])
 
     # 1) Verify frames to facts
     fv_args = [

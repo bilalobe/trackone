@@ -2,21 +2,21 @@
 """
 frame_verifier.py
 
-Parse framed telemetry (NDJSON), enforce replay window, stub-decrypt, and emit canonical facts.
+Parse framed telemetry (NDJSON), enforce replay window, AEAD-decrypt, and emit canonical facts.
 
-For M#1, this implements basic frame parsing and replay protection with stubbed decryption.
-Real AEAD (XChaCha20-Poly1305) will be added in M#2.
+For M#2 (production), implements XChaCha20-Poly1305 AEAD (192-bit nonce, 24 bytes).
 
-Frame format (v1, stubbed):
+Frame format (v1, AEAD):
 - Header: dev_id(u16), msg_type(u8), fc(u32), flags(u8)
-- Nonce: 24 bytes (base64/hex string for now)
-- Ciphertext: json.dumps(payload) bytes (plaintext for now)
-- Tag: 16 bytes (placeholder)
+- Nonce: 24 bytes (base64 string)
+- Ciphertext: AEAD over compact TLV
+- Tag: 16 bytes
 
 Transport: NDJSON, one frame per line as JSON with fields {hdr, nonce, ct, tag}.
 
 References:
 - ADR-002: Telemetry Framing, Nonce/Replay Policy
+- ADR-006: Forward-only schema policy (XChaCha only, no ChaCha/salt4)
 """
 from __future__ import annotations
 
@@ -28,6 +28,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import nacl.bindings
+
 # Constants for maintainability
 DEFAULT_REPLAY_WINDOW = 64
 MAX_FRAME_COUNTER = 2**32 - 1
@@ -38,7 +40,17 @@ try:
 
     JSONSCHEMA_AVAILABLE = True
 except ImportError:
+    jsonschema = None  # type: ignore
     JSONSCHEMA_AVAILABLE = False
+
+
+def _load_schema(path: Path) -> dict | None:
+    try:
+        if path.exists():
+            return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    return None
 
 
 class ReplayWindow:
@@ -53,6 +65,16 @@ class ReplayWindow:
         self.window_size = window_size
         self.highest_fc: dict[str, int] = {}
         self.seen: dict[str, set[int]] = {}
+
+    def initialize_from_device_table(self, device_table: dict) -> None:
+        """Initialize replay window state from persisted device table."""
+        for dev_key, entry in device_table.items():
+            highest = entry.get("highest_fc_seen", -1)
+            if highest >= 0:
+                dev_id_str = f"pod-{int(dev_key):03d}"
+                self.highest_fc[dev_id_str] = highest
+                # Don't pre-populate seen set - only track current session frames
+                self.seen[dev_id_str] = set()
 
     def check_and_update(self, dev_id: str, fc: int) -> tuple[bool, str]:
         """
@@ -122,20 +144,84 @@ def validate_fact(obj: dict, schema: dict | None) -> None:
         print(f"[WARN] Fact validation: {e}", file=sys.stderr)
 
 
+# --- Device table helpers ---
+
+
 def load_device_table(path: Path) -> dict[str, dict[str, Any]]:
     """Load device table from disk, or return empty dict."""
-    if not path.exists():
+    if not path or not path.exists():
         return {}
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        data = json.loads(path.read_text(encoding="utf-8"))
     except Exception:
         return {}
+
+    # Enforce version requirement (ADR-006)
+    meta = data.get("_meta", {})
+    version = meta.get("version")
+    if version != "1.0":
+        print(
+            f"[ERROR] Device table version {version!r} not supported. "
+            "Expected '1.0'. Regenerate with: python scripts/pod_sim/pod_sim.py --framed --device-table <path>",
+            file=sys.stderr,
+        )
+        raise ValueError(f"Unsupported device table version: {version!r}")
+
+    # Optional schema validation (tiny schema)
+    if JSONSCHEMA_AVAILABLE:
+        schema_path = (
+            Path(__file__).parent.parent.parent
+            / "toolset"
+            / "unified"
+            / "schemas"
+            / "device_table.schema.json"
+        )
+        schema = _load_schema(schema_path)
+        if schema:
+            try:
+                jsonschema.validate(instance=data, schema=schema)  # type: ignore
+            except Exception as e:
+                print(
+                    f"[ERROR] Device table schema validation failed: {e}",
+                    file=sys.stderr,
+                )
+                raise
+
+    return data
 
 
 def save_device_table(path: Path, tbl: dict) -> None:
     """Persist device table to disk."""
+    if not path:
+        return
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(tbl, indent=2) + "\n", encoding="utf-8")
+
+
+# --- TLV helpers (mirror pod_sim) ---
+
+
+def decode_tlv(data: bytes) -> dict:
+    i = 0
+    out: dict[str, Any] = {}
+    while i + 2 <= len(data):
+        t = data[i]
+        length = data[i + 1]
+        i += 2
+        if i + length > len(data):
+            break
+        v = data[i : i + length]
+        i += length
+        if t == 0x01 and length == 4:
+            out["counter"] = int.from_bytes(v, "big", signed=False)
+        elif t == 0x02 and length == 2:
+            out["bioimpedance"] = int.from_bytes(v, "big", signed=False) / 100.0
+        elif t == 0x03 and length == 2:
+            out["temp_c"] = int.from_bytes(v, "big", signed=True) / 100.0
+        elif t == 0x07 and length == 1:
+            out["status_flags"] = v[0]
+        # else: ignore unknown TLVs
+    return out
 
 
 def parse_frame(line: str) -> tuple[dict | None, str]:
@@ -187,23 +273,45 @@ def parse_frame(line: str) -> tuple[dict | None, str]:
     return frame, ""
 
 
-def stub_decrypt(frame: dict) -> dict | None:
+def aead_decrypt(frame: dict, device_table: dict) -> dict | None:
     """
-    Stub decryption for M#1.
+    AEAD decryption using XChaCha20-Poly1305 (192-bit nonce only).
 
-    For now, assumes ciphertext is base64-encoded JSON payload.
-    Real AEAD will be implemented in M#2.
+    Uses device_table[dev_id] to fetch ck_up. Nonce is provided in-frame.
 
     Returns:
         payload dict or None on failure
     """
     try:
-        if "ct" not in frame:
+        if "ct" not in frame or "nonce" not in frame or "hdr" not in frame:
+            return None
+        hdr = frame["hdr"]
+        dev_id_u16 = int(hdr["dev_id"]) & 0xFFFF
+        msg_type = int(hdr["msg_type"]) & 0xFF
+        dev_entry = device_table.get(str(dev_id_u16))
+        if not dev_entry:
+            return None  # unknown device / missing key
+        ck_up_b = base64.b64decode(dev_entry.get("ck_up", ""))
+        if len(ck_up_b) != 32:
+            return None
+        nonce = base64.b64decode(frame["nonce"])
+        ct = base64.b64decode(frame["ct"])
+        tag = base64.b64decode(frame.get("tag", ""))
+
+        # Enforce 24-byte nonce only (ADR-006: forward-only, XChaCha only)
+        if len(nonce) != 24:
+            return None
+        if len(tag) != 16:
             return None
 
-        ct_b64 = frame["ct"]
-        ct_bytes = base64.b64decode(ct_b64)
-        payload = json.loads(ct_bytes.decode("utf-8"))
+        aad = dev_id_u16.to_bytes(2, "big") + msg_type.to_bytes(1, "big")
+
+        # XChaCha20-Poly1305 (IETF) only
+        pt = nacl.bindings.crypto_aead_xchacha20poly1305_ietf_decrypt(
+            ct + tag, aad, nonce, ck_up_b
+        )
+
+        payload = decode_tlv(pt)
         return payload
     except Exception:
         return None
@@ -231,14 +339,14 @@ def process(argv=None) -> int:
     """
     Main processing function.
 
-    Reads frames from --in, enforces replay window, stub-decrypts,
+    Reads frames from --in, enforces replay window, AEAD-decrypts,
     and writes canonical facts to --out-facts directory.
 
     Returns:
         0 on success, 1 on error
     """
     p = argparse.ArgumentParser(
-        description="Parse framed telemetry and emit canonical facts (M#1 stub)"
+        description="Parse framed telemetry and emit canonical facts (XChaCha20-Poly1305)"
     )
     p.add_argument(
         "--in",
@@ -258,7 +366,7 @@ def process(argv=None) -> int:
         dest="device_table",
         type=Path,
         required=True,
-        help="Device table JSON (for key lookup in M#2, persisted state)",
+        help="Device table JSON (contains per-device keying material)",
     )
     p.add_argument(
         "--window",
@@ -281,8 +389,9 @@ def process(argv=None) -> int:
     device_table = load_device_table(args.device_table)
     fact_schema = load_fact_schema()
 
-    # Initialize replay window
+    # Initialize replay window from persisted state
     replay = ReplayWindow(window_size=args.window)
+    replay.initialize_from_device_table(device_table)
 
     # Process frames
     total = 0
@@ -317,8 +426,8 @@ def process(argv=None) -> int:
                 )
                 continue
 
-            # Stub decrypt
-            payload = stub_decrypt(frame)
+            # AEAD decrypt
+            payload = aead_decrypt(frame, device_table)
             if payload is None:
                 rejected += 1
                 print(
@@ -337,14 +446,14 @@ def process(argv=None) -> int:
             with fact_file.open("w", encoding="utf-8") as out_fh:
                 json.dump(fact, out_fh, indent=2, sort_keys=True)
 
-            # Update device table for persistence
+            # Update device table for persistence (non-secret runtime state)
             dev_key = str(hdr["dev_id"])
-            device_table[dev_key] = {
-                "highest_fc_seen": fc,
-                "last_seen": datetime.now(UTC).isoformat(),
-                "msg_type": hdr["msg_type"],
-                "flags": hdr["flags"],
-            }
+            entry = device_table.get(dev_key, {})
+            entry["highest_fc_seen"] = max(int(entry.get("highest_fc_seen", -1)), fc)
+            entry["last_seen"] = datetime.now(UTC).isoformat()
+            entry["msg_type"] = hdr["msg_type"]
+            entry["flags"] = hdr["flags"]
+            device_table[dev_key] = entry
 
             accepted += 1
 
