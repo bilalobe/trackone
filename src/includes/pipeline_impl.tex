@@ -1,81 +1,102 @@
 % Pipeline implementation notes
 \section{Gateway Pipeline Implementation}
 
-\subsection{Framed ingest (M\#1, stubbed)}
-This milestone wires a simulated device (pod) producing framed telemetry to a gateway that performs basic validation and emits canonical facts suitable for Merkle batching and OpenTimestamps (OTS) anchoring.
+\subsection{Framed ingest (M\#1--M\#3)}
+The gateway receives framed telemetry from simulated devices (pods), performs cryptographic verification, replay detection, and emits canonical facts for Merkle batching and OpenTimestamps (OTS) anchoring.
 
 \paragraph{Transport and frame shape}
-Frames are emitted as NDJSON (one JSON object per line) for readability and ease of testing. Each frame has the following fields:
+Frames are emitted as NDJSON (one JSON object per line).
+Each frame contains:
 \begin{verbatim}
 {
   "hdr":   { "dev_id": u16, "msg_type": u8, "fc": u32, "flags": u8 },
   "nonce": base64(24 bytes),
-  "ct":    base64(utf8(JSON payload)),
-  "tag":   base64(16 bytes placeholder)
+  "ct":    base64(XChaCha20-Poly1305 ciphertext),
+  "tag":   base64(16 bytes authentication tag)
 }
 \end{verbatim}
-For M\#1, confidentiality/authenticity are stubbed: the ciphertext (ct) is simply the UTF-8 JSON payload bytes, and the tag is random placeholder.
+
+\textbf{M\#3 implementation:} Full XChaCha20-Poly1305 AEAD with tag verification. The gateway decrypts \texttt{ct} using the device's \texttt{ck\_up}, verifies the authentication tag, and validates AAD binding to header fields.
 
 \paragraph{Replay window policy}
-For each device, the gateway maintains a device table recording the highest frame counter (\texttt{highest\_fc\_seen}) and last-seen time. A frame is accepted if and only if:
-\begin{itemize}
-    \item First frame for the device: \(\texttt{fc} \ge 0\) is accepted.
-    \item Otherwise: \(0 < \texttt{fc} - \texttt{highest\_fc\_seen} \le \texttt{window}\) (default window = 64).
+Per-device state in \texttt{device\_table.json} tracks:
+\begin{itemize}[nosep]
+    \item \texttt{highest\_fc\_seen}: Maximum accepted frame counter
+    \item \texttt{last\_seen}: ISO 8601 timestamp of last valid frame
+    \item \texttt{msg\_type}, \texttt{flags}: Last seen header fields
 \end{itemize}
-Duplicate or stale frames (\(\le 0\) delta) and jumps beyond the window are rejected. In M\#1 we treat \texttt{fc} as 32-bit; extending to fc64 is straightforward by tracking high bits per device.
 
-\paragraph{Device table (gateway state)}
-The device table is persisted as JSON (one map entry per device id):
+Acceptance criteria:
+\begin{itemize}[nosep]
+    \item First frame: $\texttt{fc} \ge 0$ accepted
+    \item Subsequent: $0 < \texttt{fc} - \texttt{highest\_fc\_seen} \le 64$
+    \item Duplicates and out-of-window frames rejected
+\end{itemize}
+
+Device table persistence ensures replay protection survives gateway restarts.
+
+\paragraph{Device table schema v1.0 (ADR-006)}
+Forward-only schema policy: no migrations, clean slate at milestone boundaries.
 \begin{verbatim}
 {
-  "1": {
-    "highest_fc_seen": 42,
-    "last_seen": "2025-10-08T12:34:56Z",
-    "msg_type": 1,
-    "flags": 0
+  "_meta": {
+    "version": "1.0",
+    "salt8": "<base64-8B>",
+    "ck_up": "<base64-32B>",
+    "site_id": "an-001"
   },
-  ...
+  "101": {
+    "highest_fc_seen": 42,
+    "last_seen": "2025-10-13T12:34:56Z",
+    ...
+  }
 }
 \end{verbatim}
+
+Schema validated at runtime with clear regeneration guidance on version mismatch.
 
 \paragraph{Canonical facts}
-Accepted frames are “decrypted” (ct base64-decoded to JSON) and written as canonical fact JSON files:
+Accepted frames are decrypted and written as canonical fact JSON:
 \begin{verbatim}
 {
-  "device_id": "pod-001",
+  "device_id": "pod-101",
   "timestamp": "<gateway-utc-iso>",
   "nonce": "<base64-24B>",
-  "payload": { ... original payload JSON ... }
+  "payload": { ... decrypted payload JSON ... }
 }
 \end{verbatim}
-Facts are validated against \texttt{toolset/unified/schemas/fact.schema.json} (warning-only in M\#1). Canonicalization for Merkle leaves uses sorted keys and no whitespace.
+
+Facts validated against \texttt{toolset/unified/schemas/fact.schema.json}. Canonicalization: sorted keys, UTF-8, no whitespace (ADR-003).
 
 \paragraph{Batching and daily artifacts}
-Canonical facts are batched deterministically:
-\begin{enumerate}
-    \item Compute SHA-256 of each canonical fact; sort leaf hashes lexicographically.
-    \item Build a binary Merkle tree (duplicate last when odd); the root is \(\texttt{merkle\_root}\).
-    \item Emit a block header JSON with fields \texttt{version, site\_id, day, batch\_id, merkle\_root, count, leaf\_hashes}.
-    \item Build a day record JSON containing \texttt{version, site\_id, date, prev\_day\_root, batches[], day\_root}.
-    \item Write a canonical day blob (JSON, canonicalized) to \texttt{day/YYYY-MM-DD.bin} and a human-readable \texttt{.json} peer.
+Deterministic Merkle tree construction:
+\begin{enumerate}[nosep]
+    \item Compute SHA-256 of each canonical fact
+    \item Sort leaf hashes lexicographically (order independence)
+    \item Build binary Merkle tree (duplicate last leaf if odd count)
+    \item Emit block header with \texttt{merkle\_root}, \texttt{count}, \texttt{leaf\_hashes}
+    \item Build day record with \texttt{prev\_day\_root} for chaining (zero bytes for genesis day)
+    \item Write canonical day blob to \texttt{day/YYYY-MM-DD.bin}
 \end{enumerate}
-Both the block header and the day record are validated against their schemas when \texttt{--validate-schemas} is passed.
+
+Both block headers and day records validated against JSON schemas when \texttt{--validate-schemas} flag is set.
 
 \paragraph{Anchoring and verification}
-The day blob is anchored with OTS (a placeholder is written if the OTS client is not available). Verification recomputes the Merkle root from the facts directory and compares it to the recorded block header, then verifies the OTS proof.
+Day blob anchored with OpenTimestamps.
+Verification recomputes Merkle root from facts directory, compares to recorded block header, and verifies OTS proof timestamp.
 
-\paragraph{Quick start}
-M\#0 (examples only):
+\paragraph{Quick start (M\#3)}
 \begin{verbatim}
-python scripts/gateway/merkle_batcher.py \
-  --facts toolset/unified/examples \
-  --out out/site_demo --site an-001 --date 2025-10-07 --validate-schemas
-python scripts/gateway/ots_anchor.py out/site_demo/day/2025-10-07.bin
-python scripts/gateway/verify_cli.py --root out/site_demo
+# Run complete pipeline
+make run
+
+# Run individual components
+make test           # 73 tests, 85% coverage
+make test-cov       # with coverage report
+make check          # lint + format + test
+make ci             # full CI simulation
 \end{verbatim}
-M\#1 (framed ingest end-to-end):
-\begin{verbatim}
-make run         # alias: make run-m1
-make run-examples# alias: make run-m0
-\end{verbatim}
-The M\#1 pipeline executes: \texttt{pod\_sim --framed → frame\_verifier → merkle\_batcher --validate-schemas → ots\_anchor → verify\_cli} and will fail if verification does not succeed.
+
+The M\#3 pipeline: \texttt{pod\_sim --framed} → \texttt{frame\_verifier} (real AEAD) → \texttt{merkle\_batcher --validate-schemas} → \texttt{ots\_anchor} → \texttt{verify\_cli}
+
+Pipeline fails fast if any verification step does not succeed.

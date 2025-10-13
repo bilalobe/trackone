@@ -1,11 +1,43 @@
-\section{Cryptographic Design (ADR-001, ADR-002)}
-Primitives: X25519 + HKDF + XChaCha20-Poly1305; Ed25519; SHA-256.
+\section{Cryptographic Design (ADR-001, ADR-002, ADR-005)}
+\textbf{Implementation:} PyNaCl (libsodium) for all cryptographic operations.
+
+\textbf{Primitives:} X25519 + HKDF-SHA256 + XChaCha20-Poly1305; Ed25519; SHA-256.
 
 \subsection{Provisioning}
-Ephemeral ECDH; salt = $H(N_g \| N_p \| T_{pod} \| B)$. Derive $CK_{\uparrow}$, $CK_{\downarrow}$.
+Ephemeral ECDH using X25519; salt = $H(N_g \| N_p \| T_{pod} \| B)$.
+
+Derive $CK_{\uparrow}$ (uplink), $CK_{\downarrow}$ (downlink) via HKDF-SHA256 (RFC 5869).
+
+Device table schema v1.0 enforces forward-only policy: requires \texttt{\_meta.version = "1.0"}, 8-byte salt (\texttt{salt8}), and 32-byte uplink key (\texttt{ck\_up}).
 
 \subsection{Telemetry frame}
-Header: dev\_id, msg\_type, fc, flags; AEAD payload; 24B nonce = $\mathrm{salt}_8 \| \mathrm{fc}_8 \| \mathrm{rand}_8$; AAD = $\text{dev\_id} \| \text{msg\_type}$.
+Header: dev\_id(u16), msg\_type(u8), fc(u32), flags(u8); AEAD payload with XChaCha20-Poly1305.
+
+24-byte nonce construction: $\mathrm{nonce} = \mathrm{salt}_8 \| \mathrm{fc}_8 \| \mathrm{rand}_8$
+
+AAD (additional authenticated data): $\text{dev\_id} \| \text{msg\_type}$ binds header to ciphertext.
 
 \subsection{Replay policy}
-Gateway window on $(fc)$; rotate via signed command.
+Gateway maintains per-device sliding window on frame counter $(fc)$. Default window size $w=64$.
+
+A frame is accepted if: $0 < \Delta \mathrm{fc} \le w$ relative to \texttt{highest\_fc\_seen}.
+
+Duplicate/stale frames ($\Delta \le 0$) and jumps beyond $w$ are rejected with logged warnings.
+
+\subsection{Milestone progression}
+\begin{itemize}[nosep]
+  \item \textbf{M\#0:} Merkle batching, canonicalization, OTS anchoring infrastructure
+  \item \textbf{M\#1:} Framed ingest with stub AEAD (plaintext ct, placeholder tag) to validate framing and replay
+  \item \textbf{M\#2:} Real XChaCha20-Poly1305 AEAD with test vectors and AAD enforcement
+  \item \textbf{M\#3 (current):} PyNaCl migration, device table v1.0, comprehensive testing (73 tests, 85\% coverage), CI/CD with Python 3.11--3.13
+  \item \textbf{M\#4 (planned):} Ledger UI, outage logger, automated OTS upgrade
+\end{itemize}
+
+\subsection{Cryptographic library consolidation (ADR-005)}
+M\#3 migrated from \texttt{cryptography} + \texttt{pynacl} to PyNaCl-only:
+\begin{itemize}[nosep]
+    \item Single dependency for all primitives (X25519, HKDF, ChaCha/XChaCha, Ed25519)
+    \item Unified API with libsodium's proven implementations
+    \item Deterministic test vectors regenerated with PyNaCl bindings
+    \item Simplified maintenance and security updates
+\end{itemize}

@@ -1,9 +1,15 @@
 \section{Introduction}
-Heritage-safe monitoring requires reversible, low-impact sensing with ultra--low-power links. We present a deterministic telemetry pipeline for ``Barnacle'' pods that (i) secures data end-to-end, and (ii) commits daily proofs via OpenTimestamps without publishing payloads.
+Heritage-safe monitoring requires reversible, low-impact sensing with ultra--low-power links.
+We present a deterministic telemetry pipeline for ``Barnacle'' pods that (i) secures data end-to-end with authenticated encryption, and (ii) commits daily proofs via OpenTimestamps without publishing payloads.
 
 \textbf{Contributions:}
 \begin{itemize}[nosep]
-    \item A compact frame and key lifecycle (ADR-001, ADR-002)
+    \item A compact frame and key lifecycle with real AEAD (ADR-001, ADR-002)
     \item Deterministic canonicalization and Merkle policy with daily OTS anchoring (ADR-003)
-    \item A reference gateway pipeline with tests and reproducible artifacts
+    \item PyNaCl-based cryptographic implementation with comprehensive test vectors (ADR-005)
+    \item Forward-only schema policy for maintainability (ADR-006)
+    \item A reference gateway pipeline with 85\% test coverage and reproducible artifacts
 \end{itemize}
+
+\textbf{Current Status (v0.0.1-m3, October 2025):}
+The system implements production-grade XChaCha20-Poly1305 AEAD with deterministic test vectors, property-based testing, and CI/CD across Python 3.11--3.13.
