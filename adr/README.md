@@ -33,6 +33,21 @@ Each ADR captures context, the decision, consequences, and alternatives.
     - Daily OTS anchoring for public timestamp verification
     - Schema validation for facts, block headers, and day records
 
+- **ADR‑005: PyNaCl Migration**
+  Status: Accepted (M#3)
+  Summary: Consolidate all cryptographic operations to PyNaCl (libsodium):
+    - Removed `cryptography` dependency
+    - Unified API for X25519, HKDF, ChaCha/XChaCha AEAD, Ed25519
+    - Regenerated test vectors with PyNaCl bindings
+    - Improved maintainability and performance
+
+### Policy & Process
+
+- **ADR‑006: Forward-only schema policy and deprecating `salt4`**
+  Status: Accepted (M#2)
+  Summary: Adopt a forward-only policy. Standardize on `salt8` for XChaCha (24‑byte nonce), drop `salt4` and migrations;
+  the current milestone schema is the only valid runtime format. Older milestones are archived as references only.
+
 ## Implementation Status
 
 | ADR     | M#0        | M#1                          | M#2                     |
