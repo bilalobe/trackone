@@ -1,0 +1,38 @@
+\section{Schemas, Merkle Policy, and OTS (ADR-003)}
+
+\subsection{Canonicalization}
+Facts and records are serialized as JSON with:
+\begin{itemize}[nosep]
+  \item UTF-8, sorted keys, no insignificant whitespace.
+  \item Stable number/string encoding; no trailing zeros or locale variance.
+\end{itemize}
+Leaf hash: $h_i=\mathrm{SHA}\text{-}256(\texttt{canonical\_json}(fact\_i))$.
+
+\subsection{Merkle tree}
+\begin{itemize}[nosep]
+  \item Sort leaf hashes lexicographically to remove input-order dependence.
+  \item Pairwise hash up the tree; when odd, duplicate the last hash at that level.
+  \item Root is $\texttt{merkle\_root}$; include leaf\_hashes in the header for auditability.
+\end{itemize}
+
+\subsection{Block header schema}
+Fields: \texttt{version, site\_id, day, batch\_id, merkle\_root, count, leaf\_hashes}. Validated by \texttt{block\_header.schema.json}.
+
+\subsection{Day record schema}
+Fields: \texttt{version, site\_id, date, prev\_day\_root, batches[], day\_root}. Canonical day blob written as \texttt{day/YYYY-MM-DD.bin} with a human-readable \texttt{.json} peer. Validated by \texttt{day\_record.schema.json}.
+
+\subsection{OTS anchoring and verification}
+\begin{itemize}[nosep]
+  \item Anchor the canonical day blob with OpenTimestamps; store proof alongside the blob.
+  \item Verification: recompute Merkle root from canonical facts, check against header/day record, then verify OTS proof.
+  \item If OTS client unavailable, write a placeholder and defer confirmation; proofs can be upgraded later.
+\end{itemize}
+
+\subsection{Schema validation}
+When \texttt{--validate-schemas} is enabled, validate against:
+\begin{itemize}[nosep]
+  \item \texttt{fact.schema.json} (telemetry facts)
+  \item \texttt{block\_header.schema.json} (batch header)
+  \item \texttt{day\_record.schema.json} (daily aggregates)
+\end{itemize}
+Validation is warning-only in M\#1 to preserve pipeline progress.

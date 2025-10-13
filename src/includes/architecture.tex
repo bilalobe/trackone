@@ -1,8 +1,16 @@
 \section{System Architecture}
 Pods $\rightarrow$ LoRa $\rightarrow$ Gateway: verify, batch, anchor; Offline-tolerant.
 
+\noindent Pipeline (per ADRs):
+\begin{itemize}[nosep]
+  \item ADR-002 (Framing): Pods emit framed telemetry with fc and nonce; AEAD is stubbed in M\#1 and enabled in M\#2.
+  \item Gateway verifies anti-replay window, canonicalizes facts (ADR-003), and persists deterministic artifacts.
+  \item Daily batching computes Merkle roots and emits day blobs; OTS anchoring provides public timestamp proofs (ADR-003).
+  \item Verification replays facts $\rightarrow$ Merkle root $\rightarrow$ day blob $\rightarrow$ OTS proof.
+\end{itemize}
+
 \begin{figure}[h]
     \centering
     %\includegraphics[width=0.85\linewidth]{figs/architecture.pdf}
-    \caption{High-level architecture}
+    \caption{High-level architecture (pods $\rightarrow$ framed uplink $\rightarrow$ gateway verify/canonicalize $\rightarrow$ Merkle batch $\rightarrow$ OTS anchor)}
 \end{figure}
