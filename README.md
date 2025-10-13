@@ -1,34 +1,79 @@
 # Track1 — Ultra–Low‑Power, Verifiable Telemetry (Barnacle Sentinel)
 
+[![CI](https://github.com/bilalobe/trackone/actions/workflows/ci.yml/badge.svg)](https://github.com/bilalobe/trackone/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/bilalobe/trackone/branch/main/graph/badge.svg)](https://codecov.io/gh/yourusername/trackone)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 This repository contains the code and documents for Track1: secure pod→gateway telemetry with daily, publicly verifiable
 timestamp proofs (OpenTimestamps), plus deterministic batching and schemas.
 
-**Current Milestone**: M#1 — Framed Telemetry Ingest (v0.0.1-m1)
+**Current Status**: M#3 — Production AEAD + PyNaCl Migration (v0.0.1-m3)
+**Release Date**: October 13, 2025
+**Test Coverage**: 73 tests passing, 85% code coverage
+**CI/CD**: Python 3.11/3.12/3.13 with uv package manager
 
-## Quick start (Milestone#1 — framed ingest)
+## ✨ What's New in M#3
 
-Run the complete end-to-end pipeline with one command:
+- ✅ **Real XChaCha20-Poly1305 AEAD** with tag verification (no more stubs!)
+- ✅ **PyNaCl migration** (ADR-005): Single cryptographic library for all primitives
+- ✅ **Device table schema v1.0** (ADR-006): Forward-only policy, no migrations
+- ✅ **Comprehensive testing**: 73 tests including property-based (Hypothesis) and security tests
+- ✅ **Deterministic AEAD vectors**: Reproducible cryptographic test vectors
+- ✅ **Enhanced CI/CD**: uv-based workflow, Python 3.11-3.13 matrix, lint + test jobs
+- ✅ **85% code coverage** with detailed reports
+
+## Quick start (M#3)
+
+Run the complete end-to-end pipeline with real AEAD encryption:
 
 ```bash
-bash scripts/gateway/run_pipeline.sh
+make run
 ```
 
-This demonstrates the full M#1 workflow:
+This demonstrates the full M#3 workflow with production cryptography:
 
-1. **pod_sim --framed** → generates framed telemetry (NDJSON with `{hdr, nonce, ct, tag}`)
-2. **frame_verifier.py** → parses frames, enforces replay window, stub-decrypts, emits canonical facts
-3. **merkle_batcher.py** → builds Merkle tree, creates block header + day blob
+1. **pod_sim --framed** → generates encrypted framed telemetry with XChaCha20-Poly1305
+2. **frame_verifier.py** → decrypts frames, verifies authentication tags, enforces replay window
+## Manual step-by-step (M#3)
 4. **ots_anchor.py** → timestamps day blob via OpenTimestamps
-5. **verify_cli.py** → recomputes root, verifies proof
+Run each pipeline step individually to understand the workflow:
 
 Outputs land in `out/site_demo/`:
-
-- `frames.ndjson` — framed telemetry records
-- `facts/*.json` — canonical fact files (one per frame)
-- `blocks/*.block.json` — signed-ready block header
+# 1) Generate encrypted framed telemetry (10 frames from pod-003)
+- `frames.ndjson` — encrypted framed telemetry records
+- `facts/*.json` — canonical fact files (decrypted payloads)
+- `blocks/*.block.json` — Merkle block headers
 - `day/*.bin` — canonical day blob (for OTS)
 - `day/*.bin.ots` — OTS proof
 - `day/*.json` — human‑readable day record
+# 2) Verify frames with real AEAD decryption (replay window=64)
+
+## Development Commands
+
+```bash
+# Run full pipeline with real AEAD
+make run
+# 3) Batch facts into deterministic Merkle tree
+# Run all tests with coverage
+make test           # Quick test run
+make test-cov       # With detailed coverage report
+
+  --date 2025-10-13 \
+make check          # Run linting + formatting + tests
+make lint           # Lint with ruff
+# 4) Anchor the day blob with OpenTimestamps
+python scripts/gateway/ots_anchor.py out/site_demo/day/2025-10-13.bin
+# CI simulation
+make ci             # Run full CI checks locally
+
+# Generate test vectors
+make gen-vectors    # Regenerate deterministic AEAD vectors
+
+# Cleanup
+make clean          # Remove test artifacts
+make clean-all      # Deep clean (including coverage reports)
+```
 
 ## Manual step-by-step (M#1)
 
@@ -48,17 +93,26 @@ python scripts/gateway/frame_verifier.py \
   --out-facts out/site_demo/facts \
   --device-table out/site_demo/device_table.json \
   --window 64
+- **crypto_utils.py** — PyNaCl-based cryptographic primitives (M#3)
+    - X25519 key exchange and HKDF-SHA256 derivation (RFC 5869)
+    - XChaCha20-Poly1305 AEAD encryption/decryption
+    - Ed25519 signatures
+    - All operations via PyNaCl (libsodium) for consistency
+    - References: ADR-001, ADR-005
 
+- **frame_verifier.py** — Production framed ingest with real AEAD (M#3)
 # 3) Batch facts into Merkle tree
+    - **Real XChaCha20-Poly1305 decryption** with tag verification
+    - AAD (Additional Authenticated Data) binding to header fields
 python scripts/gateway/merkle_batcher.py \
-  --facts out/site_demo/facts \
+    - Persistent device table for replay protection across restarts
   --out out/site_demo \
   --site an-001 \
   --date 2025-10-07 \
   --validate-schemas
 
 # 4) Anchor the day blob
-python scripts/gateway/ots_anchor.py out/site_demo/day/2025-10-07.bin
+    - Day chaining via prev_day_root (32 zero bytes for genesis day)
 
 # 5) Verify Merkle root and OTS proof
 python scripts/gateway/verify_cli.py --root out/site_demo
@@ -74,199 +128,223 @@ python scripts/gateway/merkle_batcher.py \
   --facts toolset/unified/examples \
   --out out/site_demo \
   --site an-001 \
-  --date 2025-10-07 \
-  --validate-schemas
+- **run_pipeline.sh** — End-to-end automation
+    - One-command demonstration of complete workflow with real AEAD
 
 # 2) Anchor the day blob (requires OpenTimestamps client)
 python scripts/gateway/ots_anchor.py out/site_demo/day/2025-10-07.bin
 
 # 3) Verify recomputed root matches and OTS proof verifies
 python scripts/gateway/verify_cli.py --root out/site_demo
-```
+    - **Framed mode (`--framed`)**: emits encrypted `{hdr, nonce, ct, tag}` (M#3)
+    - Uses XChaCha20-Poly1305 for encryption
 
 ## What's in here
 
-### Gateway Scripts (`scripts/gateway/`)
+- **crypto_test_vectors.json** — Deterministic AEAD test vectors (M#3)
+    - XChaCha20-Poly1305 vectors for reproducible testing
+    - Generated with PyNaCl bindings
 
 - **frame_verifier.py** — M#1: Framed ingest + replay window protection
     - Parses NDJSON frames with header validation
     - Enforces replay window (default: 64, configurable)
     - Stub decryption (base64 JSON for M#1; real AEAD in M#2)
     - Emits canonical fact JSON files
+- **device_table.schema.json** — Device table v1.0 (forward-only policy, ADR-006)
     - References: ADR-002 (Telemetry Framing, Nonce/Replay Policy)
 
-- **merkle_batcher.py** — Canonicalization → Merkle → block/day files
-    - Reads facts/*.json, computes canonical JSON bytes
-    - Hash-sorted Merkle leaves (order-independent)
-    - Day chaining via prev_day_root (32 zero bytes for day 1)
+    - X25519 + HKDF-SHA256 (RFC 5869) for key derivation
+    - XChaCha20‑Poly1305 for AEAD (24-byte nonce)
+    - Ed25519 for identity/config/firmware signatures
+    - SHA‑256 for Merkle trees and hashing
+    - **M#3**: Implemented with PyNaCl (libsodium)
+- **CHANGELOG.md** — Keep a Changelog compliant version history
     - Outputs: blocks/*.block.json, day/*.bin, day/*.json
     - Schema validation with --validate-schemas
     - References: ADR-003 (Canonicalization, Merkle Policy)
-
+    - AAD binding: dev_id || msg_type authenticated with ciphertext
+    - Gateway replay window with configurable size (default: 64)
+    - Persistent device table for state across restarts
 - **ots_anchor.py** — OpenTimestamps integration
+- **htmlcov/** — Test coverage reports
     - Stamps day.bin → day.bin.ots
     - Graceful fallback (placeholder) if OTS client missing
-    - Supports upgrade workflow for pending proofs
+    - Day chaining via prev_day_root (32 zero bytes for genesis)
 
 - **verify_cli.py** — Root recomputation and OTS verification
-    - Recomputes Merkle root from facts/
-    - Compares against block header and day record
-    - Verifies OTS proof (or placeholder)
-    - Exit 0 on success, non-zero on failure
-
-- **run_pipeline.sh** — M#1 end-to-end automation
-    - One-command demonstration of complete framed workflow
-    - Configurable parameters (site, date, device, count)
-
-### Pod Simulator (`scripts/pod_sim/`)
-
-- **pod_sim.py** — Device telemetry simulator
-    - Plain mode: emits NDJSON facts (M#0)
-    - Framed mode (`--framed`): emits `{hdr, nonce, ct, tag}` (M#1)
-    - Optional `--facts-out` for cross-check plain facts
-    - Configurable device ID, count, sleep interval
-
-- **crypto_test_vectors.json** — Fixed test vectors for AEAD (M#2)
-
-### Schemas (`toolset/unified/schemas/`)
-
-- **fact.schema.json** — Device telemetry fact format
-- **block_header.schema.json** — Merkle block header format
-- **day_record.schema.json** — Daily record format (with prev_day_root)
-
-### Documentation
-
-- **adr/** — Architecture Decision Records (see index below)
-- **src/** — LaTeX manuscript/report files
-- **CHANGELOG.md** — Version history and milestone deliverables
-- **CONTRIBUTING.md** — PR guidelines, ADR process, CI workflow
-
-### Build Artifacts (git‑ignored)
-
-- **out/** — Pipeline outputs (frames, facts, blocks, day blobs, OTS proofs)
-
-## Design decisions (ADRs)
-
-- **ADR‑001** — Cryptographic Primitives and Framing
-    - X25519 + HKDF + XChaCha20‑Poly1305 for AEAD
-    - Ed25519 for identity/config/firmware
-    - SHA‑256 for Merkle trees
-
-- **ADR‑002** — Telemetry Framing, Nonce/Replay Policy, Device Table
-    - Compact frame layout: dev_id(u16), msg_type(u8), fc(u32), flags(u8)
-    - 24‑byte XChaCha nonce: salt(8)||fc(8)||rand(8)
-    - Gateway replay window with configurable size
-
-- **ADR‑003** — Canonicalization, Merkle Policy, Daily OTS Anchoring
-    - Canonical JSON: sorted keys, UTF-8, no whitespace
-    - Hash-sorted Merkle leaves for order independence
-    - Day chaining via prev_day_root
-    - Daily OTS anchoring for public verifiability
-
-See `adr/README.md` for summaries and guidance.
-
-## Tests
-
-Run all tests:
-
-```bash
+Run all tests with coverage:
 pytest -q
 ```
+# Quick test run
+make test
 
-Current test coverage:
-
-### M#0 Tests (Canonical Batching)
-
+# With detailed coverage report
+make test-cov
 - **Canonical JSON determinism**: Byte-identical output across runs
-- **Merkle root computation**: Empty, single, odd, power-of-2, order independence
-- **Schema validation**: fact, block_header, day_record
-- **Day chaining**: prev_day_root linkage
-- **End‑to‑end batch/verify**: Complete M#0 workflow
+# Or directly with pytest
+pytest --cov=scripts --cov-report=term-missing --cov-report=xml -v
 
 ### M#1 Tests (Framed Ingest)
-
-- **Frame parsing**: Valid/invalid frame structure, header validation
+**Current Status (M#3)**: 73 tests passing in 1.57s, 85% code coverage
 - **Replay window**: Accepts increasing fc, rejects duplicates and out-of-window
-- **Stub decryption**: Base64-encoded JSON payload handling
+### Test Suites
 - **End‑to‑end pipeline**: pod_sim → frame_verifier → merkle_batcher → verify_cli
-
-### Skipped Tests (M#2 Scope)
-
-- Real AEAD encryption/decryption with test vectors
+#### Cryptographic Primitives (`test_crypto_impl.py`)
+- X25519: Key generation, shared secret agreement
+- HKDF: Deterministic derivation per RFC 5869
+- XChaCha20-Poly1305: Encrypt/decrypt round-trip, authentication failure detection
+- Ed25519: Sign/verify signatures
+- **8 tests, 99% coverage**
 - Device table key lookup
-- Nonce construction from frame counter
+#### Test Vectors (`test_crypto_vectors.py`)
+- Deterministic AEAD vectors verified against PyNaCl
+- Canonical JSON hashing with expected SHA-256 values
+- Schema compliance for fact format
+- **14 tests, 93% coverage**
 - Tag verification
-
+## Frame Format (M#3)
+- Frame parsing: Valid/invalid structure, header validation
+Frames use NDJSON with JSON objects containing:
+- End-to-end pipeline integration
+- **3 tests, 97% coverage**
 ## Frame Format (M#1)
-
+#### Security Testing (`test_framed_security.py`)
+- **Ciphertext tampering**: Single-bit flip → authentication failure
+- **Tag tampering**: Modified tag → rejection
+- **AAD tampering**: Modified header → tag mismatch
+- **Nonce validation**: Invalid nonce length → rejected
+- **Unknown device**: Unprovisioned device → rejected
+- **5 tests, 99% coverage**
 For M#1, frames use NDJSON with JSON objects containing:
-
-```json
-{
-  "hdr": {
-    "dev_id": 3,
-    // u16: device ID
-    "msg_type": 1,
-    // u8: message type (1=measurement)
+#### Gateway Pipeline (`test_gateway_pipeline.py`)
+- Canonical JSON determinism (sorted keys, no whitespace)
+- Merkle root: empty, single, odd, power-of-2, order independence
+  // 24 bytes: salt(8)||fc(8)||rand(8)
+- Day chaining: prev_day_root linkage
+  // XChaCha20-Poly1305 ciphertext
+- **14 tests, 98% coverage**
+  // 16 bytes: Poly1305 authentication tag
+#### Merkle Reproducibility (`test_merkle_repro.py`)
+- Deterministic root computation across runs
+- Unicode handling, numeric precision
+**M#3 Production Behavior**:
+- **12 tests, 99% coverage**
+- `ct` field contains XChaCha20-Poly1305 encrypted JSON payload
+- `tag` field is the Poly1305 authentication tag (verified on decrypt)
+- `nonce` construction: 8-byte salt || 8-byte frame counter || 8-byte random
+- AAD (Additional Authenticated Data): `dev_id || msg_type` binds header to ciphertext
+- Device keys loaded from `device_table.json` (schema v1.0)
+- Reject beyond window boundary
+- Duplicate rejection across gateway restarts
+- **3 tests, 99% coverage**
     "fc": 0,
-    // u32: frame counter
+#### Property-Based Testing (`test_tlv_properties.py`)
+- TLV encoding round-trip with Hypothesis
+- Robustness against arbitrary/truncated input
+- Unknown tag handling
+- **5 tests, 96% coverage**
     "flags": 0
-    // u8: flags (reserved)
+### Coverage Report
   },
-  "nonce": "base64...",
-  // 24 bytes (XChaCha20 nonce)
-  "ct": "base64...",
-  // ciphertext (JSON payload for M#1 stub)
-  "tag": "base64..."
-  // 16 bytes (Poly1305 tag placeholder)
-}
-```
-
+**Overall**: 85% (1506 statements, 223 missed)
 **M#1 Stub Behavior**:
+| Module | Coverage | Missing Lines |
+|--------|----------|---------------|
+- **M#0** ✅ (v0.0.1-m0, Oct 7 2025): Canonical schemas, deterministic batching, OTS anchoring
+- **M#1** ✅ (v0.0.1-m1, Oct 12 2025): Frame verifier stub + pod simulator v2 → framed ingest
+- **M#3** ✅ (v0.0.1-m3, Oct 13 2025): Real AEAD, PyNaCl migration, device table v1.0, 73 tests, 85% coverage
+- **M#4** (planned): Gateway "Ledger" tab JSON output, outage logger, automated daily OTS anchor/upgrade
+- **Future**: Key rotation workflows (ADR-001), operational hardening, performance optimization
 
+**Note**: M#2 was an implementation phase (AEAD + test vectors) that was rolled into M#3 release.
 - `ct` field contains base64-encoded JSON payload (no real encryption)
-- `tag` field is a random 16-byte placeholder (not verified)
-- Real AEAD (XChaCha20-Poly1305) will be added in M#2
-
-## Determinism Rules
-
-To ensure reproducible Merkle roots and day blobs:
-
+- **Python**: 3.11, 3.12, or 3.13 (CI tested on all three)
+- **Required packages**: jsonschema, pynacl, pytest, pytest-cov, hypothesis
 1. **Canonical JSON**: Sorted keys, UTF-8, no whitespace
+- **Recommended**: [uv](https://github.com/astral-sh/uv) for fast dependency management
+
+### Installation
 2. **Hash-sorted leaves**: Merkle tree built from sorted leaf hashes (order-independent)
-3. **Fixed number format**: Integers as integers, scaled ints for precision
-4. **Day chaining**: Include prev_day_root (32 zero bytes for genesis day)
-5. **Consistent timestamps**: Use ISO 8601 UTC format
-
-Running `merkle_batcher.py` twice on the same facts/ yields:
-
-- Identical block header (same merkle_root)
-- Byte-identical day.bin (same SHA-256)
-
-## Roadmap
-
-- **M#0** ✅ (v0.0.1-m0): Canonical schemas, deterministic batching, OTS anchoring
-- **M#1** ✅ (v0.0.1-m1): Frame verifier stub + pod simulator v2 → framed ingest
-- **M#2** (1–2 weeks): Real AEAD (XChaCha20‑Poly1305) with test vectors
-- **M#3** (2–3 weeks): Gateway "Ledger" tab JSON, outage logger
-- **Continuous**: Daily OTS anchor/upgrade automation, CLI polish
-
-## Requirements
-
-- **Python**: 3.11 or later
-- **Required packages**: pytest, jsonschema
-- **Optional**: OpenTimestamps client (`ots`) for real proof anchoring
-
-Install dependencies:
+Using **uv** (recommended for speed):
 
 ```bash
-# Production dependencies
-pip install -r requirements.txt
+# Install uv if you don't have it
+curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Development dependencies (includes linting tools)
+# Install dependencies
+uv pip install -r requirements.txt
+
+# Install dev dependencies (linting, formatting)
+uv pip install -r requirements-dev.txt
+```
+
+Using **pip**:
+4. **Day chaining**: Include prev_day_root (32 zero bytes for genesis day)
+5. **Consistent timestamps**: Use ISO 8601 UTC format
+# Install dependencies
+Running `merkle_batcher.py` twice on the same facts/ yields:
+
+# Install dev dependencies
+- Byte-identical day.bin (same SHA-256)
+```
+
+### CI/CD
+
+The project uses GitHub Actions with `uv` for fast, reproducible builds:
+
+- **Lint job**: ruff (linter) + black (formatter check)
+- **Test job**: pytest with coverage on Python 3.11/3.12/3.13 matrix
+- **Coverage**: Uploaded to Codecov (Python 3.13 only)
+
+See `.github/workflows/ci.yml` for the full workflow.
+- **M#3** ✅ (v0.0.1-m3): Production AEAD, PyNaCl migration, device table schema
+- **Continuous**: Daily OTS anchor/upgrade automation, CLI polish
+
+### Code Quality
+- **Required packages**: pytest, jsonschema
+- **Optional**: OpenTimestamps client (`ots`) for real proof anchoring
+# Lint code with ruff
+Install dependencies:
+ruff check scripts/
+
+# Auto-format with black
+# Production dependencies
+black scripts/
+
+# Type checking (optional)
+mypy scripts/gateway scripts/pod_sim
+
+# Run all quality checks
+make check    # lint + format + test
+```
+
+### Testing
+
+```bash
+# Run all tests
+make test
+
+# Run with coverage report
+make test-cov
+
+# Run specific test file
+pytest scripts/tests/test_crypto_impl.py -v
+
+# Run tests matching pattern
+pytest -k "test_aead" -v
+
+# Run with hypothesis verbose output
+pytest --hypothesis-show-statistics
+```
+pip install -r requirements.txt
+### Continuous Integration
+
+Simulate CI locally:
+
+```bash
+make ci    # Runs lint, format check, and full test suite
 pip install -r requirements-dev.txt
 
-# Or using uv (recommended)
 pip install uv
 uv pip install -r requirements.txt
 uv pip install -r requirements-dev.txt
