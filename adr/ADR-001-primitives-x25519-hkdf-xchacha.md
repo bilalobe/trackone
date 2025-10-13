@@ -1,7 +1,8 @@
-# ADR-001: Cryptographic Primitives and Framing for Track 1`
+# ADR-001: Cryptographic Primitives and Framing for Track 1
 
 **Status:** Accepted
 **Date:** 2025-10-06
+**Updated:** 2025-10-12 (PyNaCl migration completed)
 
 ## Context
 
@@ -15,16 +16,26 @@
 
 ## Decision
 
+**Implementation Library:** PyNaCl (libsodium bindings) for all cryptographic primitives.
+
 - **Key agreement:** X25519 (ECDH over Curve25519)
     - Used during provisioning (ephemeral+static) to derive channel secrets.
-- **KDF:** HKDF (RFC 5869) with SHA‑256
+    - Implementation: `nacl.public.PrivateKey` / `nacl.public.Box`
+- **KDF:** HKDF-SHA256 (RFC 5869)
     - HKDF‑Extract with a salt; HKDF‑Expand with context strings to derive uplink/downlink keys.
-- **AEAD:** XChaCha20‑Poly1305 (libsodium compact framing)
+    - Implementation: `nacl.bindings.crypto_kdf_hkdf_sha256_extract/expand`
+- **AEAD (192-bit nonce):** XChaCha20‑Poly1305
     - Encrypts telemetry payloads; provides integrity and confidentiality with a 192‑bit nonce.
+    - Implementation: `nacl.bindings.crypto_aead_xchacha20poly1305_ietf_encrypt/decrypt`
+- **AEAD (96-bit nonce):** ChaCha20-Poly1305 (IETF variant)
+    - Used in tests and compatibility scenarios requiring 12-byte nonces.
+    - Implementation: `nacl.bindings.crypto_aead_chacha20poly1305_ietf_encrypt/decrypt`
 - **Signatures:** Ed25519
     - Pod identity and config/firmware authenticity; gateway block header signatures.
+    - Implementation: `nacl.signing.SigningKey` / `nacl.signing.VerifyKey`
 - **Hash:** SHA‑256
     - Merkle leaves/roots, day blobs (for OTS), and auxiliary digests.
+    - Implementation: `nacl.hash.sha256`
 
 ## Telemetry Frame (v1, logical)
 
@@ -45,14 +56,14 @@ nonce/aad/plain/tag.
   key (Ed25519/X25519).
 - X25519 ephemeral ECDH (eP↔eG), optional static+ephemeral hybrid.
 - `PRK = HKDF‑Extract(salt = SHA‑256(Ng||Np||Tpod||B), IKM = ECDH secret(s))`
-- `CK_up = HKDF‑Expand(PRK, “barnacle:up”, 32)`
-- `CK_down = HKDF‑Expand(PRK, “barnacle:down”, 32)`
+- `CK_up = HKDF‑Expand(PRK, "barnacle:up", 32)`
+- `CK_down = HKDF‑Expand(PRK, "barnacle:down", 32)`
 - Pod signs transcript with Ed25519; gateway verifies with PKP (from QR/onboard registry).
 
 ## Replay and Rotation
 
 - **Replay protection:** gateway tracks highest FC per device with a sliding acceptance window (e.g., 64).
-- **Key rotation:** signed “rotate” command from gateway; derive `CK’ = HKDF‑Expand(PRK, “rotate:epoch=E”, 32)`; persist
+- **Key rotation:** signed "rotate" command from gateway; derive `CK' = HKDF‑Expand(PRK, "rotate:epoch=E", 32)`; persist
   new epoch and reset replay window.
 
 ## Ledger Interface (non‑secret decisions)
@@ -68,14 +79,27 @@ nonce/aad/plain/tag.
 - **Security:** Modern, audited primitives with minimal foot‑guns; forward secrecy via ephemeral ECDH; robust AEAD with
   long nonce.
 - **Simplicity:** AEAD frames are small; nonce assembly deterministic; HKDF context strings document key purpose.
-- **Portability:** Implementations exist in C, Rust, Go, Python; feasible on Cortex‑M0+/M3.
+- **Portability:** libsodium implementations exist in C, Rust, Go, Python; feasible on Cortex‑M0+/M3.
 - **Auditability:** Clear separation of secret frames and public hashes/anchors; easy to produce vectors and proofs.
+- **Performance:** PyNaCl (libsodium) provides optimized implementations faster than pure Python alternatives.
+- **Consistency:** Single crypto library (PyNaCl) instead of mixed cryptography + pynacl dependencies.
 
 ## Alternatives Considered
 
 - **AES‑GCM:** +HW acceleration on some MCUs; −strict 96‑bit nonce discipline; higher risk if counters ever collide.
 - **ChaCha20‑Poly1305 (96‑bit nonce):** acceptable; −tighter nonce space than XChaCha.
 - **P‑256 ECDH/ECDSA:** acceptable; +HW on some chips; −implementation complexity vs Ed25519/X25519 on MCUs.
+- **cryptography package:** Previous choice; replaced by PyNaCl for better performance and API consistency (see
+  ADR-005).
+
+## Migration Notes (2025-10-12)
+
+Migrated from mixed `cryptography` + `pynacl` to `pynacl` only:
+
+- **Removed:** `cryptography.hazmat.primitives.*` dependencies
+- **Benefits:** Single crypto library, better performance, cleaner API
+- **Compatibility:** All test vectors regenerated with PyNaCl; backward compatibility maintained
+- **See:** ADR-005 for detailed migration rationale and implementation notes
 
 ## Non‑decisions (future ADRs)
 
@@ -87,6 +111,7 @@ nonce/aad/plain/tag.
 
 - Provide end‑to‑end test vectors: (Ng, Np, Tpod, B, eP/eG, PRK, CK_up/down, nonce, aad, plain, cipher, tag).
 - Interop tests between pod simulator and Python verifier.
+- All test vectors generated with PyNaCl for deterministic, reproducible results.
 
 ## Operational Notes
 
@@ -97,3 +122,4 @@ nonce/aad/plain/tag.
 ## Status Rationale
 
 - Meets threat model and resource constraints; easy to implement and audit; aligns with verifiable ledger flow.
+- PyNaCl provides battle-tested libsodium implementations with excellent performance characteristics.
