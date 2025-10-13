@@ -9,22 +9,22 @@ This simulator supports two modes:
 1. **Plain mode** (M#0): Emits canonical fact JSON (device_id, timestamp, nonce, payload)
    Usage: python pod_sim.py --device-id pod-001 --count 10
 
-2. **Framed mode** (M#1): Emits NDJSON frames with {hdr, nonce, ct, tag} fields
-   Usage: python pod_sim.py --framed --device-id pod-003 --count 10 --out frames.ndjson
+2. **Framed mode** (M#2/Production): Emits NDJSON frames with {hdr, nonce, ct, tag} fields using AEAD (XChaCha20-Poly1305)
+   Usage: python pod_sim.py --framed --device-id pod-003 --count 10 --out frames.ndjson --device-table device_table.json
 
-Frame structure (M#1 stub):
+Frame structure (AEAD):
 - hdr: dict with {dev_id: u16, msg_type: u8, fc: u32, flags: u8}
-- nonce: base64 string (24 random bytes)
-- ct: base64 string (JSON payload in plaintext for M#1)
-- tag: base64 string (16 random bytes placeholder)
+- nonce: base64 string (24 bytes = salt8 || fc64 || rand8)
+- ct: base64 string (AEAD ciphertext)
+- tag: base64 string (16 bytes Poly1305)
 
-For M#1, encryption is stubbed: the ciphertext contains base64-encoded JSON payload.
-Real AEAD (XChaCha20-Poly1305) will be implemented in M#2 with proper key derivation.
+Payload inside AEAD is a compact TLV for minimal overhead.
 
 Optional --facts-out writes plain facts alongside framed output for cross-checking.
 
 References:
-- ADR-002: Telemetry Framing, Nonce/Replay Policy
+- ADR-001/002: Cryptographic primitives and nonce/replay policy (XChaCha20-Poly1305 with 192-bit nonce)
+- ADR-006: Forward-only schema policy (salt8 only, no salt4/migrations)
 """
 from __future__ import annotations
 
@@ -37,13 +37,50 @@ import struct
 import time
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
+
+import nacl.bindings
+
+# Local crypto helpers (HKDF)
+try:
+    # Prefer importing from gateway utils to avoid duplication
+    import importlib.util
+
+    GW_DIR = Path(__file__).parent.parent / "gateway"
+    cu_spec = importlib.util.spec_from_file_location(
+        "crypto_utils", str(GW_DIR / "crypto_utils.py")
+    )
+    assert cu_spec and cu_spec.loader
+    crypto_utils = importlib.util.module_from_spec(cu_spec)
+    cu_spec.loader.exec_module(crypto_utils)  # type: ignore
+except Exception:  # Fallback minimal HKDF if import fails
+    import hashlib  # type: ignore
+    import hmac
+
+    def hkdf_sha256(ikm: bytes, salt: bytes, info: bytes, length: int) -> bytes:  # type: ignore
+        if salt is None:
+            salt = b""
+        if info is None:
+            info = b""
+        prk = hmac.new(salt, ikm, hashlib.sha256).digest()
+        okm = b""
+        t = b""
+        counter = 1
+        while len(okm) < length:
+            t = hmac.new(prk, t + info + bytes([counter]), hashlib.sha256).digest()
+            okm += t
+            counter += 1
+        return okm[:length]
+
+else:
+    hkdf_sha256 = crypto_utils.hkdf_sha256  # type: ignore
 
 
 def emit_fact(device_id: str, counter: int) -> dict:
     now = datetime.now(UTC).isoformat()
     payload = {
         "counter": counter,
-        "bioimpedance": round(random.uniform(50.0, 120.0), 3),
+        "bioimpedance": round(random.uniform(50.0, 120.0), 2),
         "temp_c": round(random.uniform(20.0, 40.0), 2),
     }
     return {
@@ -58,7 +95,6 @@ def parse_dev_id_u16(device_id: str) -> int:
     """Parse a u16 device id from a device_id string like 'pod-001'.
     Falls back to 1 if no trailing number is present. Clamped to [0, 65535]."""
     num = 1
-    # extract trailing digits
     i = len(device_id) - 1
     while i >= 0 and device_id[i].isdigit():
         i -= 1
@@ -71,41 +107,139 @@ def parse_dev_id_u16(device_id: str) -> int:
     return max(0, min(65535, num))
 
 
-def build_header(dev_id_u16: int, msg_type: int, fc_u32: int, flags: int) -> bytes:
-    """Build 8-byte header: u16, u8, u32, u8 using big-endian canonical order."""
-    return struct.pack(
-        ">HBIB", dev_id_u16, msg_type & 0xFF, fc_u32 & 0xFFFFFFFF, flags & 0xFF
-    )
-
-
 def b64(data: bytes) -> str:
     return base64.b64encode(data).decode("ascii")
 
 
-def emit_framed(device_id: str, counter: int, payload: dict) -> dict:
-    """
-    Emit a framed record with header dict and base64-encoded fields.
+# --- TLV helpers (very small, for demo/test) ---
+# t=0x01: counter (u32), t=0x02: bioimpedance*100 (u16), t=0x03: temp_c*100 (i16)
 
-    For M#1, this creates frames matching the format expected by frame_verifier.py:
-    - hdr: dict with {dev_id, msg_type, fc, flags}
-    - nonce: base64 string (24 bytes)
-    - ct: base64 string (JSON payload for now)
-    - tag: base64 string (16 bytes placeholder)
+
+def encode_tlv(payload: dict) -> bytes:
+    out = bytearray()
+    # counter
+    c = int(payload.get("counter", 0)) & 0xFFFFFFFF
+    out += bytes([0x01, 4]) + struct.pack(">I", c)
+    # bioimpedance scaled by 100 to u16
+    bio = int(round(float(payload.get("bioimpedance", 0.0)) * 100))
+    bio = max(0, min(65535, bio))
+    out += bytes([0x02, 2]) + struct.pack(">H", bio)
+    # temp_c scaled by 100 to i16
+    tc = int(round(float(payload.get("temp_c", 0.0)) * 100))
+    tc = max(-32768, min(32767, tc))
+    out += bytes([0x03, 2]) + struct.pack(">h", tc)
+    return bytes(out)
+
+
+# --- Device table helpers ---
+
+
+def load_device_table(path: Path) -> dict[str, dict[str, Any]]:
+    if not path or not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def save_device_table(path: Path, tbl: dict[str, dict[str, Any]]) -> None:
+    if not path:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(tbl, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def ensure_device_entry(
+    tbl: dict[str, dict[str, Any]], dev_id_u16: int
+) -> dict[str, Any]:
+    # Top-level metadata for key derivation
+    meta = tbl.get("_meta")
+    if not isinstance(meta, dict):
+        meta = {"version": "1.0"}
+    if "master_seed" not in meta:
+        meta["master_seed"] = b64(secrets.token_bytes(32))
+    if "version" not in meta:
+        meta["version"] = "1.0"
+    tbl["_meta"] = meta
+
+    key = str(dev_id_u16)
+    if key not in tbl:
+        salt8 = secrets.token_bytes(8)
+        # Derive per-device uplink key from master seed and salt8
+        master_seed = base64.b64decode(meta["master_seed"])  # type: ignore
+        info = f"barnacle:up:dev={dev_id_u16:05d}".encode("ascii")
+        ck_up = hkdf_sha256(master_seed, salt8, info, 32)
+        tbl[key] = {
+            "salt8": b64(salt8),
+            "ck_up": b64(ck_up),
+            "highest_fc_seen": -1,
+        }
+    return tbl[key]
+
+
+def build_nonce(salt8: bytes, fc64: int) -> bytes:
+    """Build 24-byte nonce: salt8 || fc64 || rand8 (big-endian for fc)."""
+    rand8 = secrets.token_bytes(8)
+    return salt8 + (fc64 & 0xFFFFFFFFFFFFFFFF).to_bytes(8, "big") + rand8
+
+
+def emit_framed(
+    device_id: str, counter: int, payload: dict, device_table_path: Path | None
+) -> dict:
     """
-    # Header fields as dict (not packed binary)
+    Emit a framed record with header dict and base64-encoded fields using AEAD (XChaCha20-Poly1305).
+    """
     dev_id_u16 = parse_dev_id_u16(device_id)
-    msg_type = 1  # stub: measurement
-    fc_u32 = counter
+    msg_type = 1  # measurement
+    fc64 = int(counter)
+    fc_u32 = fc64 & 0xFFFFFFFF
     flags = 0
 
-    # Nonce and tag placeholders
-    nonce = secrets.token_bytes(24)
-    tag = secrets.token_bytes(16)
+    # Device table / keys
+    tbl = load_device_table(device_table_path) if device_table_path else {}
+    entry = ensure_device_entry(tbl, dev_id_u16)
 
-    # Ciphertext is just JSON(payload) bytes for M#1 stub
-    ct_bytes = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode(
-        "utf-8"
+    # Retrieve salt8, ensuring it's exactly 8 bytes
+    salt8_raw = entry.get("salt8")
+    if isinstance(salt8_raw, str):
+        salt8 = base64.b64decode(salt8_raw)
+    elif isinstance(salt8_raw, bytes):
+        salt8 = salt8_raw
+    else:
+        raise ValueError(f"Device {dev_id_u16}: missing required salt8 field")
+
+    # Validate salt8 length
+    if len(salt8) != 8:
+        raise ValueError(
+            f"Device {dev_id_u16}: salt8 must be exactly 8 bytes, got {len(salt8)}"
+        )
+
+    ck_up = (
+        base64.b64decode(entry["ck_up"])
+        if isinstance(entry.get("ck_up"), str)
+        else entry["ck_up"]
     )
+    if len(ck_up) != 32:
+        raise ValueError(
+            f"Device {dev_id_u16}: ck_up must be exactly 32 bytes, got {len(ck_up)}"
+        )
+
+    # Nonce and AAD
+    nonce = build_nonce(salt8, fc64)
+    aad = struct.pack(">HB", dev_id_u16, msg_type & 0xFF)
+
+    # TLV payload and AEAD encrypt (XChaCha20-Poly1305)
+    tlv = encode_tlv(payload)
+    combined = nacl.bindings.crypto_aead_xchacha20poly1305_ietf_encrypt(
+        tlv, aad, nonce, ck_up
+    )
+    ct, tag = combined[:-16], combined[-16:]
+
+    # Persist highest fc and any updates
+    entry["highest_fc_seen"] = max(int(entry.get("highest_fc_seen", -1)), fc64)
+    tbl[str(dev_id_u16)] = entry
+    save_device_table(device_table_path, tbl)
 
     return {
         "hdr": {
@@ -115,14 +249,14 @@ def emit_framed(device_id: str, counter: int, payload: dict) -> dict:
             "flags": flags,
         },
         "nonce": b64(nonce),
-        "ct": b64(ct_bytes),
+        "ct": b64(ct),
         "tag": b64(tag),
     }
 
 
 def write_plain_fact(path: Path, counter: int, fact: dict) -> None:
     path.mkdir(parents=True, exist_ok=True)
-    out_file = path / f"fact_{counter:06d}.json"
+    out_file = path / f"{counter:06d}.json"
     with out_file.open("w", encoding="utf-8") as fh:
         json.dump(fact, fh, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
         fh.write("\n")
@@ -139,12 +273,17 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         "--framed",
         action="store_true",
-        help="Emit framed NDJSON with {hdr, nonce, ct, tag} fields instead of plain facts",
+        help="Emit framed NDJSON with {hdr, nonce, ct, tag} fields using AEAD",
     )
     p.add_argument(
         "--facts-out",
         type=Path,
         help="When --framed is set, also write plain facts to this directory for cross-check",
+    )
+    p.add_argument(
+        "--device-table",
+        type=Path,
+        help="Path to device table JSON (used to persist per-device salt and key)",
     )
     args = p.parse_args(argv)
 
@@ -154,8 +293,8 @@ def main(argv: list[str] | None = None) -> int:
             fact = emit_fact(args.device_id, i)
             if args.framed:
                 frame = emit_framed(
-                    args.device_id, i, fact["payload"]
-                )  # use payload as plaintext
+                    args.device_id, i, fact["payload"], args.device_table
+                )
                 line = json.dumps(frame, separators=(",", ":"))
                 if args.facts_out:
                     write_plain_fact(args.facts_out, i, fact)
