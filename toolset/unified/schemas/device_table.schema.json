@@ -1,0 +1,69 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Device Table",
+  "type": "object",
+  "properties": {
+    "_meta": {
+      "type": "object",
+      "properties": {
+        "master_seed": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9+/]+=*$"
+        },
+        "version": {
+          "const": "1.0"
+        }
+      },
+      "required": [
+        "master_seed",
+        "version"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "patternProperties": {
+    "^\\d{1,5}$": {
+      "type": "object",
+      "properties": {
+        "salt8": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9+/]+=*$"
+        },
+        "ck_up": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9+/]+=*$"
+        },
+        "highest_fc_seen": {
+          "type": [
+            "integer",
+            "number"
+          ]
+        },
+        "last_seen": {
+          "type": "string"
+        },
+        "msg_type": {
+          "type": [
+            "integer",
+            "number"
+          ]
+        },
+        "flags": {
+          "type": [
+            "integer",
+            "number"
+          ]
+        }
+      },
+      "required": [
+        "salt8",
+        "ck_up"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "_meta"
+  ],
+  "additionalProperties": false
+}

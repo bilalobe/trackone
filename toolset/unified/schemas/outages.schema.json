@@ -1,0 +1,204 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/schemas/outages.schema.json",
+  "title": "Daily Outages Record",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "date": {
+      "type": "string",
+      "format": "date"
+    },
+    "site_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "incidents": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "low",
+              "medium",
+              "high",
+              "critical"
+            ]
+          },
+          "start_utc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "end_utc": {
+            "type": "string",
+            "format": "date-time",
+            "$comment": "end_utc should be greater than or equal to start_utc; enforce via external validation"
+          },
+          "components": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "pods": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "gateway": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "pods",
+              "gateway"
+            ]
+          },
+          "signal": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "missed_frames",
+                      "auth_failure",
+                      "low_battery",
+                      "tamper_alert"
+                    ]
+                  },
+                  "details": {
+                    "type": "string"
+                  },
+                  "first_detected_utc": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                },
+                "required": [
+                  "type"
+                ]
+              }
+            ],
+            "$comment": "Backward-compatible: accepts legacy string or structured signal object"
+          },
+          "actions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "diagnostics": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "rssi_dbm": {
+                "type": "number"
+              },
+              "snr_db": {
+                "type": "number"
+              },
+              "battery_mv": {
+                "type": "integer"
+              },
+              "frame_counter": {
+                "type": "integer"
+              }
+            }
+          },
+          "artifacts": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "photos": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "logs": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "day_bin": {
+                "type": "string"
+              },
+              "day_ots": {
+                "type": "string"
+              },
+              "merkle_index": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Position of the fact in the day's Merkle tree"
+              },
+              "merkle_proof": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "description": "SHA-256 sibling hashes from leaf to root"
+              }
+            }
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "restored",
+              "partial",
+              "deferred"
+            ]
+          },
+          "followups": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "severity",
+          "start_utc",
+          "end_utc",
+          "components",
+          "outcome"
+        ],
+        "if": {
+          "properties": {
+            "end_utc": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "end_utc"
+          ]
+        },
+        "then": {
+          "$comment": "Constraint: end_utc should be >= start_utc; compare timestamps in application layer"
+        }
+      }
+    }
+  },
+  "required": [
+    "date",
+    "site_id",
+    "incidents"
+  ]
+}
