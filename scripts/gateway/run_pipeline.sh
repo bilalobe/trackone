@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # run_pipeline.sh
 #
-# M#1 end-to-end pipeline:
+# Track1 end-to-end pipeline (v1.0):
 #   pod_sim --framed → frame_verifier → merkle_batcher → ots_anchor → verify_cli
 #
 # This demonstrates the complete framed telemetry ingestion, batching, anchoring,
-# and verification workflow.
+# and verification workflow using XChaCha20-Poly1305 (24-byte nonce).
 
 set -euo pipefail
 
@@ -22,39 +22,30 @@ FACTS_DIR="${OUT_DIR}/facts"
 DEVICE_TABLE="${OUT_DIR}/device_table.json"
 DAY_BIN="${OUT_DIR}/day/${DATE}.bin"
 
-echo "[pipeline] Starting M#1 end-to-end pipeline"
+echo "[pipeline] Starting Track1 pipeline (v1.0)"
 echo "[pipeline] Site: ${SITE}, Date: ${DATE}, Device: ${DEVICE_ID}"
-echo ""
+echo "[pipeline] AEAD: XChaCha20-Poly1305 (24-byte nonce)"
 
 # Create output directories
 mkdir -p "${OUT_DIR}"
 mkdir -p "${FACTS_DIR}"
 
-# Create minimal device table (for M#2 key lookup)
-echo "[pipeline] Creating device table..."
-cat > "${DEVICE_TABLE}" <<EOF
-{
-  "devices": {
-    "pod-003": {
-      "device_id": "pod-003",
-      "pubkey": "placeholder_for_m2"
-    }
-  }
-}
-EOF
+# Ensure fresh state for facts (avoid counting stale files)
+rm -f "${FACTS_DIR}"/*.json 2>/dev/null || true
 
-# Step 1: Generate framed telemetry
+# Step 1: Generate framed telemetry (sim persists device_table with per-device salts/keys)
 echo "[pipeline] Step 1: Generating framed telemetry (${NUM_FRAMES} frames)..."
 python scripts/pod_sim/pod_sim.py \
   --framed \
   --device-id "${DEVICE_ID}" \
   --count "${NUM_FRAMES}" \
+  --device-table "${DEVICE_TABLE}" \
   --out "${FRAMES_FILE}"
 
 echo "[pipeline] Generated: ${FRAMES_FILE}"
-echo ""
 
 # Step 2: Verify frames and extract facts
+echo ""
 echo "[pipeline] Step 2: Verifying frames and extracting facts..."
 python scripts/gateway/frame_verifier.py \
   --in "${FRAMES_FILE}" \
@@ -62,9 +53,8 @@ python scripts/gateway/frame_verifier.py \
   --device-table "${DEVICE_TABLE}" \
   --window 64
 
-echo ""
-
 # Step 3: Batch facts into Merkle tree
+echo ""
 echo "[pipeline] Step 3: Batching facts into Merkle tree..."
 python scripts/gateway/merkle_batcher.py \
   --facts "${FACTS_DIR}" \
@@ -73,15 +63,13 @@ python scripts/gateway/merkle_batcher.py \
   --date "${DATE}" \
   --validate-schemas
 
-echo ""
-
 # Step 4: Anchor day blob with OTS
+echo ""
 echo "[pipeline] Step 4: Anchoring day blob with OpenTimestamps..."
 python scripts/gateway/ots_anchor.py "${DAY_BIN}"
 
-echo ""
-
 # Step 5: Verify Merkle root and OTS proof
+echo ""
 echo "[pipeline] Step 5: Verifying Merkle root and OTS proof..."
 python scripts/gateway/verify_cli.py \
   --root "${OUT_DIR}" \
