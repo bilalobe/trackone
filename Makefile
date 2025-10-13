@@ -1,5 +1,5 @@
 # Makefile for Track1 — Ultra-Low-Power, Verifiable Telemetry
-# Milestone-agnostic targets for development and testing
+# Forward-only development (v1.0)
 
 SHELL := /bin/bash
 .SHELLFLAGS := -c
@@ -13,7 +13,7 @@ COUNT ?= 10
 OUT_DIR ?= out/site_demo
 
 # Targets
-.PHONY: help run run-m1 run-m0 run-examples test clean tag tag-m1 lint format lint-fix
+.PHONY: help install run test test-verbose test-cov clean tag lint format lint-fix dev-setup gen-vectors
 
 help: ## Show this help message
 	@echo "Track1 Make Targets:"
@@ -21,25 +21,25 @@ help: ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
-run: run-m1 ## Run M#1 pipeline (framed ingest, default)
+install: ## Install production dependencies
+	@echo "[make] Installing dependencies..."
+	pip install -r requirements.txt
+	@echo "[make] ✓ Dependencies installed"
 
-run-m1: ## M#1: pod_sim --framed -> frame_verifier -> merkle_batcher -> ots_anchor -> verify_cli
-	@echo "[make] Running M#1 end-to-end pipeline..."
-	@bash scripts/gateway/run_pipeline.sh && echo "[make] ✓ M#1 pipeline completed successfully" || (echo "[make] ✗ M#1 pipeline failed" && exit 1)
+dev-setup: ## Install development dependencies (includes linting tools)
+	@echo "[make] Installing development dependencies..."
+	pip install -r requirements.txt
+	pip install -r requirements-dev.txt
+	@echo "[make] ✓ Development environment ready"
 
-run-m0: run-examples ## M#0: Batch example facts -> anchor -> verify (alias)
+run: ## Run end-to-end pipeline (framed ingest with XChaCha20-Poly1305)
+	@echo "[make] Running end-to-end pipeline..."
+	@bash scripts/gateway/run_pipeline.sh && echo "[make] ✓ Pipeline completed successfully" || (echo "[make] ✗ Pipeline failed" && exit 1)
 
-run-examples: ## M#0: examples -> batch -> anchor -> verify
-	@echo "[make] Running M#0 example pipeline..."
-	python scripts/gateway/merkle_batcher.py \
-		--facts toolset/unified/examples \
-		--out $(OUT_DIR) \
-		--site $(SITE) \
-		--date $(DATE) \
-		--validate-schemas
-	python scripts/gateway/ots_anchor.py $(OUT_DIR)/day/$(DATE).bin
-	python scripts/gateway/verify_cli.py --root $(OUT_DIR)
-	@echo "[make] ✓ M#0 pipeline completed successfully"
+gen-vectors: ## Generate deterministic AEAD test vectors
+	@echo "[make] Generating deterministic AEAD vectors..."
+	python scripts/dev/gen_aead_vector.py
+	@echo "[make] ✓ Vectors generated"
 
 test: ## Run all tests with pytest
 	@echo "[make] Running tests..."
@@ -50,27 +50,38 @@ test-verbose: ## Run tests with verbose output
 	@echo "[make] Running tests (verbose)..."
 	pytest -v
 
+test-cov: ## Run tests with coverage report
+	@echo "[make] Running tests with coverage..."
+	pytest --cov=scripts --cov-report=term-missing --cov-report=html -v
+	@echo "[make] ✓ Coverage report generated (see htmlcov/index.html)"
+
 clean: ## Remove build artifacts and output directories
 	@echo "[make] Cleaning build artifacts..."
 	rm -rf out/
 	rm -rf __pycache__
 	rm -rf scripts/**/__pycache__
 	rm -rf .pytest_cache
+	rm -rf .hypothesis
+	rm -rf htmlcov/
+	rm -rf .coverage
 	rm -f src/*.aux src/*.log src/*.out src/*.toc src/*.bbl src/*.blg
 	@echo "[make] ✓ Cleaned"
 
+clean-all: clean ## Remove all build artifacts including .ruff_cache
+	@echo "[make] Deep cleaning..."
+	rm -rf .ruff_cache
+	rm -rf .mypy_cache
+	@echo "[make] ✓ Deep clean complete"
+
 tag: ## Create and push git tag: make tag TAG=vX.Y.Z
 	@if [ -z "$(TAG)" ]; then \
-		echo "[ERROR] Usage: make tag TAG=v0.0.1-m1"; \
+		echo "[ERROR] Usage: make tag TAG=v1.0.0"; \
 		exit 1; \
 	fi
 	@echo "[make] Creating and pushing tag: $(TAG)"
 	git tag -a $(TAG) -m "Release $(TAG)"
 	git push origin $(TAG)
 	@echo "[make] ✓ Tag $(TAG) created and pushed"
-
-tag-m1: ## Quick tag for M#1: v0.0.1-m1
-	$(MAKE) tag TAG=v0.0.1-m1
 
 lint: ## Run basic Python linting (if ruff/black available)
 	@echo "[make] Running linting..."
@@ -99,10 +110,24 @@ lint-fix: ## Run ruff with auto-fix
 	@echo "[make] Running ruff with auto-fix..."
 	@if command -v ruff >/dev/null 2>&1; then \
 		ruff check scripts/ --fix; \
+		echo "[make] ✓ Linting issues fixed"; \
 	else \
 		echo "[ERROR] ruff not installed. Install with: pip install ruff"; \
 		exit 1; \
 	fi
-	@echo "[make] ✓ Fixed"
 
-.DEFAULT_GOAL := help
+check: lint test ## Run linting and tests (pre-commit checks)
+	@echo "[make] ✓ All checks passed"
+
+ci: lint test-cov ## Run full CI checks locally (lint + tests with coverage)
+	@echo "[make] ✓ CI checks passed"
+
+.PHONY: watch
+watch: ## Watch for file changes and re-run tests (requires pytest-watch)
+	@echo "[make] Watching for changes (Ctrl+C to stop)..."
+	@if command -v ptw >/dev/null 2>&1; then \
+		ptw scripts/ --; \
+	else \
+		echo "[ERROR] pytest-watch not installed. Install with: pip install pytest-watch"; \
+		exit 1; \
+	fi
