@@ -3,19 +3,37 @@
 test_crypto_vectors.py
 
 Tests for cryptographic operations and test vectors.
-Currently tests canonical JSON serialization and fact schema validation.
-Full crypto implementation (X25519, HKDF, XChaCha20-Poly1305) will be added in Track 1 phase.
+Currently, tests canonical JSON serialization and fact schema validation.
+Adds enabled tests for X25519, HKDF, XChaCha20-Poly1305, and Ed25519.
 """
+import importlib.util
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "gateway"))
+GW_DIR = Path(__file__).parent.parent / "gateway"
+sys.path.insert(0, str(GW_DIR))
+
+# Dynamically load merkle_batcher like other tests
+mb_spec = importlib.util.spec_from_file_location(
+    "merkle_batcher", str(GW_DIR / "merkle_batcher.py")
+)
+assert mb_spec and mb_spec.loader, "Cannot load merkle_batcher"
+merkle_batcher = importlib.util.module_from_spec(mb_spec)
+sys.modules["merkle_batcher"] = merkle_batcher  # Fix dataclass __module__ lookup
+mb_spec.loader.exec_module(merkle_batcher)  # type: ignore
 
 import json
 from hashlib import sha256
 
 import pytest
-from merkle_batcher import canonical_json, load_schemas, validate_against_schema
+
+# Import crypto utils
+CU_PATH = Path(__file__).parent.parent / "gateway" / "crypto_utils.py"
+cu_spec = importlib.util.spec_from_file_location("crypto_utils", str(CU_PATH))
+assert cu_spec and cu_spec.loader, f"Cannot load crypto_utils from {CU_PATH}"
+crypto_utils = importlib.util.module_from_spec(cu_spec)
+sys.modules["crypto_utils"] = crypto_utils  # Fix module lookup
+cu_spec.loader.exec_module(crypto_utils)  # type: ignore
 
 # Load test vectors
 VECTORS_PATH = Path(__file__).parent.parent / "pod_sim" / "crypto_test_vectors.json"
@@ -45,7 +63,7 @@ class TestCanonicalHashVectors:
             fact = vector["fact"]
             expected_json = vector["expected_canonical_json"]
 
-            result = canonical_json(fact)
+            result = merkle_batcher.canonical_json(fact)
             result_str = result.decode("utf-8")
 
             assert result_str == expected_json, (
@@ -60,17 +78,17 @@ class TestCanonicalHashVectors:
             fact = vector["fact"]
 
             # Compute hash twice
-            canon1 = canonical_json(fact)
+            canon1 = merkle_batcher.canonical_json(fact)
             hash1 = sha256(canon1).hexdigest()
 
-            canon2 = canonical_json(fact)
+            canon2 = merkle_batcher.canonical_json(fact)
             hash2 = sha256(canon2).hexdigest()
 
             assert hash1 == hash2, f"Non-deterministic hash for {vector['description']}"
 
     def test_all_vector_facts_are_valid(self, test_vectors):
         """Test that all vector facts pass schema validation."""
-        schemas = load_schemas()
+        schemas = merkle_batcher.load_schemas()
         if "fact" not in schemas:
             pytest.skip("Fact schema not available")
 
@@ -81,7 +99,7 @@ class TestCanonicalHashVectors:
 
             # validate_against_schema prints warnings but doesn't raise
             # We just ensure it doesn't crash
-            validate_against_schema(
+            merkle_batcher.validate_against_schema(
                 fact_to_validate, schemas["fact"], vector["description"]
             )
 
@@ -91,7 +109,7 @@ class TestFactSchemaCompliance:
 
     def test_minimal_fact_schema(self):
         """Test a minimal valid fact."""
-        schemas = load_schemas()
+        schemas = merkle_batcher.load_schemas()
         if "fact" not in schemas:
             pytest.skip("Fact schema not available")
 
@@ -102,11 +120,11 @@ class TestFactSchemaCompliance:
             "payload": {},
         }
 
-        validate_against_schema(fact, schemas["fact"], "Minimal fact")
+        merkle_batcher.validate_against_schema(fact, schemas["fact"], "Minimal fact")
 
     def test_fact_with_signature(self):
         """Test a fact with optional signature field."""
-        schemas = load_schemas()
+        schemas = merkle_batcher.load_schemas()
         if "fact" not in schemas:
             pytest.skip("Fact schema not available")
 
@@ -118,11 +136,13 @@ class TestFactSchemaCompliance:
             "signature": "deadbeef",
         }
 
-        validate_against_schema(fact, schemas["fact"], "Fact with signature")
+        merkle_batcher.validate_against_schema(
+            fact, schemas["fact"], "Fact with signature"
+        )
 
     def test_fact_missing_required_field(self):
         """Test that facts missing required fields are detected."""
-        schemas = load_schemas()
+        schemas = merkle_batcher.load_schemas()
         if "fact" not in schemas:
             pytest.skip("Fact schema not available")
 
@@ -135,7 +155,7 @@ class TestFactSchemaCompliance:
 
         # validate_against_schema should print a warning for invalid fact
         # It doesn't raise, but we verify it can handle invalid input
-        validate_against_schema(fact, schemas["fact"], "Invalid fact")
+        merkle_batcher.validate_against_schema(fact, schemas["fact"], "Invalid fact")
 
 
 class TestVectorCoverage:
@@ -170,40 +190,109 @@ class TestVectorCoverage:
         assert len(unique_payloads) >= 2, "Vectors should have varied payloads"
 
 
-class TestFutureCryptoPlaceholders:
-    """Placeholder tests for future crypto implementations."""
+class TestCryptoEnabled:
+    """Previously skipped crypto tests are now enabled using crypto_utils."""
 
-    def test_future_crypto_sections_exist(self, test_vectors):
-        """Verify placeholder sections exist for future crypto implementations."""
-        assert "future_crypto_vectors" in test_vectors
-        future = test_vectors["future_crypto_vectors"]
+    def test_x25519_key_exchange(self):
+        a = crypto_utils.x25519_keypair()
+        b = crypto_utils.x25519_keypair()
+        za = crypto_utils.x25519_shared_secret(a.private, b.public)
+        zb = crypto_utils.x25519_shared_secret(b.private, a.public)
+        assert za == zb and len(za) == 32
 
-        # These sections are placeholders for Track 1 implementation
-        assert "x25519_key_exchange" in future
-        assert "hkdf_derivation" in future
-        assert "xchacha20_poly1305_encryption" in future
-        assert "ed25519_signatures" in future
+    def test_hkdf_derivation(self):
+        ikm = b"\x11" * 32
+        salt = b"\x22" * 16
+        up = crypto_utils.hkdf_sha256(ikm, salt, b"barnacle:up", 32)
+        down = crypto_utils.hkdf_sha256(ikm, salt, b"barnacle:down", 32)
+        assert len(up) == 32 and len(down) == 32 and up != down
 
-    @pytest.mark.skip(reason="X25519 key exchange not yet implemented - Track 1 phase")
-    def test_x25519_key_exchange_placeholder(self):
-        """Placeholder for X25519 ECDH key exchange tests."""
-        pass
+    def test_xchacha20_poly1305_encryption(self):
+        key = bytes(range(32))
+        nonce = b"n" * 24
+        aad = b"\x01\x02\x03"
+        pt = b"payload"
+        ct, tag = crypto_utils.xchacha20poly1305_ietf_encrypt(key, nonce, pt, aad)
+        rt = crypto_utils.xchacha20poly1305_ietf_decrypt(key, nonce, ct, tag, aad)
+        assert rt == pt
 
-    @pytest.mark.skip(reason="HKDF derivation not yet implemented - Track 1 phase")
-    def test_hkdf_derivation_placeholder(self):
-        """Placeholder for HKDF key derivation tests."""
-        pass
+    def test_ed25519_signatures(self):
+        import nacl.exceptions
 
-    @pytest.mark.skip(reason="XChaCha20-Poly1305 not yet implemented - Track 1 phase")
-    def test_xchacha20_poly1305_placeholder(self):
-        """Placeholder for XChaCha20-Poly1305 AEAD encryption tests."""
-        pass
+        kp = crypto_utils.ed25519_keypair()
+        msg = b"day.bin root"
+        sig = crypto_utils.ed25519_sign(kp.private, msg)
+        crypto_utils.ed25519_verify(kp.public, msg, sig)
+        with pytest.raises(nacl.exceptions.BadSignatureError):
+            crypto_utils.ed25519_verify(kp.public, msg + b"x", sig)
 
-    @pytest.mark.skip(reason="Ed25519 signatures not yet implemented - Track 1 phase")
-    def test_ed25519_signatures_placeholder(self):
-        """Placeholder for Ed25519 signature tests."""
-        pass
+
+class TestDeterministicAEADVectors:
+    def test_chacha20poly1305_vector_matches(self):
+        """Verify ciphertext and tag match deterministic vector exactly."""
+        import nacl.bindings
+
+        vectors_path = (
+            Path(__file__).resolve().parents[2]
+            / "toolset"
+            / "unified"
+            / "crypto_test_vectors.json"
+        )
+        if not vectors_path.exists():
+            pytest.skip(f"Deterministic vectors file not found: {vectors_path}")
+        data = json.loads(vectors_path.read_text(encoding="utf-8"))
+        vecs = data.get("deterministic_aead_vectors", [])
+        if not vecs:
+            pytest.skip("No deterministic AEAD vectors present")
+        v = vecs[0]
+
+        key = bytes.fromhex(v["key"])
+        nonce = bytes.fromhex(v["nonce"])
+        aad = bytes.fromhex(v["aad"])
+        pt = bytes.fromhex(v["plaintext"])
+
+        # Use PyNaCl for verification
+        combined = nacl.bindings.crypto_aead_chacha20poly1305_ietf_encrypt(
+            pt, aad, nonce, key
+        )
+        ct, tag = combined[:-16], combined[-16:]
+
+        assert ct.hex() == v["ciphertext"], "Ciphertext mismatch"
+        assert tag.hex() == v["tag"], "Tag mismatch"
+
+    def test_xchacha20poly1305_vector_matches(self):
+        """Verify XChaCha ciphertext and tag match deterministic vector exactly."""
+        import nacl.bindings
+
+        vectors_path = (
+            Path(__file__).resolve().parents[2]
+            / "toolset"
+            / "unified"
+            / "crypto_test_vectors.json"
+        )
+        if not vectors_path.exists():
+            pytest.skip(f"Deterministic vectors file not found: {vectors_path}")
+        data = json.loads(vectors_path.read_text(encoding="utf-8"))
+        vecs = data.get("deterministic_xaead_vectors", [])
+        if not vecs:
+            pytest.skip("No deterministic XAEAD vectors present")
+        v = vecs[0]
+
+        key = bytes.fromhex(v["key"])
+        nonce = bytes.fromhex(v["nonce"])
+        aad = bytes.fromhex(v["aad"])
+        pt = bytes.fromhex(v["plaintext"])
+
+        combined = nacl.bindings.crypto_aead_xchacha20poly1305_ietf_encrypt(
+            pt, aad, nonce, key
+        )
+        ct, tag = combined[:-16], combined[-16:]
+
+        assert ct.hex() == v["ciphertext"], "XChaCha ciphertext mismatch"
+        assert tag.hex() == v["tag"], "XChaCha tag mismatch"
 
 
 if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
+    import pytest as _pytest
+
+    _pytest.main([__file__, "-v"])
