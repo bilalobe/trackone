@@ -50,6 +50,17 @@
       "expected_sha256": "computed_by_test"
     }
   ],
+  "deterministic_aead_vectors": [
+    {
+      "description": "ChaCha20-Poly1305 with fixed key/nonce for TLV payload",
+      "key": "0000000000000000000000000000000000000000000000000000000000000000",
+      "nonce": "000000000000000000000000",
+      "aad": "007b01",
+      "plaintext_tlv": "01040000000a02020fa003020320",
+      "expected_ciphertext": "8e3b8d9c0e1f2a3b4c5d6e7f8091",
+      "expected_tag": "a1b2c3d4e5f607182930414253647586"
+    }
+  ],
   "future_crypto_vectors": {
     "note": "These will be populated when X25519/HKDF/XChaCha20-Poly1305 implementation is added",
     "x25519_key_exchange": [],
