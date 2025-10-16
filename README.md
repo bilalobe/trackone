@@ -177,6 +177,14 @@ python scripts/gateway/verify_cli.py --root out/site_demo
     - Day chaining via prev_day_root (32 zero bytes for genesis)
 
 - **verify_cli.py** — Root recomputation and OTS verification
+
+- **QIM-A watermarking** (M#4+) — Authenticity layer for biometric time-series
+    - Scalar QIM embedding and detection (scripts/qim/)
+    - Band-pass filtering for bio-signal frequency band (~1/200 to 1/10 Hz)
+    - Gateway integration (qim_verifier.py) for framed ingest pipeline
+    - NOT cryptographic security (separate trust boundary from AEAD)
+    - References: ADR-007 (QIM-A Watermarking Architecture)
+
 Run all tests with coverage:
 pytest -q
 ```
@@ -258,8 +266,10 @@ For M#1, frames use NDJSON with JSON objects containing:
 - **M#0** ✅ (v0.0.1-m0, Oct 7 2025): Canonical schemas, deterministic batching, OTS anchoring
 - **M#1** ✅ (v0.0.1-m1, Oct 12 2025): Frame verifier stub + pod simulator v2 → framed ingest
 - **M#3** ✅ (v0.0.1-m3, Oct 13 2025): Real AEAD, PyNaCl migration, device table v1.0, 73 tests, 85% coverage
-- **M#4** (planned): Gateway "Ledger" tab JSON output, outage logger, automated daily OTS anchor/upgrade
-- **Future**: Key rotation workflows (ADR-001), operational hardening, performance optimization
+- **M#4** (in progress): Gateway automation, QIM-A watermarking (Option B), ledger output, automated OTS anchoring
+- **M#5** (planned): QIM robustness testing, lab validation, notebook integration
+- **0.1.0** (planned): Python reference implementation complete
+- **Future**: Key rotation workflows (ADR-001), Rust port (0.2.x), embedded/Cortex-M (0.3.x)
 
 **Note**: M#2 was an implementation phase (AEAD + test vectors) that was rolled into M#3 release.
 - `ct` field contains base64-encoded JSON payload (no real encryption)

@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **QIM-A watermarking infrastructure** (ADR-007)
+    - QIM module stubs (embed, detect, config) for biometric time-series authenticity
+    - Gateway integration module (qim_verifier.py)
+    - Band-pass filtering for bio-signal frequency band (~1/200 to 1/10 Hz)
+    - Configuration with operating parameters (Δ/σ, block_sec, detection thresholds)
+    - Test stubs for QIM modules (test_qim_embed.py, test_qim_detect.py)
+- **git-cliff configuration** for automated changelog generation
+    - Conventional commit parsers (feat → Added, fix → Fixed, etc.)
+    - Support for milestone-based tags (v0.0.1-m3, v0.0.1-m4, etc.)
+    - Keep a Changelog format with SemVer compliance
+- **Makefile targets** for QIM workflow
+    - `make qim-notebook`: Validate QIM-A notebook (for M#5)
+    - `make test-qim`: Run QIM-specific tests
 - Gateway "Ledger" tab JSON output
 - Outage logger
 - Daily OTS anchor/upgrade automation

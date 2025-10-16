@@ -13,7 +13,7 @@ COUNT ?= 10
 OUT_DIR ?= out/site_demo
 
 # Targets
-.PHONY: help install run test test-verbose test-cov clean tag lint format lint-fix dev-setup gen-vectors
+.PHONY: help install run test test-verbose test-cov clean tag lint format lint-fix dev-setup gen-vectors qim-notebook test-qim
 
 help: ## Show this help message
 	@echo "Track1 Make Targets:"
@@ -40,6 +40,24 @@ gen-vectors: ## Generate deterministic AEAD test vectors
 	@echo "[make] Generating deterministic AEAD vectors..."
 	python scripts/dev/gen_aead_vector.py
 	@echo "[make] ✓ Vectors generated"
+
+qim-notebook: ## Validate QIM-A notebook (requires jupyter)
+	@echo "[make] Validating QIM-A notebook..."
+	@if command -v jupyter >/dev/null 2>&1; then \
+		if [ -f notebooks/QIM-A_Watermarking.ipynb ]; then \
+			jupyter nbconvert --execute --to html notebooks/QIM-A_Watermarking.ipynb && \
+			echo "[make] ✓ QIM notebook validated"; \
+		else \
+			echo "[make] ⚠ notebooks/QIM-A_Watermarking.ipynb not found (will be created in M#5)"; \
+		fi \
+	else \
+		echo "[make] ⚠ jupyter not installed, skipping. Install with: pip install jupyter"; \
+	fi
+
+test-qim: ## Run QIM tests only
+	@echo "[make] Running QIM tests..."
+	pytest scripts/tests/test_qim_*.py -v
+	@echo "[make] ✓ QIM tests passed"
 
 test: ## Run all tests with pytest
 	@echo "[make] Running tests..."
