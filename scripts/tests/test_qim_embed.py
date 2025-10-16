@@ -25,6 +25,8 @@ import numpy as np
 import pytest
 
 # Import QIM modules
+# Note: Dynamic import pattern used here because QIM modules are not part of an installed package.
+#       This is acceptable for M#4 stubs. In M#5, consider refactoring to use proper package structure.
 QIM_DIR = Path(__file__).parent.parent / "qim"
 
 config_spec = importlib.util.spec_from_file_location(

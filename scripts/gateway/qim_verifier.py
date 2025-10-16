@@ -127,11 +127,16 @@ def verify_qim_from_fact(
 
     # Stub: return default verification result
     # TODO(M#5): Implement actual QIM detection using qim/detect.py
+    # Stub: return placeholder verification result
+    # NOTE: These are placeholder values for M#4 infrastructure setup.
+    #       Real QIM detection will be implemented in M#5.
     result = {
-        "qim_verified": False,  # Stub: always unverified
-        "confidence": 0.0,  # Stub: zero confidence
-        "score": 0.0,  # Stub: zero score
-        "ber": 1.0 if expected_bits is not None else None,  # Stub: 100% error
+        "qim_verified": False,  # Stub: always unverified (no detection yet)
+        "confidence": 0.0,  # Stub: zero confidence (no detection yet)
+        "score": 0.0,  # Stub: zero score (no detection yet)
+        "ber": (
+            0.5 if expected_bits is not None else None
+        ),  # Stub: 50% error (random guess)
     }
 
     return result

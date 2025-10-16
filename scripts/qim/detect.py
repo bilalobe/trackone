@@ -242,13 +242,19 @@ def detect_watermark(
 
     References:
         - ADR-007: Complete QIM-A detection pipeline
+
+    Note:
+        Dynamic import is used here to avoid circular dependency issues during
+        test imports. In production use, consider restructuring modules to use
+        standard imports at module level. This is acceptable for M#4 stubs but
+        should be refactored in M#5 when modules are properly packaged.
     """
     # Import here to avoid circular dependency issues
     import importlib.util
     import sys
     from pathlib import Path
 
-    # Load embed module dynamically
+    # Load embed module dynamically (TODO: refactor to module-level import in M#5)
     embed_path = Path(__file__).parent / "embed.py"
     embed_spec = importlib.util.spec_from_file_location(
         "qim_embed_internal", str(embed_path)
@@ -277,7 +283,8 @@ def detect_watermark(
     # Step 3: Compute metrics
     ber = compute_ber(detected_bits, expected_bits)
     confidence = compute_confidence(detected_bits, expected_bits, signal, config)
-    score = compute_correlation_score(signal, signal)  # Stub: self-correlation
+    # Stub: Use placeholder score (real correlation with reference signal in M#5)
+    score = 0.5  # Placeholder: 50% correlation (neither good nor bad)
 
     # Step 4: Verification decision
     qim_verified = (ber <= config.ber_target) and (
