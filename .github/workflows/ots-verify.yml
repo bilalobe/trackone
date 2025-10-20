@@ -1,0 +1,45 @@
+name: OTS Verify (headers)
+
+on:
+  push:
+    branches:
+      - 'ci/ots-verify-draft'
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+jobs:
+  ots-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Restore bitcoin headers cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/bitcoin-data
+          key: bitcoin-headers-${{ runner.os }}-v1
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq python3-pip bitcoind || true
+          pip3 install --upgrade pip
+          pip3 install opentimestamps-client || true
+
+      - name: Make CI script executable
+        run: |
+          chmod +x scripts/ci/ots_verify.sh
+
+      - name: Run OTS verification helper
+        env:
+          DATADIR: ${{ runner.temp }}/bitcoin-data
+          TIMEOUT_SECS: 600
+        run: |
+          scripts/ci/ots_verify.sh out/site_demo/day || true
+
+      - name: Save bitcoin headers cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/bitcoin-data
+          key: bitcoin-headers-${{ runner.os }}-v1
