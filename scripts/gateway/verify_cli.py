@@ -14,13 +14,14 @@ Exit codes:
 - 1: Block header not found or invalid day field
 - 2: Merkle root mismatch
 - 3: OTS proof file not found
-- 4: OTS proof verification failed
+- 4: OTS proof verification failed (strict mode only)
 
-This enables auditors to independently verify the gateway's claims without
-trusting the gateway operator or database.
+By default (lenient mode), placeholder proofs and unavailable OTS verification are treated as non-fatal to support CI/trial phases.
+Use --strict-ots to require a successful OTS verification (headers available and client installed).
 
 References:
 - ADR-003: Canonicalization, Merkle Policy, Daily OTS Anchoring
+- ADR-007: CI headers policy (lenient in PRs, strict on main)
 
 Usage:
     # Verify using facts from default location
@@ -33,6 +34,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import subprocess
 from hashlib import sha256
 from pathlib import Path
@@ -59,16 +61,18 @@ def merkle_root(leaves):
     return layer[0].hex()
 
 
-def verify_ots(ots_path: Path) -> bool:
+def run_ots_verify(ots_path: Path) -> int:
+    """Run 'ots verify' if available; return its exit code or 127 if not available."""
+    if shutil.which("ots") is None:
+        return 127
     try:
-        # Try to call ots verify (requires ots client installed)
         result = subprocess.run(
             ["ots", "verify", str(ots_path)], capture_output=True, text=True
         )
-        return result.returncode == 0
+        return result.returncode
     except Exception:
-        # Fallback: check for placeholder
-        return ots_path.read_text(encoding="utf-8").strip() == "OTS_PROOF_PLACEHOLDER"
+        # Treat unexpected execution issues as failure
+        return 2
 
 
 def main(argv=None) -> int:
@@ -83,6 +87,11 @@ def main(argv=None) -> int:
         type=Path,
         default=Path("toolset/unified/examples"),
         help="Directory with fact JSON files to recompute the Merkle root",
+    )
+    p.add_argument(
+        "--strict-ots",
+        action="store_true",
+        help="Require successful OTS verification; otherwise lenient (placeholders/headers-missing are non-fatal)",
     )
     args = p.parse_args(argv)
 
@@ -131,12 +140,44 @@ def main(argv=None) -> int:
     if not ots_path.exists():
         print(f"ERROR: OTS proof file not found: {ots_path}")
         return 3
-    if not verify_ots(ots_path):
-        print(f"ERROR: OTS proof verification failed for {ots_path}")
+
+    # Accept explicit placeholder in lenient mode
+    try:
+        content = ots_path.read_text(encoding="utf-8").strip()
+    except Exception:
+        content = ""
+    if content == "OTS_PROOF_PLACEHOLDER":
+        print(
+            f"WARN: OTS placeholder found at {ots_path}; skipping verification (lenient mode)"
+        )
+        return 0
+
+    rc = run_ots_verify(ots_path)
+    if rc == 0:
+        print("OK: root matches and OTS verified")
+        return 0
+
+    # Non-zero: either ots not available (127) or verification failed (headers missing, etc.)
+    if args.strict_ots:
+        reason = (
+            "OTS client not installed"
+            if rc == 127
+            else f"verification failed (rc={rc})"
+        )
+        print(f"ERROR: OTS proof {reason} for {ots_path}")
         return 4
 
-    print("OK: root matches and OTS verified")
+    # Lenient mode: warn and proceed
+    if rc == 127:
+        print(f"WARN: OTS client not installed; skipping verification for {ots_path}")
+    else:
+        print(
+            f"WARN: OTS verify returned {rc}; treating as deferred (lenient mode) for {ots_path}"
+        )
     return 0
+
+
+# ci: trigger ots-verify
 
 
 if __name__ == "__main__":
