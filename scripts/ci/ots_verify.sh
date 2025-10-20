@@ -6,7 +6,18 @@ set -euo pipefail
 
 ROOT_DIR="${1:-.}"
 DATADIR="${DATADIR:-$HOME/.bitcoin}"
-BITCOIND_EXTRA_ARGS="${BITCOIND_EXTRA_ARGS:-'-listen=0 -blocksonly=1 -prune=550 -txindex=0 -dbcache=50 -maxconnections=8 -disablewallet=1'}"
+# Default extra args as an array (no embedded quote characters)
+DEFAULT_BITCOIND_EXTRA_ARGS=( -listen=0 -blocksonly=1 -prune=550 -txindex=0 -dbcache=50 -maxconnections=8 -disablewallet=1 )
+
+# If BITCOIND_EXTRA_ARGS is provided as a string in the environment, split it into an array.
+BITCOIND_EXTRA_ARGS_ARRAY=()
+if [ -n "${BITCOIND_EXTRA_ARGS:-}" ]; then
+  # Split on whitespace into array (safe for typical usage in CI). If you need complex quoting, set the array in the script.
+  read -r -a BITCOIND_EXTRA_ARGS_ARRAY <<< "${BITCOIND_EXTRA_ARGS}"
+else
+  BITCOIND_EXTRA_ARGS_ARRAY=("${DEFAULT_BITCOIND_EXTRA_ARGS[@]}")
+fi
+
 TIMEOUT_SECS="${TIMEOUT_SECS:-600}"   # 10 minutes
 SLEEP_INTERVAL="${SLEEP_INTERVAL:-5}"
 STRICT_VERIFY="${STRICT_VERIFY:-0}"   # 0 = allow deferred (timeout), 1 = fail on timeout
@@ -23,8 +34,9 @@ if ! command -v bitcoin-cli >/dev/null 2>&1; then
 fi
 
 # Start bitcoind in background
-echo "Starting bitcoind (datadir=$DATADIR) with args: $BITCOIND_EXTRA_ARGS"
-bitcoind -datadir="$DATADIR" -daemon $BITCOIND_EXTRA_ARGS
+echo "Starting bitcoind (datadir=$DATADIR) with args: ${BITCOIND_EXTRA_ARGS_ARRAY[*]}"
+# shellcheck disable=SC2068
+bitcoind -datadir="$DATADIR" -daemon "${BITCOIND_EXTRA_ARGS_ARRAY[@]}"
 
 cleanup() {
   echo "Shutting down bitcoind..."
