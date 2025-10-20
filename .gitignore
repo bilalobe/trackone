@@ -49,6 +49,12 @@ device_table.json
 *.bin.ots
 *.bin.sha256
 
+# Re-include OTS proof files under out/**/day so they can be committed and tracked via LFS
+# (keep this after the out/ and *.bin.ots ignore rules)
+!out/
+!out/**/day/
+!out/**/day/*.bin.ots
+
 # LaTeX
 *.aux
 *.log
