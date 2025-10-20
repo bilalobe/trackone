@@ -7,9 +7,15 @@ on:
   pull_request:
     types: [opened, reopened, synchronize]
 
+concurrency:
+  group: ots-verify-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   ots-verify:
     runs-on: ubuntu-latest
+    env:
+      BITCOIN_CORE_VERSION: '28.1'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -17,29 +23,59 @@ jobs:
       - name: Restore bitcoin headers cache
         uses: actions/cache@v4
         with:
-          path: ${{ runner.temp }}/bitcoin-data
-          key: bitcoin-headers-${{ runner.os }}-v1
+          path: ~/.bitcoin
+          key: bitcoin-headers-${{ runner.os }}-v${{ env.BITCOIN_CORE_VERSION }}
+          restore-keys: |
+            bitcoin-headers-${{ runner.os }}-
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
 
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y jq python3-pip bitcoind || true
+          sudo apt-get install -y jq curl tar
           pip3 install --upgrade pip
-          pip3 install opentimestamps-client || true
+          pip3 install opentimestamps-client
+
+      - name: Install Bitcoin Core (bitcoind)
+        run: |
+          cd "$RUNNER_TEMP"
+          curl -L -o bitcoin.tar.gz https://bitcoincore.org/bin/bitcoin-core-${BITCOIN_CORE_VERSION}/bitcoin-${BITCOIN_CORE_VERSION}-x86_64-linux-gnu.tar.gz
+          tar -xzf bitcoin.tar.gz
+          echo "$RUNNER_TEMP/bitcoin-${BITCOIN_CORE_VERSION}/bin" >> "$GITHUB_PATH"
+          bitcoind -version
 
       - name: Make CI script executable
         run: |
           chmod +x scripts/ci/ots_verify.sh
 
-      - name: Run OTS verification helper
-        env:
-          DATADIR: ${{ runner.temp }}/bitcoin-data
-          TIMEOUT_SECS: 600
+      - name: Check for OTS files
+        id: check_ots
         run: |
-          scripts/ci/ots_verify.sh out/site_demo/day || true
+          shopt -s nullglob
+          files=(out/site_demo/day/*.ots)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No OTS files found; skipping verification."
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Found ${#files[@]} OTS file(s)."
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run OTS verification helper
+        if: steps.check_ots.outputs.found == 'true'
+        timeout-minutes: 15
+        run: |
+          scripts/ci/ots_verify.sh out/site_demo/day
 
       - name: Save bitcoin headers cache
         uses: actions/cache@v4
         with:
-          path: ${{ runner.temp }}/bitcoin-data
-          key: bitcoin-headers-${{ runner.os }}-v1
+          path: ~/.bitcoin
+          key: bitcoin-headers-${{ runner.os }}-v${{ env.BITCOIN_CORE_VERSION }}-${{ github.run_id }}
+          restore-keys: |
+            bitcoin-headers-${{ runner.os }}-v${{ env.BITCOIN_CORE_VERSION }}
+            bitcoin-headers-${{ runner.os }}-
