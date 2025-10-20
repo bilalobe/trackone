@@ -131,3 +131,12 @@ watch: ## Watch for file changes and re-run tests (requires pytest-watch)
 		echo "[ERROR] pytest-watch not installed. Install with: pip install pytest-watch"; \
 		exit 1; \
 	fi
+
+.PHONY: ots-verify
+ots-verify: ## Verify OTS proofs locally (uses headers-only bitcoind; STRICT_VERIFY=0 by default)
+	@echo "[make] Verifying OTS proofs in $(OUT_DIR)/day ..."
+	@if [ ! -x scripts/ci/ots_verify.sh ]; then \
+		echo "[ERROR] scripts/ci/ots_verify.sh not found or not executable"; \
+		exit 1; \
+	fi
+	STRICT_VERIFY=$${STRICT_VERIFY:-0} TIMEOUT_SECS=$${TIMEOUT_SECS:-600} scripts/ci/ots_verify.sh $(OUT_DIR)/day

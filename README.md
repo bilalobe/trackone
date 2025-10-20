@@ -1,22 +1,18 @@
 # Track1 — Ultra–Low‑Power, Verifiable Telemetry (Barnacle Sentinel)
 
 [![CI](https://github.com/bilalobe/trackone/actions/workflows/ci.yml/badge.svg)](https://github.com/bilalobe/trackone/actions/workflows/ci.yml)
+[![OTS Verify](https://github.com/bilalobe/trackone/actions/workflows/ots-verify.yml/badge.svg)](https://github.com/bilalobe/trackone/actions/workflows/ots-verify.yml)
 [![codecov](https://codecov.io/gh/bilalobe/trackone/branch/main/graph/badge.svg)](https://codecov.io/gh/yourusername/trackone)
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-
-[![CI](https://github.com/bilalobe/trackone/actions/workflows/ci.yml/badge.svg)](https://github.com/bilalobe/trackone/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/bilalobe/trackone/branch/main/graph/badge.svg)](https://codecov.io/gh/bilalobe/trackone)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 This repository contains the code and documents for Track1: secure pod→gateway telemetry with daily, publicly verifiable
 timestamp proofs (OpenTimestamps), plus deterministic batching and schemas.
 
-**Current Status**: M#3 — Production AEAD + PyNaCl Migration (v0.0.1-m3)
-**Release Date**: October 13, 2025
+**Current Status**: M#4 — OTS CI headers policy accepted (ADR-007), v0.0.1-m4
+**Release Date**: October 20, 2025
 **Test Coverage**: 73 tests passing, 85% code coverage
-**CI/CD**: Python 3.11/3.12/3.13 with uv package manager
+**CI/CD**: Python 3.11/3.12/3.13 with uv package manager; OTS verification policy per ADR-007
 
 ## ✨ What's New in M#3
 
