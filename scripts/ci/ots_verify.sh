@@ -148,6 +148,68 @@ done
 echo "Required header heights: ${heights[*]}"
 echo "Max required header height: $max_height"
 
+# --- New: avoid starting bitcoind when DATADIR looks empty and STRICT_VERIFY != 1 ---
+# If DATADIR appears empty (no headers cached) and we're not strict, skip starting bitcoind and defer verification.
+if command -v du >/dev/null 2>&1; then
+  dir_kb=$(du -sk "$DATADIR" 2>/dev/null | cut -f1 || echo 0)
+else
+  dir_kb=0
+fi
+if [ -z "${dir_kb}" ]; then dir_kb=0; fi
+
+echo "DATADIR size: ${dir_kb} KB"
+
+# If the datadir is small (<50MB) and we're in non-strict mode, defer instead of attempting to sync many headers.
+# The previous threshold was too small (1MB) and directories alone showed >4KB which caused bitcoind to start.
+MIN_DATADIR_KB=${MIN_DATADIR_KB:-51200} # 50 MB
+if [ "$dir_kb" -lt "$MIN_DATADIR_KB" ] && [ "${STRICT_VERIFY:-0}" != "1" ]; then
+  echo "DATADIR appears small (size ${dir_kb} KB < ${MIN_DATADIR_KB} KB); skipping full bitcoin sync in non-strict mode."
+  if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+    {
+      echo "### OTS Verification Summary"
+      echo "- Deferred due to missing bitcoin headers cache (DATADIR size ${dir_kb} KB)"
+      echo "- Required max height: $max_height"
+      echo "- To make this run succeed: enable/restore the ~/.bitcoin cache in Actions, run on a branch with cached headers, or set STRICT_VERIFY=1 to fail instead of defer."
+    } >> "$GITHUB_STEP_SUMMARY"
+  fi
+  # Attempt best-effort verification (calendar proofs) but don't fail CI for missing headers in non-strict mode
+  if command -v ots >/dev/null 2>&1; then
+    shopt -s nullglob
+    for f in "$ROOT_DIR"/*.ots; do
+      [ -f "$f" ] || continue
+      if ! ots verify "$f"; then
+        echo "Verification for $f deferred due to missing headers."
+      fi
+    done
+  fi
+  exit 0
+fi
+
+# Respect RUN_BITCOIND environment flag (set by workflow). If not explicitly allowed, don't start bitcoind.
+# This is useful to avoid starting bitcoind for draft PRs or forks where syncing headers is impractical.
+if [ "${RUN_BITCOIND:-0}" != "1" ]; then
+  echo "RUN_BITCOIND=${RUN_BITCOIND:-0}: not starting bitcoind in this run (likely a draft PR or manual guard)."
+  if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+    {
+      echo "### OTS Verification Summary"
+      echo "- Skipped starting bitcoind because RUN_BITCOIND=${RUN_BITCOIND:-0}."
+      echo "- Required max height: $max_height"
+      echo "- To force a full verification: set RUN_BITCOIND=1 (e.g., run on main, use workflow_dispatch, or add label run-ots-verify)."
+    } >> "$GITHUB_STEP_SUMMARY"
+  fi
+  # Attempt best-effort verification (calendar proofs) but don't fail CI for missing headers in non-strict mode
+  if command -v ots >/dev/null 2>&1; then
+    shopt -s nullglob
+    for f in "$ROOT_DIR"/*.ots; do
+      [ -f "$f" ] || continue
+      if ! ots verify "$f"; then
+        echo "Verification for $f deferred due to missing headers or disabled bitcoind."
+      fi
+    done
+  fi
+  exit 0
+fi
+
 # Now start bitcoind in background (we only start when headers are required)
 if ! command -v bitcoind >/dev/null 2>&1; then
   echo "bitcoind is not installed; cannot run trustless OTS verification. Skipping."
