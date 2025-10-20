@@ -4,24 +4,13 @@ on:
   push:
     branches:
       - 'ci/ots-verify-draft'
-    paths:
-      - '.github/workflows/ots-verify.yml'
-      - 'scripts/ci/ots_verify.sh'
-      - 'scripts/gateway/ots_anchor.py'
-      - 'scripts/gateway/verify_cli.py'
-      - 'scripts/gateway/merkle_batcher.py'
-      - 'docs/ots-verification.md'
-      - 'adr/ADR-007-*'
   pull_request:
     types: [opened, reopened, synchronize]
-    paths:
-      - '.github/workflows/ots-verify.yml'
-      - 'scripts/ci/ots_verify.sh'
-      - 'scripts/gateway/ots_anchor.py'
-      - 'scripts/gateway/verify_cli.py'
-      - 'scripts/gateway/merkle_batcher.py'
-      - 'docs/ots-verification.md'
-      - 'adr/ADR-007-*'
+  # Allow a label on a PR to explicitly request a run (no files need to change)
+  pull_request_target:
+    types: [labeled]
+  # Allow manual runs from the Actions UI
+  workflow_dispatch: {}
 
 permissions:
   contents: read
@@ -32,46 +21,31 @@ concurrency:
 
 jobs:
   ots-verify:
+    # Only run this job when it's one of:
+    # - a push (push trigger still applies),
+    # - a pull_request (any PR) — label gating is handled below,
+    # - a pull_request_target labeled event where the label name is 'run-ots-verify',
+    # - or a manual workflow_dispatch.
+    if: >-
+      github.event_name == 'push' ||
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'pull_request_target' && github.event.action == 'labeled' && github.event.label && github.event.label.name == 'run-ots-verify')
     runs-on: ubuntu-latest
     env:
       BITCOIN_CORE_VERSION: '28.1'
     steps:
-      - name: Checkout
+      - name: Checkout (normal events)
+        if: github.event_name != 'pull_request_target'
         uses: actions/checkout@v4
 
-      - name: Restore bitcoin headers cache
-        uses: actions/cache@v4
+      - name: Checkout PR head (when invoked via pull_request_target labeled)
+        if: github.event_name == 'pull_request_target' && github.event.pull_request
+        uses: actions/checkout@v4
         with:
-          path: ~/.bitcoin
-          key: bitcoin-headers-${{ runner.os }}-v${{ env.BITCOIN_CORE_VERSION }}
-          restore-keys: |
-            bitcoin-headers-${{ runner.os }}-
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.x'
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y jq curl tar
-          pip3 install --upgrade pip
-          pip3 install opentimestamps-client
-
-      - name: Install Bitcoin Core (bitcoind)
-        run: |
-          cd "$RUNNER_TEMP"
-          curl -L -o bitcoin.tar.gz https://bitcoincore.org/bin/bitcoin-core-${BITCOIN_CORE_VERSION}/bitcoin-${BITCOIN_CORE_VERSION}-x86_64-linux-gnu.tar.gz
-          tar -xzf bitcoin.tar.gz
-          echo "$RUNNER_TEMP/bitcoin-${BITCOIN_CORE_VERSION}/bin" >> "$GITHUB_PATH"
-          export PATH="$RUNNER_TEMP/bitcoin-${BITCOIN_CORE_VERSION}/bin:$PATH"
-          bitcoind -version
-          bitcoin-cli -version
-
-      - name: Make CI script executable
-        run: |
-          chmod +x scripts/ci/ots_verify.sh
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
 
       - name: Check for OTS files
         id: check_ots
@@ -86,6 +60,45 @@ jobs:
             echo "found=true" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Restore bitcoin headers cache
+        if: steps.check_ots.outputs.found == 'true'
+        uses: actions/cache@v4
+        with:
+          path: ~/.bitcoin
+          key: bitcoin-headers-${{ runner.os }}-v${{ env.BITCOIN_CORE_VERSION }}
+          restore-keys: |
+            bitcoin-headers-${{ runner.os }}-
+
+      - name: Set up Python
+        if: steps.check_ots.outputs.found == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install dependencies
+        if: steps.check_ots.outputs.found == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq curl tar
+          pip3 install --upgrade pip
+          pip3 install opentimestamps-client
+
+      - name: Install Bitcoin Core (bitcoind)
+        if: steps.check_ots.outputs.found == 'true'
+        run: |
+          cd "$RUNNER_TEMP"
+          curl -L -o bitcoin.tar.gz https://bitcoincore.org/bin/bitcoin-core-${BITCOIN_CORE_VERSION}/bitcoin-${BITCOIN_CORE_VERSION}-x86_64-linux-gnu.tar.gz
+          tar -xzf bitcoin.tar.gz
+          echo "$RUNNER_TEMP/bitcoin-${BITCOIN_CORE_VERSION}/bin" >> "$GITHUB_PATH"
+          export PATH="$RUNNER_TEMP/bitcoin-${BITCOIN_CORE_VERSION}/bin:$PATH"
+          bitcoind -version
+          bitcoin-cli -version
+
+      - name: Make CI script executable
+        if: steps.check_ots.outputs.found == 'true'
+        run: |
+          chmod +x scripts/ci/ots_verify.sh
+
       - name: Run OTS verification helper
         if: steps.check_ots.outputs.found == 'true'
         timeout-minutes: 15
@@ -96,7 +109,7 @@ jobs:
           scripts/ci/ots_verify.sh out/site_demo/day
 
       - name: Upload Bitcoin logs (on failure)
-        if: failure()
+        if: failure() && steps.check_ots.outputs.found == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: bitcoin-logs
@@ -108,6 +121,7 @@ jobs:
           retention-days: 7
 
       - name: Save bitcoin headers cache
+        if: steps.check_ots.outputs.found == 'true'
         uses: actions/cache@v4
         with:
           path: ~/.bitcoin
