@@ -38,6 +38,9 @@ jobs:
       - name: Checkout (normal events)
         if: github.event_name != 'pull_request_target'
         uses: actions/checkout@v4
+        with:
+          lfs: true
+          fetch-depth: 0
 
       - name: Checkout PR head (when invoked via pull_request_target labeled)
         if: github.event_name == 'pull_request_target' && github.event.pull_request
@@ -46,6 +49,7 @@ jobs:
           repository: ${{ github.event.pull_request.head.repo.full_name }}
           ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
+          lfs: true
 
       - name: Check for OTS files
         id: check_ots
