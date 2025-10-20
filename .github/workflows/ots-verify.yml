@@ -10,7 +10,17 @@ on:
   pull_request_target:
     types: [labeled]
   # Allow manual runs from the Actions UI
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      run_bitcoind:
+        description: 'Force bitcoind start (1=yes, 0=no; default: auto-decide based on context)'
+        required: false
+        default: 'auto'
+        type: choice
+        options:
+          - 'auto'
+          - '1'
+          - '0'
 
 permissions:
   contents: read
@@ -64,6 +74,41 @@ jobs:
             echo "found=true" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Decide whether to start bitcoind
+        id: decide_run_bitcoind
+        if: steps.check_ots.outputs.found == 'true'
+        env:
+          GH_EVENT_NAME: ${{ github.event_name }}
+          GH_REF_NAME: ${{ github.ref_name }}
+          PR_DRAFT: ${{ github.event.pull_request.draft || 'false' }}
+          PR_ACTION: ${{ github.event.action || '' }}
+          PR_LABEL: ${{ github.event.label.name || '' }}
+          DISPATCH_INPUT: ${{ github.event.inputs.run_bitcoind || 'auto' }}
+        run: |
+          # Default: don't run bitcoind
+          run=0
+          echo "Context: EVENT=$GH_EVENT_NAME REF=$GH_REF_NAME ACTION=$PR_ACTION DRAFT=$PR_DRAFT LABEL=$PR_LABEL DISPATCH_INPUT=$DISPATCH_INPUT"
+
+          # If workflow_dispatch input explicitly sets run_bitcoind, respect it (unless 'auto')
+          if [ "$DISPATCH_INPUT" = "1" ]; then
+            echo "workflow_dispatch input forces RUN_BITCOIND=1"
+            run=1
+          elif [ "$DISPATCH_INPUT" = "0" ]; then
+            echo "workflow_dispatch input forces RUN_BITCOIND=0"
+            run=0
+          else
+            # Auto-decide based on event context
+            # Manual runs and main branch should run bitcoind
+            if [ "$GH_EVENT_NAME" = 'workflow_dispatch' ] || [ "$GH_REF_NAME" = 'main' ]; then
+              run=1
+            fi
+            # For pull_request_target labeled events, run only when label is the explicit trigger
+            if [ "$GH_EVENT_NAME" = 'pull_request_target' ] && [ "$PR_ACTION" = 'labeled' ] && [ "$PR_LABEL" = 'run-ots-verify' ]; then
+              run=1
+            fi
+          fi
+          echo "run_bitcoind=$run" >> "$GITHUB_OUTPUT"
+
       - name: Restore bitcoin headers cache
         if: steps.check_ots.outputs.found == 'true'
         uses: actions/cache@v4
@@ -109,6 +154,8 @@ jobs:
         env:
           # Strict on main pushes, lenient on PRs/other branches
           STRICT_VERIFY: ${{ github.ref_name == 'main' && '1' || '0' }}
+          # Derived from the prior decide step
+          RUN_BITCOIND: ${{ steps.decide_run_bitcoind.outputs.run_bitcoind || '0' }}
         run: |
           scripts/ci/ots_verify.sh out/site_demo/day
 

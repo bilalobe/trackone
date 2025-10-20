@@ -177,8 +177,5 @@ def main(argv=None) -> int:
     return 0
 
 
-# ci: trigger ots-verify
-
-
 if __name__ == "__main__":
     raise SystemExit(main())
