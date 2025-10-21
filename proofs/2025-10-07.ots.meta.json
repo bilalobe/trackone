@@ -1,0 +1,14 @@
+{
+  "milestone": "m4",
+  "day": "2025-10-07",
+  "artifact": "out/site_demo/day/2025-10-07.bin",
+  "artifact_sha256": "4778cddcf437f0b0ac8cd62fef3b89909bd6f4a8fd9590ac6e4a70e4fded5f60",
+  "ots_proof": "out/site_demo/day/2025-10-07.bin.ots",
+  "ots_client_version": "v0.7.2",
+  "bitcoin": {
+    "height": 919384,
+    "blockhash": "00000000000000000000b36d7b88a2e781f65619746bc238d4cfde8555f13733",
+    "merkleroot": "166c8fe05f6071d8a29145c4e52c039159c699f3278c45d1c3107503b59c8047"
+  },
+  "verified_at_utc": "2025-10-21T18:26:48Z"
+}

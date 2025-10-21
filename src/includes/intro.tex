@@ -8,8 +8,9 @@ We present a deterministic telemetry pipeline for ``Barnacle'' pods that (i) sec
     \item Deterministic canonicalization and Merkle policy with daily OTS anchoring (ADR-003)
     \item PyNaCl-based cryptographic implementation with comprehensive test vectors (ADR-005)
     \item Forward-only schema policy for maintainability (ADR-006)
+    \item CI-feasible, trustless OTS verification using Bitcoin headers (ADR-007)
     \item A reference gateway pipeline with 85\% test coverage and reproducible artifacts
 \end{itemize}
 
-\textbf{Current Status (v0.0.1-m3, October 2025):}
-The system implements production-grade XChaCha20-Poly1305 AEAD with deterministic test vectors, property-based testing, and CI/CD across Python 3.11--3.13.
+\textbf{Current Status (v0.0.1-m4, October 2025):}
+Production AEAD, reproducible Merkle/OTS artifacts, and an accepted CI verification policy (ADR-007) using Bitcoin Core in headers-only mode with datadir caching. Prior milestone results (M\#3) remain stable with 73 tests and 85\% coverage.

@@ -32,10 +32,10 @@ Coverage: 85% (1506 statements, 223 missed)
 \subsection{Security Validation}
 \textbf{AEAD integrity:} All tamper detection tests pass
 \begin{itemize}[nosep]
-    \item Ciphertext modification → authentication failure
-    \item Tag modification → verification rejection
-    \item AAD tampering → tag mismatch detection
-    \item Nonce validation → length enforcement
+    \item Ciphertext modification \textrightarrow{}authentication failure
+    \item Tag modification \textrightarrow{}verification rejection
+    \item AAD tampering \textrightarrow{}tag mismatch detection
+    \item Nonce validation \textrightarrow{}length enforcement
 \end{itemize}
 
 \textbf{Replay protection:} Window enforcement tested
@@ -45,6 +45,62 @@ Coverage: 85% (1506 statements, 223 missed)
     \item Persistence verified across gateway restarts
 \end{itemize}
 
+\subsection{OpenTimestamps Integration}
+\textbf{Successful Bitcoin anchoring:} Production day blobs anchored to Bitcoin blocks 919384, 919388, 919418 via OpenTimestamps calendar servers.
+
+\textbf{Verification validated:}
+\begin{itemize}[nosep]
+    \item Local verification with Bitcoin Core (headers-only mode)
+    \item Multiple independent calendar attestations received
+    \item Merkle root recomputation matches anchored commitment
+    \item End-to-end trustless timestamp verification confirmed
+\end{itemize}
+
+\textbf{CI challenges addressed:}
+\begin{itemize}[nosep]
+    \item Full blockchain sync impractical ($>$500 GB, days to sync)
+    \item Headers-only mode reduces storage to $<$1 GB
+    \item Initial header sync: $\sim$15 minutes (one-time cost)
+    \item Subsequent verifications: seconds (with cached headers)
+    \item Alternative: offline verification with pre-downloaded headers
+\end{itemize}
+
+\textbf{Operational considerations:}
+\begin{itemize}[nosep]
+    \item \texttt{ots stamp}: Immediate (free, public calendars)
+    \item \texttt{ots upgrade}: Automatic after 1--6 hours (Bitcoin confirmation)
+    \item \texttt{ots verify}: Requires Bitcoin P2P or block explorer API
+    \item Air-gapped deployments: Defer verification or use trusted header feeds
+\end{itemize}
+
+\subsection{Milestone (M\#4): Bitcoin OTS Anchoring Finalized}
+\textbf{Artifact:} \texttt{out/site\_demo/day/2025-10-07.bin}\\
+\textbf{SHA256:} \texttt{4778cddcf437f0b0ac8cd62fef3b89909bd6f4a8fd9590ac6e4a70e4fded5f60}\\
+\textbf{OTS Proof:} \texttt{out/site\_demo/day/2025-10-07.bin.ots}\\
+\textbf{OTS Client:} \texttt{v0.7.2}
+
+\textbf{Anchored Bitcoin block:}
+\begin{itemize}[nosep]
+    \item Height: \texttt{919384}
+    \item Block hash: \texttt{00000000000000000000b36d7b88a2e781f65619746bc238d4cfde8555f13733}
+    \item Merkle root: \texttt{166c8fe05f6071d8a29145c4e52c039159c699f3278c45d1c3107503b59c8047}
+\end{itemize}
+
+\textbf{Verification transcript (local node, headers-only/pruned-safe):}
+\begin{verbatim}
+ots verify out/site_demo/day/2025-10-07.bin.ots
+# Success! Bitcoin block 919384 attests existence as of 2025-10-16 IST
+
+BHASH=$(bitcoin-cli getblockhash 919384)
+bitcoin-cli getblockheader $BHASH | jq -r .merkleroot
+# 166c8fe05f6071d8a29145c4e52c039159c699f3278c45d1c3107503b59c8047
+
+python scripts/gateway/verify_cli.py --root out/site_demo --facts out/site_demo/facts
+# OK: root matches and OTS verified
+\end{verbatim}
+
+\textbf{Proof metadata:} \texttt{proofs/2025-10-07.ots.meta.json} captures all fields above (artifact path, SHA-256, OTS client version, Bitcoin height/hash/merkleroot, verification time).
+
 \subsection{Documentation}
 \textbf{Architecture Decision Records (ADRs):}
 \begin{itemize}[nosep]
@@ -53,6 +109,14 @@ Coverage: 85% (1506 statements, 223 missed)
     \item ADR-003: Canonicalization, Merkle policy, OTS anchoring
     \item ADR-005: PyNaCl migration (completed M\#3)
     \item ADR-006: Forward-only schema policy
+    \item ADR-007: OTS verification in CI with Bitcoin headers (M\#4)
+\end{itemize}
+
+\textbf{Operational guides:}
+\begin{itemize}[nosep]
+    \item \texttt{docs/ots-verification.md}: Bitcoin Core setup, CI strategies
+    \item \texttt{README.md}: Quick start, development workflow
+    \item \texttt{CHANGELOG.md}: Keep a Changelog compliant (M\#0--M\#3)
 \end{itemize}
 
 \textbf{Test coverage report:} HTML coverage report in \texttt{htmlcov/index.html}
@@ -61,10 +125,11 @@ Coverage: 85% (1506 statements, 223 missed)
 
 \subsection{Planned (M\#4)}
 \begin{itemize}[nosep]
-    \item Gateway "Ledger" tab with JSON output visualization
+    \item Gateway ``Ledger'' tab with JSON output visualization
     \item Outage logger for connectivity monitoring
     \item Automated daily OTS anchor/upgrade workflow
     \item Key rotation workflows per ADR-001
+    \item OTS verification integration in CI (with header caching) --- policy accepted, see ADR-007
 \end{itemize}
 
 \subsection{Repository Metrics}
@@ -74,4 +139,5 @@ Coverage: 85% (1506 statements, 223 missed)
     \item \textbf{CI status:} All 9 checks passing
     \item \textbf{Dependencies:} 5 runtime (jsonschema, pynacl, pytest, pytest-cov, hypothesis)
     \item \textbf{License:} MIT
+    \item \textbf{Platform:} Linux (openSUSE Tumbleweed, Ubuntu 24.04 tested)
 \end{itemize}
