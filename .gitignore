@@ -42,11 +42,11 @@ htmlcov/
 
 # Project specific
 out/
+!out/site_demo/day/*.ots
 facts/
 frames.ndjson
 device_table.json
 *.bin
-*.bin.ots
 *.bin.sha256
 
 # LaTeX
