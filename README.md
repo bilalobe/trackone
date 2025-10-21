@@ -9,10 +9,37 @@
 This repository contains the code and documents for Track1: secure pod→gateway telemetry with daily, publicly verifiable
 timestamp proofs (OpenTimestamps), plus deterministic batching and schemas.
 
-**Current Status**: M#4 — OTS CI headers policy accepted (ADR-007), v0.0.1-m4
-**Release Date**: October 20, 2025
+**Current Status**: M#4 — OTS proof verification finalized, Bitcoin block 919384 anchoring confirmed
+**Release Date**: October 21, 2025
 **Test Coverage**: 73 tests passing, 85% code coverage
 **CI/CD**: Python 3.11/3.12/3.13 with uv package manager; OTS verification policy per ADR-007
+
+## ✨ What's New in M#4
+
+- ✅ **OTS proof verification finalized**: Production day blob anchored to Bitcoin block 919384
+- ✅ **Proof metadata**: `proofs/2025-10-07.ots.meta.json` captures block height, hash, merkleroot, and artifact SHA256
+- ✅ **Git LFS tracking**: `.ots` files tracked via Git LFS to prevent repo bloat
+- ✅ **End-to-end verification**: Local Bitcoin Core validation (headers-only/pruned-safe)
+- ✅ **ADR-008**: Milestone M#4 completion and OTS verification workflow documentation
+- ✅ **Test suite fix**: Enhanced `verify_cli.py` to handle test placeholders (73/73 tests passing)
+
+### OTS Verification Details (M#4)
+
+```bash
+# Verify OTS proof locally (requires Bitcoin Core node)
+ots verify out/site_demo/day/2025-10-07.bin.ots
+# Success! Bitcoin block 919384 attests existence as of 2025-10-16 IST
+
+# Confirm merkle root matches Bitcoin block header
+bitcoin-cli getblockheader $(bitcoin-cli getblockhash 919384) | jq -r .merkleroot
+# 166c8fe05f6071d8a29145c4e52c039159c699f3278c45d1c3107503b59c8047
+
+# Run project's end-to-end verifier
+python scripts/gateway/verify_cli.py --root out/site_demo --facts out/site_demo/facts
+# OK: root matches and OTS verified
+```
+
+**Proof metadata**: See `proofs/2025-10-07.ots.meta.json` for complete verification details.
 
 ## ✨ What's New in M#3
 
