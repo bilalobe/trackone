@@ -1,0 +1,17 @@
+# Git LFS tracking for OpenTimestamps proof files
+*.ots filter=lfs diff=lfs merge=lfs -text
+
+# Ensure consistent line endings
+*.py text eol=lf
+*.md text eol=lf
+*.tex text eol=lf
+*.json text eol=lf
+*.sh text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# Binary files
+*.bin binary
+*.png binary
+*.jpg binary
+*.jpeg binary
