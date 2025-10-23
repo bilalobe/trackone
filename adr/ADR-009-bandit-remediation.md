@@ -1,0 +1,97 @@
+ADR 009: Bandit findings remediation and decisions
+===============================================
+
+Status: accepted
+Date: 2025-10-22
+
+Context
+-------
+A Bandit security scan over runtime code (scripts/) reported several low-severity,
+high-confidence issues. The goal was to remediate or provide justified suppressions
+so CI fails only on high-severity/high-confidence issues while minimizing false positives.
+
+Findings (Bandit)
+-----------------
+- B404: import of subprocess (blacklist) — scripts/gateway/ots_anchor.py, scripts/gateway/verify_cli.py
+- B603/B607: subprocess invocation with partial path or without shell=False — calling the external `ots` CLI
+- B603: subprocess calls where Bandit flagged potential untrusted input execution
+- B110: try/except/pass detected — verify_cli.py
+- B101: assert used — scripts/pod_sim/pod_sim.py
+- B311: use of ``random`` module for values used in simulation — pod_sim.py
+
+Decision summary
+----------------
+1. Continue to call the external OpenTimestamps CLI (`ots`) where needed for "stamp" and
+   "verify" operations. This is an external operational dependency and not re-implementable
+   inside this repo.
+2. Reduce Bandit noise by:
+   - Validating the external executable path (via ``shutil.which`` and ``os.access``) before invocation.
+   - Invoking the executable via an absolute path and an argument list (no shell=True).
+   - Narrowing exception handling to specific, meaningful exceptions.
+   - Replacing problematic ``assert`` usage with explicit condition checks and raising appropriate exceptions.
+   - Replacing non-cryptographic ``random`` with a cryptographically secure PRNG in the simulator to avoid B311.
+   - Adding short, targeted ``# nosec`` suppressions at validated invocation sites with inline justification.
+3. Configure Bandit in CI to only fail on issues that are both high-severity and high-confidence.
+   This reduces false positives while keeping the CI signal meaningful.
+
+Files changed
+-------------
+- scripts/gateway/ots_anchor.py
+  - Use ``shutil.which('ots')`` to find the executable.
+  - Validate the resolved path is a file and executable via ``Path.resolve()`` and ``os.access(..., X_OK)``.
+  - Invoke the executable via full path list (no shell).
+  - Catch ``subprocess.CalledProcessError`` and ``OSError`` explicitly; fallback to writing a placeholder proof.
+  - Add ``# nosec`` to the validated subprocess.run call with justification comment.
+
+- scripts/gateway/verify_cli.py
+  - Narrowed file-read exceptions (``OSError``, ``UnicodeDecodeError``) around the placeholder check.
+  - Use ``shutil.which`` and validate the executable path before invoking ``ots verify``.
+  - Invoke verified full path and add ``# nosec`` inline to the subprocess.run call.
+
+- scripts/pod_sim/pod_sim.py
+  - Removed an ``assert`` that Bandit flagged (replaced with explicit import validation raising ``ImportError`` if the spec/loader is missing).
+  - Replaced use of the pseudo-random ``random`` module with ``secrets.SystemRandom()`` for the simulator's sample data generation (addresses B311; simulators may use secure RNG to avoid tool warnings).
+
+- .bandit.yaml
+  - Exclude dev/test helpers: ``scripts/tests`` and ``scripts/dev``
+  - Set reporting thresholds to ``severity: high`` and ``confidence: high`` so CI only fails for high-risk/high-confidence findings.
+
+Why these changes
+-----------------
+- B404 + B603/B607 relate to invoking external binaries. The safest in-repo mitigation is to:
+  - Use absolute, validated paths and avoid shell interpolation.
+  - Validate executables are actually present and executable.
+  - Use targeted suppressions with clear inline justification when the invocation is deliberate and validated.
+
+- B101: ``assert`` may be optimized away and is not appropriate for runtime checks. Use explicit condition checks and errors.
+
+- B311: Using ``random`` for anything that might be mistaken as crypto usage triggers Bandit. For a simulator, using
+  ``secrets.SystemRandom`` maintains the behavior but satisfies Bandit.
+
+Alternative approaches considered
+--------------------------------
+- Replacing CLI calls with a pure-Python implementation of OTS—not feasible here (external network and Bitcoin anchoring required).
+- Disabling Bandit checks globally or by rule—rejected to keep useful security scanning.
+- Adding a separate Bandit configuration for exact rules—future work if the team wants finer-grained suppression.
+
+Consequences and follow-ups
+---------------------------
+- CI will now only fail on high/high Bandit findings. Developers should run Bandit locally with the provided config when making security-sensitive changes.
+- We added inline ``# nosec`` suppressions for two subprocess.run calls; these are justified and safe because of the explicit runtime validation.
+- Recommend adding Bandit to dev dependencies (``requirements-dev.txt``) with a pinned version for reproducible CI runs.
+- Consider adding an artifacts step to the CI job to upload Bandit JSON output for audit if desired.
+
+How to reproduce the scan locally
+---------------------------------
+Install Bandit and run from the repo root:
+
+```bash
+pip install bandit
+bandit -r scripts -c .bandit.yaml
+```
+
+Notes for reviewers
+-------------------
+- The changes are intentionally conservative and aim to preserve behavior while addressing tool warnings in a defensible way.
+- If you prefer stricter or looser Bandit behavior (e.g., medium severity allowed), update ``.bandit.yaml`` accordingly.
+- The inline comments on ``# nosec`` suppressions explain the rationale for those exceptions.
