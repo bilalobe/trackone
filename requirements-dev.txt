@@ -1,12 +1,14 @@
-# Development and testing dependencies
--r requirements.txt
-
-# Testing
 pytest>=8.4.2
 pytest-cov>=6.0.0
-hypothesis>=6.140.3
-
-# Code quality
-ruff>=0.1.0
-black>=23.0.0
+pytest-xdist>=3.1.0
+pytest-mock>=3.10.0
+pytest-timeout>=2.3.0
+hypothesis>=6.142.2,<7.0
+opentimestamps-client>=0.7.2
+black>=24.0.0
+ruff>=0.10.0
 mypy>=1.0.0
+bandit>=1.7.8
+pip-audit>=2.7.3
+time-machine>=2.14.0
+hatchling>=1.28.0
