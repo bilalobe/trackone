@@ -5,14 +5,39 @@ description = "Ultra-Low-Power, Verifiable Telemetry (Barnacle Sentinel)"
 authors = [{ name = "BILAL", email = "elkhatabibilal@gmail.com" }]
 license = { text = "MIT" }
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<4.0"
 dependencies = [
     "jsonschema>=4.23.0",
     "pynacl>=1.6.0",
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+[project.optional-dependencies]
+dev = [
     "pytest>=8.4.2",
     "pytest-cov>=6.0.0",
-    "hypothesis==6.142.2",
-    "opentimestamps-client==0.7.2",
+    "pytest-xdist>=3.1.0",
+    "pytest-mock>=3.10.0",
+    "pytest-timeout>=2.3.0",
+    "hypothesis>=6.142.2,<7.0",
+    "opentimestamps-client>=0.7.2",
+    "black>=24.0.0",
+    "ruff>=0.10.0",
+    "mypy>=1.0.0",
+    "bandit>=1.7.8",
+    "pip-audit>=2.7.3",
+    "time-machine>=2.14.0",
+]
+test = [
+    "pytest>=8.4.2",
+    "pytest-cov>=6.0.0",
+    "hypothesis>=6.142.2,<7.0",
+    "opentimestamps-client>=0.7.2",
 ]
 
 [project.urls]
@@ -21,6 +46,10 @@ Repository = "https://github.com/bilalobe/trackone"
 Documentation = "https://github.com/bilalobe/trackone/blob/main/README.md"
 Changelog = "https://github.com/bilalobe/trackone/blob/main/CHANGELOG.md"
 
+[project.scripts]
+# Example CLI entry point:
+# trackone-cli = "trackone.cli:main"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
@@ -28,31 +57,101 @@ build-backend = "hatchling.build"
 # Hatchling build configuration
 [tool.hatch.build.targets.wheel]
 packages = ["scripts"]
-# Include only the source code, not test directories
+# Include only the package source code; exclude tests and build artifacts
 exclude = [
     "scripts/tests",
     "scripts/**/__pycache__",
     "scripts/**/*.pyc",
+    ".git",
+    "build",
+    "dist",
+    "out",
 ]
 
 [tool.hatch.build.targets.sdist]
 include = [
-    "/scripts",
-    "/toolset",
-    "/adr",
-    "/requirements.txt",
-    "/requirements-dev.txt",
-    "/LICENSE",
-    "/README.md",
-    "/CHANGELOG.md",
-    "/Makefile",
+    "scripts",
+    "toolset",
+    "adr",
+    "requirements.txt",
+    "requirements-dev.txt",
+    "LICENSE",
+    "README.md",
+    "CHANGELOG.md",
+    "Makefile",
 ]
 exclude = [
     "*.pyc",
     "__pycache__",
-    "/.git",
-    "/out",
+    ".git",
+    "out",
 ]
+
+# Pytest configuration (use scripts/tests as the root; skip slow by default)
+[tool.pytest.ini_options]
+testpaths = ["tests", "scripts/tests"]
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--strict-config",
+    "--tb=short",
+]
+markers = [
+    "unit: unit tests (fast, no external I/O)",
+    "integration: integration tests (I/O or multiple modules)",
+    "e2e: end-to-end tests (slow, full pipeline)",
+    "crypto: cryptographic primitives and edge cases",
+    "ots: OpenTimestamps related tests",
+    "slow: slow-running tests (excluded by default)",
+    "real_ots: uses real OpenTimestamps client (very slow, opt-in)",
+]
+# Treat warnings as errors, but allow some known safe warnings
+filterwarnings = [
+    "error",
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+    "ignore::pytest.PytestUnraisableExceptionWarning",  # For async cleanup issues
+    "ignore::ResourceWarning",  # File handle cleanup in tests
+]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+# Coverage configuration
+[tool.coverage.run]
+branch = true
+source = ["scripts"]
+omit = [
+    "scripts/tests/*",
+    "scripts/dev/*",
+    "*/__pycache__/*",
+    "*/test_*.py",
+]
+parallel = true
+
+[tool.coverage.report]
+precision = 2
+show_missing = true
+skip_empty = true
+skip_covered = false
+sort = "Cover"
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if __name__ == .__main__.",  # Alternative main guard
+    "@abstract",
+    "raise AssertionError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
+
+fail_under = 85
+
+[tool.coverage.html]
+directory = "htmlcov"
+
+[tool.coverage.xml]
+output = "coverage.xml"
 
 # Black configuration for Track1 project
 [tool.black]
@@ -86,8 +185,10 @@ exclude = [
     "dist",
     "out",
 ]
+line-length = 88
 
 [tool.ruff.lint]
+# Select a focused set of rules; expand as needed
 select = [
     "E", # pycodestyle errors
     "W", # pycodestyle warnings
@@ -121,3 +222,12 @@ line-ending = "auto"
 
 [tool.ruff.lint.isort]
 known-first-party = ["scripts"]
+
+# Mypy configuration (tighter checks)
+[tool.mypy]
+python_version = "3.11"
+strict = true
+exclude = [
+    "scripts/tests/",
+    "scripts/dev/",
+]
