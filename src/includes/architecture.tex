@@ -1,16 +1,217 @@
 \section{System Architecture}
-Pods $\rightarrow$ LoRa $\rightarrow$ Gateway: verify, batch, anchor; Offline-tolerant.
 
-\noindent Pipeline (per ADRs):
-\begin{itemize}[nosep]
-  \item ADR-002 (Framing): Pods emit framed telemetry with fc and nonce; AEAD is stubbed in M\#1 and enabled in M\#2.
-  \item Gateway verifies anti-replay window, canonicalizes facts (ADR-003), and persists deterministic artifacts.
-  \item Daily batching computes Merkle roots and emits day blobs; OTS anchoring provides public timestamp proofs (ADR-003).
-  \item Verification replays facts $\rightarrow$ Merkle root $\rightarrow$ day blob $\rightarrow$ OTS proof.
-\end{itemize}
+\subsection{Overview}
+
+Track1 implements a three-tier architecture: \textbf{Pod} (sensor + radio) $\rightarrow$ \textbf{Gateway} (verify + batch + anchor) $\rightarrow$ \textbf{Verification} (independent auditor). The system is designed for offline-tolerant operation with eventual Bitcoin timestamping.
+
+\textbf{Core dataflow:}
+\begin{enumerate}[nosep]
+    \item Pods generate telemetry and transmit encrypted frames via LoRa/serial
+    \item Gateway decrypts frames, enforces replay protection, writes canonical facts
+    \item Daily batch process computes Merkle root and produces day blob
+    \item OpenTimestamps anchors day blob to Bitcoin blockchain
+    \item Independent verifiers recompute Merkle root and validate OTS proof
+\end{enumerate}
 
 \begin{figure}[h]
     \centering
     %\includegraphics[width=0.85\linewidth]{figs/architecture.pdf}
-    \caption{High-level architecture (pods $\rightarrow$ framed uplink $\rightarrow$ gateway verify/canonicalize $\rightarrow$ Merkle batch $\rightarrow$ OTS anchor)}
+    \caption{High-level architecture: Pods $\rightarrow$ framed uplink $\rightarrow$ Gateway (verify/canonicalize) $\rightarrow$ Merkle batch $\rightarrow$ OTS anchor}
 \end{figure}
+
+\subsection{Component Responsibilities}
+
+\textbf{Pod Simulator (\texttt{pod\_sim.py}):}
+\begin{itemize}[nosep]
+    \item Generates synthetic telemetry facts (temperature, battery, location)
+    \item Encodes payloads as compact TLV (Type-Length-Value) structures
+    \item Constructs frame headers: \texttt{device\_id}, \texttt{msg\_type}, \texttt{frame\_counter}, \texttt{flags}
+    \item Builds nonces: \texttt{salt8 || fc\_u32 || padding} (24 bytes for XChaCha20)
+    \item Encrypts payloads with XChaCha20-Poly1305 AEAD (or plaintext stub for M\#1)
+    \item Emits NDJSON frames to stdout or file (gateway ingestion format)
+\end{itemize}
+
+\textbf{Frame Verifier (\texttt{frame\_verifier.py}):}
+\begin{itemize}[nosep]
+    \item Parses NDJSON frames from pod uplink
+    \item Decrypts ciphertext with XChaCha20-Poly1305, validates 16-byte authentication tag
+    \item Enforces replay protection: sliding 64-frame window per \texttt{device\_id}
+    \item Rejects duplicate \texttt{frame\_counter}, backward jumps, out-of-window frames
+    \item Persists replay state to \texttt{replay\_state.json} (survives gateway restarts)
+    \item Writes canonical fact JSON to \texttt{facts/} directory
+\end{itemize}
+
+\textbf{Merkle Batcher (\texttt{merkle\_batcher.py}):}
+\begin{itemize}[nosep]
+    \item Reads all canonical fact files for a given day
+    \item Computes deterministic canonical JSON (sorted keys, no whitespace)
+    \item Hashes each fact with SHA-256, sorts hashes lexicographically
+    \item Builds Merkle tree with pairwise hashing (duplicate-last for odd layers)
+    \item Emits block header: \texttt{merkle\_root}, \texttt{count}, \texttt{leaf\_hashes}, \texttt{day}, \texttt{site\_id}
+    \item Produces day blob (\texttt{day/YYYY-MM-DD.bin}) and day record (\texttt{day/YYYY-MM-DD.json})
+    \item Validates artifacts against JSON schemas (\texttt{block.schema.json}, \texttt{day.schema.json})
+\end{itemize}
+
+\textbf{OTS Anchor (\texttt{ots\_anchor.py}):}
+\begin{itemize}[nosep]
+    \item Invokes \texttt{ots stamp <day.bin>} to submit SHA-256 to calendar servers
+    \item Creates \texttt{day.bin.ots} proof file (binary format with attestations)
+    \item Falls back to placeholder text file if \texttt{ots} binary unavailable (test/CI support)
+    \item Proof metadata stored in \texttt{proofs/*.ots.meta.json} (block height, hash, merkleroot)
+\end{itemize}
+
+\textbf{Verification CLI (\texttt{verify\_cli.py}):}
+\begin{itemize}[nosep]
+    \item Independent tool for third-party auditors (no gateway trust required)
+    \item Recomputes Merkle root from canonical fact files
+    \item Compares recomputed root against block header (authoritative source)
+    \item Verifies OTS proof with \texttt{ots verify} (requires Bitcoin Core headers)
+    \item Returns exit codes: 0 (success), 1 (header missing), 2 (root mismatch), 3 (proof missing), 4 (proof invalid)
+\end{itemize}
+
+\subsection{Pipeline Workflow (per ADRs)}
+
+\textbf{M\#1 (Stub AEAD --- ADR-004):}
+\begin{itemize}[nosep]
+    \item Framing implemented with plaintext payloads (crypto stub)
+    \item Replay window active and tested
+    \item Merkle batching and OTS anchoring with placeholder proofs
+    \item End-to-end integration validated
+\end{itemize}
+
+\textbf{M\#2 (Real AEAD --- ADR-002):}
+\begin{itemize}[nosep]
+    \item XChaCha20-Poly1305 encryption enabled
+    \item Nonce construction: \texttt{salt8 || fc\_u64 || random8}
+    \item AAD: \texttt{device\_id || msg\_type} (prevents context confusion)
+    \item TLV payload encoding for compact on-air size
+\end{itemize}
+
+\textbf{M\#3 (PyNaCl Migration --- ADR-005):}
+\begin{itemize}[nosep]
+    \item Single cryptographic library (PyNaCl) for all primitives
+    \item Device table schema v1.0 with forward-only policy (ADR-006)
+    \item Test vectors validated against reference implementation
+    \item 85\% code coverage with comprehensive security tests
+\end{itemize}
+
+\textbf{M\#4 (OTS Verification --- ADR-008):}
+\begin{itemize}[nosep]
+    \item Production Bitcoin anchoring confirmed (block 919384)
+    \item Real OTS integration tests (optional, marked \texttt{@pytest.mark.real\_ots})
+    \item Git LFS for binary OTS proofs
+    \item Enhanced test suite: 158 tests across 10 modules
+\end{itemize}
+
+\subsection{Platform Dependencies}
+
+\textbf{Operating System:}
+\begin{itemize}[nosep]
+    \item Linux (tested: openSUSE Tumbleweed, Ubuntu 24.04)
+    \item Kernel: 5.15+ (modern Python compatibility)
+    \item Architecture: x86\_64, ARM64 (Raspberry Pi 4 tested for gateway role)
+\end{itemize}
+
+\textbf{Python Runtime:}
+\begin{itemize}[nosep]
+    \item Python 3.11, 3.12, 3.13 (all tested in CI matrix)
+    \item Package manager: \texttt{uv} (fast, deterministic dependency resolution)
+    \item Virtual environment required (isolation from system packages)
+\end{itemize}
+
+\textbf{Core Dependencies:}
+\begin{itemize}[nosep]
+    \item \texttt{pynacl} (1.5.0+): XChaCha20-Poly1305, X25519, Ed25519, HKDF-SHA256
+        \begin{itemize}[nosep]
+            \item Wraps libsodium (audited C library)
+            \item Provides constant-time implementations (timing-attack resistance)
+        \end{itemize}
+    \item \texttt{jsonschema} (4.19.0+): Schema validation for block/day records
+        \begin{itemize}[nosep]
+            \item Draft 7 JSON Schema support
+            \item Validation of required fields, types, formats
+        \end{itemize}
+\end{itemize}
+
+\textbf{Testing Dependencies:}
+\begin{itemize}[nosep]
+    \item \texttt{pytest} (8.0+): Test framework with fixtures and parametrization
+    \item \texttt{pytest-cov} (4.1+): Coverage measurement and HTML reporting
+    \item \texttt{pytest-xdist} (3.5+): Parallel test execution (faster CI)
+    \item \texttt{pytest-mock} (3.12+): Mock fixtures for subprocess calls
+    \item \texttt{hypothesis} (6.92+): Property-based testing for cryptographic properties
+\end{itemize}
+
+\textbf{Development Tools:}
+\begin{itemize}[nosep]
+    \item \texttt{mypy} (1.7+): Static type checking (gradual typing, --strict mode)
+    \item \texttt{ruff} (0.1+): Fast linter and formatter (replaces flake8, isort, black)
+    \item \texttt{bandit} (1.7+): Security static analysis (ADR-009 hardening)
+\end{itemize}
+
+\textbf{Optional External Tools:}
+\begin{itemize}[nosep]
+    \item \texttt{opentimestamps-client} (0.7.2+): \texttt{ots} binary for stamping/verification
+        \begin{itemize}[nosep]
+            \item Python package: \texttt{pip install opentimestamps-client}
+            \item Provides: \texttt{ots stamp}, \texttt{ots upgrade}, \texttt{ots verify}, \texttt{ots info}
+        \end{itemize}
+    \item \texttt{bitcoin-core} (27.0+): \texttt{bitcoind} for local OTS verification
+        \begin{itemize}[nosep]
+            \item Headers-only mode: \texttt{-prune=550 -blocksonly=1}
+            \item Storage: $<$1 GB (vs. $>$500 GB full node)
+            \item Initial sync: 10--20 minutes (one-time cost)
+        \end{itemize}
+\end{itemize}
+
+\textbf{Build System:}
+\begin{itemize}[nosep]
+    \item \texttt{make}: Unified command interface (\texttt{make test}, \texttt{make run}, \texttt{make coverage})
+    \item \texttt{uv}: Fast Python package installer (5--10× faster than pip)
+    \item \texttt{git-lfs}: Large file storage for binary OTS proofs
+\end{itemize}
+
+\subsection{Deployment Profiles}
+
+\textbf{Development (local laptop):}
+\begin{itemize}[nosep]
+    \item Python + uv + pytest (core testing)
+    \item Optional: \texttt{ots} binary for real OTS tests
+    \item No Bitcoin Core required (tests use placeholders)
+\end{itemize}
+
+\textbf{CI/CD (GitHub Actions / GitLab CI):}
+\begin{itemize}[nosep]
+    \item Python 3.11/3.12/3.13 matrix testing
+    \item Cached uv packages (5--10 second install)
+    \item Cached Bitcoin headers (optional, for OTS verification jobs)
+    \item Test execution: $<$2 minutes per Python version
+\end{itemize}
+
+\textbf{Production Gateway (Raspberry Pi 4 / cloud VM):}
+\begin{itemize}[nosep]
+    \item Python 3.11+ with PyNaCl and dependencies
+    \item OpenTimestamps client for daily anchoring
+    \item Bitcoin Core (headers-only) for local verification
+    \item Persistent storage: \texttt{out/} directory, \texttt{replay\_state.json}
+    \item Cron jobs: Daily \texttt{ots stamp} at 00:10 UTC, weekly \texttt{ots upgrade}
+\end{itemize}
+
+\textbf{Auditor Workstation (any Linux machine):}
+\begin{itemize}[nosep]
+    \item Python 3.11+ with jsonschema
+    \item OpenTimestamps client (for \texttt{ots verify})
+    \item Bitcoin Core (headers-only, can be remote RPC)
+    \item Input: Fact files, block headers, day blobs, OTS proofs
+    \item Output: Verification report (Merkle root match, OTS validity)
+\end{itemize}
+
+\subsection{Security Assumptions}
+
+\begin{itemize}[nosep]
+    \item \textbf{Pod security:} Pods are physically secure; keys not extractable
+    \item \textbf{Gateway trust:} Gateway may log/store facts, but cannot forge OTS proofs
+    \item \textbf{Bitcoin security:} Bitcoin blockchain is immutable (51\% attack infeasible)
+    \item \textbf{OTS calendar servers:} Multiple independent servers reduce single-point failure
+    \item \textbf{PyNaCl integrity:} Library is installed from trusted sources (PyPI with hash verification)
+\end{itemize}

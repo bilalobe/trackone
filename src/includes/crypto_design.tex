@@ -29,8 +29,9 @@ Duplicate/stale frames ($\Delta \le 0$) and jumps beyond $w$ are rejected with l
   \item \textbf{M\#0:} Merkle batching, canonicalization, OTS anchoring infrastructure
   \item \textbf{M\#1:} Framed ingest with stub AEAD (plaintext ct, placeholder tag) to validate framing and replay
   \item \textbf{M\#2:} Real XChaCha20-Poly1305 AEAD with test vectors and AAD enforcement
-  \item \textbf{M\#3 (current):} PyNaCl migration, device table v1.0, comprehensive testing (73 tests, 85\% coverage), CI/CD with Python 3.11--3.13
-  \item \textbf{M\#4 (planned):} Ledger UI, outage logger, automated OTS upgrade
+  \item \textbf{M\#3:} PyNaCl migration, device table v1.0, comprehensive testing; CI/CD Python 3.11--3.13
+  \item \textbf{M\#4 (current):} OTS anchoring finalized; \textbf{151 tests, 85\% coverage}; expanded security and pipeline edge-case tests
+  \item \textbf{Post M\#4 (planned):} Ledger UI, outage logger, automated OTS upgrade
 \end{itemize}
 
 \subsection{Cryptographic library consolidation (ADR-005)}

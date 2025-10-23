@@ -1,51 +1,53 @@
 \section{Experiments}
 
-\subsection{Determinism (M\#0--M\#3)}
+\subsection{Determinism (M\#0--M\#4)}
 We verify deterministic Merkle root computation:
 \begin{itemize}[nosep]
-    \item Same input facts → identical \texttt{merkle\_root} (hex)
-    \item Same input facts → byte-identical \texttt{day.bin} (SHA-256)
-    \item Hash-sorted leaves ensure order independence: shuffled fact files → same root
+    \item Same input facts \textrightarrow{} identical \texttt{merkle\_root} (hex)
+    \item Same input facts \textrightarrow{} byte-identical \texttt{day.bin} (SHA-256)
+    \item Hash-sorted leaves ensure order independence: shuffled fact files \textrightarrow{} same root
 \end{itemize}
 
-Test coverage: empty set, single fact, odd count, power-of-2 count, random filename ordering, Unicode edge cases.
+Test coverage includes: empty set, single fact, odd count, power-of-2 count, random filename ordering, Unicode edge cases.
 
-\subsection{Cryptographic Correctness (M\#3)}
+\subsection{Cryptographic Correctness (M\#4)}
 \textbf{Deterministic AEAD vectors:} XChaCha20-Poly1305 test vectors in \texttt{crypto\_test\_vectors.json} verified against PyNaCl bindings.
 
 \textbf{Round-trip tests:}
 \begin{itemize}[nosep]
     \item X25519: Key generation and shared secret agreement
-    \item HKDF: Deterministic derivation per RFC 5869
+    \item HKDF: Deterministic derivation per RFC 5869 and length/empty-edge cases
     \item XChaCha20-Poly1305: Encrypt/decrypt round-trip, authentication failure detection
-    \item Ed25519: Sign/verify signatures
+    \item Ed25519: Sign/verify signatures, tamper and wrong-key rejection
 \end{itemize}
 
-\textbf{Property-based testing (Hypothesis):} TLV encoding round-trip with arbitrary inputs, robustness against truncated/malformed data.
+\textbf{Property-based testing (Hypothesis):} TLV encoding robustness against truncated/malformed data; unknown tags ignored.
 
-\subsection{Security Testing (M\#3)}
+\subsection{Security Testing (M\#4)}
 Tamper detection tests validate AEAD integrity:
 \begin{itemize}[nosep]
-    \item \textbf{Ciphertext tampering}: Single-bit flip → tag verification fails
-    \item \textbf{Tag tampering}: Modified authentication tag → rejection
-    \item \textbf{AAD tampering}: Modified header fields → tag mismatch
-    \item \textbf{Nonce validation}: Invalid nonce length (not 24 bytes) → rejected
-    \item \textbf{Unknown device}: Frame from unprovisioned device → rejected
+    \item \textbf{Ciphertext tampering}: Single-bit flip \textrightarrow{} tag verification fails
+    \item \textbf{Tag tampering}: Modified authentication tag \textrightarrow{} rejection
+    \item \textbf{AAD tampering}: Modified header fields \textrightarrow{} tag mismatch
+    \item \textbf{Nonce validation}: Invalid nonce length (not 24 bytes) \textrightarrow{} rejected
+    \item \textbf{Unknown device}: Frame from unprovisioned device \textrightarrow{} rejected
+    \item \textbf{Frame structure}: Missing fields, malformed JSON, and empty files handled gracefully
 \end{itemize}
 
 All security tests pass with proper error messages and logging.
 
-\subsection{Framed Ingest Robustness (M\#1--M\#3)}
+\subsection{Framed Ingest Robustness (M\#4)}
 Replay window enforcement with attack scenarios:
 \begin{itemize}[nosep]
-    \item \textbf{Monotonic acceptance}: 10 frames with increasing \texttt{fc} (0..9) → all accepted
-    \item \textbf{Duplicate rejection}: Replay same frame → rejected with logged warning
-    \item \textbf{Out-of-window rejection}: Jump \texttt{fc} by +100 beyond window (64) → rejected
-    \item \textbf{Reordering tolerance}: Frames within window but out of order → accepted
-    \item \textbf{Restart persistence}: Device table persisted → duplicates rejected after restart
+    \item \textbf{Monotonic acceptance}: Increasing \texttt{fc} within window \textrightarrow{} accepted
+    \item \textbf{Duplicate rejection}: Replay same frame \textrightarrow{} rejected with logged warning
+    \item \textbf{Out-of-window rejection}: Jumps beyond window (64) \textrightarrow{} rejected
+    \item \textbf{Reordering tolerance}: Frames within window but out of order \textrightarrow{} accepted
+    \item \textbf{Restart persistence}: Device table persisted \textrightarrow{} duplicates rejected after restart
+    \item \textbf{Boundary acceptance}: Exactly highest+window accepted; window+1 rejected
 \end{itemize}
 
-\subsection{End-to-End Pipeline (M\#3)}
+\subsection{End-to-End Pipeline (M\#4)}
 Complete workflow validated by \texttt{test\_end\_to\_end\_pipeline}:
 \begin{enumerate}[nosep]
     \item \texttt{pod\_sim --framed} generates encrypted frames
@@ -57,35 +59,31 @@ Complete workflow validated by \texttt{test\_end\_to\_end\_pipeline}:
 
 Exit code 0 confirms entire chain is cryptographically verifiable.
 
-\subsection{Test Coverage (M\#3)}
-\textbf{73 tests} across 8 test modules:
+\subsection{Test Coverage (M\#4)}
+\textbf{151 tests} across 11 test modules:
 \begin{itemize}[nosep]
-    \item \texttt{test\_crypto\_impl.py}: Primitive correctness (8 tests)
-    \item \texttt{test\_crypto\_vectors.py}: Deterministic vectors (14 tests)
-    \item \texttt{test\_framed\_ingest.py}: Frame parsing and replay (3 tests)
-    \item \texttt{test\_framed\_security.py}: AEAD tamper detection (5 tests)
-    \item \texttt{test\_gateway\_pipeline.py}: Merkle batching and verification (14 tests)
-    \item \texttt{test\_merkle\_repro.py}: Reproducibility and edge cases (12 tests)
-    \item \texttt{test\_replay\_edges.py}: Replay window edge cases (3 tests)
-    \item \texttt{test\_tlv\_properties.py}: Property-based TLV tests (5 tests)
+    \item \texttt{test\_crypto\_impl.py}, \texttt{test\_crypto\_vectors.py}
+    \item \texttt{test\_framed\_ingest.py}, \texttt{test\_framed\_security.py}
+    \item \texttt{test\_gateway\_pipeline.py}, \texttt{test\_merkle\_repro.py}
+    \item \texttt{test\_replay\_edges.py}, \texttt{test\_tlv\_properties.py}
+    \item \texttt{test\_ots\_anchor.py} (NEW), \texttt{test\_pod\_sim.py} (NEW)
+    \item \texttt{test\_edge\_cases.py} (NEW)
 \end{itemize}
 
-\textbf{Coverage: 85\%} (1506 statements, 223 missed).
+\textbf{Coverage: 85\%} across gateway and pod\_sim modules. Uncovered code primarily in CLI entry points and rare error branches.
 
-Uncovered code primarily in CLI entry points and error handling branches.
-
-\subsection{Performance (M\#3)}
+\subsection{Performance (M\#4)}
 Wall-time measurements on Ubuntu 24.04, Python 3.13, pytest runtime:
 
 \begin{tabular}{lrr}
     \hline
     Operation & 10 frames & 100 frames \\
     \hline
-    \texttt{pod\_sim --framed} & <0.1s & <0.2s \\
-    \texttt{frame\_verifier} (AEAD) & <0.1s & <0.5s \\
-    \texttt{merkle\_batcher} & <0.1s & <0.5s \\
-    \texttt{verify\_cli} & <0.1s & <0.5s \\
-    \textbf{Full test suite (73 tests)} & \multicolumn{2}{c}{\textbf{1.57s}} \\
+    \texttt{pod\_sim --framed} & $<0.1$ s & $<0.2$ s \\
+    \texttt{frame\_verifier} (AEAD) & $<0.1$ s & $<0.5$ s \\
+    \texttt{merkle\_batcher} & $<0.1$ s & $<0.5$ s \\
+    \texttt{verify\_cli} & $<0.1$ s & $<0.5$ s \\
+    \textbf{Full test suite (151 tests)} & \multicolumn{2}{c}{\textbf{$\sim$18.9 s}} \\
     \hline
 \end{tabular}
 
@@ -98,9 +96,9 @@ Storage overhead per day (10 devices, 100 frames each):
     \item OTS proof: $\sim$5 KB (pending), $\sim$10 KB (confirmed)
 \end{itemize}
 
-\textbf{Total daily storage: $\sim$390 KB for 1,000 measurements.} Scales linearly with device count and sampling rate.
+\textbf{Total daily storage: $\sim$390 KB for 1{,}000 measurements.} Scales linearly with device count and sampling rate.
 
-\subsection{CI/CD (M\#3)}
+\subsection{CI/CD (M\#4)}
 Automated testing via GitHub Actions with \texttt{uv} package manager:
 \begin{itemize}[nosep]
     \item \textbf{Python matrix}: 3.11, 3.12, 3.13
@@ -109,4 +107,4 @@ Automated testing via GitHub Actions with \texttt{uv} package manager:
     \item \textbf{Coverage upload}: Codecov integration (Python 3.13 only)
 \end{itemize}
 
-All 9 CI checks passing as of v0.0.1-m3 (October 13, 2025).
+All CI checks passing as of v0.0.1-m4 (October 21, 2025).

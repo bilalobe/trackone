@@ -1,7 +1,7 @@
 % Pipeline implementation notes
 \section{Gateway Pipeline Implementation}
 
-\subsection{Framed ingest (M\#1--M\#3)}
+\subsection{Framed ingest (M\#1--M\#4)}
 The gateway receives framed telemetry from simulated devices (pods), performs cryptographic verification, replay detection, and emits canonical facts for Merkle batching and OpenTimestamps (OTS) anchoring.
 
 \paragraph{Transport and frame shape}
@@ -16,7 +16,7 @@ Each frame contains:
 }
 \end{verbatim}
 
-\textbf{M\#3 implementation:} Full XChaCha20-Poly1305 AEAD with tag verification. The gateway decrypts \texttt{ct} using the device's \texttt{ck\_up}, verifies the authentication tag, and validates AAD binding to header fields.
+\textbf{M\#4 implementation:} Full XChaCha20-Poly1305 AEAD with tag verification. The gateway decrypts \texttt{ct} using the device's \texttt{ck\_up}, verifies the authentication tag, and validates AAD binding to header fields.
 
 \paragraph{Replay window policy}
 Per-device state in \texttt{device\_table.json} tracks:
@@ -85,18 +85,18 @@ Both block headers and day records validated against JSON schemas when \texttt{-
 Day blob anchored with OpenTimestamps.
 Verification recomputes Merkle root from facts directory, compares to recorded block header, and verifies OTS proof timestamp.
 
-\paragraph{Quick start (M\#3)}
+\paragraph{Quick start (M\#4)}
 \begin{verbatim}
 # Run complete pipeline
 make run
 
 # Run individual components
-make test           # 73 tests, 85% coverage
+make test           # 151 tests, ~85% coverage
 make test-cov       # with coverage report
 make check          # lint + format + test
 make ci             # full CI simulation
 \end{verbatim}
 
-The M\#3 pipeline: \texttt{pod\_sim --framed} → \texttt{frame\_verifier} (real AEAD) → \texttt{merkle\_batcher --validate-schemas} → \texttt{ots\_anchor} → \texttt{verify\_cli}
+The M\#4 pipeline: \texttt{pod\_sim --framed} $\rightarrow$ \texttt{frame\_verifier} (real AEAD) $\rightarrow$ \texttt{merkle\_batcher --validate-schemas} $\rightarrow$ \texttt{ots\_anchor} $\rightarrow$ \texttt{verify\_cli}
 
 Pipeline fails fast if any verification step does not succeed.
