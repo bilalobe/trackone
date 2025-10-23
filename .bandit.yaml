@@ -1,0 +1,9 @@
+# Bandit configuration: exclude tests and dev helpers; keep S101 active for runtime code.
+# Docs: https://bandit.readthedocs.io/
+exclude_dirs:
+  - scripts/tests
+# Do NOT skip S101 globally; we want to catch asserts in production code.
+skips: []
+# Optionally tune reporting thresholds (uncomment to adjust noise):
+# severity: low
+# confidence: high
