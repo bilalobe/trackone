@@ -60,7 +60,7 @@ Complete workflow validated by \texttt{test\_end\_to\_end\_pipeline}:
 Exit code 0 confirms entire chain is cryptographically verifiable.
 
 \subsection{Test Coverage (M\#4)}
-\textbf{151 tests} across 11 test modules:
+\textbf{181 tests} across 11 test modules (some runs may skip 2 optional tests):
 \begin{itemize}[nosep]
     \item \texttt{test\_crypto\_impl.py}, \texttt{test\_crypto\_vectors.py}
     \item \texttt{test\_framed\_ingest.py}, \texttt{test\_framed\_security.py}
@@ -70,7 +70,7 @@ Exit code 0 confirms entire chain is cryptographically verifiable.
     \item \texttt{test\_edge\_cases.py} (NEW)
 \end{itemize}
 
-\textbf{Coverage: 85\%} across gateway and pod\_sim modules. Uncovered code primarily in CLI entry points and rare error branches.
+\textbf{Coverage: ~84\%} across gateway and pod\_sim modules (measured; coverage target: 85\%). Uncovered code primarily in CLI entry points and rare error branches.
 
 \subsection{Performance (M\#4)}
 Wall-time measurements on Ubuntu 24.04, Python 3.13, pytest runtime:
@@ -83,7 +83,7 @@ Wall-time measurements on Ubuntu 24.04, Python 3.13, pytest runtime:
     \texttt{frame\_verifier} (AEAD) & $<0.1$ s & $<0.5$ s \\
     \texttt{merkle\_batcher} & $<0.1$ s & $<0.5$ s \\
     \texttt{verify\_cli} & $<0.1$ s & $<0.5$ s \\
-    \textbf{Full test suite (151 tests)} & \multicolumn{2}{c}{\textbf{$\sim$18.9 s}} \\
+    \textbf{Full test suite (181 tests)} & \multicolumn{2}{c}{\textbf{$\sim$18.9 s}} \\
     \hline
 \end{tabular}
 

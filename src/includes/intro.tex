@@ -1,8 +1,10 @@
 \section{Introduction}
 
-Heritage site monitoring presents unique constraints: sensors must operate for years without maintenance, avoid invasive installation, and preserve data integrity across decades without relying on commercial vendors that may discontinue services. While modern IoT platforms provide telemetry infrastructure, they typically require vendor lock-in (AWS IoT, Azure IoT) or incur per-message costs (blockchain-native systems like Helium Network).
+Heritage site monitoring presents unique constraints: sensors must operate for years without maintenance, avoid invasive installation, and preserve data integrity across decades without relying on commercial vendors that may discontinue services.
+While modern IoT platforms provide telemetry infrastructure, they typically require vendor lock-in (AWS IoT, Azure IoT) or incur per-message costs (blockchain-native systems like Helium Network).
 
-Track1 addresses a specific niche: \textbf{publicly-auditable telemetry for resource-constrained heritage sensors} where multi-decade autonomy is required and vendor lock-in is unacceptable. The system combines ultra-low power LoRa communication (<1kB/day traffic budget), edge AEAD encryption (gateway verifies without cloud dependency), and zero-marginal-cost public timestamping via Bitcoin blockchain through OpenTimestamps.
+Track1 addresses a specific niche: \textbf{publicly-auditable telemetry for resource-constrained heritage sensors} where multi-decade autonomy is required and vendor lock-in is unacceptable.
+The system combines ultra-low power LoRa communication (<1kB/day traffic budget), edge AEAD encryption (gateway verifies without cloud dependency), and zero-marginal-cost public timestamping via Bitcoin blockchain through OpenTimestamps.
 
 \subsection{Problem Statement}
 
@@ -25,7 +27,8 @@ Existing solutions fail one or more requirements:
 
 \subsection{Contributions}
 
-This work presents Track1, an \textbf{open-source implementation} combining low-power cryptography, deterministic Merkle batching, and Bitcoin timestamping for heritage site telemetry. While individual components are well-established (AEAD encryption, Merkle trees, OpenTimestamps), Track1 is the \textbf{first open system} integrating them for ultra-low power LoRa deployments with public Bitcoin verification.
+This work presents Track1, an \textbf{open-source implementation} combining low-power cryptography, deterministic Merkle batching, and Bitcoin timestamping for heritage site telemetry.
+While individual components are well-established (AEAD encryption, Merkle trees, OpenTimestamps), Track1 is the \textbf{first open system} integrating them for ultra-low power LoRa deployments with public Bitcoin verification.
 
 \textbf{Key contributions:}
 
@@ -40,7 +43,8 @@ This work presents Track1, an \textbf{open-source implementation} combining low-
 
     \item \textbf{Daily Merkle anchoring} via OpenTimestamps
     \begin{itemize}[nosep]
-        \item Amortizes blockchain costs: 1 anchor/day vs. 1000+ individual timestamps
+        \item Amortizes blockchain costs: 1 anchor/day vs.
+        1000+ individual timestamps
         \item Public verifiability without vendor lock-in (Bitcoin blockchain)
         \item Reproducible roots: canonical JSON (RFC 8785 style), sorted leaves
         \item Independent verification CLI for third-party auditors
@@ -76,7 +80,7 @@ AWS IoT Core & Vendor logs & \$0.50 & None & No \\
 Azure IoT Hub & Vendor logs & \$0.25 & None & No \\
 Helium Network & Blockchain & \$0.09 & None & Partial \\
 Guardtime KSI & Proprietary & Enterprise & None & No \\
-Cert. Transparency & Public (CT logs) & N/A & N/A & Yes \\
+Cert.\ Transparency & Public (CT logs) & N/A & N/A & Yes \\
 \textbf{Track1} & \textbf{Bitcoin (OTS)} & \textbf{\$0.001} & \textbf{1.4 Wh} & \textbf{Yes (MIT)} \\
 \hline
 \end{tabular}
@@ -93,18 +97,32 @@ This targets a \textbf{specific niche}: heritage sites requiring publicly-audita
 
 \subsection{Real-World Impact}
 
-Heritage site conservators think in \textbf{decades}, not product cycles. Track1 addresses long-term concerns:
+Heritage site conservators think in \textbf{decades}, not product cycles.
+Track1 addresses long-term concerns:
 
 \begin{itemize}[nosep]
-    \item \textbf{Vendor discontinuation:} AWS can deprecate IoT services (e.g., AWS IoT 1-Click discontinued 2020). Bitcoin blockchain persists 100+ years.
-    \item \textbf{Pricing changes:} Cloud providers can increase fees. OTS anchoring costs are fixed (Bitcoin transaction fees amortized across all users).
-    \item \textbf{Data sovereignty:} Museums require independent verification. Track1 verification CLI runs offline with pre-downloaded Bitcoin headers.
-    \item \textbf{Open protocols:} Complete system reproducible from source code. No proprietary black boxes.
+    \item \textbf{Vendor discontinuation:} AWS can deprecate IoT services (e.g., AWS IoT 1-Click discontinued 2020).
+    Bitcoin blockchain persists 100+ years.
+    \item \textbf{Pricing changes:} Cloud providers can increase fees.
+    OTS anchoring costs are fixed (Bitcoin transaction fees amortized across all users).
+    \item \textbf{Data sovereignty:} Museums require independent verification.
+    Track1 verification CLI runs offline with pre-downloaded Bitcoin headers.
+    \item \textbf{Open protocols:} Complete system reproducible from source code.
+    No proprietary black boxes.
 \end{itemize}
 
 \subsection{Document Structure}
 
-Section 2 covers threat model and requirements. Section 3 describes system architecture. Section 4 details cryptographic design (XChaCha20-Poly1305, HKDF, nonce construction). Section 5 presents pipeline implementation (frame verification, Merkle batching, OTS anchoring). Section 6 documents schemas and canonicalization policy. Section 7 validates the system through experiments. Section 8 presents results (181 tests, 84\% coverage, Bitcoin block 919384 attestation). Section 9 discusses related work and ethical considerations. Section 10 concludes with roadmap.
+Section 2 covers threat model and requirements.
+Section 3 describes system architecture.
+Section 4 details cryptographic design (XChaCha20-Poly1305, HKDF, nonce construction).
+Section 5 presents pipeline implementation (frame verification, Merkle batching, OTS anchoring).
+Section 6 documents schemas and canonicalization policy.
+Section 7 validates the system through experiments.
+Section 8 presents results (181 tests, 84\% coverage, Bitcoin block 919384 attestation).
+Section 9 discusses related work and ethical considerations.
+Section 10 concludes with roadmap.
 
 \textbf{Current Status (v0.0.1-m4, October 22, 2025):}
-Production XChaCha20-Poly1305 AEAD, reproducible Merkle roots, real Bitcoin OTS anchoring verified, and comprehensive test suite (181 tests passing, 84\% coverage across gateway and pod\_sim modules). All ADRs accepted through ADR-009.
+Production XChaCha20-Poly1305 AEAD, reproducible Merkle roots, real Bitcoin OTS anchoring verified, and comprehensive test suite (181 tests passing, 84\% coverage across gateway and pod\_sim modules).
+All ADRs accepted through ADR-009.

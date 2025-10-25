@@ -2,31 +2,31 @@
 
 \subsection{Merkle Tree Timestamping Systems}
 
-\textbf{Certificate Transparency (RFC 6962, 2013):} Google's CT system uses Merkle trees to create append-only logs of TLS certificates with public auditability. CT demonstrates the viability of Merkle-based timestamping at scale (billions of certificates), but targets web PKI, not IoT telemetry. CT logs are operated by trusted third parties, whereas Track1 uses Bitcoin blockchain for trustless verification.
+\textbf{Certificate Transparency (RFC 6962, 2013):} Google's CT system uses Merkle trees to create append-only logs of TLS certificates with public auditability. CT demonstrates the viability of Merkle-based timestamping at scale (billions of certificates), but targets web PKI, not IoT telemetry.\ CT logs are operated by trusted third parties, whereas Track1 uses Bitcoin blockchain for trustless verification.
 
-\textbf{Trillian (Google, 2017):} Generic Merkle tree implementation extracted from CT. Provides verifiable data structures as a service but requires infrastructure deployment. Track1's daily batching is conceptually similar but optimized for LoRa duty cycle constraints and Bitcoin anchoring costs.
+\textbf{Trillian (Google, 2017):} Generic Merkle tree implementation extracted from CT. Provides verifiable data structures as a service but requires infrastructure deployment.\ Track1's daily batching is conceptually similar but optimized for LoRa duty cycle constraints and Bitcoin anchoring costs.
 
-\textbf{Guardtime KSI (2007-present):} Commercial blockchain timestamping service used for IoT and critical infrastructure. KSI uses proprietary blockchain (not Bitcoin) with Merkle aggregation. Requires enterprise licensing and closed-source verification. Track1 provides equivalent functionality with open-source implementation and public Bitcoin verification.
+\textbf{Guardtime KSI (2007-present):} Commercial blockchain timestamping service used for IoT and critical infrastructure. KSI uses proprietary blockchain (not Bitcoin) with Merkle aggregation. Requires enterprise licensing and closed-source verification.\ Track1 provides equivalent functionality with open-source implementation and public Bitcoin verification.
 
 \subsection{Blockchain-Based IoT Systems}
 
-\textbf{Helium Network (2019-present):} Decentralized wireless network using Helium blockchain (now Solana). Provides proof-of-coverage and data credits for IoT devices. Charges per-packet fees (\$0.00001/packet), making it unsuitable for multi-year autonomous deployments. Track1's daily OTS anchoring provides zero marginal cost after initial stamp.
+\textbf{Helium Network (2019-present):} Decentralized wireless network using Helium blockchain (now Solana).\ Provides proof-of-coverage and data credits for IoT devices.\ Charges per-packet fees (\$0.00001/packet), making it unsuitable for multi-year autonomous deployments.\ Track1's daily OTS anchoring provides zero marginal cost after initial stamp.
 
-\textbf{IOTA Tangle (2016-present):} Directed acyclic graph (DAG) designed for IoT micropayments. Requires continuous connectivity and computational overhead for tip selection. Track1's gateway-based batching enables offline pod operation with intermittent uplinks.
+\textbf{IOTA Tangle (2016-present):} Directed acyclic graph (DAG) designed for IoT micropayments.\ Requires continuous connectivity and computational overhead for tip selection.\ Track1's gateway-based batching enables offline pod operation with intermittent uplinks.
 
-\textbf{Ethereum-based systems:} Various research projects use Ethereum smart contracts for IoT data integrity. Gas fees (\$0.50-\$5 per transaction) make per-message timestamping prohibitively expensive. Track1's Merkle batching amortizes blockchain costs across 1000+ daily facts.
+\textbf{Ethereum-based systems:} Various research projects use Ethereum smart contracts for IoT data integrity.\ Gas fees (\$0.50-\$5 per transaction) make per-message timestamping prohibitively expensive.\ Track1's Merkle batching amortizes blockchain costs across 1000+ daily facts.
 
 \subsection{OpenTimestamps Ecosystem}
 
-\textbf{OpenTimestamps Protocol (2016):} Standard for Bitcoin blockchain timestamping. Track1 builds on OTS but adapts it for LoRa telemetry workflows: daily batching instead of real-time stamping, gateway-based aggregation, and offline verification with pre-downloaded headers.
+\textbf{OpenTimestamps Protocol (2016):} Standard for Bitcoin blockchain timestamping.\ Track1 builds on OTS but adapts it for LoRa telemetry workflows: daily batching instead of real-time stamping, gateway-based aggregation, and offline verification with pre-downloaded headers.
 
-\textbf{Existing OTS implementations:} Focus on document timestamping (PDFs, git commits). Track1 extends OTS to IoT telemetry with Merkle aggregation, canonical JSON determinism, and day-chaining for temporal continuity.
+\textbf{Existing OTS implementations:} Focus on document timestamping (PDFs, git commits).\ Track1 extends OTS to IoT telemetry with Merkle aggregation, canonical JSON determinism, and day-chaining for temporal continuity.
 
 \subsection{Low-Power IoT Cryptography}
 
-\textbf{TinyCrypt, ARM mbed TLS:} Lightweight crypto libraries for microcontrollers. Demonstrate feasibility of AES-GCM and ECC on constrained devices. Track1 uses PyNaCl (libsodium wrapper) for gateway crypto while pods use minimal nonce construction (salt8 + counter).
+\textbf{TinyCrypt, ARM mbed TLS:} Lightweight crypto libraries for microcontrollers. Demonstrate feasibility of AES-GCM and ECC on constrained devices.\ Track1 uses PyNaCl (libsodium wrapper) for gateway crypto while pods use minimal nonce construction (salt8 + counter).
 
-\textbf{LoRaWAN Security (LoRa Alliance):} Standard AES-128 encryption with session keys. Track1 targets non-LoRaWAN deployments (simple LoRa P2P) with XChaCha20-Poly1305 for 256-bit security and larger nonce space.
+\textbf{LoRaWAN Security (LoRa Alliance):} Standard AES-128 encryption with session keys.\ Track1 targets non-LoRaWAN deployments (simple LoRa P2P) with XChaCha20-Poly1305 for 256-bit security and larger nonce space.
 
 \subsection{Track1's Unique Contribution}
 
@@ -37,7 +37,7 @@ While individual components (Merkle trees, AEAD, OTS) are established, Track1's 
     \item \textbf{vs. Guardtime KSI:} Open-source implementation; public Bitcoin blockchain instead of proprietary KSI chain
     \item \textbf{vs. Helium Network:} Zero marginal cost (daily batching) instead of per-packet fees; ultra-low power budget
     \item \textbf{vs. Ethereum systems:} 1000× cost reduction via Merkle aggregation (\$0.001/day vs. \$1+/day)
-    \item \textbf{vs. LoRaWAN:} Stronger crypto (XChaCha20 vs. AES-128); public auditability; no network server dependency
+    \item \textbf{vs. LoRaWAN:} Stronger crypto (XChaCha20 vs.\ AES-128); public auditability; no network server dependency
 \end{itemize}
 
 Track1 targets heritage sites requiring \textbf{multi-decade autonomy} and \textbf{vendor-independent verification}—a niche not addressed by commercial IoT platforms or blockchain systems optimized for real-time transactions.
@@ -46,64 +46,64 @@ Track1 targets heritage sites requiring \textbf{multi-decade autonomy} and \text
 
 \subsection{Current Limitations (M\#4)}
 
-\textbf{On-pod cryptography:} Current implementation uses gateway-based AEAD encryption. Pod payloads are encrypted in transit (LoRa frames) but encryption keys are managed by gateway. Future work (M\#6) will implement on-pod key derivation for end-to-end encryption.
+\textbf{On-pod cryptography:} Current implementation uses gateway-based AEAD encryption.\ Pod payloads are encrypted in transit (LoRa frames) but encryption keys are managed by gateway.\ Future work (M\#6) will implement on-pod key derivation for end-to-end encryption.
 
-\textbf{Key rotation:} ADR-001 specifies key rotation workflows, but automation is not yet implemented. Manual key updates required for long-term deployments (M\#5 target: automated weekly ratcheting).
+\textbf{Key rotation:} ADR-001 specifies key rotation workflows, but automation is not yet implemented.\ Manual key updates required for long-term deployments (M\#5 target: automated weekly ratcheting).
 
-\textbf{Replay window size:} Fixed at 64 frames. For high-latency scenarios (weeks offline), larger windows or epoch-based schemes may be needed.
+\textbf{Replay window size:} Fixed at 64 frames.\ For high-latency scenarios (weeks offline), larger windows or epoch-based schemes may be needed.
 
-\textbf{Single gateway:} Current architecture assumes single gateway per site. Multi-gateway deployments with state synchronization not yet implemented.
+\textbf{Single gateway:} Current architecture assumes single gateway per site.\ Multi-gateway deployments with state synchronization not yet implemented.
 
-\textbf{OTS upgrade automation:} Proofs require manual \texttt{ots upgrade} command after Bitcoin confirmations. M\#5 will add cron-based automation.
+\textbf{OTS upgrade automation:} Proofs require manual \texttt{ots upgrade} command after Bitcoin confirmations.\ M\#5 will add cron-based automation.
 
 \subsection{Scalability Considerations}
 
-\textbf{Pod count:} Linear growth in frame ingestion (tested up to 10 devices). Gateway can handle 100+ pods with parallel frame processing.
+\textbf{Pod count:} Linear growth in frame ingestion (tested up to 10 devices).\ Gateway can handle 100+ pods with parallel frame processing.
 
-\textbf{Merkle computation:} $O(n \log n)$ complexity. Daily batches of 10,000 facts compute in <1 second on Raspberry Pi 4.
+\textbf{Merkle computation:} $O(n \log n)$ complexity.\ Daily batches of 10,000 facts compute in <1 second on Raspberry Pi 4.
 
-\textbf{OTS cost:} One proof per day regardless of fact count. Cost fixed at \textasciitilde\$0.001/day (Bitcoin transaction fees amortized across all OTS calendar users).
+\textbf{OTS cost:} One proof per day regardless of fact count.\ Cost fixed at \textasciitilde\$0.001/day (Bitcoin transaction fees amortized across all OTS calendar users).
 
-\textbf{Storage:} 1000 facts/day × 500 bytes/fact × 365 days = 180 MB/year. Manageable for multi-decade deployments.
+\textbf{Storage:} 1000 facts/day × 500 bytes/fact × 365 days = 180 MB/year.\ Manageable for multi-decade deployments.
 
 \subsection{Deployment Assumptions}
 
-\textbf{Bitcoin blockchain continuity:} Assumes Bitcoin network operates for verification timeframe (decades). If Bitcoin becomes unavailable, OTS proofs remain but require alternative verification mechanisms.
+\textbf{Bitcoin blockchain continuity:} Assumes Bitcoin network operates for verification timeframe (decades).\ If Bitcoin becomes unavailable, OTS proofs remain but require alternative verification mechanisms.
 
-\textbf{OTS calendar availability:} Relies on public OTS calendar servers for stamping. Failure modes: queue stamps locally, batch-process during uplink windows.
+\textbf{OTS calendar availability:} Relies on public OTS calendar servers for stamping.\ Failure modes: queue stamps locally, batch-process during uplink windows.
 
-\textbf{Gateway trust boundary:} Gateway can drop/modify facts before Merkle batching. Mitigation: On-pod signing (M\#6) enables end-to-end tamper detection.
+\textbf{Gateway trust boundary:} Gateway can drop/modify facts before Merkle batching.\ Mitigation: On-pod signing (M\#6) enables end-to-end tamper detection.
 
-\textbf{Physical security:} Assumes pods are physically secure (adhesive mount, tamper-evident). Determined attackers with physical access can extract keys.
+\textbf{Physical security:} Assumes pods are physically secure (adhesive mount, tamper-evident).\ Determined attackers with physical access can extract keys.
 
 \section{Ethical Considerations}
 
 \subsection{Privacy and Data Sovereignty}
 
-\textbf{Fact confidentiality:} Telemetry payloads remain local (gateway storage). Only Merkle roots are public (Bitcoin blockchain via OTS). Individual facts cannot be reconstructed from blockchain data.
+\textbf{Fact confidentiality:} Telemetry payloads remain local (gateway storage).\ Only Merkle roots are public (Bitcoin blockchain via OTS). Individual facts cannot be reconstructed from blockchain data.
 
-\textbf{Right to be forgotten (GDPR):} Local fact deletion is possible (gateway operator decision). However, Merkle root in Bitcoin blockchain is immutable. Heritage sites should assess GDPR applicability before deployment.
+\textbf{Right to be forgotten (GDPR):} Local fact deletion is possible (gateway operator decision).\ However, Merkle root in Bitcoin blockchain is immutable.\ Heritage sites should assess GDPR applicability before deployment.
 
-\textbf{Metadata leakage:} Frame timing and pod IDs are visible to LoRa eavesdroppers. XChaCha20 encryption hides payload content but not traffic patterns.
+\textbf{Metadata leakage:} Frame timing and pod IDs are visible to LoRa eavesdroppers.\ XChaCha20 encryption hides payload content but not traffic patterns.
 
 \subsection{Environmental Impact}
 
-\textbf{Battery disposal:} CR2032 lithium cells require proper recycling. Multi-year autonomy reduces disposal frequency vs. annually-replaced batteries.
+\textbf{Battery disposal:} CR2032 lithium cells require proper recycling.\ Multi-year autonomy reduces disposal frequency vs.\ annually-replaced batteries.
 
-\textbf{Bitcoin energy consumption:} OTS leverages existing Bitcoin infrastructure (no additional mining). Daily batching minimizes per-fact environmental impact (1 anchor amortized across 1000+ facts).
+\textbf{Bitcoin energy consumption:} OTS leverages existing Bitcoin infrastructure (no additional mining).\ Daily batching minimizes per-fact environmental impact (1 anchor amortized across 1000+ facts).
 
 \subsection{Heritage Site Stewardship}
 
-\textbf{Reversibility:} Adhesive pod mounts are non-invasive and removable without surface damage. Critical for heritage site preservation ethics.
+\textbf{Reversibility:} Adhesive pod mounts are non-invasive and removable without surface damage.\ Critical for heritage site preservation ethics.
 
-\textbf{Curator control:} Gateway operator decides what data to collect and publish (Merkle roots). Public verification enables accountability but respects site autonomy.
+\textbf{Curator control:} Gateway operator decides what data to collect and publish (Merkle roots).\ Public verification enables accountability but respects site autonomy.
 
-\textbf{Long-term access:} Open-source design ensures data remains accessible even if Track1 project discontinues. Bitcoin verification survives organizational changes.
+\textbf{Long-term access:} Open-source design ensures data remains accessible even if Track1 project discontinues.\ Bitcoin verification survives organizational changes.
 
 \subsection{Responsible Disclosure}
 
-\textbf{Security vulnerabilities:} All cryptographic designs documented in ADRs. Independent security review encouraged (MIT license). No security-by-obscurity.
+\textbf{Security vulnerabilities:} All cryptographic designs documented in ADRs. Independent security review encouraged (MIT license).\ No security-by-obscurity.
 
-\textbf{Test coverage:} 84\% coverage with 181 tests provides confidence but not proof of correctness. Formal verification out of scope for M\#4.
+\textbf{Test coverage:} 84\% coverage with 181 tests provides confidence but not proof of correctness.\ Formal verification out of scope for M\#4.
 
-\textbf{Known attack vectors:} Physical pod tampering, gateway compromise, replay attacks beyond window size. Documented in ADR-002 threat model.
+\textbf{Known attack vectors:} Physical pod tampering, gateway compromise, replay attacks beyond window size.\ Documented in ADR-002 threat model.

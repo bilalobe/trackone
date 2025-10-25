@@ -18,7 +18,8 @@ Header: dev\_id(u16), msg\_type(u8), fc(u32), flags(u8); AEAD payload with XChaC
 AAD (additional authenticated data): $\text{dev\_id} \| \text{msg\_type}$ binds header to ciphertext.
 
 \subsection{Replay policy}
-Gateway maintains per-device sliding window on frame counter $(fc)$. Default window size $w=64$.
+Gateway maintains per-device sliding window on frame counter $(fc)$.
+Default window size $w=64$.
 
 A frame is accepted if: $0 < \Delta \mathrm{fc} \le w$ relative to \texttt{highest\_fc\_seen}.
 

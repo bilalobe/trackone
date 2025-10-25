@@ -2,7 +2,8 @@
 
 \subsection{M\#4 Achievements}
 
-Track1 (Barnacle Sentinel) has successfully completed Milestone \#4, establishing a production-ready, verifiable telemetry pipeline with Bitcoin-anchored timestamp proofs. The system demonstrates:
+Track1 (Barnacle Sentinel) has completed Milestone \#4, delivering a production-oriented, verifiable telemetry pipeline with Bitcoin-anchored timestamp proofs.
+The system demonstrates:
 
 \textbf{End-to-end cryptographic security:}
 \begin{itemize}[nosep]
@@ -15,35 +16,27 @@ Track1 (Barnacle Sentinel) has successfully completed Milestone \#4, establishin
 
 \textbf{Verifiable batching and anchoring:}
 \begin{itemize}[nosep]
-    \item Deterministic canonical JSON with 100\% reproducibility
-    \item Hash-sorted Merkle tree construction (eliminates ingestion-order bias)
-    \item Daily OpenTimestamps anchoring to Bitcoin blockchain
-    \item Production proof verified against Bitcoin block 919384
+    \item Deterministic canonical JSON outputs suitable for byte-for-byte reproducibility
+    \item Hash-sorted Merkle tree construction (reduces ingestion-order bias)
+    \item Daily OpenTimestamps anchoring to the Bitcoin blockchain (calendar attestations)
     \item Independent verification CLI for third-party auditors
 \end{itemize}
 
-\textbf{Production readiness:}
+\textbf{Production readiness (notes):}
 \begin{itemize}[nosep]
-    \item 158 tests with 85\% code coverage across gateway and pod simulation modules
-    \item Comprehensive test categories: unit, integration, security, edge cases, property-based
-    \item CI/CD pipeline: Python 3.11/3.12/3.13 with uv package manager
-    \item Static analysis: mypy (type safety), ruff (linting), bandit (security)
-    \item Git LFS integration for binary OTS proofs (prevents repository bloat)
+    \item Test suite: 181 tests (2 skipped in some runs); coverage measurements currently report 83.8\% overall for gateway and pod simulation modules
+    \item Test categories: unit, integration, security, edge cases, and property-based tests
+    \item CI matrix: Python 3.11/3.12/3.13 (uv-based dependency management in CI as an experimental option)
+    \item Static analysis: mypy (type checks), ruff (linting), bandit (security scanning)
+    \item Git LFS used for large artifacts such as OTS proofs
 \end{itemize}
 
-\textbf{Documentation completeness:}
-\begin{itemize}[nosep]
-    \item 9 Architecture Decision Records (ADR-001 through ADR-009)
-    \item Operational guides for OTS verification and Bitcoin Core setup
-    \item Interactive HTML coverage reports (htmlcov/index.html)
-    \item Keep a Changelog format with detailed release notes
-\end{itemize}
-
-The M\#4 milestone validates the core thesis: ultra-low-power heritage sensors can achieve cryptographic verifiability without trusted intermediaries. Bitcoin timestamping provides public auditability while preserving payload confidentiality through AEAD encryption.
+The M\#4 milestone validates the core thesis: resource-constrained heritage sensors can achieve cryptographic verifiability without trusted intermediaries.
+Bitcoin timestamping provides public auditability while payload confidentiality is preserved through AEAD encryption.
 
 \subsection{Roadmap: M\#5 and Beyond}
 
-\textbf{Milestone \#5 (Planned --- Q4 2025):}
+\textbf{Milestone \#5 (Planned—Q4 2025):}
 \begin{itemize}[nosep]
     \item \textbf{Gateway Ledger Tab:} Web interface for auditors to browse blocks, day records, and OTS proofs
         \begin{itemize}[nosep]
@@ -51,127 +44,80 @@ The M\#4 milestone validates the core thesis: ultra-low-power heritage sensors c
             \item Merkle proof generation for individual facts
             \item Timeline visualization of day-chain continuity
         \end{itemize}
-    \item \textbf{Automated OTS Workflow:} Cron-based anchor and upgrade pipeline
+    \item \textbf{Automated OTS Workflow:} Configurable anchor and upgrade pipeline (cron or systemd timers)
         \begin{itemize}[nosep]
-            \item Daily stamping at 00:10 UTC (configurable)
-            \item Weekly upgrade polling for Bitcoin confirmations
-            \item Email/webhook notifications on verification success/failure
+            \item Daily stamping at a configurable time (default: 00:10 UTC)
+            \item Scheduled \texttt{ots upgrade} runs for confirmation propagation
+            \item Notification hooks (webhook/email) for verification outcomes
         \end{itemize}
     \item \textbf{Outage Logger:} Connectivity monitoring and gap detection
         \begin{itemize}[nosep]
-            \item Per-device expected telemetry cadence
-            \item Alert thresholds for missing frames (e.g., 4 consecutive misses)
+            \item Per-device expected telemetry cadence and alert thresholds
             \item Outage event log with duration and affected devices
         \end{itemize}
     \item \textbf{Multi-day Verification:} Validate day-chain continuity
         \begin{itemize}[nosep]
-            \item Verify \texttt{prev\_day\_root} links between consecutive days
-            \item Detect chain breaks or root mismatches
-            \item Generate chain verification reports
+            \item Verify chained \texttt{prev\_day\_root} links between consecutive days
+            \item Detect chain breaks or root mismatches and surface remediation steps
         \end{itemize}
 \end{itemize}
 
 \textbf{Future Enhancements (M\#6+):}
 \begin{itemize}[nosep]
-    \item \textbf{Key Rotation:} Implement ADR-001 key derivation schedules
-        \begin{itemize}[nosep]
-            \item Periodic ratcheting of symmetric keys (e.g., weekly)
-            \item Backward secrecy: old keys destroyed after rotation
-            \item Forward secrecy: future keys unpredictable from current state
-        \end{itemize}
-    \item \textbf{Device Attestation:} Ed25519 signature verification
-        \begin{itemize}[nosep]
-            \item Pod signs frames with device-specific keypair
-            \item Gateway validates signatures before accepting frames
-            \item Revocation list for compromised device keys
-        \end{itemize}
-    \item \textbf{Enhanced Proof Metadata:} Richer OTS proof context
-        \begin{itemize}[nosep]
-            \item Git commit SHA of gateway build
-            \item Build timestamp and compiler version
-            \item Device firmware versions per pod
-        \end{itemize}
-    \item \textbf{Air-gapped Deployment Guide:} Offline verification procedures
-        \begin{itemize}[nosep]
-            \item Pre-downloaded Bitcoin header bundles
-            \item Sneakernet workflows for isolated networks
-            \item Signature-based header authenticity checks
-        \end{itemize}
-    \item \textbf{Performance Benchmarking:} Throughput characterization
-        \begin{itemize}[nosep]
-            \item Frames-per-second ingestion capacity
-            \item Merkle batching performance vs. leaf count
-            \item OTS verification latency with local vs. remote headers
-        \end{itemize}
-    \item \textbf{Multi-site Aggregation:} Federated anchoring
-        \begin{itemize}[nosep]
-            \item Cross-site Merkle trees (site roots as leaves)
-            \item Single daily OTS proof for multiple deployment sites
-            \item Site isolation while enabling global auditability
-        \end{itemize}
+    \item \textbf{Key Rotation:} Implement ADR-001 key derivation and rotation schedules
+    \item \textbf{Device Attestation:} Ed25519 signature verification and revocation workflows
+    \item \textbf{Enhanced Proof Metadata:} Include build metadata (git SHA, build timestamp) and firmware versions
+    \item \textbf{Air-gapped Deployment Guide:} Offline verification procedures with signed header bundles
+    \item \textbf{Performance Benchmarking:} Throughput and Merkle batching performance targets
+    \item \textbf{Multi-site Aggregation:} Federated anchoring and cross-site Merkle roots
 \end{itemize}
 
-\subsection{Operational Considerations}
+\subsection{Operational Considerations (clarified)}
 
 \textbf{Deployment scenarios:}
 \begin{itemize}[nosep]
     \item \textbf{Cloud-connected:} Full automation with Bitcoin P2P and public OTS calendars
-    \item \textbf{Intermittent connectivity:} Queue OTS operations, batch-process during uplink windows
-    \item \textbf{Air-gapped:} Manual OTS export/import via removable media, deferred verification
+    \item \textbf{Intermittent connectivity:} Queue OTS operations and batch during uplink windows
+    \item \textbf{Air-gapped:} Manual OTS export/import via removable media; pre-signed header bundles for offline verification
 \end{itemize}
 
 \textbf{Scalability characteristics:}
 \begin{itemize}[nosep]
-    \item \textbf{Pod count:} Linear growth in frame ingestion (tested up to 10 devices)
-    \item \textbf{Frame rate:} Configurable per-pod cadence (typical: 1 frame/5 minutes)
-    \item \textbf{Daily batch size:} $O(n \log n)$ Merkle computation (fast for $n < 10^6$ facts)
-    \item \textbf{OTS overhead:} One proof per day regardless of fact count (fixed cost)
+    \item \textbf{Pod count:} Linear growth in frame ingestion (tested at small scale; further benchmarking planned)
+    \item \textbf{Frame rate:} Configurable per-pod cadence (typical: one frame / 5 minutes)
+    \item \textbf{Daily batch size:} $O(n \log n)$ Merkle computation (practical for $n < 10^6$ facts)
+    \item \textbf{OTS overhead:} One proof per day regardless of fact count (fixed recurring cost)
 \end{itemize}
 
-\textbf{Maintenance workflow:}
-\begin{itemize}[nosep]
-    \item Weekly: Run \texttt{ots upgrade} to update pending proofs with Bitcoin confirmations
-    \item Monthly: Backup device table and replay window state
-    \item Quarterly: Rotate gateway secrets per key rotation schedule (M\#6)
-    \item Annual: Audit complete day-chain for continuity and OTS proof validity
-\end{itemize}
+\subsection{Research Contributions (hedged and clarified)}
 
-\subsection{Research Contributions}
+This work presents Track1, a \textbf{practical, open reference implementation} that integrates well-known cryptographic components and timestamping workflows for a focused deployment niche: heritage sites requiring long-term data verifiability without vendor lock-in.
 
-This work presents Track1, a \textbf{system-level integration} of established cryptographic components adapted for a specific deployment niche: heritage sites requiring multi-decade autonomous monitoring without vendor lock-in.
-
-\textbf{Key insight:} Daily Merkle batching amortizes blockchain timestamping costs (1 OTS anchor/day vs. 1000+ individual timestamps) while maintaining per-frame cryptographic integrity. This makes public Bitcoin verification economically viable for resource-constrained IoT deployments.
-
-\textbf{System integration contributions:}
-
+\textbf{Key insights:}
 \begin{enumerate}[nosep]
-    \item \textbf{Ultra-low power adaptation:} XChaCha20-Poly1305 AEAD with LoRa duty cycle constraints (<1\% EU868), enabling 2+ year battery autonomy on CR2032 cells
+    \item \textbf{Ultra-low power adaptation:} XChaCha20-Poly1305 AEAD with LoRa duty cycle constraints enables multi-year battery operation in typical configurations
 
-    \item \textbf{Deterministic batching:} Canonical JSON + hash-sorted Merkle trees ensure 100\% reproducible roots, enabling independent verification by third parties
+    \item \textbf{Deterministic batching:} Canonical JSON and hash-sorted Merkle trees ensure reproducible roots for independent verification
 
-    \item \textbf{Zero-marginal-cost anchoring:} Daily OTS batching reduces per-fact blockchain cost from \$0.50 (Ethereum) or \$0.00001 (Helium) to \$0.001/1000 = \$0.000001 per fact
+    \item \textbf{Negligible marginal-cost anchoring:} Daily OpenTimestamps batching amortizes per-fact blockchain costs; after initial node/setup overhead the per-fact incremental cost is effectively negligible compared with commercial timestamping services\footnote{Initial Bitcoin node setup and header synchronization are one-time costs; ongoing node maintenance is small and amortized over many facts.}
 
-    \item \textbf{Open implementation:} First open-source system combining LoRa + AEAD + Bitcoin OTS with comprehensive test coverage (181 tests, 84\%) and ADR documentation
+    \item \textbf{Open implementation and reproducibility:} A documented reference implementation, ADRs, and test artifacts enable third-party auditors to reproduce verification results
 \end{enumerate}
 
-\textbf{Comparison with prior art:}
-
+\textbf{Comparison with prior art (concise):}
 \begin{itemize}[nosep]
-    \item \textbf{vs. Certificate Transparency / Trillian:} Adapted Merkle timestamping from web PKI to IoT telemetry workflows; Bitcoin verification instead of trusted CT log operators
-
-    \item \textbf{vs. Guardtime KSI:} Open-source implementation with public Bitcoin blockchain instead of proprietary KSI chain and enterprise licensing
-
-    \item \textbf{vs. Helium Network / Ethereum IoT:} 1000× cost reduction through daily batching (\$0.001/day vs. \$0.09-\$1/day); ultra-low power budget (1.4 Wh/day)
-
-    \item \textbf{vs. Commercial IoT platforms:} Vendor-independent verification survives provider discontinuation; no subscription fees or API deprecation risk
+    \item \textbf{Certificate Transparency / Trillian:} Merkle-based transparency model; Track1 adapts Merkle anchoring to IoT telemetry and uses Bitcoin as the public anchor rather than a dedicated CT log operator
+    \item \textbf{Guardtime KSI:} KSI provides enterprise timestamping with different trust and licensing assumptions; Track1 is an open reference tied to Bitcoin for public attestations
+    \item \textbf{Helium / blockchain-native LoRa networks:} Alternative cost and trust models; Track1 targets a different operational trade-off (daily batching, minimal per-device power)
+    \item \textbf{Commercial IoT platforms:} Vendor-managed telemetry and logs; Track1 emphasizes independent verification and avoidance of vendor lock-in
 \end{itemize}
 
-Track1 targets a \textbf{specific niche} not addressed by existing systems: publicly-auditable telemetry for heritage sites where curators think in decades, not product cycles, and require guarantees that outlive organizational changes.
+Track1 targets a \textbf{well-defined niche}: publicly-auditable telemetry for heritage sites where curators need long-lived verifiability that survives organizational changes.
 
-\subsection{Final Remarks}
+\subsection{Final Remarks (updated)}
 
-Track1 achieves its core objective: \emph{verifiable telemetry for resource-constrained sensors without trusted intermediaries}. The M\#4 milestone provides a production-ready foundation with Bitcoin-anchored timestamp proofs and comprehensive test coverage.
+Track1 achieves its practical goal: verifiable telemetry for resource-constrained sensors without trusted intermediaries.\ Milestone \#4 delivers a solid foundation with documented artifacts and reproducible verification steps.
 
-Future work (M\#5+) will focus on operational tooling (ledger UI, outage monitoring, automated OTS workflows) and advanced security features (key rotation, device attestation). The modular architecture and extensive ADR documentation enable independent auditors to validate the system's cryptographic properties and reproduce verification results.
+Next steps before broad pilot deployments: increase unit-test coverage to meet the 85\% target, add a small ledger UI for auditors (M\#5), and harden operational runbooks for air-gapped and intermittent networks.
 
-With 158 tests, 85\% coverage, and real Bitcoin attestation confirmed, Track1 is ready for pilot deployments in heritage sensor networks requiring long-term data integrity guarantees.
+With 181 tests (2 skipped in some runs) and ongoing verification against live OpenTimestamps calendars, Track1 is positioned for pilot deployments in heritage sensor networks where long-term data integrity is paramount.

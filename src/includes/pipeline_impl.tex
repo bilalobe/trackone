@@ -16,7 +16,8 @@ Each frame contains:
 }
 \end{verbatim}
 
-\textbf{M\#4 implementation:} Full XChaCha20-Poly1305 AEAD with tag verification. The gateway decrypts \texttt{ct} using the device's \texttt{ck\_up}, verifies the authentication tag, and validates AAD binding to header fields.
+\textbf{M\#4 implementation:} Full XChaCha20-Poly1305 AEAD with tag verification.
+The gateway decrypts \texttt{ct} using the device's \texttt{ck\_up}, verifies the authentication tag, and validates AAD binding to header fields.
 
 \paragraph{Replay window policy}
 Per-device state in \texttt{device\_table.json} tracks:
@@ -66,7 +67,8 @@ Accepted frames are decrypted and written as canonical fact JSON:
 }
 \end{verbatim}
 
-Facts validated against \texttt{toolset/unified/schemas/fact.schema.json}. Canonicalization: sorted keys, UTF-8, no whitespace (ADR-003).
+Facts validated against \texttt{toolset/unified/schemas/fact.schema.json}.
+Canonicalization: sorted keys, UTF-8, no whitespace (ADR-003).
 
 \paragraph{Batching and daily artifacts}
 Deterministic Merkle tree construction:
@@ -91,7 +93,7 @@ Verification recomputes Merkle root from facts directory, compares to recorded b
 make run
 
 # Run individual components
-make test           # 151 tests, ~85% coverage
+make test           # 181 tests, ~84% measured coverage (local runs may skip 2 optional tests)
 make test-cov       # with coverage report
 make check          # lint + format + test
 make ci             # full CI simulation

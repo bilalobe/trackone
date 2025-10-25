@@ -16,10 +16,13 @@ Leaf hash: $h_i=\mathrm{SHA}\text{-}256(\texttt{canonical\_json}(fact\_i))$.
 \end{itemize}
 
 \subsection{Block header schema}
-Fields: \texttt{version, site\_id, day, batch\_id, merkle\_root, count, leaf\_hashes}. Validated by \texttt{block\_header.schema.json}.
+Fields: \texttt{version, site\_id, day, batch\_id, merkle\_root, count, leaf\_hashes}.
+Validated by \texttt{block\_header.schema.json}.
 
 \subsection{Day record schema}
-Fields: \texttt{version, site\_id, date, prev\_day\_root, batches[], day\_root}. Canonical day blob written as \texttt{day/YYYY-MM-DD.bin} with a human-readable \texttt{.json} peer. Validated by \texttt{day\_record.schema.json}.
+Fields: \texttt{version, site\_id, date, prev\_day\_root, batches[], day\_root}.
+Canonical day blob written as \texttt{day/YYYY-MM-DD.bin} with a human-readable \texttt{.json} peer.
+Validated by \texttt{day\_record.schema.json}.
 
 \subsection{OTS anchoring and verification}
 \begin{itemize}[nosep]
@@ -29,7 +32,8 @@ Fields: \texttt{version, site\_id, date, prev\_day\_root, batches[], day\_root}.
 \end{itemize}
 
 \subsubsection{Local verification workflow}
-OpenTimestamps verification requires Bitcoin block headers to validate the Merkle root attestations. The complete workflow:
+OpenTimestamps verification requires Bitcoin block headers to validate the Merkle root attestations.
+The complete workflow:
 
 \begin{enumerate}[nosep]
   \item \textbf{Generate OTS proof:} \texttt{ots stamp day/2025-10-07.bin} submits hash to calendar servers
@@ -45,7 +49,8 @@ verify BitcoinBlockHeaderAttestation(919418)
 \end{verbatim}
 
 \subsubsection{Bitcoin Core configuration for verification}
-Full Bitcoin blockchain sync is impractical for CI environments (831,862 blocks as of October 2025, $>$500 GB). OTS verification only requires \textbf{block headers} (not full blocks). See ADR-007 for CI policy and operational guidance.
+Full Bitcoin blockchain sync is impractical for CI environments (831,862 blocks as of October 2025, $>$500 GB). OTS verification only requires \textbf{block headers} (not full blocks).
+See ADR-007 for CI policy and operational guidance.
 
 \begin{verbatim}
 # Headers-only/pruned mode (< 1 GB storage)
@@ -68,7 +73,8 @@ bitcoin-cli -getinfo
 Once headers reach the attested block heights (extracted from \texttt{ots info <file.ots>}), verification succeeds without syncing full blocks.
 
 \subsubsection{CI verification strategy (ADR-007)}
-Syncing Bitcoin headers in CI is time-consuming (10--20 minutes for full catchup). Strategies (per ADR-007):
+Syncing Bitcoin headers in CI is time-consuming (10--20 minutes for full catchup).
+Strategies (per ADR-007):
 
 \begin{itemize}[nosep]
   \item \textbf{Cache Bitcoin datadir:} Persist \texttt{\textasciitilde/.bitcoin} between CI runs to reuse headers
@@ -86,7 +92,8 @@ Syncing Bitcoin headers in CI is time-consuming (10--20 minutes for full catchup
 5. Cache ~/.bitcoin for next run
 \end{verbatim}
 
-\textbf{Trade-off:} OTS provides trustless Bitcoin-anchored timestamps but requires Bitcoin P2P connectivity. For air-gapped deployments, verification must occur offline with pre-downloaded headers or trusted header feeds.
+\textbf{Trade-off:} OTS provides trustless Bitcoin-anchored timestamps but requires Bitcoin P2P connectivity.
+For air-gapped deployments, verification must occur offline with pre-downloaded headers or trusted header feeds.
 
 \subsection{Schema validation}
 When \texttt{--validate-schemas} is enabled, validate against:

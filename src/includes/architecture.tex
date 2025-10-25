@@ -2,7 +2,8 @@
 
 \subsection{Overview}
 
-Track1 implements a three-tier architecture: \textbf{Pod} (sensor + radio) $\rightarrow$ \textbf{Gateway} (verify + batch + anchor) $\rightarrow$ \textbf{Verification} (independent auditor). The system is designed for offline-tolerant operation with eventual Bitcoin timestamping.
+Track1 implements a three-tier architecture: \textbf{Pod} (sensor + radio) $\rightarrow$ \textbf{Gateway} (verify + batch + anchor) $\rightarrow$ \textbf{Verification} (independent auditor).
+The system is designed for offline-tolerant operation with eventual Bitcoin timestamping.
 
 \textbf{Core dataflow:}
 \begin{enumerate}[nosep]
@@ -71,7 +72,7 @@ Track1 implements a three-tier architecture: \textbf{Pod} (sensor + radio) $\rig
 
 \subsection{Pipeline Workflow (per ADRs)}
 
-\textbf{M\#1 (Stub AEAD --- ADR-004):}
+\textbf{M\#1 (Stub AEAD—ADR-004):}
 \begin{itemize}[nosep]
     \item Framing implemented with plaintext payloads (crypto stub)
     \item Replay window active and tested
@@ -79,7 +80,7 @@ Track1 implements a three-tier architecture: \textbf{Pod} (sensor + radio) $\rig
     \item End-to-end integration validated
 \end{itemize}
 
-\textbf{M\#2 (Real AEAD --- ADR-002):}
+\textbf{M\#2 (Real AEAD—ADR-002):}
 \begin{itemize}[nosep]
     \item XChaCha20-Poly1305 encryption enabled
     \item Nonce construction: \texttt{salt8 || fc\_u64 || random8}
@@ -87,7 +88,7 @@ Track1 implements a three-tier architecture: \textbf{Pod} (sensor + radio) $\rig
     \item TLV payload encoding for compact on-air size
 \end{itemize}
 
-\textbf{M\#3 (PyNaCl Migration --- ADR-005):}
+\textbf{M\#3 (PyNaCl Migration—ADR-005):}
 \begin{itemize}[nosep]
     \item Single cryptographic library (PyNaCl) for all primitives
     \item Device table schema v1.0 with forward-only policy (ADR-006)
@@ -95,12 +96,12 @@ Track1 implements a three-tier architecture: \textbf{Pod} (sensor + radio) $\rig
     \item 85\% code coverage with comprehensive security tests
 \end{itemize}
 
-\textbf{M\#4 (OTS Verification --- ADR-008):}
+\textbf{M\#4 (OTS Verification—ADR-008):}
 \begin{itemize}[nosep]
     \item Production Bitcoin anchoring confirmed (block 919384)
     \item Real OTS integration tests (optional, marked \texttt{@pytest.mark.real\_ots})
     \item Git LFS for binary OTS proofs
-    \item Enhanced test suite: 158 tests across 10 modules
+    \item Enhanced test suite: 181 tests across the repository (some runs may skip two optional tests)
 \end{itemize}
 
 \subsection{Platform Dependencies}
