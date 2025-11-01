@@ -48,11 +48,17 @@ Each ADR captures context, the decision, consequences, and alternatives.
   Summary: Adopt a forward-only policy. Standardize on `salt8` for XChaCha (24‑byte nonce), drop `salt4` and migrations;
   the current milestone schema is the only valid runtime format. Older milestones are archived as references only.
 
-`- **ADR‑007: OTS verification in CI and Bitcoin headers policy**
+- **ADR‑007: OTS verification in CI and Bitcoin headers policy**
   Status: Accepted (M#4)
   Summary: Trustless OTS verification in CI using Bitcoin Core in headers-only/pruned mode with cached datadir; parse
   required heights from `.ots` artifacts, wait for headers to catch up, then run `ots verify`. Skip non-blocking when
   headers are unavailable within timeout.
+
+## Tooling & Performance
+
+- **ADR‑011: Benchmarking Strategy for TrackOne**
+  Status: Proposed (M#5)
+  Summary: Introduces pytest-benchmark based micro/mid-level benchmarks for crypto and gateway primitives, optional CI artifacts, and conventions for running and comparing baselines.
 
 ## Implementation Status
 
