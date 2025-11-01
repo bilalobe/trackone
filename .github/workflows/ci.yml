@@ -24,13 +24,21 @@ jobs:
           python-version: '3.11'
 
       - name: Install linting tools
-        run: uv pip install --system ruff black
+        run: uv pip install --system -r requirements-dev.txt
 
       - name: Run ruff (linter)
         run: ruff check scripts/ --output-format=github
 
       - name: Run black (formatter check)
         run: black --check scripts/
+
+      - name: Run mypy (type-check)
+        run: mypy scripts
+
+      - name: Run bandit (security scan on runtime code)
+        run: |
+          # Use config to exclude tests/dev; scan the entire scripts/ tree
+          bandit -r scripts -c .bandit.yaml
 
   test:
     runs-on: ubuntu-latest
@@ -57,11 +65,10 @@ jobs:
       - name: Install dependencies
         run: |
           uv pip install --system -r requirements.txt
-          uv pip install --system pytest pytest-cov hypothesis
 
-      - name: Run tests with coverage
+      - name: Run tests with coverage (parallel)
         run: |
-          pytest --cov=scripts --cov-report=term-missing --cov-report=xml -v
+          pytest -n auto --cov=scripts --cov-report=term-missing --cov-report=xml -v
 
       - name: Upload coverage to Codecov
         if: matrix.python-version == '3.13'
