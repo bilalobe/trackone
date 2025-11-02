@@ -60,6 +60,12 @@ Each ADR captures context, the decision, consequences, and alternatives.
   Status: Proposed (M#5)
   Summary: Introduces pytest-benchmark based micro/mid-level benchmarks for crypto and gateway primitives, optional CI artifacts, and conventions for running and comparing baselines.
 
+## Data Storage & Analytics
+
+- **ADR‑012: Parquet Export for Telemetry Facts (0.2.0+)**
+  Status: Proposed
+  Summary: Add optional Parquet exporter (columnar, partitioned by day/site) derived from canonical JSON; keeps JSON as source of truth for Merkle/OTS, improves analytical scans and storage efficiency.
+
 ## Implementation Status
 
 | ADR     | M#0        | M#1                          | M#2                     |
