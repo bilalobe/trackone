@@ -35,13 +35,12 @@ DEFAULT_REPLAY_WINDOW = 64
 MAX_FRAME_COUNTER = 2**32 - 1
 HEADER_FIELDS = {"dev_id", "msg_type", "fc", "flags"}
 
-# Optional jsonschema: mypy will warn if stubs are missing; silence with import-untyped
+# Optional jsonschema: mypy will warn if stubs are missing; detect availability
 try:
-    import jsonschema  # type: ignore[import-untyped]
+    import jsonschema
 
     JSONSCHEMA_AVAILABLE: bool = True
 except Exception:
-    jsonschema = None
     JSONSCHEMA_AVAILABLE = False
 
 
