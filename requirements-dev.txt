@@ -12,3 +12,4 @@ bandit>=1.7.8
 pip-audit>=2.7.3
 time-machine>=2.14.0
 hatchling>=1.27.0
+types-jsonschema
