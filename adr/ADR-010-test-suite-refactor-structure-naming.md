@@ -34,7 +34,7 @@ Adopt a consistent structure and naming for tests and fixtures, and decompose ov
 - Migration rules
   - Remove `_edge_cases` suffix by renaming `'test_*_edge_cases.py'` → `'test_*.py'` when no conflict exists.
   - Use `git mv` for all renames to preserve history.
-  - After each change set: run `'pytest scripts/tests/unit/gateway -q'` and then `'pytest -q'`.
+  - After each change set: run `'pytest tests/unit/gateway -q'` and then `'pytest -q'`.
 
 - Decomposition targets
   - Split `'tests/integration/test_gateway_pipeline.py'` by scenario/stage.
@@ -69,7 +69,7 @@ Adopt a consistent structure and naming for tests and fixtures, and decompose ov
 - `'tests/fixtures/pipeline_fixtures.py'`: split per domain and import only where needed.
 
 3) Validation
-- Run subset and full suite: `'pytest scripts/tests/unit/gateway -q'`, then `'pytest -q'`.
+- Run subset and full suite: `'pytest tests/unit/gateway -q'`, then `'pytest -q'`.
 - Ensure CI passes and test discovery remains stable.
 
 ## Tooling/CI

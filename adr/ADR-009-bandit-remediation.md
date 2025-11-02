@@ -53,7 +53,7 @@ Files changed
   - Replaced use of the pseudo-random ``random`` module with ``secrets.SystemRandom()`` for the simulator's sample data generation (addresses B311; simulators may use secure RNG to avoid tool warnings).
 
 - .bandit.yaml
-  - Exclude dev/test helpers: ``scripts/tests`` and ``scripts/dev``
+  - Exclude dev/test helpers: ``tests`` and ``scripts/dev``
   - Set reporting thresholds to ``severity: high`` and ``confidence: high`` so CI only fails for high-risk/high-confidence findings.
 
 Why these changes

@@ -71,7 +71,7 @@ For M#1 only:
 
 ## Testing
 
-- `scripts/tests/test_framed_ingest.py` covers:
+- `tests/test_framed_ingest.py` covers:
     - Accept path with increasing `fc`
     - Duplicate/out‑of‑window rejection
     - End‑to‑end: frames → facts → batch → (OTS) → verify
