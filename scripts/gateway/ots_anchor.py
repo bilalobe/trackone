@@ -35,25 +35,34 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import subprocess
+import subprocess  # nosec: B404 - invoking a vetted external tool via validated args
 from pathlib import Path
 
 
 def ots_stamp(day_bin_path: Path, ots_path: Path) -> None:
-    """Stamp the day blob using OpenTimestamps CLI, or write a placeholder if not available."""
+    """Stamp the day blob using OpenTimestamps CLI, or write a placeholder if not available.
+
+    Contract:
+    - Input: day_bin_path (Path to .bin), ots_path (.bin.ots target path)
+    - Behavior: attempt `ots stamp <bin>`; on any failure, write placeholder proof.
+    - Success: if the OTS command doesn't produce the .ots file, write placeholder.
+    """
     try:
-        # Try to call ots stamp (requires ots client installed)
-        subprocess.run(["ots", "stamp", str(day_bin_path)], check=True)
-        # OTS client writes .ots file next to .bin
+        # Attempt to invoke the OTS client. Tests expect the plain command name here.
+        # nosec: B603 - call is to a fixed executable name with local file argument; no shell.
+        subprocess.run(["ots", "stamp", str(day_bin_path)], check=True)  # nosec
+        # OTS client typically writes <bin>.ots; ensure something exists for downstream steps.
         if not ots_path.exists():
-            # Fallback: create a dummy .ots file
             ots_path.write_text("OTS_PROOF_PLACEHOLDER\n", encoding="utf-8")
-    except Exception:
-        # Fallback: create a dummy .ots file
+    except subprocess.CalledProcessError:
+        # Non-zero exit from the OTS client → fallback placeholder
+        ots_path.write_text("OTS_PROOF_PLACEHOLDER\n", encoding="utf-8")
+    except OSError:
+        # Command not found, permission issue, etc. → fallback placeholder
         ots_path.write_text("OTS_PROOF_PLACEHOLDER\n", encoding="utf-8")
 
 
-def main(argv=None) -> int:
+def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(
         description="Anchor a day blob using OpenTimestamps (OTS)"
     )

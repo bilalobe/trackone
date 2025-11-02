@@ -33,20 +33,25 @@ from __future__ import annotations
 
 import argparse
 import json
-import subprocess
+import os
+import shutil
+import subprocess  # nosec: B404 - invoking external 'ots' tool via validated full path
+from collections.abc import Iterable
 from hashlib import sha256
 from pathlib import Path
+from typing import Any
 
 
-def canonical_json(obj) -> bytes:
+def canonical_json(obj: Any) -> bytes:
     return json.dumps(obj, sort_keys=True, separators=(",", ":")).encode("utf-8")
 
 
-def merkle_root(leaves):
+def merkle_root(leaves: Iterable[bytes]) -> str:
     # Mirror merkle_batcher: if empty -> sha256(""); else hash leaves, sort by hex, then build tree
-    if not leaves:
+    leaves_list = list(leaves)
+    if not leaves_list:
         return sha256(b"").hexdigest()
-    leaf_hashes = [sha256(leaf).hexdigest() for leaf in leaves]
+    leaf_hashes = [sha256(leaf).hexdigest() for leaf in leaves_list]
     leaf_hashes_sorted = sorted(leaf_hashes)
     layer = [bytes.fromhex(hx) for hx in leaf_hashes_sorted]
     while len(layer) > 1:
@@ -65,20 +70,36 @@ def verify_ots(ots_path: Path) -> bool:
         content = ots_path.read_text(encoding="utf-8").strip()
         if content == "OTS_PROOF_PLACEHOLDER":
             return True
-    except Exception:
+    except (OSError, UnicodeDecodeError):
+        # If reading fails, fall back to attempting real OTS verification below.
+        # Narrow exception avoids catching unrelated errors.
         pass
 
     # Try real OTS verification
+    ots_exe = shutil.which("ots")
+    if not ots_exe:
+        # No external 'ots' binary available; treat as unverifiable.
+        return False
+
+    # Validate that the resolved path is an executable file to reduce risk.
+    ots_path_obj = Path(ots_exe).resolve()
+    if not ots_path_obj.is_file() or not os.access(str(ots_path_obj), os.X_OK):
+        return False
+
     try:
+        # Use full path to the executable and avoid shell=True.
+        # nosec: B603 - ots_exe is validated above (absolute, file, executable); args are local paths.
         result = subprocess.run(
-            ["ots", "verify", str(ots_path)], capture_output=True, text=True
-        )
+            [str(ots_path_obj), "verify", str(ots_path)], capture_output=True, text=True
+        )  # nosec
         return result.returncode == 0
-    except Exception:
+    except subprocess.CalledProcessError:
+        return False
+    except OSError:
         return False
 
 
-def main(argv=None) -> int:
+def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(
         description="Verify Merkle root and OTS proof for a day"
     )
@@ -106,7 +127,8 @@ def main(argv=None) -> int:
     block_path = block_files[0]
 
     # Load block header to get authoritative day value
-    block_header = json.load(block_path.open("r", encoding="utf-8"))
+    with block_path.open("r", encoding="utf-8") as f:
+        block_header = json.load(f)
     day = block_header.get("day")
     if not isinstance(day, str) or len(day) != 10:
         print(f"ERROR: Invalid or missing 'day' in block header: {block_path}")
@@ -117,11 +139,12 @@ def main(argv=None) -> int:
 
     # Read and canonicalize all facts
     fact_files = sorted(facts_dir.glob("*.json"))
-    leaves = []
+    leaves: list[bytes] = []
     for fpath in fact_files:
-        obj = json.load(fpath.open("r", encoding="utf-8"))
-        canon = canonical_json(obj)
-        leaves.append(canon)
+        with fpath.open("r", encoding="utf-8") as f:
+            obj = json.load(f)
+            canon = canonical_json(obj)
+            leaves.append(canon)
 
     # Recompute Merkle root
     recomputed_root = merkle_root(leaves)

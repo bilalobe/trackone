@@ -35,19 +35,23 @@ DEFAULT_REPLAY_WINDOW = 64
 MAX_FRAME_COUNTER = 2**32 - 1
 HEADER_FIELDS = {"dev_id", "msg_type", "fc", "flags"}
 
+# Optional jsonschema: mypy will warn if stubs are missing; silence with import-untyped
 try:
-    import jsonschema
+    import jsonschema  # type: ignore[import-untyped]
 
-    JSONSCHEMA_AVAILABLE = True
-except ImportError:
-    jsonschema = None  # type: ignore
+    JSONSCHEMA_AVAILABLE: bool = True
+except Exception:
+    jsonschema = None
     JSONSCHEMA_AVAILABLE = False
 
 
-def _load_schema(path: Path) -> dict | None:
+def _load_schema(path: Path) -> dict[str, Any] | None:
     try:
         if path.exists():
-            return json.loads(path.read_text(encoding="utf-8"))
+            data = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                return data
+            return None
     except Exception:
         return None
     return None
@@ -66,7 +70,9 @@ class ReplayWindow:
         self.highest_fc: dict[str, int] = {}
         self.seen: dict[str, set[int]] = {}
 
-    def initialize_from_device_table(self, device_table: dict) -> None:
+    def initialize_from_device_table(
+        self, device_table: dict[str, dict[str, Any]]
+    ) -> None:
         """Initialize replay window state from persisted device table."""
         for dev_key, entry in device_table.items():
             highest = entry.get("highest_fc_seen", -1)
@@ -117,7 +123,7 @@ class ReplayWindow:
         return True, "ok"
 
 
-def load_fact_schema() -> dict | None:
+def load_fact_schema() -> dict[str, Any] | None:
     """Load fact.schema.json for optional validation."""
     schema_path = (
         Path(__file__).parent.parent.parent
@@ -128,13 +134,16 @@ def load_fact_schema() -> dict | None:
     )
     if schema_path.exists():
         try:
-            return json.loads(schema_path.read_text(encoding="utf-8"))
+            data = json.loads(schema_path.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                return data
+            return None
         except Exception as e:
             print(f"[WARN] Failed to load fact schema: {e}", file=sys.stderr)
     return None
 
 
-def validate_fact(obj: dict, schema: dict | None) -> None:
+def validate_fact(obj: dict[str, Any], schema: dict[str, Any] | None) -> None:
     """Validate fact against schema if available."""
     if not (schema and JSONSCHEMA_AVAILABLE):
         return
@@ -179,7 +188,7 @@ def load_device_table(path: Path) -> dict[str, dict[str, Any]]:
         schema = _load_schema(schema_path)
         if schema:
             try:
-                jsonschema.validate(instance=data, schema=schema)  # type: ignore
+                jsonschema.validate(instance=data, schema=schema)
             except Exception as e:
                 print(
                     f"[ERROR] Device table schema validation failed: {e}",
@@ -187,10 +196,17 @@ def load_device_table(path: Path) -> dict[str, dict[str, Any]]:
                 )
                 raise
 
-    return data
+    # Normalize to typed shape: dict[str, dict[str, Any]]
+    out: dict[str, dict[str, Any]] = {}
+    if isinstance(data, dict):
+        for k, v in data.items():
+            # Use PEP 604 union form for isinstance as recommended by ruff (UP038)
+            if isinstance(k, str | int) and isinstance(v, dict):
+                out[str(k)] = v
+    return out
 
 
-def save_device_table(path: Path, tbl: dict) -> None:
+def save_device_table(path: Path | None, tbl: dict[str, Any]) -> None:
     """Persist device table to disk."""
     if not path:
         return
@@ -201,7 +217,7 @@ def save_device_table(path: Path, tbl: dict) -> None:
 # --- TLV helpers (mirror pod_sim) ---
 
 
-def decode_tlv(data: bytes) -> dict:
+def decode_tlv(data: bytes) -> dict[str, Any]:
     i = 0
     out: dict[str, Any] = {}
     while i + 2 <= len(data):
@@ -224,7 +240,7 @@ def decode_tlv(data: bytes) -> dict:
     return out
 
 
-def parse_frame(line: str) -> tuple[dict | None, str]:
+def parse_frame(line: str) -> tuple[dict[str, Any] | None, str]:
     """
     Parse a single NDJSON frame line.
 
@@ -273,7 +289,9 @@ def parse_frame(line: str) -> tuple[dict | None, str]:
     return frame, ""
 
 
-def aead_decrypt(frame: dict, device_table: dict) -> dict | None:
+def aead_decrypt(
+    frame: dict[str, Any], device_table: dict[str, dict[str, Any]]
+) -> dict[str, Any] | None:
     """
     AEAD decryption using XChaCha20-Poly1305 (192-bit nonce only).
 
@@ -312,12 +330,14 @@ def aead_decrypt(frame: dict, device_table: dict) -> dict | None:
         )
 
         payload = decode_tlv(pt)
-        return payload
+        if isinstance(payload, dict):
+            return payload
+        return None
     except Exception:
         return None
 
 
-def frame_to_fact(frame: dict, payload: dict) -> dict:
+def frame_to_fact(frame: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
     """
     Convert verified frame + decrypted payload to canonical fact.
 
@@ -335,7 +355,7 @@ def frame_to_fact(frame: dict, payload: dict) -> dict:
     }
 
 
-def process(argv=None) -> int:
+def process(argv: list[str] | None = None) -> int:
     """
     Main processing function.
 
@@ -482,7 +502,7 @@ def process(argv=None) -> int:
     return 0
 
 
-def main(argv=None) -> int:
+def main(argv: list[str] | None = None) -> int:
     """CLI entry point."""
     return process(argv)
 

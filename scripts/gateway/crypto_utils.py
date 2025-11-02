@@ -55,14 +55,16 @@ def x25519_shared_secret(
 # --- HKDF (SHA-256, RFC 5869) ---
 
 
-def hkdf_sha256(ikm: bytes, salt: bytes, info: bytes, length: int) -> bytes:
+def hkdf_sha256(
+    ikm: bytes, salt: bytes | None, info: bytes | None, length: int
+) -> bytes:
     """
     HKDF (RFC 5869) with HMAC-SHA256.
 
     Args:
         ikm: input key material
-        salt: optional salt (can be empty)
-        info: context/application specific info (can be empty)
+        salt: optional salt (can be None or empty)
+        info: context/application specific info (can be None or empty)
         length: length of output keying material in bytes
     Returns:
         OKM of requested length.

@@ -36,9 +36,10 @@ import sys
 from dataclasses import asdict, dataclass
 from hashlib import sha256
 from pathlib import Path
+from typing import Any
 
 try:
-    import jsonschema
+    import jsonschema  # type: ignore[import-untyped]
 
     JSONSCHEMA_AVAILABLE = True
 except ImportError:
@@ -47,7 +48,7 @@ except ImportError:
 DATE_RX = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
-def canonical_json(obj) -> bytes:
+def canonical_json(obj: Any) -> bytes:
     """Canonicalize JSON: sorted keys, UTF-8, no whitespace."""
     return json.dumps(obj, sort_keys=True, separators=(",", ":")).encode("utf-8")
 
@@ -63,7 +64,7 @@ class BlockHeader:
     leaf_hashes: list[str]  # optional aid for auditors
     ots_proof: str | None = None
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
         return d
 
@@ -91,9 +92,9 @@ def merkle_root_from_leaves(leaves: list[bytes]) -> tuple[str, list[str]]:
     return layer[0].hex(), leaf_hashes_sorted
 
 
-def load_schemas() -> dict:
+def load_schemas() -> dict[str, Any]:
     """Load fact, block_header, and day_record schemas if available."""
-    schemas = {}
+    schemas: dict[str, Any] = {}
     schema_dir = Path(__file__).parent.parent.parent / "toolset" / "unified" / "schemas"
     for name in ["fact", "block_header", "day_record"]:
         schema_path = schema_dir / f"{name}.schema.json"
@@ -105,17 +106,18 @@ def load_schemas() -> dict:
     return schemas
 
 
-def validate_against_schema(obj: dict, schema: dict, label: str) -> None:
+def validate_against_schema(
+    obj: dict[str, Any], schema: dict[str, Any], label: str
+) -> None:
     """Validate obj against schema; print warning if validation fails."""
     if not JSONSCHEMA_AVAILABLE:
         return
     try:
         jsonschema.validate(instance=obj, schema=schema)
         print(f"[OK] {label} validated against schema.", file=sys.stderr)
-    except jsonschema.ValidationError as e:
-        print(f"[WARN] {label} schema validation failed: {e.message}", file=sys.stderr)
     except Exception as e:
-        print(f"[WARN] {label} schema validation error: {e}", file=sys.stderr)
+        # jsonschema.ValidationError and other errors are handled here
+        print(f"[WARN] {label} schema validation failed: {e}", file=sys.stderr)
 
 
 def load_facts(facts_dir: Path) -> list[bytes]:
@@ -131,18 +133,36 @@ def load_facts(facts_dir: Path) -> list[bytes]:
     return leaves
 
 
-def prev_day_root_or_zero(out_dir: Path, site: str, day: str) -> str:
+def prev_day_root_or_zero(
+    out_dir: Path, site_or_day: str, day: str | None = None
+) -> str:
+    """Return the previous day's root or zeros.
+
+    Accepts either:
+      prev_day_root_or_zero(out_dir, day)
+    or
+      prev_day_root_or_zero(out_dir, site, day)
+
+    The `site` argument is currently unused but accepted for backward/forward compatibility.
+    """
+    # Determine day parameter depending on call style
+    day_val = site_or_day if day is None else day
+
     # naive previous day lookup by file presence; adjust if you want true calendar math
     # Here we scan the day/ directory for the latest *.json older than 'day'
     day_dir = out_dir / "day"
     if not day_dir.exists():
         return "00" * 32
-    candidates = sorted(p for p in day_dir.glob("*.json") if p.name < f"{day}.json")
+    candidates = sorted(p for p in day_dir.glob("*.json") if p.name < f"{day_val}.json")
     if not candidates:
         return "00" * 32
     try:
-        prev = json.loads(candidates[-1].read_text(encoding="utf-8"))
-        return prev.get("day_root", "00" * 32)
+        prev_any = json.loads(candidates[-1].read_text(encoding="utf-8"))
+        if isinstance(prev_any, dict):
+            val = prev_any.get("day_root")
+            if isinstance(val, str):
+                return val
+        return "00" * 32
     except Exception:
         return "00" * 32
 

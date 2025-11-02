@@ -31,7 +31,6 @@ from __future__ import annotations
 import argparse
 import base64
 import json
-import random
 import secrets
 import struct
 import time
@@ -50,14 +49,18 @@ try:
     cu_spec = importlib.util.spec_from_file_location(
         "crypto_utils", str(GW_DIR / "crypto_utils.py")
     )
-    assert cu_spec and cu_spec.loader
+    # Avoid using 'assert' (Bandit B101). Raise ImportError to trigger fallback.
+    if not cu_spec or not cu_spec.loader:
+        raise ImportError("crypto_utils spec not found")
     crypto_utils = importlib.util.module_from_spec(cu_spec)
-    cu_spec.loader.exec_module(crypto_utils)  # type: ignore
+    cu_spec.loader.exec_module(crypto_utils)
 except Exception:  # Fallback minimal HKDF if import fails
-    import hashlib  # type: ignore
+    import hashlib
     import hmac
 
-    def hkdf_sha256(ikm: bytes, salt: bytes, info: bytes, length: int) -> bytes:  # type: ignore
+    def hkdf_sha256(
+        ikm: bytes, salt: bytes | None, info: bytes | None, length: int
+    ) -> bytes:
         if salt is None:
             salt = b""
         if info is None:
@@ -73,15 +76,19 @@ except Exception:  # Fallback minimal HKDF if import fails
         return okm[:length]
 
 else:
-    hkdf_sha256 = crypto_utils.hkdf_sha256  # type: ignore
+    hkdf_sha256 = crypto_utils.hkdf_sha256
 
 
-def emit_fact(device_id: str, counter: int) -> dict:
+# Use a cryptographically secure RNG for simulations to avoid Bandit B311 warnings.
+_rnd = secrets.SystemRandom()
+
+
+def emit_fact(device_id: str, counter: int) -> dict[str, Any]:
     now = datetime.now(UTC).isoformat()
-    payload = {
+    payload: dict[str, Any] = {
         "counter": counter,
-        "bioimpedance": round(random.uniform(50.0, 120.0), 2),
-        "temp_c": round(random.uniform(20.0, 40.0), 2),
+        "bioimpedance": round(_rnd.uniform(50.0, 120.0), 2),
+        "temp_c": round(_rnd.uniform(20.0, 40.0), 2),
     }
     return {
         "device_id": device_id,
@@ -115,7 +122,7 @@ def b64(data: bytes) -> str:
 # t=0x01: counter (u32), t=0x02: bioimpedance*100 (u16), t=0x03: temp_c*100 (i16)
 
 
-def encode_tlv(payload: dict) -> bytes:
+def encode_tlv(payload: dict[str, Any]) -> bytes:
     out = bytearray()
     # counter
     c = int(payload.get("counter", 0)) & 0xFFFFFFFF
@@ -138,12 +145,20 @@ def load_device_table(path: Path) -> dict[str, dict[str, Any]]:
     if not path or not path.exists():
         return {}
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(data, dict):
+            out: dict[str, dict[str, Any]] = {}
+            for k, v in data.items():
+                # Use PEP 604 union form for isinstance as recommended by ruff (UP038)
+                if isinstance(k, str | int) and isinstance(v, dict):
+                    out[str(k)] = v
+            return out
+        return {}
     except Exception:
         return {}
 
 
-def save_device_table(path: Path, tbl: dict[str, dict[str, Any]]) -> None:
+def save_device_table(path: Path | None, tbl: dict[str, dict[str, Any]]) -> None:
     if not path:
         return
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -167,7 +182,7 @@ def ensure_device_entry(
     if key not in tbl:
         salt8 = secrets.token_bytes(8)
         # Derive per-device uplink key from master seed and salt8
-        master_seed = base64.b64decode(meta["master_seed"])  # type: ignore
+        master_seed = base64.b64decode(meta["master_seed"])
         info = f"barnacle:up:dev={dev_id_u16:05d}".encode("ascii")
         ck_up = hkdf_sha256(master_seed, salt8, info, 32)
         tbl[key] = {
@@ -185,8 +200,11 @@ def build_nonce(salt8: bytes, fc64: int) -> bytes:
 
 
 def emit_framed(
-    device_id: str, counter: int, payload: dict, device_table_path: Path | None
-) -> dict:
+    device_id: str,
+    counter: int,
+    payload: dict[str, Any],
+    device_table_path: Path | None,
+) -> dict[str, Any]:
     """
     Emit a framed record with header dict and base64-encoded fields using AEAD (XChaCha20-Poly1305).
     """
@@ -254,7 +272,7 @@ def emit_framed(
     }
 
 
-def write_plain_fact(path: Path, counter: int, fact: dict) -> None:
+def write_plain_fact(path: Path, counter: int, fact: dict[str, Any]) -> None:
     path.mkdir(parents=True, exist_ok=True)
     out_file = path / f"{counter:06d}.json"
     with out_file.open("w", encoding="utf-8") as fh:
