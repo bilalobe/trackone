@@ -23,8 +23,12 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install linting tools
-        run: uv pip install --system -r requirements-dev.txt
+      - name: Install runtime + linting tools
+        run: |
+          # Ensure runtime packages (from requirements.txt) are available for type-checkers
+          uv pip install --system -r requirements.txt
+          # Then install developer tools (linters, mypy, pytest, etc.)
+          uv pip install --system -r requirements-dev.txt
 
       - name: Run ruff (linter)
         run: ruff check scripts/ --output-format=github
@@ -33,7 +37,7 @@ jobs:
         run: black --check scripts/
 
       - name: Run mypy (type-check)
-        run: mypy scripts
+        run: mypy --install-types --non-interactive scripts
 
       - name: Run bandit (security scan on runtime code)
         run: |
@@ -62,9 +66,12 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install dependencies
+      - name: Install runtime + test deps
         run: |
+          # Runtime requirements (pynacl, jsonschema, etc.)
           uv pip install --system -r requirements.txt
+          # Test/runtime helpers (pytest, coverage, etc.)
+          uv pip install --system -r requirements-dev.txt
 
       - name: Run tests with coverage (parallel)
         run: |
