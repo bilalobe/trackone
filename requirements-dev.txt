@@ -3,6 +3,7 @@ pytest-cov>=6.0.0
 pytest-xdist>=3.1.0
 pytest-mock>=3.10.0
 pytest-timeout>=2.3.0
+pytest-benchmark>=5.1.0
 hypothesis>=6.142.2,<7.0
 opentimestamps-client>=0.7.2
 black>=24.0.0
@@ -13,3 +14,5 @@ pip-audit>=2.7.3
 time-machine>=2.14.0
 hatchling>=1.27.0
 types-jsonschema
+mdformat>=0.7.17
+mdformat-gfm>=0.3.5
