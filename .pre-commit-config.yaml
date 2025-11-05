@@ -11,13 +11,23 @@ repos:
     rev: 23.12.1
     hooks:
       - id: black
-        files: scripts/
+        # Let pre-commit decide which files changed; don't force repo-wide run here
+        # (use `pre-commit run --all-files` explicitly in CI or developers' machines)
+        # files: .  <-- removed to avoid repo-wide matching
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.1.13
     hooks:
       - id: ruff
-        files: scripts/
-        args: [ --fix ]
+        # Lint changed Python files only; keep autofix arg for local convenience
+        args: ["--fix"]
       - id: ruff-format
-        files: scripts/
+
+  - repo: https://github.com/executablebooks/mdformat
+    rev: 1.0.0
+    hooks:
+      - id: mdformat
+        files: ^(README\.md|adr/.+\.md|docs/.+\.md)$
+        additional_dependencies:
+          - mdformat-gfm
+          - mdformat-ruff
