@@ -13,36 +13,39 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
-        with:
-          enable-cache: true
-
-      - name: Set up Python
+      - name: Set up Python 3.14
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.14'
 
-      - name: Install runtime + linting tools
+      - name: Cache pip and uv
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.cache/uv
+          key: ${{ runner.os }}-pipuv-${{ hashFiles('**/requirements*.txt') }}-${{ hashFiles('pyproject.toml') }}
+
+      - name: Cache tox virtualenvs
+        uses: actions/cache@v4
+        with:
+          path: .tox
+          key: ${{ runner.os }}-tox-${{ hashFiles('tox.ini') }}-${{ hashFiles('**/requirements*.txt') }}-${{ hashFiles('pyproject.toml') }}-${{ hashFiles('.pre-commit-config.yaml') }}
+
+      - name: Cache pre-commit
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pre-commit
+          key: ${{ runner.os }}-precommit-${{ hashFiles('.pre-commit-config.yaml') }}
+
+      - name: Ensure pip, wheel and tox
         run: |
-          # Ensure runtime packages (from requirements.txt) are available for type-checkers
-          uv pip install --system -r requirements.txt
-          # Then install developer tools (linters, mypy, pytest, etc.)
-          uv pip install --system -r requirements-dev.txt
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install --upgrade tox
 
-      - name: Run ruff (linter)
-        run: ruff check scripts/ --output-format=github
-
-      - name: Run black (formatter check)
-        run: black --check scripts/
-
-      - name: Run mypy (type-check)
-        run: mypy --install-types --non-interactive scripts
-
-      - name: Run bandit (security scan on runtime code)
+      - name: Run meta tox envs
         run: |
-          # Use config to exclude tests/dev; scan the entire scripts/ tree
-          bandit -r scripts -c .bandit.yaml
+          tox -p auto -e lint,type,readme,precommit,security
 
   test:
     runs-on: ubuntu-latest
@@ -50,36 +53,50 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: [ '3.11', '3.12', '3.13' ]
 
+        include:
+          - python-version: '3.12'
+            toxenv: py312
+          - python-version: '3.13'
+            toxenv: py313
+          - python-version: '3.14'
+            toxenv: py314
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
-        with:
-          enable-cache: true
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install runtime + test deps
-        run: |
-          # Runtime requirements (pynacl, jsonschema, etc.)
-          uv pip install --system -r requirements.txt
-          # Test/runtime helpers (pytest, coverage, etc.)
-          uv pip install --system -r requirements-dev.txt
-
-      - name: Run tests with coverage (parallel)
-        run: |
-          pytest -n auto --cov=scripts --cov-report=term-missing --cov-report=xml -v
-
-      - name: Upload coverage to Codecov
-        if: matrix.python-version == '3.13'
-        uses: codecov/codecov-action@v4
+      - name: Cache pip and uv
+        uses: actions/cache@v4
         with:
-          file: ./coverage.xml
-          fail_ci_if_error: false
+          path: |
+            ~/.cache/pip
+            ~/.cache/uv
+          key: ${{ runner.os }}-pipuv-${{ matrix.python-version }}-${{ hashFiles('**/requirements*.txt') }}-${{ hashFiles('pyproject.toml') }}
+
+      - name: Cache tox virtualenvs
+        uses: actions/cache@v4
+        with:
+          path: .tox
+          key: ${{ runner.os }}-tox-${{ matrix.toxenv }}-${{ hashFiles('tox.ini') }}-${{ hashFiles('**/requirements*.txt') }}-${{ hashFiles('pyproject.toml') }}-${{ hashFiles('.pre-commit-config.yaml') }}
+
+      - name: Ensure pip, wheel and tox
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install --upgrade tox
+
+      - name: Run tests via tox
+        run: |
+          tox -e ${{ matrix.toxenv }}
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.toxenv }}
+          path: coverage.xml
+          if-no-files-found: warn
+          retention-days: 7
