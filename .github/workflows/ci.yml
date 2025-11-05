@@ -45,7 +45,7 @@ jobs:
 
       - name: Run meta tox envs
         run: |
-          tox -p auto -e lint,type,readme,precommit,security
+          tox -p
 
   test:
     runs-on: ubuntu-latest
