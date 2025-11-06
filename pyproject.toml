@@ -112,6 +112,7 @@ filterwarnings = [
     "ignore::PendingDeprecationWarning",
     "ignore::pytest.PytestUnraisableExceptionWarning",  # For async cleanup issues
     "ignore::ResourceWarning",  # File handle cleanup in tests
+    "ignore::pytest_benchmark.logger.PytestBenchmarkWarning",
 ]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
