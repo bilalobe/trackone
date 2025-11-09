@@ -90,6 +90,14 @@ Each ADR captures context, the decision, consequences, and alternatives.
   Status: Proposed (M#5)
   Summary: Adopt `git-cliff` with a project `cliff.toml` to generate and validate CHANGELOG sections from conventional commits; gate releases in CI and surface breaking/migration notes.
 
+- **ADR‑017: Rust Core and PyO3 Integration Strategy (Latent Goal)**
+  Status: Proposed (M#6)
+  Summary: Introduce a Rust core crate with PyO3 bindings for canonicalization, hashing, Merkle, and eventually AEAD/signatures; ship wheels with `maturin`, keep Python API stable with fallbacks, and roll out in phases post‑0.1.0.
+
+- **ADR‑018: Cryptographic randomness and nonce policy**
+  Status: Accepted
+  Summary: Standardize OS‑backed CSPRNG usage across Python and Rust; prohibit non‑CSPRNG APIs in crypto contexts; define AEAD nonce sizes and salt policy (16–32 bytes), provide `crypto_rng.py` helper, and require test fakes for deterministic tests.
+
 ### Platform Evolution
 
 - **ADR‑017: Rust Core and PyO3 Integration Strategy (Latent Goal)**
@@ -185,6 +193,5 @@ When proposing a new ADR:
 
 1. Copy the template above
 1. Number sequentially (ADR-004, ADR-005, etc.)
-   ~~3. Submit as PR with "ADR: " prefix~~
 1. Mark as "Proposed" until discussed and accepted
 1. Update this README index when accepted
