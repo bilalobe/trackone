@@ -21,61 +21,61 @@
 For test harness and initial development, we use **ChaCha20-Poly1305** with a **96-bit nonce** (12 bytes):
 
 - Nonce: `salt4 || fc32 || rand4`
-    - `salt4`: per‑device random salt (4 bytes)
-    - `fc32`: 32-bit frame counter
-    - `rand4`: 4-byte random
+  - `salt4`: per‑device random salt (4 bytes)
+  - `fc32`: 32-bit frame counter
+  - `rand4`: 4-byte random
 
 Production deployment will use **XChaCha20-Poly1305** with **192-bit nonce** (24 bytes):
 
 - Nonce: `salt8 || fc64 || rand8`
-    - `salt8`: per‑device random salt (8 bytes)
-    - `fc64`: 64-bit frame counter
-    - `rand8`: 8-byte random
+  - `salt8`: per‑device random salt (8 bytes)
+  - `fc64`: 64-bit frame counter
+  - `rand8`: 8-byte random
 
 This allows test development with standard ChaCha20-Poly1305 while planning for XChaCha's extended nonce space in
 production.
 
 - **Frame layout (v1):**
-    - `dev_id`: u16
-    - `msg_type`: u8 (0=telemetry, 1=alert, 2=ack, 3=cfg_ack)
-    - `fc`: u32 (frame counter)
-    - `flags`: u8 (bitfield; e.g., low_power, flood, anomaly)
-    - `payload_ct`: 16–24 B ciphertext (variable, compact TLV inside)
-    - `tag`: 16 B (Poly1305)
-    - **Total typical:** 2 + 1 + 4 + 1 + (16–24) + 16 = 40–48 B
+  - `dev_id`: u16
+  - `msg_type`: u8 (0=telemetry, 1=alert, 2=ack, 3=cfg_ack)
+  - `fc`: u32 (frame counter)
+  - `flags`: u8 (bitfield; e.g., low_power, flood, anomaly)
+  - `payload_ct`: 16–24 B ciphertext (variable, compact TLV inside)
+  - `tag`: 16 B (Poly1305)
+  - **Total typical:** 2 + 1 + 4 + 1 + (16–24) + 16 = 40–48 B
 
 ## Payload (inside AEAD)
 
 - Minimal TLV to keep evolvable:
-    - t=0x01: counter (u32)
-    - t=0x02: bioimpedance*100 (u16)
-    - t=0x03: temp_c*100 (i16)
-    - t=0x07: status_flags (u8)
+  - t=0x01: counter (u32)
+  - t=0x02: bioimpedance\*100 (u16)
+  - t=0x03: temp_c\*100 (i16)
+  - t=0x07: status_flags (u8)
 - Gateway decodes TLV into a Fact; schema defined in `fact.schema.json`
 
 ## Replay Policy
 
 - Gateway maintains `device_table[dev_id]`:
-    - `highest_fc_seen` (u32 for M#2, u64 for production)
-    - `fc_window` (default 64; accept if `|fc - highest_fc_seen| ≤ window_size`)
-    - `salt4`/`salt8` for nonce reconstruction
-    - `ck_up` (32-byte AEAD key)
+  - `highest_fc_seen` (u32 for M#2, u64 for production)
+  - `fc_window` (default 64; accept if `|fc - highest_fc_seen| ≤ window_size`)
+  - `salt4`/`salt8` for nonce reconstruction
+  - `ck_up` (32-byte AEAD key)
 - On receipt:
-    1. Rebuild nonce from stored salt, fc from header, rand from frame
-    2. Verify AEAD with AAD = `dev_id || msg_type`; if fails → drop
-    3. Check replay window; if duplicate or outside window → drop and log
-    4. If accepted → update `highest_fc_seen`, persist device_table
+  1. Rebuild nonce from stored salt, fc from header, rand from frame
+  1. Verify AEAD with AAD = `dev_id || msg_type`; if fails → drop
+  1. Check replay window; if duplicate or outside window → drop and log
+  1. If accepted → update `highest_fc_seen`, persist device_table
 - **FC rollback handling:**
-    - If `fc < highest_fc_seen` and not within window: mark device "stale"; require re‑provision
+  - If `fc < highest_fc_seen` and not within window: mark device "stale"; require re‑provision
 
 ## Device Table (Gateway)
 
 - **Fields (per device_id):**
-    - `salt4` (M#2) or `salt8` (production): nonce salt
-    - `ck_up`: 32-byte uplink AEAD key
-    - `highest_fc_seen`: last accepted frame counter
-    - `last_seen`: ISO8601 timestamp
-    - `msg_type`, `flags`: from last frame
+  - `salt4` (M#2) or `salt8` (production): nonce salt
+  - `ck_up`: 32-byte uplink AEAD key
+  - `highest_fc_seen`: last accepted frame counter
+  - `last_seen`: ISO8601 timestamp
+  - `msg_type`, `flags`: from last frame
 - **Storage:** JSON with atomic writes; encrypted at rest if needed
 
 ## Key Rotation (Future)

@@ -13,16 +13,19 @@
 
 Adopt a two-tier verification policy:
 
-1) Headers-only Bitcoin Core for trustless verification
+1. Headers-only Bitcoin Core for trustless verification
+
 - Run bitcoind in headers-only/pruned mode (no full blocks) with low resource usage.
 - Persist the Bitcoin datadir between CI runs to reuse downloaded headers.
 - In CI, parse required block heights from .ots files and wait until headers reach the highest required height before running `ots verify`.
 
-2) Graceful fallback when headers are unavailable
+2. Graceful fallback when headers are unavailable
+
 - If a CI job cannot reach required headers within a bounded timeout (e.g., 10 minutes), skip OTS verify for those artifacts with a clear, non-failing note.
 - Allow offline/manual verification outside CI using a machine with synced headers.
 
 Implementation notes
+
 - Start bitcoind with: `-listen=0 -blocksonly=1 -prune=550 -txindex=0 -dbcache=50`.
 - Cache `~/.bitcoin` between runs (CI cache key includes OS and Bitcoin Core version).
 - Extract required heights by parsing `ots info <file.ots>` for `BitcoinBlockHeaderAttestation(<height>)`.
@@ -31,11 +34,13 @@ Implementation notes
 ## Consequences
 
 Positive
+
 - Trustless verification preserved using Bitcoin headers; no dependency on third-party explorers for acceptance.
 - CI remains fast and stable by caching headers; most runs verify in seconds.
 - Clear operational path for air-gapped or resource-limited environments.
 
 Negative / Trade-offs
+
 - First run in a new CI runner incurs a one-time header sync (10–20 minutes depending on network).
 - Requires running bitcoind in CI containers/VMs.
 - Fallback path temporarily skips verification when headers lag; auditors must verify later on a synced machine.
@@ -49,10 +54,10 @@ Negative / Trade-offs
 ## Testing & Migration
 
 - Add a CI helper script to:
-  1) Start bitcoind (headers-only)
-  2) Collect heights from `ots info` output
-  3) Wait for headers to catch up (with timeout)
-  4) Run `ots verify` and record results
+  1. Start bitcoind (headers-only)
+  1. Collect heights from `ots info` output
+  1. Wait for headers to catch up (with timeout)
+  1. Run `ots verify` and record results
 - Developers can verify locally using the same script; document expectations and timeouts.
 
 ## Acceptance Criteria

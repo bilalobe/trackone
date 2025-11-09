@@ -17,6 +17,7 @@ For M#1 only:
 
 - **Frame shape (transport/NDJSON)**
   Each line is a JSON object:
+
   ```json
   {
     "hdr":   { "dev_id": u16, "msg_type": u8, "fc": u32, "flags": u8 },
@@ -25,6 +26,7 @@ For M#1 only:
     "tag":   "base64(16B)"      // placeholder random
   }
   ```
+
 - **Replay window (enforced):**
   Gateway maintains `highest_fc_seen` per `dev_id` and accepts a frame iff `0 < fc - highest_fc_seen ≤ window` (default
   64). First frame for a device is accepted if `fc ≥ 0`.
@@ -34,9 +36,11 @@ For M#1 only:
 
 - **Canonical facts:**
   Gateway writes canonical fact JSON:
+
   ```json
   { "device_id": "pod-XYZ", "timestamp": "<gateway-utc-iso>", "nonce": "<base64-24B>", "payload": {...} }
   ```
+
   Facts are validated against `fact.schema.json` (warn‑only by default).
 
 - **Batch/anchor/verify:**
@@ -54,10 +58,10 @@ For M#1 only:
 ## Migration (M#2 Plan)
 
 - Replace the stub with AEAD per ADR‑001/002:
-    - Nonce: XChaCha 24B = `salt8 || fc64 || rand8`
-    - AAD: `dev_id || msg_type`
-    - Payload: compact TLV inside AEAD ciphertext
-    - Tag: Poly1305 (16B)
+  - Nonce: XChaCha 24B = `salt8 || fc64 || rand8`
+  - AAD: `dev_id || msg_type`
+  - Payload: compact TLV inside AEAD ciphertext
+  - Tag: Poly1305 (16B)
 - Add test vectors: (Ng, Np, Tpod, B, eP/eG → PRK → CK_up/down → nonce/AAD/plain → cipher/tag).
 - Enforce AEAD verification in gateway; invalid tag → drop + log.
 - Keep the **same** header fields and replay window policy; only `ct/tag` semantics change.
@@ -72,9 +76,9 @@ For M#1 only:
 ## Testing
 
 - `tests/test_framed_ingest.py` covers:
-    - Accept path with increasing `fc`
-    - Duplicate/out‑of‑window rejection
-    - End‑to‑end: frames → facts → batch → (OTS) → verify
+  - Accept path with increasing `fc`
+  - Duplicate/out‑of‑window rejection
+  - End‑to‑end: frames → facts → batch → (OTS) → verify
 - CI runs `pytest` and a one‑shot pipeline (`make run`).
 
 ## Status Rationale

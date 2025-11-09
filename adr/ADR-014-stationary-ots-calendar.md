@@ -60,3 +60,6 @@ References
 
 - https://opentimestamps.org/
 - https://github.com/opentimestamps
+- ADR-007: OTS verification in CI and Bitcoin headers policy (related verification workflow and headers-only strategy)
+- ADR-008: Milestone M#4 completion and OTS verification workflow (production proof handling and metadata)
+- ADR-015: Parallel Anchoring with OTS and RFC 3161 TSA (multi-anchor coordination; how calendar preference fits into hybrid anchoring)

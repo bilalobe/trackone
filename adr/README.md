@@ -10,36 +10,44 @@ Each ADR captures context, the decision, consequences, and alternatives.
 - **ADR‑001: Cryptographic Primitives and Framing**
   Status: Accepted (M#0)
   Summary: Establishes modern, efficient primitives for provisioning and AEAD telemetry:
-    - X25519 + HKDF for key derivation
-    - XChaCha20‑Poly1305 for AEAD (M#2 implementation)
-    - Ed25519 for identity/config/firmware signatures
-    - SHA‑256 for Merkle trees and hashing
+
+  - X25519 + HKDF for key derivation
+  - XChaCha20‑Poly1305 for AEAD (M#2 implementation)
+  - Ed25519 for identity/config/firmware signatures
+  - SHA‑256 for Merkle trees and hashing
 
 - **ADR‑002: Telemetry Framing, Nonce/Replay Policy, and Device Table**
   Status: Accepted (M#1 stub)
   Summary: Defines compact frame layout and gateway security policies:
-    - Frame header: dev_id(u16), msg_type(u8), fc(u32), flags(u8)
-    - 24‑byte XChaCha nonce construction: salt(8)||fc(8)||rand(8)
-    - Gateway replay window with configurable size (default: 64)
-    - Device table for per-device state tracking (highest_fc_seen, last_seen)
-    - M#1 implementation: stub decryption (base64 JSON), real AEAD in M#2
+
+  - Frame header: dev_id(u16), msg_type(u8), fc(u32), flags(u8)
+  - 24‑byte XChaCha nonce construction: salt(8)||fc(8)||rand(8)
+  - Gateway replay window with configurable size (default: 64)
+  - Device table for per-device state tracking (highest_fc_seen, last_seen)
+  - M#1 implementation: stub decryption (base64 JSON), real AEAD in M#2
 
 - **ADR‑003: Canonicalization, Merkle Policy, and Daily OpenTimestamps Anchoring**
   Status: Accepted (M#0, M#1)
   Summary: Ensures deterministic, verifiable data integrity:
-    - Canonical JSON: sorted keys, UTF-8, no whitespace
-    - Hash-sorted Merkle leaves for order independence
-    - Day chaining via prev_day_root (32 zero bytes for genesis)
-    - Daily OTS anchoring for public timestamp verification
-    - Schema validation for facts, block headers, and day records
+
+  - Canonical JSON: sorted keys, UTF-8, no whitespace
+  - Hash-sorted Merkle leaves for order independence
+  - Day chaining via prev_day_root (32 zero bytes for genesis)
+  - Daily OTS anchoring for public timestamp verification
+  - Schema validation for facts, block headers, and day records
+
+- **ADR‑004: Framed Ingest Stub for M#1 (Plaintext CT for Pipeline Bring‑up)**
+  Status: Accepted (M#1)
+  Summary: Documents the temporary plaintext-ciphertext stub used to bring up the end-to-end pipeline before real AEAD; replay window enforced; canonical facts emitted.
 
 - **ADR‑005: PyNaCl Migration**
   Status: Accepted (M#3)
   Summary: Consolidate all cryptographic operations to PyNaCl (libsodium):
-    - Removed `cryptography` dependency
-    - Unified API for X25519, HKDF, ChaCha/XChaCha AEAD, Ed25519
-    - Regenerated test vectors with PyNaCl bindings
-    - Improved maintainability and performance
+
+  - Removed `cryptography` dependency
+  - Unified API for X25519, HKDF, ChaCha/XChaCha AEAD, Ed25519
+  - Regenerated test vectors with PyNaCl bindings
+  - Improved maintainability and performance
 
 ### Policy & Process
 
@@ -54,10 +62,44 @@ Each ADR captures context, the decision, consequences, and alternatives.
   required heights from `.ots` artifacts, wait for headers to catch up, then run `ots verify`. Skip non-blocking when
   headers are unavailable within timeout.
 
+- **ADR‑008: Milestone M#4 Completion and OTS Verification Workflow**
+  Status: Accepted (M#4)
+  Summary: Records the production OTS anchoring/verification of a day blob, CLI verification modes, and Git LFS policy for `.ots` artifacts with associated metadata.
+
+- **ADR‑009: Bandit findings remediation and decisions**
+  Status: Accepted (M#4)
+  Summary: Hardens subprocess usage and exception handling around `ots` calls; documents selective `# nosec` justifications and CI policy to reduce false positives while keeping security signal.
+
+- **ADR‑010: Test suite refactor (structure and naming)**
+  Status: Proposed (M#4→M#5)
+  Summary: Decompose monolith tests, move fixtures closer to submodules, and adopt clearer naming (drop `_edge_cases`, `_boost`); improves focus and iteration speed.
+
+- **ADR‑013: Python Version Support Policy (Last Three Minors)**
+  Status: Proposed
+  Summary: Always support the last three CPython minors in CI/tox (currently 3.12, 3.13, 3.14); drop the oldest from defaults when a new minor releases; keep a dedicated env for explicit checks.
+
+- **ADR‑014: Stationary OpenTimestamps Calendar for Deterministic Anchoring**
+  Status: Proposed (M#5)
+  Summary: Introduce a self-hosted OTS calendar for CI/local determinism with configurable fallback to public pools; outlines deployment and verification flow.
+
+- **ADR‑015: Parallel Anchoring with OpenTimestamps and RFC 3161 TSA**
+  Status: Proposed (M#5)
+  Summary: For each daily Merkle root, produce and store both an OTS proof and an RFC 3161 TSA response over the same digest; verify both in CI/CLI and treat dual success as strongest assurance while remaining backward-compatible with OTS-only.
+
+- **ADR‑016: Changelog Policy and Automation with git-cliff**
+  Status: Proposed (M#5)
+  Summary: Adopt `git-cliff` with a project `cliff.toml` to generate and validate CHANGELOG sections from conventional commits; gate releases in CI and surface breaking/migration notes.
+
+### Platform Evolution
+
+- **ADR‑017: Rust Core and PyO3 Integration Strategy (Latent Goal)**
+  Status: Proposed (M#6)
+  Summary: Introduce a Rust core crate with PyO3 bindings for canonicalization, hashing, Merkle, and eventually AEAD/signatures; ship wheels with `maturin`, keep Python API stable with fallbacks, and roll out in phases post‑0.1.0.
+
 ## Tooling & Performance
 
 - **ADR‑011: Benchmarking Strategy for TrackOne**
-  Status: Proposed (M#5)
+  Status: Accepted (M#5)
   Summary: Introduces pytest-benchmark based micro/mid-level benchmarks for crypto and gateway primitives, optional CI artifacts, and conventions for running and comparing baselines.
 
 ## Data Storage & Analytics
@@ -69,7 +111,7 @@ Each ADR captures context, the decision, consequences, and alternatives.
 ## Implementation Status
 
 | ADR     | M#0        | M#1                          | M#2                     |
-|---------|------------|------------------------------|-------------------------|
+| ------- | ---------- | ---------------------------- | ----------------------- |
 | ADR-001 | Schema     | Stub                         | Real AEAD               |
 | ADR-002 | -          | Stub decrypt + replay window | Key lookup + tag verify |
 | ADR-003 | ✓ Complete | ✓ Complete                   | Persistent state        |
@@ -142,7 +184,7 @@ Each ADR captures context, the decision, consequences, and alternatives.
 When proposing a new ADR:
 
 1. Copy the template above
-2. Number sequentially (ADR-004, ADR-005, etc.)
-3. Submit as PR with "ADR: " prefix
-4. Mark as "Proposed" until discussed and accepted
-5. Update this README index when accepted
+1. Number sequentially (ADR-004, ADR-005, etc.)
+   ~~3. Submit as PR with "ADR: " prefix~~
+1. Mark as "Proposed" until discussed and accepted
+1. Update this README index when accepted

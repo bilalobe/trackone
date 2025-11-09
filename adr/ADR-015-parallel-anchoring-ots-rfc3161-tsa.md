@@ -1,0 +1,140 @@
+# ADR-015: Parallel Anchoring with OpenTimestamps and RFC 3161 TSA
+
+**Status**: Proposed
+**Date**: 2025-11-06
+**Milestone Target**: M#5 (post 0.1.0 hardening)
+
+## Context
+
+TrackOne currently anchors daily Merkle roots using OpenTimestamps (OTS) per ADR-003 and verifies them in CI per ADR-007. OTS gives decentralized, trust-minimized timestamp proofs via Bitcoin calendars. Some stakeholders (heritage/public institutions) require compatibility with formal / accredited timestamp authorities (RFC 3161 / ETSI EN 319 421) for policy and audit traceability. Additionally, social / peer trust (multi-party co-signing) strengthens assurances.
+
+Challenges:
+
+- OTS proofs depend on Bitcoin inclusion latency (minutes to hours) and block headers availability.
+- RFC 3161 TSA responses provide immediate signed time but require trusting the TSA's private key and audit process.
+- We need a storage model and verification workflow that allows using both in parallel without duplicating hashing work.
+
+## Decision
+
+Adopt parallel daily anchoring: for each day `D` and site `S` we produce a single canonical `day_root` and generate both an OTS proof and an RFC 3161 TSA response over the same 32-byte digest. We store both artifacts side-by-side and treat successful verification of either anchor as sufficient for "timestamp obtained" while preferring *dual verification* for stronger assurance.
+
+### Scope
+
+- Hash input: the existing canonical day record (hash-sorted Merkle root over that day’s fact/block set) as defined in ADR-003; no change to hashing algorithm (SHA-256) in this ADR.
+- Artifacts written under `out/<site>/day/`:
+  - `YYYY-MM-DD.bin` — canonical serialized day record (unchanged)
+  - `YYYY-MM-DD.bin.ots` — OpenTimestamps proof (unchanged path semantics)
+  - `YYYY-MM-DD.tsq` — RFC 3161 timestamp query (DER)
+  - `YYYY-MM-DD.tsr` — RFC 3161 timestamp response (DER)
+  - `YYYY-MM-DD.tsr.json` — parsed metadata (policy OID, genTime, TSA name, nonce, imprint hash)
+  - `tsa_ca.pem` / optional `tsa_chain.pem` — CA materials for verification (if not global)
+  - `YYYY-MM-DD.peers.json` (optional) — array of peer co-signatures `{peer_id, sig_hex, pubkey_hex}`
+
+### Workflow
+
+1. Compute `day_root` after final block ingestion for day D.
+1. Submit root to OTS calendar (existing code) yielding `.bin.ots`.
+1. Build RFC 3161 query (`openssl ts -query`) over `YYYY-MM-DD.bin` (SHA-256 imprint); send to configured TSA URL; store `.tsr`.
+1. Parse `.tsr` to JSON metadata (`openssl ts -reply -in ... -text` or ASN.1 decode lib) and persist.
+1. (Optional) Distribute `(site_id, date, day_root)` to peers; collect detached Ed25519 signatures; append to `YYYY-MM-DD.peers.json`.
+1. Mark anchoring status in ledger index: `ots_verified`, `tsa_verified`, `peer_signatures_count`.
+
+### Verification Policy
+
+- CI: Attempt OTS verify; attempt TSA verify; record results. Failure of one does **not** fail the build if the other succeeds (configurable threshold). Dual failure fails.
+- Dashboard: Show three badges (OTS, TSA, Peer) with states: `pending`, `verified`, `failed`, `skipped`.
+- CLI (`verify_cli.py`) gains flags:
+  - `--verify-ots`, `--verify-tsa`, `--verify-peers`, `--require-all`.
+
+### Configuration
+
+- Add `anchoring.toml` (or YAML) in project root:
+
+```
+[ots]
+enabled = true
+calendar_urls = ["https://a.pool.opentimestamps.org", "https://b.pool.opentimestamps.org"]
+
+[tsa]
+enabled = true
+url = "https://tsa.example.org/timestamp"
+ca_bundle = "out/site_demo/day/tsa_ca.pem"
+policy_oid = "0.4.0.2023.1"  # example OID or blank
+request_certs = true
+
+[peers]
+enabled = true
+min_signatures = 2
+peer_pubkeys_file = "config/peer_pubkeys.json"
+context = "trackone:day_root:v1"
+```
+
+## Consequences
+
+### Positive
+
+- Diversified trust: decentralized (OTS) + centralized audited (TSA) + social (peer signatures).
+- Faster timestamp availability (immediate RFC 3161) while retaining long-term Bitcoin anchor.
+- Policy compliance for institutions needing RFC 3161 evidence packages.
+- Backward compatible: existing OTS-only flows remain valid; addition is additive.
+
+### Negative / Trade-offs
+
+- Additional complexity in artifact management and CI checks.
+- Need to maintain TSA trust roots and monitor TSA certificate expiration.
+- Slight increase in daily runtime and storage (RFC 3161 artifacts are small but non-zero).
+- Peer signature workflow introduces operational coordination.
+
+### Operational Impact
+
+- New secrets/config for TSA endpoint if authentication required.
+- Rotation procedures for TSA CA bundle and peer keys.
+- Monitoring tasks: alert if TSA verification starts failing or if OTS proofs lag excessively.
+
+## Alternatives Considered
+
+1. TSA-only anchoring: rejected (loses decentralized assurance; single trust root).
+1. OTS-only (status quo): insufficient for stakeholders requiring formal timestamping compliance.
+1. Anchoring on public L2 (Polygon) daily instead of TSA: considered; may complement future ADR (cost/gas overhead). Not mutually exclusive—can layer later.
+1. Just peer co-signing without TSA: weaker for formal audits lacking standardized timestamp structure.
+
+## Testing & Migration
+
+### Testing
+
+- Unit tests: parse `.tsr` and compare imprint hash to SHA-256 of `YYYY-MM-DD.bin`.
+- Property test: invalid imprint (mutated file) causes verification failure.
+- Integration test: mock TSA (local Flask) returning canned `.tsr`; ensure parallel success path.
+- CI: mark build `yellow` if one verifier passes and the other is pending; `red` if both fail.
+
+### Migration Steps (Post Acceptance)
+
+1. Implement RFC 3161 stamping utility (`tsa_stamp_day_blob`) in gateway code.
+1. Extend anchoring pipeline to call TSA logic after OTS.
+1. Add verification functions and integrate into `verify_cli.py`.
+1. Add configuration file and documentation updates (`README`, operator guide).
+1. Backfill TSA artifacts for a limited recent window (optional); mark older days `ots_only`.
+
+### Rollback
+
+- Disable `[tsa].enabled` or `[peers].enabled` flags; pipeline reverts to OTS-only without code removal.
+
+## Future Extensions
+
+- Add L2 (Polygon/Arbitrum) anchor ADR for triple anchoring (cost vs resilience).
+- Store TSA response in transparency log (e.g., append `.tsr` hash to Sigstore Rekor) for public audit.
+- Threshold signature scheme (e.g., FROST Ed25519) replacing individual peer signatures.
+
+## References
+
+- ADR-003 (Canonicalization & OTS anchoring)
+- ADR-007 (OTS CI verification)
+- ADR-014 (Stationary OTS calendar)
+- ADR-008 (M#4 OTS workflow and metadata)
+- ADR-017 (Rust CLI verification — optional future verifier)
+- RFC 3161: Time-Stamp Protocol (TSP)
+- ETSI EN 319 421/422 (Policy & security requirements for TSPs)
+
+______________________________________________________________________
+
+This ADR formalizes multi-anchor strategy to improve resilience and audit acceptance without altering on-pod behavior or core hashing semantics.

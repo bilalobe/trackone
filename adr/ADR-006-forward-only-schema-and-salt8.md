@@ -31,13 +31,15 @@ Adopt a forward-only policy for schemas and cryptographic metadata:
 
 ## Alternatives considered
 
-1) Keep both `salt4` and `salt8` in production code
-    - Pros: seamless interop with older deployments
-    - Cons: increased complexity, larger attack surface, duplicated tests; not needed for this repo
+1. Keep both `salt4` and `salt8` in production code
 
-2) Auto-derive `salt8` from `salt4` on load and persist both
-    - Pros: soft transition
-    - Cons: legacy handling lingers; mixed states to support; obscures clear-cut milestone boundary
+   - Pros: seamless interop with older deployments
+   - Cons: increased complexity, larger attack surface, duplicated tests; not needed for this repo
+
+1. Auto-derive `salt8` from `salt4` on load and persist both
+
+   - Pros: soft transition
+   - Cons: legacy handling lingers; mixed states to support; obscures clear-cut milestone boundary
 
 ## Scope and impact
 
@@ -51,10 +53,10 @@ Adopt a forward-only policy for schemas and cryptographic metadata:
 
 - Short term (documentation now): this ADR records the direction and policy.
 - Enforcement (when flipping fully to forward-only):
-    - Tighten device table schema to require `salt8` and reject `salt4`.
-    - Remove any fallback that derives `salt8` from `salt4`.
-    - Delete legacy flags/branches that enable 12-byte nonces.
-    - Fail fast on older table versions and instruct to regenerate.
+  - Tighten device table schema to require `salt8` and reject `salt4`.
+  - Remove any fallback that derives `salt8` from `salt4`.
+  - Delete legacy flags/branches that enable 12-byte nonces.
+  - Fail fast on older table versions and instruct to regenerate.
 
 ## Consequences
 
@@ -65,9 +67,9 @@ Adopt a forward-only policy for schemas and cryptographic metadata:
 
 - No migrations. We do not ship migration shims or support dual-running formats inside the repo.
 - When a milestone changes the shape/protocol, we:
-    1) Archive previous artifacts and ADRs as read-only references.
-    2) Delete legacy references from source code and schemas.
-    3) Regenerate tables/vectors for the new milestone.
+  1. Archive previous artifacts and ADRs as read-only references.
+  1. Delete legacy references from source code and schemas.
+  1. Regenerate tables/vectors for the new milestone.
 
 ## References
 

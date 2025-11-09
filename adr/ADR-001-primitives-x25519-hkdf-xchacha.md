@@ -8,10 +8,10 @@
 
 - We need a secure, auditable telemetry pipeline between ultra–low‑power pods and a gateway with intermittent links.
 - Constraints:
-    - Tiny payloads (≤ 40–60 bytes typical)
-    - Low compute/energy on MCU-class devices
-    - Simple nonce management with replay protection
-    - Deterministic verification and public timestamp anchoring (OpenTimestamps)
+  - Tiny payloads (≤ 40–60 bytes typical)
+  - Low compute/energy on MCU-class devices
+  - Simple nonce management with replay protection
+  - Deterministic verification and public timestamp anchoring (OpenTimestamps)
 - Deliverables must be portable across languages (pod firmware, Python gateway) and easy to test with vectors.
 
 ## Decision
@@ -19,23 +19,23 @@
 **Implementation Library:** PyNaCl (libsodium bindings) for all cryptographic primitives.
 
 - **Key agreement:** X25519 (ECDH over Curve25519)
-    - Used during provisioning (ephemeral+static) to derive channel secrets.
-    - Implementation: `nacl.public.PrivateKey` / `nacl.public.Box`
+  - Used during provisioning (ephemeral+static) to derive channel secrets.
+  - Implementation: `nacl.public.PrivateKey` / `nacl.public.Box`
 - **KDF:** HKDF-SHA256 (RFC 5869)
-    - HKDF‑Extract with a salt; HKDF‑Expand with context strings to derive uplink/downlink keys.
-    - Implementation: `nacl.bindings.crypto_kdf_hkdf_sha256_extract/expand`
+  - HKDF‑Extract with a salt; HKDF‑Expand with context strings to derive uplink/downlink keys.
+  - Implementation: `nacl.bindings.crypto_kdf_hkdf_sha256_extract/expand`
 - **AEAD (192-bit nonce):** XChaCha20‑Poly1305
-    - Encrypts telemetry payloads; provides integrity and confidentiality with a 192‑bit nonce.
-    - Implementation: `nacl.bindings.crypto_aead_xchacha20poly1305_ietf_encrypt/decrypt`
+  - Encrypts telemetry payloads; provides integrity and confidentiality with a 192‑bit nonce.
+  - Implementation: `nacl.bindings.crypto_aead_xchacha20poly1305_ietf_encrypt/decrypt`
 - **AEAD (96-bit nonce):** ChaCha20-Poly1305 (IETF variant)
-    - Used in tests and compatibility scenarios requiring 12-byte nonces.
-    - Implementation: `nacl.bindings.crypto_aead_chacha20poly1305_ietf_encrypt/decrypt`
+  - Used in tests and compatibility scenarios requiring 12-byte nonces.
+  - Implementation: `nacl.bindings.crypto_aead_chacha20poly1305_ietf_encrypt/decrypt`
 - **Signatures:** Ed25519
-    - Pod identity and config/firmware authenticity; gateway block header signatures.
-    - Implementation: `nacl.signing.SigningKey` / `nacl.signing.VerifyKey`
+  - Pod identity and config/firmware authenticity; gateway block header signatures.
+  - Implementation: `nacl.signing.SigningKey` / `nacl.signing.VerifyKey`
 - **Hash:** SHA‑256
-    - Merkle leaves/roots, day blobs (for OTS), and auxiliary digests.
-    - Implementation: `nacl.hash.sha256`
+  - Merkle leaves/roots, day blobs (for OTS), and auxiliary digests.
+  - Implementation: `nacl.hash.sha256`
 
 ## Telemetry Frame (v1, logical)
 

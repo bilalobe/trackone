@@ -26,6 +26,7 @@ Date: 2025-11-01
 Adopt a lightweight, code-as-benchmark approach built on pytest-benchmark, with a small curated suite that runs locally by default and optionally in CI with soft thresholds.
 
 Scope (initial):
+
 - Crypto microbenchmarks (scripts/gateway/crypto_utils.py)
   - xchacha20poly1305_ietf_encrypt/decrypt: typical payload sizes (64B, 512B, 4KB)
   - hkdf_sha256: varied lengths (32, 64 bytes) and info contexts
@@ -37,6 +38,7 @@ Scope (initial):
   - verify_cli.merkle_root + verify_ots (placeholder path; real OTS gated/optional)
 
 Out-of-scope (initial):
+
 - Full-scale soak/load testing (handled by a separate tool/runner in the future)
 - OS-level profiling automation; we’ll document manual use of perf/py-spy.
 
@@ -49,14 +51,17 @@ Out-of-scope (initial):
 ## Plan & Conventions
 
 Directory layout:
+
 - `tests/bench/` contains benchmark modules (names start with `bench_*.py`).
 - Reuse fixtures from submodule confts where possible; avoid duplicating generators.
 
 Data and artifacts:
+
 - Write benchmark runs to `out/benchmarks/` (JSON files created by pytest-benchmark), which stays git-ignored.
 - Optionally keep a golden reference JSON for local comparisons in `toolset/unified/benchmarks/` (checked in) when a metric is stable.
 
 Running (local examples):
+
 - Quick run: `pytest tests/bench -q --benchmark-only`
 - Save baseline:
   - `pytest tests/bench --benchmark-only --benchmark-save=baseline`
@@ -64,11 +69,13 @@ Running (local examples):
   - `pytest tests/bench --benchmark-only --benchmark-compare=baseline`
 
 Stability guidelines:
+
 - Run on AC power, low background load.
 - Prefer release builds and pinned Python/dep versions.
 - Use `--benchmark-warmup` and multiple rounds (pytest-benchmark defaults are fine; adjust per bench if needed).
 
 Best-practices for benches in this repo:
+
 - Import canonical modules only (e.g., `from scripts.pod_sim import emit_framed`). Do not rely on legacy top-level shims.
 - Keep benchmarks small and deterministic: fixed random seeds where applicable or use deterministic fixtures.
 - Format and lint benchmark files before committing; CI will run linters.
@@ -89,11 +96,13 @@ Best-practices for benches in this repo:
 ## Consequences
 
 Positive:
+
 - Early detection of performance regressions in crypto and pipeline primitives.
 - Shared conventions and location reduce benchmark bit-rot.
 - Easy local usage for developers; optional CI signal.
 
 Negative / Risks:
+
 - Benchmark noise in CI; mitigated via soft thresholds and artifact-only runs initially.
 - Maintenance overhead if the suite grows without ownership; mitigate by curating a small set and reusing fixtures.
 
@@ -113,6 +122,6 @@ Negative / Risks:
 ## Next actions (short-term)
 
 1. Add the initial `tests/bench/bench_crypto.py` and `tests/bench/bench_gateway.py` stubs.
-2. Add a `make bench` target and a CI job that runs benchmarks and uploads artifacts (artifact-only initially).
-3. Document benchmark ownership and a lightweight acceptance policy for regression alerts.
-4. Optionally adopt asv/pyperf later for historical tracking and deep profiling when the team needs it.
+1. Add a `make bench` target and a CI job that runs benchmarks and uploads artifacts (artifact-only initially).
+1. Document benchmark ownership and a lightweight acceptance policy for regression alerts.
+1. Optionally adopt asv/pyperf later for historical tracking and deep profiling when the team needs it.

@@ -15,16 +15,16 @@ Previously, the project used two cryptographic libraries:
 This split introduced:
 
 1. **Dependency bloat**: Two libraries for similar primitives
-2. **API inconsistency**: Different calling conventions
-3. **Maintenance overhead**: Two security update streams
+1. **API inconsistency**: Different calling conventions
+1. **Maintenance overhead**: Two security update streams
 
 ## Decision Drivers
 
-* **Simplicity**: Single dependency for all crypto operations
-* **Performance**: libsodium (PyNaCl) is highly optimized
-* **Features**: PyNaCl offers additional primitives (sealed boxes, password hashing, etc.)
-* **API clarity**: PyNaCl has a cleaner, more Pythonic API
-* **Ecosystem**: libsodium is battle-tested and widely deployed
+- **Simplicity**: Single dependency for all crypto operations
+- **Performance**: libsodium (PyNaCl) is highly optimized
+- **Features**: PyNaCl offers additional primitives (sealed boxes, password hashing, etc.)
+- **API clarity**: PyNaCl has a cleaner, more Pythonic API
+- **Ecosystem**: libsodium is battle-tested and widely deployed
 
 ## Decision
 
@@ -43,13 +43,13 @@ All cryptographic primitives now use PyNaCl (libsodium bindings):
 ### Files Modified
 
 1. ✅ **crypto_utils.py** - Complete rewrite using PyNaCl APIs
-2. ✅ **frame_verifier.py** - Updated AEAD decryption to use `nacl.bindings`
-3. ✅ **pod_sim.py** - Updated AEAD encryption to use `nacl.bindings`
-4. ✅ **gen_aead_vector.py** - Regenerated deterministic test vectors with PyNaCl
-5. ✅ **test_crypto_impl.py** - Updated to use `nacl.exceptions.CryptoError` / `BadSignatureError`
-6. ✅ **test_crypto_vectors.py** - Updated AEAD verification to use PyNaCl
-7. ✅ **requirements.txt** - Removed `cryptography>=42.0.0`
-8. ✅ **ADR-001** - Updated to document PyNaCl as official implementation library
+1. ✅ **frame_verifier.py** - Updated AEAD decryption to use `nacl.bindings`
+1. ✅ **pod_sim.py** - Updated AEAD encryption to use `nacl.bindings`
+1. ✅ **gen_aead_vector.py** - Regenerated deterministic test vectors with PyNaCl
+1. ✅ **test_crypto_impl.py** - Updated to use `nacl.exceptions.CryptoError` / `BadSignatureError`
+1. ✅ **test_crypto_vectors.py** - Updated AEAD verification to use PyNaCl
+1. ✅ **requirements.txt** - Removed `cryptography>=42.0.0`
+1. ✅ **ADR-001** - Updated to document PyNaCl as official implementation library
 
 ### Test Vectors
 
@@ -61,8 +61,8 @@ All cryptographic primitives now use PyNaCl (libsodium bindings):
 
 - Before: `Exception` (generic)
 - After:
-    - `nacl.exceptions.CryptoError` for AEAD failures
-    - `nacl.exceptions.BadSignatureError` for signature verification failures
+  - `nacl.exceptions.CryptoError` for AEAD failures
+  - `nacl.exceptions.BadSignatureError` for signature verification failures
 
 ## Migration Verification
 
@@ -106,7 +106,7 @@ Test coverage includes:
 ## API Comparison
 
 | Primitive         | Before (`cryptography`)                | After (PyNaCl)                                              |
-|-------------------|----------------------------------------|-------------------------------------------------------------|
+| ----------------- | -------------------------------------- | ----------------------------------------------------------- |
 | X25519            | `x25519.X25519PrivateKey.generate()`   | `nacl.public.PrivateKey.generate()`                         |
 | HKDF              | `HKDF(algorithm=SHA256)`               | `nacl.bindings.crypto_kdf_hkdf_sha256_*`                    |
 | ChaCha20-Poly1305 | `ChaCha20Poly1305(key).encrypt()`      | `nacl.bindings.crypto_aead_chacha20poly1305_ietf_encrypt()` |
