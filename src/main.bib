@@ -1,6 +1,10 @@
 %! Author = beb
 %! Date = 10/6/25
 
+% ============================================================================
+% Cryptographic Primitives
+% ============================================================================
+
 @article{curve25519,
     title = {Curve25519: new {Diffie-Hellman} speed records},
     author = {Bernstein, Daniel J},
@@ -23,7 +27,8 @@
     title = {{XChaCha}: eXtended-nonce {ChaCha} and {AEAD\_XChaCha20\_Poly1305}},
     author = {Arciszewski, Scott},
     journal = {IETF Draft},
-    year = {2020}
+    year = {2020},
+    howpublished = {Internet-Draft draft-irtf-cfrg-xchacha}
 }
 
 @article{ed25519,
@@ -34,4 +39,282 @@
     number = {2},
     pages = {77--89},
     year = {2012}
+}
+
+@misc{libsodium,
+    title = {The Sodium crypto library (libsodium)},
+    author = {Denis, Frank},
+    year = {2013},
+    howpublished = {\url{https://libsodium.org}},
+    note = {Accessed: 2025-10-22}
+}
+
+@misc{pynacl,
+    title = {{PyNaCl}: Python binding to libsodium},
+    author = {{PyCA}},
+    year = {2013},
+    howpublished = {\url{https://github.com/pyca/pynacl}},
+    note = {Accessed: 2025-10-22}
+}
+
+% ============================================================================
+% Merkle Trees and Timestamping Systems
+% ============================================================================
+
+@inproceedings{ct_rfc6962,
+    title = {Certificate Transparency},
+    author = {Laurie, Ben and Langley, Adam and Kasper, Emilia},
+    booktitle = {RFC 6962},
+    year = {2013},
+    organization = {IETF},
+    note = {Internet Engineering Task Force}
+}
+
+@article{merkle1980,
+    title = {Protocols for public key cryptosystems},
+    author = {Merkle, Ralph C},
+    journal = {IEEE Symposium on Security and Privacy},
+    pages = {122--122},
+    year = {1980},
+    publisher = {IEEE}
+}
+
+@misc{trillian,
+    title = {Trillian: General Transparency},
+    author = {{Google}},
+    year = {2017},
+    howpublished = {\url{https://github.com/google/trillian}},
+    note = {Accessed: 2025-10-22}
+}
+
+@article{guardtime_ksi,
+    title = {Keyless Signature Infrastructure ({KSI}): A Hash-Based Signature Architecture},
+    author = {Buldas, Ahto and Laanoja, Risto and Truu, Ahto},
+    journal = {Cryptology ePrint Archive},
+    year = {2014},
+    note = {Report 2014/718}
+}
+
+@misc{opentimestamps,
+    title = {OpenTimestamps: Scalable, Trustless, Distributed Timestamping with {Bitcoin}},
+    author = {Todd, Peter},
+    year = {2016},
+    howpublished = {\url{https://opentimestamps.org}},
+    note = {Accessed: 2025-10-22}
+}
+
+% ============================================================================
+% Blockchain and Distributed Systems
+% ============================================================================
+
+@misc{bitcoin,
+    title = {Bitcoin: A Peer-to-Peer Electronic Cash System},
+    author = {Nakamoto, Satoshi},
+    year = {2008},
+    howpublished = {\url{https://bitcoin.org/bitcoin.pdf}}
+}
+
+@misc{helium,
+    title = {Helium: A Decentralized Wireless Network},
+    author = {{Helium Inc.}},
+    year = {2019},
+    howpublished = {\url{https://www.helium.com}},
+    note = {Accessed: 2025-10-22}
+}
+
+@article{iota,
+    title = {The {Tangle}},
+    author = {Popov, Serguei},
+    journal = {White Paper},
+    year = {2016},
+    publisher = {IOTA Foundation}
+}
+
+@inproceedings{ethereum,
+    title = {Ethereum: A secure decentralised generalised transaction ledger},
+    author = {Wood, Gavin},
+    booktitle = {Ethereum Project Yellow Paper},
+    volume = {151},
+    pages = {1--32},
+    year = {2014}
+}
+
+% ============================================================================
+% IoT and Low-Power Systems
+% ============================================================================
+
+@article{lorawan,
+    title = {{LoRaWAN} 1.1 Specification},
+    author = {{LoRa Alliance}},
+    journal = {LoRa Alliance Technical Committee},
+    year = {2017},
+    note = {Version 1.1}
+}
+
+@inproceedings{lora_security,
+    title = {Security analysis of {LoRaWAN}},
+    author = {Butun, Ismail and Pereira, Nuno and Gidlund, Mikael},
+    booktitle = {IEEE International Conference on Industrial Cyber Physical Systems (ICPS)},
+    pages = {747--752},
+    year = {2018},
+    organization = {IEEE}
+}
+
+@misc{tinycrypt,
+    title = {{TinyCrypt}: Cryptographic library for embedded systems},
+    author = {{Intel}},
+    year = {2015},
+    howpublished = {\url{https://github.com/intel/tinycrypt}},
+    note = {Accessed: 2025-10-22}
+}
+
+@article{mbed_tls,
+    title = {{Mbed TLS}: An open source, portable, easy to use, readable and flexible {TLS} library},
+    author = {{ARM Limited}},
+    year = {2009},
+    howpublished = {\url{https://www.trustedfirmware.org/projects/mbed-tls/}}
+}
+
+% ============================================================================
+% Cloud IoT Platforms (for comparison)
+% ============================================================================
+
+@misc{aws_iot,
+    title = {{AWS IoT Core}},
+    author = {{Amazon Web Services}},
+    year = {2015},
+    howpublished = {\url{https://aws.amazon.com/iot-core/}},
+    note = {Accessed: 2025-10-22}
+}
+
+@misc{azure_iot,
+    title = {{Azure IoT Hub}},
+    author = {{Microsoft Corporation}},
+    year = {2016},
+    howpublished = {\url{https://azure.microsoft.com/en-us/services/iot-hub/}},
+    note = {Accessed: 2025-10-22}
+}
+
+% ============================================================================
+% JSON and Canonicalization
+% ============================================================================
+
+@techreport{rfc8785,
+    title = {{JSON Canonicalization Scheme (JCS)}},
+    author = {Rundgren, Anders and Jordan, Bret and Erdtman, Samuel},
+    year = {2020},
+    institution = {RFC 8785, IETF},
+    type = {RFC}
+}
+
+@misc{json_schema,
+    title = {{JSON Schema}: A Media Type for Describing {JSON} Documents},
+    author = {Wright, Austin and Andrews, Henry and Hutton, Ben and Dennis, Greg},
+    year = {2020},
+    howpublished = {Internet-Draft draft-handrews-json-schema-02}
+}
+
+% ============================================================================
+% Heritage and Cultural Preservation
+% ============================================================================
+
+@article{heritage_monitoring,
+    title = {Wireless sensor networks for cultural heritage monitoring},
+    author = {Camilli, Andrea and Carocci, Caterina Francesca},
+    journal = {International Archives of the Photogrammetry, Remote Sensing and Spatial Information Sciences},
+    volume = {38},
+    number = {5},
+    pages = {W16},
+    year = {2011}
+}
+
+@article{non_invasive_monitoring,
+    title = {Non-invasive techniques for structural health monitoring of historic buildings},
+    author = {Agdas, Duzgun and Rice, Jennifer A and Martinez, Joel R and Lasa, Iñaki R},
+    journal = {Procedia Engineering},
+    volume = {118},
+    pages = {1029--1036},
+    year = {2015}
+}
+
+% ============================================================================
+% Testing and Software Engineering
+% ============================================================================
+
+@misc{hypothesis,
+    title = {Hypothesis: Property-based testing for {Python}},
+    author = {MacIver, David R},
+    year = {2013},
+    howpublished = {\url{https://hypothesis.works}},
+    note = {Accessed: 2025-10-22}
+}
+
+@misc{pytest,
+    title = {pytest: helps you write better programs},
+    author = {Krekel, Holger and Oliveira, Bruno and Pfannschmidt, Ronny and Bruynooghe, Floris and Laugher, Brianna and Bruhin, Florian},
+    year = {2004},
+    howpublished = {\url{https://pytest.org}},
+    note = {Accessed: 2025-10-22}
+}
+
+% ============================================================================
+% Tooling and Developer Tools
+% ============================================================================
+
+@misc{ruff,
+    title = {ruff: An extremely fast Python linter, formatter, and import sorter},
+    author = {{Charon}},
+    year = {2022},
+    howpublished = {\url{https://github.com/charliermarsh/ruff}},
+    note = {Accessed: 2025-10-22}
+}
+
+@misc{mypy,
+    title = {mypy: Optional static typing for Python},
+    author = {{Jukka Lehtosalo and contributors}},
+    year = {2012},
+    howpublished = {\url{http://mypy-lang.org}},
+    note = {Accessed: 2025-10-22}
+}
+
+@misc{bandit,
+    title = {Bandit: Security linter for Python code},
+    author = {{PyCQA}},
+    year = {2016},
+    howpublished = {\url{https://github.com/PyCQA/bandit}},
+    note = {Accessed: 2025-10-22}
+}
+
+@misc{git-lfs,
+    title = {Git Large File Storage (Git LFS)},
+    author = {{Git LFS contributors}},
+    year = {2015},
+    howpublished = {\url{https://git-lfs.github.com}},
+    note = {Accessed: 2025-10-22}
+}
+
+@misc{uv_pkg,
+    title = {uv: A fast, deterministic Python package manager},
+    author = {{uv maintainers}},
+    year = {2023},
+    howpublished = {\url{https://uv.pypi.io}},
+    note = {Accessed: 2025-10-22}
+}
+
+% ============================================================================
+% Miscellaneous Standards
+% ============================================================================
+
+@misc{rfc3339,
+    title = {Date and Time on the Internet: Timestamps},
+    author = {Klyne, Graham and Newman, Chris},
+    year = {2002},
+    howpublished = {RFC 3339, IETF}
+}
+
+@misc{iso8601,
+    title = {Data elements and interchange formats -- Information interchange -- Representation of dates and times},
+    author = {{ISO}},
+    year = {2019},
+    howpublished = {ISO 8601-1:2019}
 }
