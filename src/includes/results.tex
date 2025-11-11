@@ -120,25 +120,29 @@ OTS proofs tracked via Git LFS to prevent repository bloat:\\
 
 \subsection{Documentation (ADRs)}
 
-\textbf{Architecture Decision Records:}
+\textbf{Architecture Decision Records (selected):}
 \begin{itemize}[nosep]
     \item ADR-001: Cryptographic primitives (X25519, HKDF, XChaCha20-Poly1305, Ed25519)
     \item ADR-002: Telemetry framing and replay policy
     \item ADR-003: Canonicalization, Merkle policy, daily OTS anchoring
-    \item ADR-005: PyNaCl migration (M\#3)
-    \item ADR-006: Forward-only device table schema (M\#3)
-    \item ADR-007: OTS verification in CI with Bitcoin headers-only mode (M\#4)
-    \item ADR-008: M\#4 milestone completion and OTS workflow (M\#4)
-    \item ADR-009: Bandit security remediation (static analysis hardening)
+    \item ADR-004: Framed ingest stub (transition strategy)
+    \item ADR-005: PyNaCl migration (library consolidation)
+    \item ADR-006: Forward-only device table schema (salt8 policy)
+    \item ADR-007: OTS verification in CI (headers-only Bitcoin Core)
+    \item ADR-008: Milestone M\#4 completion and workflow formalization
+    \item ADR-009: Bandit remediation (security static analysis)
+    \item ADR-010: Test suite refactor and naming conventions
+    \item ADR-011: Benchmarking strategy (metrics, harness, artifact outputs)
+    \item ADR-012: Parquet export / columnar storage (future data lake option)
+    \item ADR-013: Python version support policy (3.11--3.13 matrix)
+    \item ADR-014: Stationary OTS calendar fallback policy
+    \item ADR-015: Parallel anchoring (RFC 3161 TSA + OTS)
+    \item ADR-016: Changelog policy (git-cliff integration)
+    \item ADR-017: Rust core and PyO3 integration (latent migration plan)
+    \item ADR-018: Cryptographic randomness and nonce policy
 \end{itemize}
 
-\textbf{Operational documentation:}
-\begin{itemize}[nosep]
-    \item \texttt{docs/ots-verification.md}: Bitcoin Core setup, CI verification strategies
-    \item \texttt{README.md}: Quick start guide, development workflow, test commands
-    \item \texttt{CHANGELOG.md}: Keep a Changelog format (M\#0--M\#4 releases)
-    \item \texttt{htmlcov/index.html}: Interactive test coverage report (85.14\% overall)
-\end{itemize}
+\textbf{External artifacts:} Deterministic crypto vectors reside at \texttt{toolset/unified/crypto\_test\_vectors.json}; absence triggers intentional skips. Real OTS proofs (e.g., \texttt{out/site\_demo/day/*.bin.ots}) enable full anchoring tests; RFC 3161 TSA responses (\texttt{*.tsr}) may be stored alongside per ADR-015.
 
 \subsection{Platform \& Dependencies}
 

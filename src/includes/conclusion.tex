@@ -72,6 +72,14 @@ Bitcoin timestamping provides public auditability while payload confidentiality 
     \item \textbf{Multi-site Aggregation:} Federated anchoring and cross-site Merkle roots
 \end{itemize}
 
+\textbf{Standards and tooling (new):}
+\begin{itemize}[nosep]
+    \item \textbf{Benchmarks (ADR-011):} Establish repeatable performance suites and publish CSV + plots
+    \item \textbf{Changelog policy (ADR-016):} Adopt git-cliff for conventional, CI-generated releases
+    \item \textbf{Parallel anchoring (ADR-015):} Optional RFC 3161 TSA alongside OTS for PKI-backed deployments
+    \item \textbf{Rust core (ADR-017):} Explore PyO3 modules for hot paths (AEAD, Merkle) while preserving Python API
+\end{itemize}
+
 \subsection{Operational Considerations (clarified)}
 
 \textbf{Deployment scenarios:}

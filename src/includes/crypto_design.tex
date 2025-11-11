@@ -1,7 +1,10 @@
-\section{Cryptographic Design (ADR-001, ADR-002, ADR-005)}
+\section{Cryptographic Design (ADR-001, ADR-002, ADR-005, ADR-018)}
 \textbf{Implementation:} PyNaCl (libsodium) for all cryptographic operations.
 
 \textbf{Primitives:} X25519 + HKDF-SHA256 + XChaCha20-Poly1305; Ed25519; SHA-256.
+
+% Reference for deterministic vectors location used in tests
+\textit{Deterministic crypto vectors: see} \texttt{toolset/unified/crypto\_test\_vectors.json} \textit{(mirrored by tests; ensure path available to avoid skips).}
 
 \subsection{Provisioning}
 Ephemeral ECDH using X25519; salt = $H(N_g \| N_p \| T_{pod} \| B)$.
@@ -13,7 +16,7 @@ Device table schema v1.0 enforces forward-only policy: requires \texttt{\_meta.v
 \subsection{Telemetry frame}
 Header: dev\_id(u16), msg\_type(u8), fc(u32), flags(u8); AEAD payload with XChaCha20-Poly1305.
 
-24-byte nonce construction: $\mathrm{nonce} = \mathrm{salt}_8 \| \mathrm{fc}_8 \| \mathrm{rand}_8$
+24-byte nonce construction: $\mathrm{nonce} = \mathrm{salt}_8 \| \mathrm{fc}_8 \| \mathrm{rand}_8$ \textit{(see ADR-018 for randomness and nonce policy)}
 
 AAD (additional authenticated data): $\text{dev\_id} \| \text{msg\_type}$ binds header to ciphertext.
 

@@ -104,6 +104,15 @@ The system is designed for offline-tolerant operation with eventual Bitcoin time
     \item Enhanced test suite: 181 tests across the repository (some runs may skip two optional tests)
 \end{itemize}
 
+\subsection{Anchoring variants (ADR-015)}
+Beyond OpenTimestamps, deployments MAY enable parallel RFC 3161 TSA anchoring:
+\begin{itemize}[nosep]
+    \item Daily Merkle root submitted to one or more TSA endpoints (RFC 3161)
+    \item Store returned \texttt{.tsr} responses alongside \texttt{.ots} proofs
+    \item Verification CLI can accept either OTS or TSA proofs for timestamp attestation
+\end{itemize}
+Parallel anchoring improves resilience and caters to environments requiring PKI-backed timestamps.
+
 \subsection{Platform Dependencies}
 
 \textbf{Operating System:}
