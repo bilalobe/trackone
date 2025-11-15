@@ -237,13 +237,20 @@ def _scan_calls(
             # Check if this could be from a star import of random module
             if "random" in star_imports and func_name in _RANDOM_MODULE_METHODS:
                 findings.append(
-                    Finding(ln, "star-import-call", f"{func_name} (from random.*)", line)
+                    Finding(
+                        ln, "star-import-call", f"{func_name} (from random.*)", line
+                    )
                 )
                 continue
             # Check if this could be from a star import of numpy.random
             if "numpy.random" in star_imports and func_name in _NUMPY_RANDOM_METHODS:
                 findings.append(
-                    Finding(ln, "star-import-call", f"{func_name} (from numpy.random.*)", line)
+                    Finding(
+                        ln,
+                        "star-import-call",
+                        f"{func_name} (from numpy.random.*)",
+                        line,
+                    )
                 )
     return findings
 
