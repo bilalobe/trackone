@@ -100,10 +100,6 @@ Each ADR captures context, the decision, consequences, and alternatives.
 
 ### Platform Evolution
 
-- **ADR‑017: Rust Core and PyO3 Integration Strategy (Latent Goal)**
-  Status: Proposed (M#6)
-  Summary: Introduce a Rust core crate with PyO3 bindings for canonicalization, hashing, Merkle, and eventually AEAD/signatures; ship wheels with `maturin`, keep Python API stable with fallbacks, and roll out in phases post‑0.1.0.
-
 ## Tooling & Performance
 
 - **ADR‑011: Benchmarking Strategy for TrackOne**
