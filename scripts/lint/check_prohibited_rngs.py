@@ -76,7 +76,7 @@ def _handle_import(
         asname = root.split(".")[0]  # First component, not last
     else:
         asname = root
-    
+
     if root == "random":
         random_aliases.add(asname)
     elif root == "numpy":
@@ -97,7 +97,7 @@ def _handle_import_from(
     if alias.name == "*":
         star_imports.add(module)
         return
-    
+
     if module == "random":
         # Skip safe CSPRNG methods like SystemRandom
         if alias.name in _RANDOM_MODULE_SAFE:
@@ -151,7 +151,9 @@ def _full_attr_chain(node: ast.Attribute) -> list[str]:
 
 def _is_random_call(chain: list[str], random_aliases: set[str]) -> bool:
     return (
-        len(chain) >= 2 and chain[0] in random_aliases and chain[-1] in _RANDOM_MODULE_METHODS
+        len(chain) >= 2
+        and chain[0] in random_aliases
+        and chain[-1] in _RANDOM_MODULE_METHODS
     )
 
 
@@ -192,9 +194,7 @@ def _scan_star_imports(
         line = lines[ln - 1] if 0 <= ln - 1 < len(lines) else ""
         if LINE_LEVEL_ALLOW in line:
             continue
-        findings.append(
-            Finding(ln, "star-import", f"from {module} import *", line)
-        )
+        findings.append(Finding(ln, "star-import", f"from {module} import *", line))
     return findings
 
 
