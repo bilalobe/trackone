@@ -205,6 +205,7 @@ def _scan_calls(
     numpy_aliases: set[str],
     numpy_random_aliases: set[str],
     random_direct_funcs: set[str],
+    star_imports: set[str],
 ) -> list[Finding]:
     findings: list[Finding] = []
     for node in ast.walk(tree):
@@ -229,6 +230,21 @@ def _scan_calls(
             findings.append(
                 Finding(ln, "random-func", getattr(node.func, "id", "<unknown>"), line)
             )
+            continue
+        # Check for potential star import usage
+        if isinstance(node.func, ast.Name):
+            func_name = node.func.id
+            # Check if this could be from a star import of random module
+            if "random" in star_imports and func_name in _RANDOM_MODULE_METHODS:
+                findings.append(
+                    Finding(ln, "star-import-call", f"{func_name} (from random.*)", line)
+                )
+                continue
+            # Check if this could be from a star import of numpy.random
+            if "numpy.random" in star_imports and func_name in _NUMPY_RANDOM_METHODS:
+                findings.append(
+                    Finding(ln, "star-import-call", f"{func_name} (from numpy.random.*)", line)
+                )
     return findings
 
 
@@ -265,6 +281,7 @@ def analyze(path: Path) -> list[Finding]:
         numpy_aliases,
         numpy_random_aliases,
         random_direct_funcs,
+        star_imports,
     )
     # Add star import findings
     findings.extend(_scan_star_imports(tree, lines, star_imports))

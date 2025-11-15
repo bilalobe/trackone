@@ -108,6 +108,28 @@ def test_star_import_detected():
         assert any(finding.kind == "star-import" for finding in findings), findings
 
 
+def test_star_import_with_call_detected():
+    """Star imports with function calls should detect both import and call"""
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        f = _write(tmp, "i2.py", "from random import *\nval = randint(1, 10)\n")
+        findings = rngchk.check_path(f)
+        # Should find both the star import and the function call
+        assert any(finding.kind == "star-import" for finding in findings), findings
+        assert any(finding.kind == "star-import-call" for finding in findings), findings
+
+
+def test_numpy_star_import_with_call_detected():
+    """numpy.random star imports with calls should be detected"""
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        f = _write(tmp, "i3.py", "from numpy.random import *\nval = rand(5)\n")
+        findings = rngchk.check_path(f)
+        # Should find both the star import and the function call
+        assert any(finding.kind == "star-import" for finding in findings), findings
+        assert any(finding.kind == "star-import-call" for finding in findings), findings
+
+
 def test_numpy_random_state_detected():
     """numpy.random.RandomState should be detected (not cryptographically secure)"""
     with tempfile.TemporaryDirectory() as td:
