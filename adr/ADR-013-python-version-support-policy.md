@@ -9,16 +9,17 @@ The Python ecosystem advances quickly and keeping CI green across many minor ver
 
 ## Decision
 
-TrackOne will support and continuously test against the last three CPython minor versions. When a new CPython minor is released, we:
+TrackOne will support and continuously test against the last three CPython minor versions. When a new CPython minor is released, we will:
 
-- Add that new minor to CI and tox (e.g., 3.14),
-- Drop the oldest previously supported minor from the default test matrix (e.g., 3.11), while keeping a dedicated tox env available for explicit runs when needed,
-- Keep code and tooling compatible with this three-minor window.
+- Add the new minor to CI and tox,
+- Drop the oldest previously supported minor from the default test matrix, while keeping a dedicated tox env available for explicit runs when needed,
+- Keep code and tooling compatible with this rolling three-minor window.
 
-For this cycle:
+Practical application:
 
-- Add Python 3.14 to CI/tox.
-- Mark Python 3.11 as unsustained (removed from default envlist/matrix but still runnable via `tox -e py311`).
+- The CI matrix must always include the three most recently released CPython minor versions. When a new minor is officially released, add it to CI and remove the oldest from the default matrix.
+- Maintainers may keep a dedicated tox env for older minors (for example `py311`) for one-off debugging, but these envs are not required to run by default on every PR.
+- Document the current supported minors and the rolling-window policy in `README.md` and `CONTRIBUTING.md` so contributors understand how support evolves.
 
 ## Consequences
 
@@ -41,7 +42,7 @@ For this cycle:
 
 ## Testing & Migration
 
-- CI matrix includes the last three minors (currently 3.12, 3.13, 3.14).
-- Lint job runs on the newest minor.
-- Tox envlist mirrors CI; `py311` remains as an explicit env for one-off checks (`tox -e py311`).
+- CI matrix reflects the last three released minors.
+- Lint job runs on the newest minor in the matrix.
+- Tox envlist mirrors CI; explicit older envs remain available for one-off checks (e.g., `tox -e py311`) but are not required on every PR.
 - Document the policy in README and CONTRIBUTING to set expectations.
