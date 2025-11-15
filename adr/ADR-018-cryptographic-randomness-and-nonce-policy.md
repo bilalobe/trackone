@@ -78,6 +78,7 @@ from typing import Callable, ContextManager, Optional
 from contextlib import contextmanager
 from secrets import token_bytes
 import os
+from unittest.mock import patch
 
 # Sizes
 SALT16 = 16
@@ -149,7 +150,8 @@ class _DeterministicRng:
 @contextmanager
 def use_test_rng(fake_bytes: bytes) -> ContextManager[None]:
     """
-    Context manager to temporarily override token_bytes for deterministic tests.
+    Context manager to temporarily override `secrets.token_bytes` for deterministic tests.
+
     Example:
         with use_test_rng(b"\xaa"*64):
             assert salt16() == b"\xaa"*16
@@ -157,13 +159,9 @@ def use_test_rng(fake_bytes: bytes) -> ContextManager[None]:
     if not isinstance(fake_bytes, (bytes, bytearray)):
         raise ValueError("fake_bytes must be bytes")
     rng = _DeterministicRng(bytearray(fake_bytes))
-    global token_bytes
-    orig = token_bytes
-    try:
-        token_bytes = rng  # type: ignore[assignment]
+    # Use unittest.mock.patch to avoid modifying global module state directly.
+    with patch("secrets.token_bytes", new=rng):
         yield
-    finally:
-        token_bytes = orig  # restore
 
 
 # Minimal self-test (run manually)
