@@ -54,7 +54,7 @@ protect_breaking_commits = true
 filter_commits = true
 
 [git.tag_regex]
-pattern = "^v?([0-9]+\.[0-9]+\.[0-9]+)" # supports v1.2.3 or 1.2.3
+pattern = '^v?([0-9]+\.[0-9]+\.[0-9]+)' # supports v1.2.3 or 1.2.3
 
 [changelog]
 trim = true
