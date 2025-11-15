@@ -27,7 +27,7 @@ def test_detect_random_call():
         tmp = Path(td)
         f = _write(tmp, "a.py", "import random\nrandom.randint(1, 2)\n")
         findings = rngchk.check_path(f)
-        assert any(f.kind.startswith("random") for f in findings), findings
+        assert any(finding.kind.startswith("random") for finding in findings), findings
 
 
 def test_detect_numpy_random_alias():
@@ -36,7 +36,7 @@ def test_detect_numpy_random_alias():
         tmp = Path(td)
         f = _write(tmp, "b.py", "import numpy as np\nnp.random.rand()\n")
         findings = rngchk.check_path(f)
-        assert any(f.kind == "numpy-random-call" for f in findings), findings
+        assert any(finding.kind == "numpy-random-call" for finding in findings), findings
 
 
 def test_alias_random_module():
@@ -45,7 +45,7 @@ def test_alias_random_module():
         tmp = Path(td)
         f = _write(tmp, "c.py", "import random as rnd\nrnd.choice([1,2])\n")
         findings = rngchk.check_path(f)
-        assert any(f.kind == "random-call" for f in findings), findings
+        assert any(finding.kind == "random-call" for finding in findings), findings
 
 
 def test_direct_import_function():
@@ -54,7 +54,7 @@ def test_direct_import_function():
         tmp = Path(td)
         f = _write(tmp, "d.py", "from random import randint\nprint(randint(0,3))\n")
         findings = rngchk.check_path(f)
-        assert any(f.kind == "random-func" for f in findings), findings
+        assert any(finding.kind == "random-func" for finding in findings), findings
 
 
 def test_file_suppression():
@@ -86,3 +86,34 @@ def test_safe_usage_no_findings():
         )
         findings = rngchk.check_path(f)
         assert findings == []
+
+
+def test_system_random_allowed():
+    """SystemRandom from random module should be allowed (it's a CSPRNG)"""
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        f = _write(
+            tmp, "h.py", "from random import SystemRandom\nsr = SystemRandom()\nsr.randint(1, 10)\n"
+        )
+        findings = rngchk.check_path(f)
+        assert findings == []
+
+
+def test_star_import_detected():
+    """Star imports from random should be detected"""
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        f = _write(tmp, "i.py", "from random import *\nprint('test')\n")
+        findings = rngchk.check_path(f)
+        assert any(finding.kind == "star-import" for finding in findings), findings
+
+
+def test_numpy_random_state_detected():
+    """numpy.random.RandomState should be detected (not cryptographically secure)"""
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        f = _write(
+            tmp, "j.py", "import numpy as np\nrng = np.random.RandomState(42)\n"
+        )
+        findings = rngchk.check_path(f)
+        assert any(finding.kind == "numpy-random-call" for finding in findings), findings
