@@ -148,7 +148,7 @@ class _DeterministicRng:
 
 
 @contextmanager
-def use_test_rng(fake_bytes: bytes) -> ContextManager[None]:
+def use_test_rng(fake_bytes: bytes):
     """
     Context manager to temporarily override `secrets.token_bytes` for deterministic tests.
 
