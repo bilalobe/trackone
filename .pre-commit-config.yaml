@@ -31,3 +31,12 @@ repos:
         additional_dependencies:
           - mdformat-gfm
           - mdformat-ruff
+
+  - repo: local
+    hooks:
+      - id: check-prohibited-rngs
+        name: check prohibited RNG APIs
+        entry: python scripts/lint/check_prohibited_rngs.py
+        language: system
+        files: '\.py$'
+        pass_filenames: true

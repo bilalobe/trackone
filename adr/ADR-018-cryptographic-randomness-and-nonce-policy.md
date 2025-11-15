@@ -52,6 +52,21 @@ Project components produce keys, salts, and AEAD nonces for telemetry framing, O
   - `\bnonce\b|\bsalt\b` (audit generation sites)
 - Add pre-commit or Bandit rule to flag prohibited APIs.
 
+## Enforcement & Tooling
+
+An AST-based pre-commit/CI lint (`scripts/lint/check_prohibited_rngs.py`) enforces this policy by detecting:
+
+- Imports and calls to the `random` module (rand\*, randint, choice, seed, etc.)
+- `numpy.random` usage via direct module, aliases (e.g., `np.random.rand()`), or imported names
+- Aliased imports (e.g., `import random as rnd`, `from numpy import random as nr`)
+
+Suppression mechanisms (must be justified in review):
+
+- File-level: add `# allow-prohibited-rng` anywhere in the file to skip scanning.
+- Line-level: append `# rng-ok` to a specific line to silence a finding.
+
+Rationale: AST analysis reduces false positives vs naive regex and catches alias-based usage. All cryptographic randomness must use `secrets.token_bytes`, `os.urandom`, or approved wrappers; deterministic stubs are confined to tests via explicit context managers.
+
 ## Security notes
 
 - Nonce reuse with AES-GCM/ChaCha20-Poly1305 is catastrophic; enforce uniqueness per key.
