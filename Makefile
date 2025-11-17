@@ -13,7 +13,7 @@ COUNT ?= 10
 OUT_DIR ?= out/site_demo
 
 # Targets
-.PHONY: help install run test test-verbose test-cov clean tag lint format lint-fix dev-setup gen-vectors sec-scan
+.PHONY: help install run test test-verbose test-cov clean tag lint format lint-fix dev-setup gen-vectors sec-scan bench build-native e2e pipeline-quick sha-verify ots-verify-strict test-one
 
 help: ## Show this help message
 	@echo "Track1 Make Targets:"
@@ -33,8 +33,8 @@ dev-setup: ## Install development dependencies (includes linting tools)
 	@echo "[make] ✓ Development environment ready"
 
 run: ## Run end-to-end pipeline (framed ingest with XChaCha20-Poly1305)
-	@echo "[make] Running end-to-end pipeline..."
-	@bash scripts/gateway/run_pipeline.sh && echo "[make] ✓ Pipeline completed successfully" || (echo "[make] ✗ Pipeline failed" && exit 1)
+	@echo "[make] Running end-to-end pipeline via tox..."
+	tox -e pipeline && echo "[make] ✓ Pipeline completed successfully" || (echo "[make] ✗ Pipeline failed" && exit 1)
 
 gen-vectors: ## Generate deterministic AEAD test vectors
 	@echo "[make] Generating deterministic AEAD vectors..."
@@ -59,9 +59,9 @@ test-all: ## Run all tests (disable config filters)
 test-ots-fast: ## Run OTS tests (deterministic, no real ots invocation)
 	@echo "[make] Running OTS fast tests (no real ots)..."
 	pytest -o addopts='' -q \
-	  scripts/tests/test_ots_anchor.py \
-	  scripts/tests/test_verify_cli_ots.py \
-	  scripts/tests/test_verify_cli_main.py
+	  tests/unit/test_ots_anchor.py \
+	  tests/integration/test_verify_cli_ots.py \
+	  tests/integration/test_verify_cli_main.py
 	@echo "[make] ✓ OTS fast tests passed"
 
 test-ots-real: ## Run real OTS integration tests (requires RUN_REAL_OTS=1 and 'ots' installed)
@@ -74,17 +74,39 @@ test-ots-real: ## Run real OTS integration tests (requires RUN_REAL_OTS=1 and 'o
 		echo "[ERROR] 'ots' binary not found in PATH"; \
 		exit 1; \
 	fi
-	pytest -o addopts='' -m real_ots -q scripts/tests/test_ots_real.py
+	pytest -o addopts='' -m real_ots -q tests/integration/test_ots_real.py
 	@echo "[make] ✓ Real OTS tests completed"
 
 test-verbose: ## Run tests with verbose output
 	@echo "[make] Running tests (verbose)..."
 	pytest -v
 
-test-cov: ## Run tests with coverage report
-	@echo "[make] Running tests with coverage..."
-	pytest --cov=scripts/gateway --cov=scripts/pod_sim --cov-fail-under=80 --cov-report=term-missing --cov-report=html -v
-	@echo "[make] ✓ Coverage report generated (see htmlcov/index.html)"
+# Tox-backed shortcuts
+.PHONY: tox-all tox-test tox-lint tox-type tox-readme tox-precommit tox-security tox-cov
+
+tox-all: ## Run all default tox environments (parallel if possible)
+	tox -p auto
+
+tox-test: ## Run tests on supported Pythons via tox (py312, py313, py314)
+	tox -p auto -e py312,py313,py314
+
+tox-lint: ## Run linting via tox
+	tox -e lint
+
+tox-type: ## Run mypy type-checks via tox
+	tox -e type
+
+tox-readme: ## Run README/ADR checks via tox (mdformat, ADR index)
+	tox -e readme
+
+tox-precommit: ## Run all pre-commit hooks via tox
+	tox -e precommit
+
+tox-security: ## Run security scans via tox (bandit + pip-audit)
+	tox -e security
+
+tox-cov: ## Generate coverage HTML/XML via tox coverage env
+	tox -e coverage
 
 clean: ## Remove build artifacts and output directories
 	@echo "[make] Cleaning build artifacts..."
@@ -147,30 +169,24 @@ lint-fix: ## Run ruff with auto-fix
 		exit 1; \
 	fi
 
-check: lint test ## Run linting and tests (pre-commit checks)
+check: ## Run linting, typing, and README checks (tox)
+	tox -e lint,type,readme
 	@echo "[make] ✓ All checks passed"
 
-ci: lint test-cov ## Run full CI checks locally (lint + tests with coverage)
+ci: ## Run full CI checks locally (tox)
+	tox -p auto
 	@echo "[make] ✓ CI checks passed"
 
-# Parallel test targets (pytest-xdist)
-.PHONY: test-parallel test-fast test-crypto test-slowest
+sec-scan: ## Run security scans (tox)
+	$(MAKE) tox-security
+	@echo "[make] ✓ Security scans completed"
 
-test-parallel: ## Run all tests in parallel
-	@echo "[make] Running tests in parallel..."
-	pytest scripts/tests/ -n auto --dist loadscope -q
-
-test-fast: ## Run all non-slow tests in parallel
-	@echo "[make] Running fast tests (exclude slow)..."
-	pytest scripts/tests/ -n auto --dist loadscope -m "not slow" -q
-
-test-crypto: ## Run only crypto tests
-	@echo "[make] Running crypto tests..."
-	pytest scripts/tests/ -m crypto -q
-
-test-slowest: ## Show the 30 slowest tests (parallel)
-	@echo "[make] Showing slowest tests..."
-	pytest scripts/tests/ -n auto --dist loadscope --durations=30 -q
+bench: ## Run pytest-benchmark suite and save baseline to out/benchmarks/
+	@echo "[make] Running benchmarks via tox..."
+	mkdir -p out/benchmarks
+	tox -e bench || (echo "[make] ✗ Benchmarks failed" && exit 1)
+	@cp .benchmarks/baseline.json out/benchmarks/baseline.json >/dev/null 2>&1 || true
+	@echo "[make] ✓ Benchmarks completed and baseline saved to out/benchmarks/baseline.json"
 
 .PHONY: watch
 watch: ## Watch for file changes and re-run tests (requires pytest-watch)
@@ -182,26 +198,41 @@ watch: ## Watch for file changes and re-run tests (requires pytest-watch)
 		exit 1; \
 	fi
 
-.PHONY: ots-verify
-ots-verify: ## Verify OTS proofs locally (uses headers-only bitcoind; STRICT_VERIFY=0 by default)
-	@echo "[make] Verifying OTS proofs in $(OUT_DIR)/day ..."
-	@if [ ! -x scripts/ci/ots_verify.sh ]; then \
-		echo "[ERROR] scripts/ci/ots_verify.sh not found or not executable"; \
+.PHONY: e2e
+e2e: ## Run full end-to-end: pipeline → sha → ots (non-strict by default)
+	@echo "[make] Running e2e via tox (non-strict)..."
+	STRICT_VERIFY=$${STRICT_VERIFY:-0} STRICT_SHA=$${STRICT_SHA:-1} RUN_BITCOIND=$${RUN_BITCOIND:-1} SQUASH_BAK=$${SQUASH_BAK:-1} OUT_DIR=$(OUT_DIR)/day tox -e e2e
+	@echo "[make] ✓ e2e completed"
+
+.PHONY: pipeline-quick
+pipeline-quick: ## Run pipeline only via tox
+	@echo "[make] Running pipeline via tox..."
+	tox -e pipeline
+	@echo "[make] ✓ Pipeline done"
+
+.PHONY: sha-verify
+sha-verify: ## Run SHA verification via tox (STRICT_SHA=1 to enforce JSON declared hashes)
+	@echo "[make] Running SHA verification via tox..."
+	STRICT_SHA=$${STRICT_SHA:-0} OUT_DIR=$(OUT_DIR)/day tox -e sha
+	@echo "[make] ✓ SHA verify done"
+
+.PHONY: ots-verify-strict
+ots-verify-strict: ## Run OTS verification in strict mode (requires bitcoind)
+	@echo "[make] Running OTS verification (strict)..."
+	STRICT_VERIFY=1 RUN_BITCOIND=$${RUN_BITCOIND:-1} OUT_DIR=$(OUT_DIR)/day tox -e ots
+	@echo "[make] ✓ OTS strict verify done"
+
+.PHONY: test-one
+test-one: ## Run a single test or selection quickly: make test-one TEST="tests/unit/crypto/test_hkdf.py::TestHKDF::test_deterministic_derivation -q"
+	@echo "[make] Running one-shot test via tox..."
+	@if [ -z "$$TEST" ]; then \
+		echo "[ERROR] Provide TEST=... (e.g., TEST=tests/unit/crypto/test_hkdf.py::TestHKDF::test_deterministic_derivation)"; \
 		exit 1; \
 	fi
-	STRICT_VERIFY=$${STRICT_VERIFY:-0} TIMEOUT_SECS=$${TIMEOUT_SECS:-600} scripts/ci/ots_verify.sh $(OUT_DIR)/day
+	tox -e one -- $$TEST
+	@echo "[make] ✓ One-shot test done"
 
-.PHONY: sec-scan
-sec-scan: ## Run security scans (Bandit + pip-audit)
-	@echo "[make] Running security scans..."
-	@if command -v bandit >/dev/null 2>&1; then \
-		bandit -q -r scripts/; \
-	else \
-		echo "[WARN] bandit not installed. Install with: pip install bandit"; \
-	fi
-	@if command -v pip-audit >/dev/null 2>&1; then \
-		pip-audit -r requirements.txt || true; \
-	else \
-		echo "[WARN] pip-audit not installed. Install with: pip install pip-audit"; \
-	fi
-	@echo "[make] ✓ Security scans completed"
+.PHONY: ots-verify
+ots-verify: ## Verify OTS proofs locally (uses headers-only bitcoind; STRICT_VERIFY=0 by default)
+	@echo "[make] Verifying OTS proofs via tox..."
+	STRICT_VERIFY=$${STRICT_VERIFY:0} TIMEOUT_SECS=$${TIMEOUT_SECS:-600} OUT_DIR=$(OUT_DIR)/day tox -e ots
