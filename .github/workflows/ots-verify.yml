@@ -61,6 +61,37 @@ jobs:
           fetch-depth: 0
           lfs: true
 
+      # Prepare Python + caches for running tox envs
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+
+      - name: Cache pip and uv
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.cache/uv
+          key: ${{ runner.os }}-pipuv-${{ hashFiles('**/requirements*.txt') }}-${{ hashFiles('pyproject.toml') }}
+
+      - name: Cache tox virtualenvs
+        uses: actions/cache@v4
+        with:
+          path: .tox
+          key: ${{ runner.os }}-tox-ots-${{ hashFiles('tox.ini') }}-${{ hashFiles('**/requirements*.txt') }}-${{ hashFiles('pyproject.toml') }}
+
+      - name: Install Python deps
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install --upgrade tox
+          python -m pip install --upgrade opentimestamps-client
+
+      - name: Run pipeline via tox (generate artifacts)
+        run: tox -e pipeline -- --keep-existing
+        env:
+          TOX_PYTHON: python
+
       - name: Check for OTS files
         id: check_ots
         run: |
@@ -71,8 +102,10 @@ jobs:
             echo "found=false" >> "$GITHUB_OUTPUT"
           else
             echo "Found ${#files[@]} OTS file(s)."
+            printf '%s\n' "${files[@]}"
             echo "found=true" >> "$GITHUB_OUTPUT"
           fi
+        shell: bash
 
       - name: Decide whether to start bitcoind
         id: decide_run_bitcoind
@@ -85,24 +118,16 @@ jobs:
           PR_LABEL: ${{ github.event.label.name || '' }}
           DISPATCH_INPUT: ${{ github.event.inputs.run_bitcoind || 'auto' }}
         run: |
-          # Default: don't run bitcoind
           run=0
           echo "Context: EVENT=$GH_EVENT_NAME REF=$GH_REF_NAME ACTION=$PR_ACTION DRAFT=$PR_DRAFT LABEL=$PR_LABEL DISPATCH_INPUT=$DISPATCH_INPUT"
-
-          # If workflow_dispatch input explicitly sets run_bitcoind, respect it (unless 'auto')
           if [ "$DISPATCH_INPUT" = "1" ]; then
-            echo "workflow_dispatch input forces RUN_BITCOIND=1"
             run=1
           elif [ "$DISPATCH_INPUT" = "0" ]; then
-            echo "workflow_dispatch input forces RUN_BITCOIND=0"
             run=0
           else
-            # Auto-decide based on event context
-            # Manual runs and main branch should run bitcoind
             if [ "$GH_EVENT_NAME" = 'workflow_dispatch' ] || [ "$GH_REF_NAME" = 'main' ]; then
               run=1
             fi
-            # For pull_request_target labeled events, run only when label is the explicit trigger
             if [ "$GH_EVENT_NAME" = 'pull_request_target' ] && [ "$PR_ACTION" = 'labeled' ] && [ "$PR_LABEL" = 'run-ots-verify' ]; then
               run=1
             fi
@@ -118,19 +143,6 @@ jobs:
           restore-keys: |
             bitcoin-headers-${{ runner.os }}-
 
-      - name: Set up Python
-        if: steps.check_ots.outputs.found == 'true'
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.x'
-
-      - name: Install dependencies
-        if: steps.check_ots.outputs.found == 'true'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y jq curl tar
-          pip3 install --upgrade pip
-          pip3 install opentimestamps-client
 
       - name: Install Bitcoin Core (bitcoind)
         if: steps.check_ots.outputs.found == 'true'
@@ -145,19 +157,36 @@ jobs:
 
       - name: Make CI script executable
         if: steps.check_ots.outputs.found == 'true'
-        run: |
-          chmod +x scripts/ci/ots_verify.sh
+        run: chmod +x scripts/ci/ots_verify.sh
 
-      - name: Run OTS verification helper
+      - name: Run OTS verification script
         if: steps.check_ots.outputs.found == 'true'
         timeout-minutes: 15
         env:
-          # Strict on main pushes, lenient on PRs/other branches
           STRICT_VERIFY: ${{ github.ref_name == 'main' && '1' || '0' }}
-          # Derived from the prior decide step
           RUN_BITCOIND: ${{ steps.decide_run_bitcoind.outputs.run_bitcoind || '0' }}
+          # smart upgrade knobs
+          UPGRADE_ON_PENDING: '1'
+          UPGRADE_TRIES: '5'
+          UPGRADE_BACKOFF_SECS: '15'
+          EXPLORER_BASE: 'https://mempool.space'
         run: |
-          scripts/ci/ots_verify.sh out/site_demo/day
+          ./scripts/ci/ots_verify.sh out/site_demo/day
+
+      - name: Upload OTS proof bundle
+        if: steps.check_ots.outputs.found == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ots-proof-bundle
+          path: |
+            out/site_demo/day/*.ots
+            out/site_demo/day/*.bin
+            out/site_demo/day/*.json
+            out/site_demo/day/*.sha256
+            out/site_demo/day/ots_verify_summary.txt
+            out/site_demo/day/ots_verify_summary.json
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Upload Bitcoin logs (on failure)
         if: failure() && steps.check_ots.outputs.found == 'true'

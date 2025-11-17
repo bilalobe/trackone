@@ -1,0 +1,94 @@
+name: SHA Verify
+
+on:
+  push:
+    branches:
+      - 'ci/sha-verify-draft'
+  pull_request:
+    types: [opened, reopened, synchronize]
+  pull_request_target:
+    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      strict_sha:
+        description: 'Require declared sha256 in JSON and match (1=yes, 0=no)'
+        required: false
+        default: '0'
+        type: choice
+        options: ['0','1']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sha-verify-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  sha-verify:
+    if: >-
+      github.event_name == 'push' ||
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'pull_request_target' && github.event.action == 'labeled' && github.event.label && github.event.label.name == 'run-sha-verify')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (normal events)
+        if: github.event_name != 'pull_request_target'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout PR head (when invoked via pull_request_target labeled)
+        if: github.event_name == 'pull_request_target' && github.event.pull_request
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+
+      - name: Cache pip and uv
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.cache/uv
+          key: ${{ runner.os }}-pipuv-${{ hashFiles('**/requirements*.txt') }}-${{ hashFiles('pyproject.toml') }}
+
+      - name: Cache tox virtualenvs
+        uses: actions/cache@v4
+        with:
+          path: .tox
+          key: ${{ runner.os }}-tox-sha-${{ hashFiles('tox.ini') }}-${{ hashFiles('**/requirements*.txt') }}-${{ hashFiles('pyproject.toml') }}
+
+      - name: Install Python deps
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install --upgrade tox
+
+      - name: Run pipeline via tox (generate artifacts)
+        run: tox -e pipeline
+
+      - name: Run SHA verification via tox
+        env:
+          # Prefer strict on main; otherwise only use workflow_dispatch input when present; default to '0'
+          STRICT_SHA: ${{ github.ref_name == 'main' && '1' || (github.event_name == 'workflow_dispatch' && github.event.inputs.strict_sha) || '0' }}
+          OUT_DIR: out/site_demo/day
+        run: tox -e sha
+
+      - name: Upload day artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: day-artifacts
+          path: |
+            out/site_demo/day/*.bin
+            out/site_demo/day/*.json
+            out/site_demo/day/*.ots*
+          if-no-files-found: ignore
+          retention-days: 7
