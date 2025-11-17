@@ -165,8 +165,28 @@ jobs:
         env:
           STRICT_VERIFY: ${{ github.ref_name == 'main' && '1' || '0' }}
           RUN_BITCOIND: ${{ steps.decide_run_bitcoind.outputs.run_bitcoind || '0' }}
+          # smart upgrade knobs
+          UPGRADE_ON_PENDING: '1'
+          UPGRADE_TRIES: '5'
+          UPGRADE_BACKOFF_SECS: '15'
+          EXPLORER_BASE: 'https://mempool.space'
         run: |
           ./scripts/ci/ots_verify.sh out/site_demo/day
+
+      - name: Upload OTS proof bundle
+        if: steps.check_ots.outputs.found == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ots-proof-bundle
+          path: |
+            out/site_demo/day/*.ots
+            out/site_demo/day/*.bin
+            out/site_demo/day/*.json
+            out/site_demo/day/*.sha256
+            out/site_demo/day/ots_verify_summary.txt
+            out/site_demo/day/ots_verify_summary.json
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Upload Bitcoin logs (on failure)
         if: failure() && steps.check_ots.outputs.found == 'true'

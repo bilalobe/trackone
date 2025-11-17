@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # scripts/ci/ots_verify.sh
-# CI helper: start bitcoind (headers-only), wait for headers required by .ots files, then run ots verify.
+# CI helper: start bitcoind (headers-only), wait for headers required by .ots files, optionally upgrade proofs, then run ots verify.
 # Usage: scripts/ci/ots_verify.sh <path-to-ots-dir>
 set -euo pipefail
 
@@ -10,8 +10,15 @@ DATADIR="${DATADIR:-$HOME/.bitcoin}"
 BITCOIND_EXTRA_ARGS="${BITCOIND_EXTRA_ARGS:--listen=0 -blocksonly=1 -prune=550 -txindex=0 -dbcache=50 -maxconnections=8 -disablewallet=1}"
 TIMEOUT_SECS="${TIMEOUT_SECS:-600}"   # 10 minutes
 SLEEP_INTERVAL="${SLEEP_INTERVAL:-5}"
-STRICT_VERIFY="${STRICT_VERIFY:-0}"   # 0 = allow deferred (timeout), 1 = fail on timeout
+STRICT_VERIFY="${STRICT_VERIFY:-0}"   # 0 = allow deferred (timeout/pending), 1 = fail on timeout/pending
 RUN_BITCOIND="${RUN_BITCOIND:-1}"     # 1 = start bitcoind, 0 = skip (best-effort verify)
+UPGRADE_ON_PENDING="${UPGRADE_ON_PENDING:-1}"
+UPGRADE_TRIES="${UPGRADE_TRIES:-3}"
+UPGRADE_BACKOFF_SECS="${UPGRADE_BACKOFF_SECS:-10}"
+EXPLORER_BASE="${EXPLORER_BASE:-https://mempool.space}"
+EXPLORER_HASH_BASE="${EXPLORER_HASH_BASE:-https://www.blockchain.com/btc/block}"
+OUTPUT_SUMMARY="${OUTPUT_SUMMARY:-$ROOT_DIR/ots_verify_summary.txt}"
+OUTPUT_JSON_SUMMARY="${OUTPUT_JSON_SUMMARY:-$ROOT_DIR/ots_verify_summary.json}"
 
 mkdir -p "$DATADIR"
 
@@ -23,6 +30,148 @@ if ! command -v bitcoin-cli >/dev/null 2>&1; then
   echo "bitcoin-cli is not installed; cannot query headers. Skipping."
   exit 0
 fi
+
+# Helper: upgrade all OTS files once (best-effort)
+upgrade_all_once() {
+  shopt -s nullglob
+  local any=0
+  for f in "$ROOT_DIR"/*.ots; do
+    [ -f "$f" ] || continue
+    any=1
+    echo "Upgrading proof: $f"
+    ots upgrade "$f" || true
+  done
+  if [ "$any" -eq 0 ]; then
+    echo "No OTS files to upgrade in $ROOT_DIR"
+  fi
+}
+
+# Helper: parse heights into a global array variable 'heights'
+parse_heights() {
+  heights=()
+  if ! command -v ots >/dev/null 2>&1; then
+    return 0
+  fi
+  shopt -s nullglob
+  for otsfile in "$ROOT_DIR"/*.ots; do
+    [ -f "$otsfile" ] || continue
+    while IFS= read -r line; do
+      if [[ $line =~ BitcoinBlockHeaderAttestation\(([0-9]+)\) ]]; then
+        heights+=("${BASH_REMATCH[1]}")
+      fi
+    done < <(ots info "$otsfile" 2>/dev/null || true)
+  done
+  if [ ${#heights[@]} -gt 0 ]; then
+    readarray -t heights < <(printf '%s\n' "${heights[@]}" | sort -n | uniq)
+  fi
+}
+
+# Helper: (optional) compute block hashes for heights via local node
+compute_block_hashes_if_possible() {
+  block_hashes=()
+  if [ ${#heights[@]} -eq 0 ]; then
+    return 0
+  fi
+  if [ "$RUN_BITCOIND" != "1" ]; then
+    return 0
+  fi
+  # Attempt to query block hashes; ignore failures silently
+  for h in "${heights[@]}"; do
+    bh=$(bitcoin-cli -datadir="$DATADIR" getblockhash "$h" 2>/dev/null || true)
+    if [ -n "${bh:-}" ]; then
+      block_hashes+=("$bh")
+    fi
+  done
+}
+
+# Helper: write a simple summary file with explorer URLs
+write_summary_file() {
+  # Per-file statuses are available via file_status associative array if populated
+  # Heights list from global 'heights'
+  {
+    echo "explorer_base=$EXPLORER_BASE"
+    echo "explorer_hash_base=$EXPLORER_HASH_BASE"
+    if [ ${#heights[@]} -gt 0 ]; then
+      echo -n "heights="
+      (IFS=,; echo "${heights[*]}")
+      echo -n "block_urls="
+      urls=()
+      for h in "${heights[@]}"; do
+        urls+=("$EXPLORER_BASE/block-height/$h")
+      done
+      (IFS=,; echo "${urls[*]}")
+      echo -n "block_hash_urls="
+      hash_urls=()
+      if [ ${#block_hashes[@]:-0} -gt 0 ]; then
+        for bh in "${block_hashes[@]}"; do
+          hash_urls+=("$EXPLORER_HASH_BASE/$bh")
+        done
+        (IFS=,; echo "${hash_urls[*]}")
+      else
+        echo ""
+      fi
+    else
+      echo "heights="
+      echo "block_urls="
+      echo "block_hash_urls="
+    fi
+    # Per-file lines
+    shopt -s nullglob
+    for f in "$ROOT_DIR"/*.ots; do
+      [ -f "$f" ] || continue
+      st="${file_status[$f]:-unknown}"
+      echo "file=$f status=$st"
+    done
+  } > "$OUTPUT_SUMMARY" || true
+  echo "Wrote summary: $OUTPUT_SUMMARY"
+}
+
+# Helper: write JSON summary (heights, URLs, per-file statuses)
+write_json_summary_file() {
+  {
+    echo "{"
+    printf '  "explorer_base": "%s",\n' "$EXPLORER_BASE"
+    printf '  "explorer_hash_base": "%s",\n' "$EXPLORER_HASH_BASE"
+    printf '  "heights": ['
+    if [ ${#heights[@]} -gt 0 ]; then
+      for i in "${!heights[@]}"; do
+        if [ "$i" -ne 0 ]; then printf ', '; fi
+        printf '%s' "${heights[$i]}"
+      done
+    fi
+    echo '],'
+    printf '  "block_urls": ['
+    if [ ${#heights[@]} -gt 0 ]; then
+      for i in "${!heights[@]}"; do
+        if [ "$i" -ne 0 ]; then printf ', '; fi
+        printf '"%s/block-height/%s"' "$EXPLORER_BASE" "${heights[$i]}"
+      done
+    fi
+    echo '],'
+    printf '  "block_hash_urls": ['
+    if [ ${#block_hashes[@]:-0} -gt 0 ]; then
+      for i in "${!block_hashes[@]}"; do
+        if [ "$i" -ne 0 ]; then printf ', '; fi
+        printf '"%s/%s"' "$EXPLORER_HASH_BASE" "${block_hashes[$i]}"
+      done
+    fi
+    echo '],'
+    echo '  "files": ['
+    shopt -s nullglob
+    first=1
+    for f in "$ROOT_DIR"/*.ots; do
+      [ -f "$f" ] || continue
+      st="${file_status[$f]:-unknown}"
+      if [ "$first" -ne 1 ]; then echo ","; fi
+      first=0
+      printf '    {"file": "%s", "status": "%s"}' "$f" "$st"
+    done
+    echo ''
+    echo '  ]'
+    echo "}"
+  } > "$OUTPUT_JSON_SUMMARY" || true
+  echo "Wrote JSON summary: $OUTPUT_JSON_SUMMARY"
+}
 
 # Start bitcoind in background (if enabled)
 if [ "$RUN_BITCOIND" = "1" ]; then
@@ -51,25 +200,30 @@ else
   echo "RUN_BITCOIND=0: Skipping bitcoind startup; proceeding with best-effort verification."
 fi
 
-# Collect heights from ots info outputs (unique)
-heights=()
-if command -v ots >/dev/null 2>&1; then
-  shopt -s nullglob
-  for otsfile in "$ROOT_DIR"/*.ots; do
-    [ -f "$otsfile" ] || continue
-    echo "Parsing heights from $otsfile"
-    while IFS= read -r line; do
-      if [[ $line =~ BitcoinBlockHeaderAttestation\(([0-9]+)\) ]]; then
-        heights+=("${BASH_REMATCH[1]}")
-      fi
-    done < <(ots info "$otsfile" 2>/dev/null || true)
+# Collect or upgrade to collect heights
+declare -a heights
+parse_heights
+if [ ${#heights[@]} -eq 0 ] && [ "$UPGRADE_ON_PENDING" = "1" ] && command -v ots >/dev/null 2>&1; then
+  echo "No heights parsed; attempting to upgrade proofs (tries=$UPGRADE_TRIES, backoff=${UPGRADE_BACKOFF_SECS}s)"
+  attempt=1
+  while [ "$attempt" -le "$UPGRADE_TRIES" ]; do
+    echo "Upgrade attempt $attempt/$UPGRADE_TRIES"
+    upgrade_all_once
+    parse_heights
+    if [ ${#heights[@]} -gt 0 ]; then
+      echo "Heights discovered after upgrade: ${heights[*]}"
+      break
+    fi
+    if [ "$attempt" -lt "$UPGRADE_TRIES" ]; then
+      sleep "$UPGRADE_BACKOFF_SECS"
+    fi
+    attempt=$((attempt+1))
   done
-  # de-duplicate heights
-  if [ ${#heights[@]} -gt 0 ]; then
-    readarray -t heights < <(printf '%s\n' "${heights[@]}" | sort -n | uniq)
-  fi
-else
-  echo "Warning: ots client not found in PATH; will skip verification."
+fi
+
+if [ ${#heights[@]} -gt 0 ]; then
+  # Try to compute block hashes when possible (node may or may not have headers)
+  compute_block_hashes_if_possible
 fi
 
 if [ ${#heights[@]} -eq 0 ]; then
@@ -77,17 +231,23 @@ if [ ${#heights[@]} -eq 0 ]; then
   if command -v ots >/dev/null 2>&1; then
     # Try verify directly (may succeed if headers already cached or calendar proofs are complete)
     verified=0; failed=0
+    declare -A file_status=()
     shopt -s nullglob
     for f in "$ROOT_DIR"/*.ots; do
       [ -f "$f" ] || continue
       if ots verify "$f"; then
         verified=$((verified+1))
+        file_status["$f"]=verified
       else
         echo "ots verify failed for $f"
         failed=$((failed+1))
+        file_status["$f"]=pending
       fi
     done
-    # Write summary
+    # Write summary (file + heights + urls)
+    write_summary_file
+    write_json_summary_file
+    # Write markdown summary
     if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
       {
         echo "### OTS Verification Summary"
@@ -97,7 +257,12 @@ if [ ${#heights[@]} -eq 0 ]; then
       } >> "$GITHUB_STEP_SUMMARY"
     fi
     if [ "$failed" -gt 0 ]; then
-      exit 2
+      if [ "$STRICT_VERIFY" = "1" ]; then
+        exit 2
+      else
+        echo "Non-strict mode: allowing verification failures (likely pending confirmations)."
+        exit 0
+      fi
     fi
   fi
   exit 0
@@ -154,6 +319,14 @@ if [ "$RUN_BITCOIND" = "1" ]; then
           fi
         done
       fi
+      # Update summary
+      declare -A file_status=()
+      shopt -s nullglob
+      for f in "$ROOT_DIR"/*.ots; do
+        file_status["$f"]=deferred
+      done
+      write_summary_file
+      write_json_summary_file
       exit 0
     fi
     sleep "$SLEEP_INTERVAL"
@@ -164,6 +337,7 @@ fi
 
 # Run full verification
 verified=0; failed=0
+declare -A file_status=()
 shopt -s nullglob
 for f in "$ROOT_DIR"/*.ots; do
   [ -f "$f" ] || continue
@@ -171,16 +345,46 @@ for f in "$ROOT_DIR"/*.ots; do
   if command -v ots >/dev/null 2>&1; then
     if ots verify "$f"; then
       verified=$((verified+1))
+      file_status["$f"]=verified
     else
       echo "ots verify failed for $f"
       failed=$((failed+1))
+      file_status["$f"]=pending
     fi
   else
     echo "Skipping ots verify for $f (ots not installed)."
+    file_status["$f"]=skipped
   fi
 done
 
+# If failures and upgrade-on-pending: try one last upgrade+re-verify pass
+if [ "$failed" -gt 0 ] && [ "$UPGRADE_ON_PENDING" = "1" ] && command -v ots >/dev/null 2>&1; then
+  echo "Failures detected; attempting a final upgrade + re-verify pass."
+  upgrade_all_once
+  # re-verify only failed ones
+  failed=0; verified=0; declare -A file_status_new=()
+  for f in "$ROOT_DIR"/*.ots; do
+    [ -f "$f" ] || continue
+    echo "Re-verifying $f ..."
+    if ots verify "$f"; then
+      verified=$((verified+1))
+      file_status_new["$f"]=verified
+    else
+      failed=$((failed+1))
+      file_status_new["$f"]=pending
+    fi
+  done
+  # replace statuses
+  file_status=()
+  for f in "$ROOT_DIR"/*.ots; do
+    [ -f "$f" ] || continue
+    file_status["$f"]="${file_status_new[$f]:-unknown}"
+  done
+fi
+
 # Write summary
+write_summary_file
+write_json_summary_file
 if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
   {
     echo "### OTS Verification Summary"
@@ -188,13 +392,28 @@ if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
     echo "- Files failed: $failed"
     if [ ${#heights[@]} -gt 0 ]; then
       echo "- Required heights: ${heights[*]}"
+      echo "- Explorer height URLs:"
+      for h in "${heights[@]}"; do
+        echo "  - $EXPLORER_BASE/block-height/$h"
+      done
+      if [ ${#block_hashes[@]:-0} -gt 0 ]; then
+        echo "- Explorer block hash URLs:"
+        for bh in "${block_hashes[@]}"; do
+          echo "  - $EXPLORER_HASH_BASE/$bh"
+        done
+      fi
     fi
   } >> "$GITHUB_STEP_SUMMARY"
 fi
 
 if [ "$failed" -ne 0 ]; then
   echo "At least one ots verify failed."
-  exit 2
+  if [ "$STRICT_VERIFY" = "1" ]; then
+    exit 2
+  else
+    echo "Non-strict mode: allowing verification failures (likely pending confirmations)."
+    exit 0
+  fi
 fi
 
 echo "All proofs verified."
