@@ -76,7 +76,8 @@ jobs:
 
       - name: Run SHA verification via tox
         env:
-          STRICT_SHA: ${{ github.ref_name == 'main' && '1' || github.event.inputs.strict_sha || '0' }}
+          # Prefer strict on main; otherwise only use workflow_dispatch input when present; default to '0'
+          STRICT_SHA: ${{ github.ref_name == 'main' && '1' || (github.event_name == 'workflow_dispatch' && github.event.inputs.strict_sha) || '0' }}
           OUT_DIR: out/site_demo/day
         run: tox -e sha
 
