@@ -36,7 +36,9 @@ def test_detect_numpy_random_alias():
         tmp = Path(td)
         f = _write(tmp, "b.py", "import numpy as np\nnp.random.rand()\n")
         findings = rngchk.check_path(f)
-        assert any(finding.kind == "numpy-random-call" for finding in findings), findings
+        assert any(
+            finding.kind == "numpy-random-call" for finding in findings
+        ), findings
 
 
 def test_alias_random_module():
@@ -93,7 +95,9 @@ def test_system_random_allowed():
     with tempfile.TemporaryDirectory() as td:
         tmp = Path(td)
         f = _write(
-            tmp, "h.py", "from random import SystemRandom\nsr = SystemRandom()\nsr.randint(1, 10)\n"
+            tmp,
+            "h.py",
+            "from random import SystemRandom\nsr = SystemRandom()\nsr.randint(1, 10)\n",
         )
         findings = rngchk.check_path(f)
         assert findings == []
@@ -134,8 +138,8 @@ def test_numpy_random_state_detected():
     """numpy.random.RandomState should be detected (not cryptographically secure)"""
     with tempfile.TemporaryDirectory() as td:
         tmp = Path(td)
-        f = _write(
-            tmp, "j.py", "import numpy as np\nrng = np.random.RandomState(42)\n"
-        )
+        f = _write(tmp, "j.py", "import numpy as np\nrng = np.random.RandomState(42)\n")
         findings = rngchk.check_path(f)
-        assert any(finding.kind == "numpy-random-call" for finding in findings), findings
+        assert any(
+            finding.kind == "numpy-random-call" for finding in findings
+        ), findings

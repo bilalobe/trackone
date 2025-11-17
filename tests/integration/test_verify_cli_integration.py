@@ -1,0 +1,102 @@
+"""
+Verify CLI integration tests.
+
+Tests the verify_cli module for:
+- Placeholder OTS proof acceptance
+- External 'ots' binary integration (mocked and real)
+- End-to-end verification workflow
+"""
+
+from __future__ import annotations
+
+import shutil
+import stat
+from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
+
+
+def test_verify_ots_accepts_placeholder(
+    tmp_path: Path, verify_cli, write_ots_placeholder
+):
+    """verify_ots should accept OTS_PROOF_PLACEHOLDER files."""
+    ots_path = write_ots_placeholder(tmp_path, "2025-10-07")
+    assert verify_cli.verify_ots(ots_path) is True
+
+
+def test_verify_ots_missing_binary_returns_false(
+    tmp_path: Path, verify_cli, monkeypatch
+):
+    """verify_ots should return False when 'ots' binary is not available."""
+    ots_path = tmp_path / "2025-10-07.bin.ots"
+    ots_path.write_text("REAL_PROOF_BYTES\n", encoding="utf-8")
+
+    monkeypatch.setattr(shutil, "which", lambda _: None)
+    assert verify_cli.verify_ots(ots_path) is False
+
+
+@patch("verify_cli.subprocess.run")
+def test_verify_ots_external_success(mock_run, tmp_path: Path, verify_cli, monkeypatch):
+    """verify_ots should invoke external 'ots verify' and return True on success."""
+    ots_path = tmp_path / "2025-10-07.bin.ots"
+    ots_path.write_text("REAL_PROOF_BYTES\n", encoding="utf-8")
+
+    # Create a fake 'ots' executable file
+    fake_ots = tmp_path / "ots"
+    fake_ots.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    fake_ots.chmod(fake_ots.stat().st_mode | stat.S_IEXEC)
+
+    # Mock subprocess.run to simulate successful verification
+    mock_run.return_value = SimpleNamespace(returncode=0)
+    monkeypatch.setattr(shutil, "which", lambda _: str(fake_ots))
+
+    # Should return True on success
+    result = verify_cli.verify_ots(ots_path)
+    assert result is True
+
+
+class TestVerifyCliMainPlaceholder:
+    """Integration tests for verify_cli.main with placeholder OTS proofs."""
+
+    def test_end_to_end_with_placeholder(
+        self,
+        tmp_path: Path,
+        merkle_batcher,
+        verify_cli,
+        write_sample_facts_fixture,
+        sample_facts,
+        write_ots_placeholder,
+    ):
+        """Run batcher → create OTS placeholder → verify CLI."""
+        facts_dir = tmp_path / "facts"
+        out_dir = tmp_path / "out"
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        # Write sample facts
+        write_sample_facts_fixture(facts_dir, sample_facts)
+
+        # Run batcher to create block/day outputs
+        args = [
+            "--facts",
+            str(facts_dir),
+            "--out",
+            str(out_dir),
+            "--site",
+            "test-site",
+            "--date",
+            "2025-10-07",
+        ]
+        assert merkle_batcher.main(args) == 0
+
+        # Verify day.bin exists
+        day_bin = out_dir / "day" / "2025-10-07.bin"
+        assert day_bin.exists()
+
+        # Create placeholder OTS proof
+        ots_path = write_ots_placeholder(out_dir, "2025-10-07")
+        assert ots_path.exists()
+
+        # Run verify_cli against the output
+        verify_args = ["--root", str(out_dir), "--facts", str(facts_dir)]
+        rc = verify_cli.main(verify_args)
+        assert rc == 0
