@@ -20,9 +20,11 @@ EXPLORER_HASH_BASE="${EXPLORER_HASH_BASE:-https://www.blockchain.com/btc/block}"
 OUTPUT_SUMMARY="${OUTPUT_SUMMARY:-$ROOT_DIR/ots_verify_summary.txt}"
 OUTPUT_JSON_SUMMARY="${OUTPUT_JSON_SUMMARY:-$ROOT_DIR/ots_verify_summary.json}"
 
-# Declare arrays up-front to avoid unset errors with -u
+# Declare arrays and associative maps
 declare -a heights
 declare -a block_hashes
+declare -A file_stage
+declare -A file_next_trigger
 
 mkdir -p "$DATADIR"
 
@@ -88,6 +90,35 @@ compute_block_hashes_if_possible() {
   done
 }
 
+# Helper: classify stage from ots info output
+classify_stage_for_file() {
+  local f="$1"; local info="$2"; local stage="pending"; local next="upgrade";
+  if grep -q 'Success! Timestamp complete' <<<"$info"; then
+    stage="verified"; next="none"
+  elif grep -q 'BitcoinBlockHeaderAttestation' <<<"$info"; then
+    # Has attestation heights but verify may not yet pass if blocks behind
+    stage="headers_wait_block_sync"; next="sync-blocks"
+  elif grep -q 'Timestamped by transaction' <<<"$info"; then
+    # Transaction published; waiting for confirmations
+    stage="tx_published_wait_conf"; next="confirmations+upgrade"
+  elif grep -q 'Pending confirmation in Bitcoin blockchain' <<<"$info"; then
+    stage="calendar_pending"; next="upgrade"
+  fi
+  file_stage["$f"]="$stage"
+  file_next_trigger["$f"]="$next"
+}
+
+# Helper: harvest stage info for all .ots files
+harvest_stages() {
+  shopt -s nullglob
+  for f in "$ROOT_DIR"/*.ots; do
+    [ -f "$f" ] || continue
+    local info_out
+    info_out=$(ots info "$f" 2>/dev/null || true)
+    classify_stage_for_file "$f" "$info_out"
+  done
+}
+
 # Helper: write a simple summary file with explorer URLs
 write_summary_file() {
   # Per-file statuses are available via file_status associative array if populated
@@ -124,7 +155,9 @@ write_summary_file() {
     for f in "$ROOT_DIR"/*.ots; do
       [ -f "$f" ] || continue
       st="${file_status[$f]:-unknown}"
-      echo "file=$f status=$st"
+      sg="${file_stage[$f]:-unknown}"
+      nt="${file_next_trigger[$f]:-unknown}"
+      echo "file=$f status=$st stage=$sg next_trigger=$nt"
     done
   } > "$OUTPUT_SUMMARY" || true
   echo "Wrote summary: $OUTPUT_SUMMARY"
@@ -160,15 +193,19 @@ write_json_summary_file() {
       done
     fi
     echo '],'
+    printf '  "node_blocks": %s,\n' "${NODE_BLOCKS:-null}"
+    printf '  "node_headers": %s,\n' "${NODE_HEADERS:-null}"
     echo '  "files": ['
     shopt -s nullglob
     first=1
     for f in "$ROOT_DIR"/*.ots; do
       [ -f "$f" ] || continue
       st="${file_status[$f]:-unknown}"
+      sg="${file_stage[$f]:-unknown}"
+      nt="${file_next_trigger[$f]:-unknown}"
       if [ "$first" -ne 1 ]; then echo ","; fi
       first=0
-      printf '    {"file": "%s", "status": "%s"}' "$f" "$st"
+      printf '    {"file": "%s", "status": "%s", "stage": "%s", "next_trigger": "%s"}' "$f" "$st" "$sg" "$nt"
     done
     echo ''
     echo '  ]'
@@ -204,6 +241,9 @@ else
   echo "RUN_BITCOIND=0: Skipping bitcoind startup; proceeding with best-effort verification."
 fi
 
+# Initial stage harvest (may show calendar pending before upgrade attempts)
+harvest_stages
+
 # Collect or upgrade to collect heights
 heights=()
 parse_heights
@@ -222,6 +262,7 @@ if [ ${#heights[@]} -eq 0 ] && [ "$UPGRADE_ON_PENDING" = "1" ] && command -v ots
       sleep "$UPGRADE_BACKOFF_SECS"
     fi
     attempt=$((attempt+1))
+    harvest_stages
   done
 fi
 
@@ -281,48 +322,42 @@ if [ "$RUN_BITCOIND" = "1" ]; then
   echo "Required header heights: ${heights[*]}"
   echo "Max required header height: $max_height"
 
-  # Wait until headers >= max_height or timeout
+  # Wait until blocks >= max_height or timeout (use both headers and blocks for visibility)
   start_ts=$(date +%s)
   while true; do
-    headers=$(bitcoin-cli -datadir="$DATADIR" getblockchaininfo | jq -r '.headers' 2>/dev/null || true)
+    info_json=$(bitcoin-cli -datadir="$DATADIR" getblockchaininfo 2>/dev/null || echo '{}')
+    headers=$(echo "$info_json" | jq -r '.headers' 2>/dev/null || true)
+    blocks=$(echo "$info_json" | jq -r '.blocks' 2>/dev/null || true)
     if [[ -z "$headers" || "$headers" == "null" ]]; then
-      # Fallback parse if jq not present or JSON changed
-      headers=$(bitcoin-cli -datadir="$DATADIR" getblockchaininfo | grep -o '"headers"[[:space:]]*:[[:space:]]*[0-9]*' | grep -o '[0-9]*' || echo 0)
+      headers=$(echo "$info_json" | grep -o '"headers"[[:space:]]*:[[:space:]]*[0-9]*' | grep -o '[0-9]*' || echo 0)
+    fi
+    if [[ -z "$blocks" || "$blocks" == "null" ]]; then
+      blocks=$(echo "$info_json" | grep -o '"blocks"[[:space:]]*:[[:space:]]*[0-9]*' | grep -o '[0-9]*' || echo 0)
     fi
     headers=${headers:-0}
-    echo "Current headers: $headers (need $max_height)"
-    if [ "$headers" -ge "$max_height" ]; then
-      echo "Headers have caught up to required height."
+    blocks=${blocks:-0}
+    echo "Current node state: blocks=$blocks headers=$headers (need blocks >= $max_height)"
+    if [ "$blocks" -ge "$max_height" ]; then
+      echo "Blocks have caught up to required height ($max_height)."
       break
     fi
     now_ts=$(date +%s)
     elapsed=$(( now_ts - start_ts ))
     if [ "$elapsed" -ge "$TIMEOUT_SECS" ]; then
-      echo "Timeout waiting for headers (elapsed ${elapsed}s)."
-      # Summary
+      echo "Timeout waiting for blocks >= $max_height (elapsed ${elapsed}s; blocks=$blocks headers=$headers)."
       if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
         {
           echo "### OTS Verification Summary"
-          echo "- Deferred due to header timeout after ${elapsed}s"
+          echo "- Deferred due to block sync timeout after ${elapsed}s"
+          echo "- Current blocks: $blocks"
           echo "- Current headers: $headers"
           echo "- Required max height: $max_height"
         } >> "$GITHUB_STEP_SUMMARY"
       fi
       if [ "$STRICT_VERIFY" = "1" ]; then
-        echo "STRICT_VERIFY=1: failing the job due to timeout."
+        echo "STRICT_VERIFY=1: failing the job due to block sync timeout."
         exit 1
       fi
-      # Non-strict: Attempt verification but allow failures as deferred
-      if command -v ots >/dev/null 2>&1; then
-        shopt -s nullglob
-        for f in "$ROOT_DIR"/*.ots; do
-          [ -f "$f" ] || continue
-          if ! ots verify "$f"; then
-            echo "Verification for $f deferred (headers not available)."
-          fi
-        done
-      fi
-      # Update summary
       declare -A file_status=()
       shopt -s nullglob
       for f in "$ROOT_DIR"/*.ots; do
@@ -334,6 +369,8 @@ if [ "$RUN_BITCOIND" = "1" ]; then
     fi
     sleep "$SLEEP_INTERVAL"
   done
+  # After blocks catch up, recompute block hashes (they may have appeared)
+  compute_block_hashes_if_possible
 else
   echo "RUN_BITCOIND=0: Skipping headers wait; attempting verification directly."
 fi
@@ -358,12 +395,18 @@ for f in "$ROOT_DIR"/*.ots; do
     echo "Skipping ots verify for $f (ots not installed)."
     file_status["$f"]=skipped
   fi
+  # Refresh stage after verify attempt
+  info_out=$(ots info "$f" 2>/dev/null || true)
+  classify_stage_for_file "$f" "$info_out"
 done
 
 # If failures and upgrade-on-pending: try one last upgrade+re-verify pass
 if [ "$failed" -gt 0 ] && [ "$UPGRADE_ON_PENDING" = "1" ] && command -v ots >/dev/null 2>&1; then
   echo "Failures detected; attempting a final upgrade + re-verify pass."
   upgrade_all_once
+  # Re-parse heights in case new attestation appeared
+  parse_heights
+  compute_block_hashes_if_possible
   # re-verify only failed ones
   failed=0; verified=0; declare -A file_status_new=()
   for f in "$ROOT_DIR"/*.ots; do
@@ -376,6 +419,9 @@ if [ "$failed" -gt 0 ] && [ "$UPGRADE_ON_PENDING" = "1" ] && command -v ots >/de
       failed=$((failed+1))
       file_status_new["$f"]=pending
     fi
+    # Refresh stage after verify attempt
+    info_out=$(ots info "$f" 2>/dev/null || true)
+    classify_stage_for_file "$f" "$info_out"
   done
   # replace statuses
   file_status=()
@@ -399,8 +445,8 @@ if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
       for h in "${heights[@]}"; do
         echo "  - $EXPLORER_BASE/block-height/$h"
       done
-      if [ ${#block_hashes[@]:-0} -gt 0 ]; then
-        echo "- Explorer block hash URLs:"
+      if [ ${#block_hashes[@]} -gt 0 ]; then
+        echo "- Explorer block hash URLs:";
         for bh in "${block_hashes[@]}"; do
           echo "  - $EXPLORER_HASH_BASE/$bh"
         done
