@@ -86,11 +86,18 @@ jobs:
           python -m pip install --upgrade pip setuptools wheel
           python -m pip install --upgrade tox
 
-      # Generate fresh artifacts (facts/day/.ots) via pipeline
-      - name: Run pipeline via tox (generate artifacts)
+      - name: Download pipeline-day artifact
+        id: download_pipeline
+        uses: actions/download-artifact@v4
+        with:
+          name: pipeline-day
+          path: out/site_demo/day
+        continue-on-error: true
+
+      - name: Run pipeline via tox (fallback if artifact missing)
+        if: steps.download_pipeline.outcome != 'success'
         run: tox -e pipeline
 
-      # Check for OTS files after pipeline generation
       - name: Check for OTS files
         id: check_ots
         run: |
@@ -101,8 +108,10 @@ jobs:
             echo "found=false" >> "$GITHUB_OUTPUT"
           else
             echo "Found ${#files[@]} OTS file(s)."
+            printf '%s\n' "${files[@]}"
             echo "found=true" >> "$GITHUB_OUTPUT"
           fi
+        shell: bash
 
       - name: Decide whether to start bitcoind
         id: decide_run_bitcoind
@@ -186,3 +195,9 @@ jobs:
           restore-keys: |
             bitcoin-headers-${{ runner.os }}-v${{ env.BITCOIN_CORE_VERSION }}
             bitcoin-headers-${{ runner.os }}-
+
+      - name: Restore pipeline artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: pipeline-day
+          path: out/site_demo/day
