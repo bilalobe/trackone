@@ -43,9 +43,9 @@ jobs:
           python -m pip install --upgrade pip setuptools wheel
           python -m pip install --upgrade tox
 
-      - name: Run meta tox envs
+      - name: Run lint/type/security tox envs
         run: |
-          tox -p
+          tox -e lint,type,security
 
   test:
     runs-on: ubuntu-latest
@@ -100,3 +100,37 @@ jobs:
           path: coverage.xml
           if-no-files-found: warn
           retention-days: 7
+
+  pipeline:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+
+      - name: Cache pip and uv
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.cache/uv
+          key: ${{ runner.os }}-pipuv-pipeline-${{ hashFiles('**/requirements*.txt') }}-${{ hashFiles('pyproject.toml') }}
+
+      - name: Cache tox virtualenvs
+        uses: actions/cache@v4
+        with:
+          path: .tox
+          key: ${{ runner.os }}-tox-pipeline-${{ hashFiles('tox.ini') }}-${{ hashFiles('**/requirements*.txt') }}-${{ hashFiles('pyproject.toml') }}
+
+      - name: Ensure pip, wheel and tox
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install --upgrade tox
+
+      - name: Run pipeline via tox
+        run: tox -e pipeline -- --keep-existing

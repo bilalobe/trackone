@@ -35,8 +35,11 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import contextlib
 import subprocess  # nosec: B404 - invoking a vetted external tool via validated args
 from pathlib import Path
+
+OTS_PROOF_PLACEHOLDER = "OTS_PROOF_PLACEHOLDER\n"
 
 
 def ots_stamp(day_bin_path: Path, ots_path: Path) -> None:
@@ -53,13 +56,17 @@ def ots_stamp(day_bin_path: Path, ots_path: Path) -> None:
         subprocess.run(["ots", "stamp", str(day_bin_path)], check=True)  # nosec
         # OTS client typically writes <bin>.ots; ensure something exists for downstream steps.
         if not ots_path.exists():
-            ots_path.write_text("OTS_PROOF_PLACEHOLDER\n", encoding="utf-8")
+            ots_path.write_text(OTS_PROOF_PLACEHOLDER, encoding="utf-8")
+        else:
+            # Best-effort: attempt an upgrade to enrich the proof; ignore any failures/timeouts.
+            with contextlib.suppress(Exception):
+                subprocess.run(["ots", "upgrade", str(ots_path)], check=False)  # nosec
     except subprocess.CalledProcessError:
         # Non-zero exit from the OTS client → fallback placeholder
-        ots_path.write_text("OTS_PROOF_PLACEHOLDER\n", encoding="utf-8")
+        ots_path.write_text(OTS_PROOF_PLACEHOLDER, encoding="utf-8")
     except OSError:
         # Command not found, permission issue, etc. → fallback placeholder
-        ots_path.write_text("OTS_PROOF_PLACEHOLDER\n", encoding="utf-8")
+        ots_path.write_text(OTS_PROOF_PLACEHOLDER, encoding="utf-8")
 
 
 def main(argv: list[str] | None = None) -> int:
