@@ -21,6 +21,7 @@ OUTPUT_SUMMARY="${OUTPUT_SUMMARY:-$ROOT_DIR/ots_verify_summary.txt}"
 OUTPUT_JSON_SUMMARY="${OUTPUT_JSON_SUMMARY:-$ROOT_DIR/ots_verify_summary.json}"
 
 # Declare arrays and associative maps
+: "${block_hashes:=}"  # ensure variable exists even if declare fails under some shells
 declare -a heights
 declare -a block_hashes
 declare -A file_stage
@@ -137,7 +138,7 @@ write_summary_file() {
       (IFS=,; echo "${urls[*]}")
       echo -n "block_hash_urls="
       hash_urls=()
-      if [ ${#block_hashes[@]} -gt 0 ]; then
+      if [ "$(array_len block_hashes)" -gt 0 ]; then
         for bh in "${block_hashes[@]}"; do
           hash_urls+=("$EXPLORER_HASH_BASE/$bh")
         done
@@ -186,7 +187,7 @@ write_json_summary_file() {
     fi
     echo '],'
     printf '  "block_hash_urls": ['
-    if [ ${#block_hashes[@]} -gt 0 ]; then
+    if [ "$(array_len block_hashes)" -gt 0 ]; then
       for i in "${!block_hashes[@]}"; do
         if [ "$i" -ne 0 ]; then printf ', '; fi
         printf '"%s/%s"' "$EXPLORER_HASH_BASE" "${block_hashes[$i]}"
@@ -445,7 +446,7 @@ if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
       for h in "${heights[@]}"; do
         echo "  - $EXPLORER_BASE/block-height/$h"
       done
-      if [ ${#block_hashes[@]} -gt 0 ]; then
+      if [ "$(array_len block_hashes)" -gt 0 ]; then
         echo "- Explorer block hash URLs:";
         for bh in "${block_hashes[@]}"; do
           echo "  - $EXPLORER_HASH_BASE/$bh"
