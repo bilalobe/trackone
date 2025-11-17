@@ -396,7 +396,7 @@ def _expose_gateway_symbols(request, gateway_modules):
                 # If fixture resolution fails, fall back to attaching
                 # attributes from gateway module (if available) to the
                 # existing callable to preserve some behavior.
-                gw = None
+
                 with contextlib.suppress(Exception):
                     gw = gateway_modules.get(gw_mod_name)
 
