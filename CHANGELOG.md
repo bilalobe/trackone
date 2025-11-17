@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - CI lint job now runs only lint/type/security tox envs instead of `tox -p`, preventing accidental test execution and reducing runtime.
+- OTS verification workflow is now self-contained: it generates pipeline artifacts within the same job before verification, eliminating cross-workflow race conditions.
+
+### Added
+
+- OTS verification workflow installs the `opentimestamps-client` (`ots` CLI) so verification doesn’t skip when the binary is missing. `STRICT_VERIFY=1` is enforced on `main`.
+
+### Removed
+
+- CI no longer uploads `pipeline-day` artifacts from the pipeline job since OTS verification now generates and consumes artifacts locally.
 
 ## [0.0.1-m4] - 2025-10-22
 

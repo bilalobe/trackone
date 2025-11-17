@@ -134,12 +134,3 @@ jobs:
 
       - name: Run pipeline via tox
         run: tox -e pipeline -- --keep-existing
-
-      - name: Upload pipeline artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: pipeline-day
-          path: out/site_demo/day
-          if-no-files-found: warn
-          retention-days: 7
