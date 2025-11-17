@@ -20,6 +20,10 @@ EXPLORER_HASH_BASE="${EXPLORER_HASH_BASE:-https://www.blockchain.com/btc/block}"
 OUTPUT_SUMMARY="${OUTPUT_SUMMARY:-$ROOT_DIR/ots_verify_summary.txt}"
 OUTPUT_JSON_SUMMARY="${OUTPUT_JSON_SUMMARY:-$ROOT_DIR/ots_verify_summary.json}"
 
+# Declare arrays up-front to avoid unset errors with -u
+declare -a heights
+declare -a block_hashes
+
 mkdir -p "$DATADIR"
 
 if ! command -v bitcoind >/dev/null 2>&1; then
@@ -102,7 +106,7 @@ write_summary_file() {
       (IFS=,; echo "${urls[*]}")
       echo -n "block_hash_urls="
       hash_urls=()
-      if [ ${#block_hashes[@]:-0} -gt 0 ]; then
+      if [ ${#block_hashes[@]} -gt 0 ]; then
         for bh in "${block_hashes[@]}"; do
           hash_urls+=("$EXPLORER_HASH_BASE/$bh")
         done
@@ -149,7 +153,7 @@ write_json_summary_file() {
     fi
     echo '],'
     printf '  "block_hash_urls": ['
-    if [ ${#block_hashes[@]:-0} -gt 0 ]; then
+    if [ ${#block_hashes[@]} -gt 0 ]; then
       for i in "${!block_hashes[@]}"; do
         if [ "$i" -ne 0 ]; then printf ', '; fi
         printf '"%s/%s"' "$EXPLORER_HASH_BASE" "${block_hashes[$i]}"
@@ -201,7 +205,7 @@ else
 fi
 
 # Collect or upgrade to collect heights
-declare -a heights
+heights=()
 parse_heights
 if [ ${#heights[@]} -eq 0 ] && [ "$UPGRADE_ON_PENDING" = "1" ] && command -v ots >/dev/null 2>&1; then
   echo "No heights parsed; attempting to upgrade proofs (tries=$UPGRADE_TRIES, backoff=${UPGRADE_BACKOFF_SECS}s)"
@@ -222,7 +226,6 @@ if [ ${#heights[@]} -eq 0 ] && [ "$UPGRADE_ON_PENDING" = "1" ] && command -v ots
 fi
 
 if [ ${#heights[@]} -gt 0 ]; then
-  # Try to compute block hashes when possible (node may or may not have headers)
   compute_block_hashes_if_possible
 fi
 
