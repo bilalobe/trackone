@@ -5,9 +5,9 @@ description = "Ultra-Low-Power, Verifiable Telemetry (Barnacle Sentinel)"
 authors = [{ name = "BILAL", email = "elkhatabibilal@gmail.com" }]
 license = { text = "MIT" }
 readme = "README.md"
-requires-python = ">=3.11,<4.0"
+requires-python = ">=3.12,<4.0"
 dependencies = [
-    "hypothesis==6.147.0",
+    "pynacl==1.6.1",
     "jsonschema>=4.23.0",
 ]
 classifiers = [
@@ -20,7 +20,6 @@ classifiers = [
 [project.optional-dependencies]
 dev = [
     "maturin==1.10.0",
-    "pynacl==1.6.1",
     "pytest==9.0.0",
     "ruff==0.14.4",
     "smmap==6.0.0",
@@ -167,7 +166,7 @@ output = "coverage.xml"
 # Black configuration for Track1 project
 [tool.black]
 line-length = 88
-target-version = ['py311']
+target-version = ['py312', 'py313', 'py314']
 include = '\.pyi?$'
 extend-exclude = '''
 /(
@@ -223,7 +222,7 @@ unfixable = []
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]  # Allow unused imports in __init__.py files
-"tests/*" = ["E402", "F821"]  # Allow module level imports not at top in test files, allow undefined names (fixtures)
+"tests/**" = ["E402", "F821"]  # Allow module level imports not at top in test files, allow undefined names (fixtures)
 
 [tool.ruff.format]
 # Use black-compatible formatting
@@ -236,7 +235,7 @@ known-first-party = ["scripts"]
 
 # Mypy configuration (tighter checks)
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.12"
 strict = true
 exclude = [
     "tests/",
