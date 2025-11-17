@@ -7,8 +7,8 @@ license = { text = "MIT" }
 readme = "README.md"
 requires-python = ">=3.11,<4.0"
 dependencies = [
+    "hypothesis==6.147.0",
     "jsonschema>=4.23.0",
-    "pynacl>=1.6.0",
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -19,6 +19,12 @@ classifiers = [
 
 [project.optional-dependencies]
 dev = [
+    "maturin==1.10.0",
+    "pynacl==1.6.1",
+    "pytest==9.0.0",
+    "ruff==0.14.4",
+    "smmap==6.0.0",
+    "uv==0.9.8",
     "pytest>=8.4.2",
     "pytest-cov>=6.0.0",
     "pytest-xdist>=3.1.0",
@@ -28,7 +34,6 @@ dev = [
     "hypothesis>=6.142.2,<7.0",
     "opentimestamps-client>=0.7.2",
     "black>=24.0.0",
-    "ruff>=0.10.0",
     "mypy>=1.0.0",
     "bandit>=1.7.8",
     "pip-audit>=2.7.3",
@@ -64,7 +69,6 @@ build-backend = "hatchling.build"
 packages = ["scripts"]
 # Include only the package source code; exclude tests and build artifacts
 exclude = [
-    "scripts/tests",
     "scripts/**/__pycache__",
     "scripts/**/*.pyc",
     ".git",
@@ -92,9 +96,9 @@ exclude = [
     "out",
 ]
 
-# Pytest configuration (use scripts/tests as the root; skip slow by default)
+# Pytest configuration
 [tool.pytest.ini_options]
-testpaths = ["tests", "scripts/tests"]
+testpaths = ["tests"]
 addopts = [
     "-v",
     "--strict-markers",
@@ -128,12 +132,13 @@ python_functions = ["test_*"]
 branch = true
 source = ["scripts"]
 omit = [
-    "scripts/tests/*",
+    "tests/*",
     "scripts/dev/*",
     "*/__pycache__/*",
     "*/test_*.py",
 ]
-parallel = true
+# parallel = true is handled automatically by pytest-cov with pytest-xdist
+concurrency = ["thread", "multiprocessing"]
 
 [tool.coverage.report]
 precision = 2
@@ -218,7 +223,7 @@ unfixable = []
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]  # Allow unused imports in __init__.py files
-"scripts/tests/*.py" = ["E402"]  # Allow module level imports not at top in test files
+"tests/*" = ["E402", "F821"]  # Allow module level imports not at top in test files, allow undefined names (fixtures)
 
 [tool.ruff.format]
 # Use black-compatible formatting
@@ -234,6 +239,6 @@ known-first-party = ["scripts"]
 python_version = "3.11"
 strict = true
 exclude = [
-    "scripts/tests/",
+    "tests/",
     "scripts/dev/",
 ]
