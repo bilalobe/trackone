@@ -2,21 +2,23 @@
 
 All notable changes to Track1 (Barnacle Sentinel) will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-### Added
+Nothing yet.
 
-- Gateway "Ledger" tab JSON output
-- Outage logger
-- Daily OTS anchor/upgrade automation
-
-## [0.0.1-m4] - 2025-10-21
+## [0.0.1-m4] - 2025-10-22
 
 ### Added
 
+- Tox-first development workflow with new envs: `pipeline`, `ots`, `bench`, `precommit`, `readme`, `sha`, and `e2e`.
+- Optional OTS verification workflow in CI (`.github/workflows/ots-verify.yml`) with headers cache, pipeline pre-step, and manual dispatch.
+- Optional SHA verification workflow in CI (`.github/workflows/sha-verify.yml`) to compute/validate day blob hashes.
+- Markdown formatting in pre-commit using `mdformat`, including code-block formatting via `mdformat-ruff`.
+- Badges in README.
+- ADR-013 documenting Python version support policy (last three minors).
 - **OpenTimestamps proof verification**: End-to-end Bitcoin anchoring validated
     - Proof metadata stored in `proofs/2025-10-07.ots.meta.json` with block height, hash, merkleroot
     - OTS proof file `out/site_demo/day/2025-10-07.bin.ots` anchored to Bitcoin block 919384
@@ -26,19 +28,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **verify_cli.py**: Enhanced OTS verification with test placeholder support
     - Checks for "OTS_PROOF_PLACEHOLDER" in test files before attempting real verification
     - Enables test suite to pass with mock OTS files while validating production proofs
+- **Comprehensive test suite expansion**: Coverage increased from 68% → 85%
+  - New `test_ots_anchor.py`: 10 tests covering OTS stamping, CLI, fallbacks, and file handling (ots_anchor.py: 0% → 95%)
+  - New `test_pod_sim.py`: 31 tests for fact generation, TLV encoding, nonce construction, device tables (pod_sim.py: 26% → 81%)
+  - New `test_edge_cases.py`: 27 tests for merkle_batcher, verify_cli, canonical JSON, Merkle roots, schema validation
+  - Enhanced existing tests: Added Ed25519/HKDF edge cases, frame structure validation, parametrized tests
+  - New `conftest.py`: Shared fixtures for workspace, sample facts, and device tables
+- **Test run summary**: 182 passed, 4 skipped (spot-check run: pytest full suite)
 
 ### Changed
 
-- **Test suite**: All 73 tests passing after verify_cli fix for placeholder handling
+- CI uses a matrix for tests on Python 3.12, 3.13, 3.14 and a separate meta job (lint/type/readme/precommit/security) on 3.14.
+- Single Makefile targets now delegate to tox (tests, coverage, lint/type, pipeline, OTS, bench).
+- tox uses `tox-uv` for faster environment creation and installs; caching added for pip, uv, pre-commit, and tox venvs.
+- README structure simplified; pre-commit section updated.
+- OTS anchoring now attempts an immediate best-effort `ots upgrade` after stamping; verification script also runs `ots upgrade` before parsing heights.
+- OTS verification can auto-squash `.ots.bak` into `.ots` when valid (configurable) and is non-fatal in non-strict mode when proofs are placeholders.
+- **Test suite**: Expanded from 73 → 182 tests after verify_cli fix for placeholder handling and comprehensive new coverage
+- **Test coverage by module**:
+  - `ots_anchor.py`: 0% → 95% (stamping, CLI, fallbacks)
+  - `pod_sim.py`: 26% → 81% (fact generation, TLV, device tables, CLI)
+  - `frame_verifier.py`: 79% → 82% (added edge case handling)
+  - `verify_cli.py`: 75% → 78% (added error path coverage)
+  - `merkle_batcher.py`: 90% (stable, high coverage)
+  - `crypto_utils.py`: 97% (stable, near-complete)
+- **Test suite organization**: Centralized fixtures in conftest.py, parametrized tests for better coverage
+- **Test stability**: Fixed flaky assertions (timestamp formats, nonce randomness)
 - **Documentation**: Results section in TeX report includes M#4 milestone verification details
     - Block height: 919384
     - Block hash: `00000000000000000000b36d7b88a2e781f65619746bc238d4cfde8555f13733`
     - Merkle root: `166c8fe05f6071d8a29145c4e52c039159c699f3278c45d1c3107503b59c8047`
     - Artifact SHA256: `4778cddcf437f0b0ac8cd62fef3b89909bd6f4a8fd9590ac6e4a70e4fded5f60`
+- Relocated directory fixtures that are only used by integration and end-to-end suites to module-scoped fixtures so unit-test collection is faster and test isolation is improved:
+  - `temp_workspace` and related helpers moved to `tests/integration/fixtures/helpers.py` (module-scoped for integration tests).
+  - `temp_dirs` moved to the e2e module scope (e.g. `tests/e2e/conftest.py`) so framed/e2e tests share a stable workspace layout without polluting unit test collection.
+- Deprecated the global aggregation of directory fixtures from `tests/fixtures/common_fixtures.py`; directory fixtures are no longer implicitly provided to all test packages.
 
 ### Fixed
 
+- Bench tox env now includes `pytest-benchmark` and recognizes benchmark CLI flags.
+- OTS verification helper script passes `bitcoind` flags safely and handles multiple proof shapes.
+- CI replaces external Codecov upload with artifact upload of coverage.xml per env.
 - **test_end_to_end_pipeline**: Now passes with OTS placeholder files (exit code 4 → 0)
+- **pod_sim tests**: Aligned with actual implementation (timestamp formats, build_nonce, device table behavior)
+- **OTS tests**: Tolerate both binary OTS files and text placeholders for cross-environment compatibility
 
 ### Verification
 
