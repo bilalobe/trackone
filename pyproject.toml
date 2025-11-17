@@ -166,7 +166,7 @@ output = "coverage.xml"
 # Black configuration for Track1 project
 [tool.black]
 line-length = 88
-target-version = ['py312', 'py313', 'py314']
+target-version = ['py312']
 include = '\.pyi?$'
 extend-exclude = '''
 /(
