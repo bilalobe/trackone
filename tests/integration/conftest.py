@@ -141,7 +141,6 @@ def _reset_temp_workspace_per_test(temp_workspace):
 @pytest.fixture(scope="module")
 def write_device_table():
     """Return a callable that writes a device_table JSON file (module-scoped for integration tests)."""
-    import json
 
     def _write(path, data, indent: int | None = 2):
         p = Path(path)
