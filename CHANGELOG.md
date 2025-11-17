@@ -7,7 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Nothing yet.
+### Changed
+
+- CI lint job now runs only lint/type/security tox envs instead of `tox -p`, preventing accidental test execution and reducing runtime.
 
 ## [0.0.1-m4] - 2025-10-22
 
