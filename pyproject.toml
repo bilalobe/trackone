@@ -32,7 +32,7 @@ dev = [
     "pytest-benchmark==5.1.0",
     "hypothesis>=6.142.2,<7.0",
     "opentimestamps-client>=0.7.2",
-    "black>=24.0.0",
+    "black>=25.9.11",
     "mypy>=1.0.0",
     "bandit>=1.7.8",
     "pip-audit>=2.7.3",
