@@ -119,10 +119,19 @@ Section 4 details cryptographic design (XChaCha20-Poly1305, HKDF, nonce construc
 Section 5 presents pipeline implementation (frame verification, Merkle batching, OTS anchoring).
 Section 6 documents schemas and canonicalization policy.
 Section 7 validates the system through experiments.
-Section 8 presents results (181 tests, 84\% coverage, Bitcoin block 919384 attestation).
+Section 8 presents results (192 tests, 84\% coverage, Bitcoin block 919384 attestation).
 Section 9 discusses related work and ethical considerations.
 Section 10 concludes with roadmap.
 
 \textbf{Current Status (v0.0.1-m4, October 22, 2025):}
 Production XChaCha20-Poly1305 AEAD, reproducible Merkle roots, real Bitcoin OTS anchoring verified, and comprehensive test suite (181 tests passing, 84\% coverage across gateway and pod\_sim modules).
 All ADRs accepted through ADR-009.
+
+\subsection{Competing Directions and Deferred Work}
+\textbf{Why not image watermarking or steganography?} Track1 handles scalar telemetry (temperature, RH, strain) emitted by pods without onboard cameras. Embedding image watermarks would burn energy budget on sensors that have no imaging pipeline, add transmission overhead, and fail to address the actual threat model (forged telemetry records). Therefore, steganography remains out-of-scope until image-bearing payloads exist.
+
+\textbf{Why not QIM on bio-impedance now?} Option B (Quantization Index Modulation watermarking on bio-impedance) requires lab instrumentation, deterministic stimulus, and higher bandwidth links. It is documented as future research (see ADR~\ref{adr:qim-watermarking}) but deliberately deferred until Track1's telemetry ledger reaches v0.1.0 maturity and dedicated hardware funding is secured.
+
+\textbf{Why not Rust/PyO3 migration yet?} Option C (PyO3 bridge to a Rust core, ADR-017) promises tighter power envelopes and better determinism, but increases build complexity and maintenance overhead. The current milestone keeps the Python gateway for agility; Rust modules remain a latent roadmap goal tied to post-0.1.0 benchmarking (ADR~\ref{adr:benchmarking}) and hardware refresh.
+
+In summary, Track1 prioritizes \textbf{Option A}: verifiable telemetry for heritage sensors under severe power and connectivity constraints. Alternative tracks are catalogued as future work with explicit ADRs and will be revisited once the foundational ledger pipeline is fully productized.

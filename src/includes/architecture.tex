@@ -225,3 +225,13 @@ Parallel anchoring improves resilience and caters to environments requiring PKI-
     \item \textbf{OTS calendar servers:} Multiple independent servers reduce single-point failure
     \item \textbf{PyNaCl integrity:} Library is installed from trusted sources (PyPI with hash verification)
 \end{itemize}
+
+\subsection{Deferred alternative channels}
+\textbf{Signal watermarking (Option B):} Experiments with Quantization Index Modulation (QIM) or other watermarking schemes live outside the current telemetry stack. They would augment the \emph{pod} block of Figure~1 by embedding authenticity into analog bio-impedance traces before AEAD.
+Because Track1 pods presently emit low-rate scalar telemetry (no images, no high-rate biosignals), dedicating energy budget to watermarking would provide no security benefit and would collide with the 1.4~Wh/day envelope. These techniques remain in the backlog for future hardware revisions and are documented in ADR-XXX.
+
+\textbf{Rust/PyO3 transition (Option C):} ADR-017 documents a roadmap to port gateway hot paths (AEAD, Merkle, OTS wrapping) to Rust crates exported via PyO3. The architecture diagram already isolates these responsibilities, so the transition becomes an internal replacement of \texttt{frame\_verifier.py}, \texttt{merkle\_batcher.py}, and \texttt{verify\_cli.py} modules.
+Until benchmarking (ADR-011) demonstrates a bottleneck that justifies the added toolchain complexity, the Python implementations remain the reference.
+
+In both cases the three-tier architecture stays intact: pods emit signed facts, gateways batch and anchor, and verifiers recompute evidence.
+Future channels simply plug into the pod/gateway boundary without rewriting the verifiability stack.

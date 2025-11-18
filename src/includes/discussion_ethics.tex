@@ -105,6 +105,251 @@
 \label{fig:globality}
 \end{figure}
 
+% Requires in preamble:
+% \usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,fit,shapes.geometric}
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+  node distance=1.4cm and 1.5cm,
+  block/.style = {draw, rounded corners, align=center, minimum width=2.6cm, minimum height=0.9cm, font=\small},
+  line/.style  = {-{Latex[length=2mm]}, thick},
+  group/.style = {draw, dashed, inner sep=0.3cm, rounded corners, label={[anchor=north west, font=\footnotesize, inner sep=2pt]north west:#1}}
+]
+
+% Top row: Local site processing
+\node[block] (sensor) {Sensor data\\{\scriptsize(temp, humidity)}};
+\node[block, right=of sensor] (canon) {Canonicalize\\\& normalize};
+\node[block, right=of canon]  (hash)  {Hash\\{\scriptsize(SHA-256)}};
+\node[block, right=of hash]   (merkle){Merkle\\batching};
+
+% Middle row: Global log service
+\node[block, below=2.2cm of sensor] (seq) {Sequence\\Integrate};
+\node[block, right=of seq] (ckpt) {Checkpoint\\+ witness};
+\node[block, right=of ckpt] (pub) {Publish\\checkpoint};
+\node[block, right=of pub] (ots) {OTS\\Bitcoin anchor};
+
+% Note between top and middle
+\node[below=0.8cm of hash, align=center, font=\scriptsize, text width=5cm] (note)
+  {\textit{Raw data stays local; only hashed commitments leave the site.}};
+
+% Artifacts node
+\node[block, below=2.2cm of seq] (artifacts) {Public artifacts\\{\scriptsize(checkpoint, proofs)}};
+
+% Bottom row: Verifier operations
+\node[block, below=2.2cm of artifacts] (vfetch) {Fetch payload\\+ proofs};
+\node[block, right=of vfetch] (vhash) {Recompute\\hash};
+\node[block, right=of vhash] (vincl) {Verify Merkle\\inclusion};
+\node[block, right=of vincl] (vck) {Verify\\checkpoint};
+\node[block, below=1.4cm of ots] (vots) {Verify OTS\\vs Bitcoin};
+
+% Flows - top row
+\draw[line] (sensor) -- (canon);
+\draw[line] (canon) -- (hash);
+\draw[line] (hash) -- (merkle);
+
+% Flow from merkle down to seq
+\draw[line] (merkle) -- (merkle |- seq.north);
+\draw[line] (merkle |- seq.north) -- (seq);
+
+% Middle row flows
+\draw[line] (seq) -- (ckpt);
+\draw[line] (ckpt) -- (pub);
+\draw[line] (pub) -- (ots);
+
+% Flow from pub to artifacts
+\draw[line] (pub) -- (pub |- artifacts.north);
+\draw[line] (pub |- artifacts.north) -- (artifacts);
+
+% Flow from artifacts down
+\draw[line] (artifacts) -- (vfetch);
+
+% Bottom row flows
+\draw[line] (vfetch) -- (vhash);
+\draw[line] (vhash) -- (vincl);
+\draw[line] (vincl) -- (vck);
+
+% Flow from vck to vots
+\draw[line] (vck) -- (vck |- vots.west);
+\draw[line] (vck |- vots.west) -- (vots);
+
+% Flow from ots down to vots
+\draw[line] (ots) -- (vots);
+
+% Group boxes to emphasize "globality"
+\node[group=Local site]        (gLocal) [fit=(sensor)(canon)(hash)(merkle)(note)] {};
+\node[group=Global log service](gLog)   [fit=(seq)(ckpt)(pub)(ots)] {};
+\node[group=Public networks]   (gPub)   [fit=(artifacts)] {};
+\node[group=Verifier anywhere] (gVer)   [fit=(vfetch)(vhash)(vincl)(vck)(vots)] {};
+
+\end{tikzpicture}
+\caption{Track1 data flow demonstrating globality: local sensor data is hashed and committed through Merkle trees to public Bitcoin blockchain via OpenTimestamps, enabling independent verification anywhere without exposing raw telemetry.}
+\label{fig:globality}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+  node distance=1.4cm and 1.5cm,
+  block/.style = {draw, rounded corners, align=center, minimum width=2.6cm, minimum height=0.9cm, font=\small},
+  line/.style  = {-{Latex[length=2mm]}, thick},
+  group/.style = {draw, dashed, inner sep=0.3cm, rounded corners, label={[anchor=north west, font=\footnotesize, inner sep=2pt]north west:#1}}
+]
+
+% Top row: Local site processing
+\node[block] (sensor) {Sensor data\\{\scriptsize(temp, humidity)}};
+\node[block, right=of sensor] (canon) {Canonicalize\\\& normalize};
+\node[block, right=of canon]  (hash)  {Hash\\{\scriptsize(SHA-256)}};
+\node[block, right=of hash]   (merkle){Merkle\\batching};
+
+% Middle row: Global log service
+\node[block, below=2.2cm of sensor] (seq) {Sequence\\Integrate};
+\node[block, right=of seq] (ckpt) {Checkpoint\\+ witness};
+\node[block, right=of ckpt] (pub) {Publish\\checkpoint};
+\node[block, right=of pub] (ots) {OTS\\Bitcoin anchor};
+
+% Note between top and middle
+\node[below=0.8cm of hash, align=center, font=\scriptsize, text width=5cm] (note)
+  {\textit{Raw data stays local; only hashed commitments leave the site.}};
+
+% Artifacts node
+\node[block, below=2.2cm of seq] (artifacts) {Public artifacts\\{\scriptsize(checkpoint, proofs)}};
+
+% Bottom row: Verifier operations
+\node[block, below=2.2cm of artifacts] (vfetch) {Fetch payload\\+ proofs};
+\node[block, right=of vfetch] (vhash) {Recompute\\hash};
+\node[block, right=of vhash] (vincl) {Verify Merkle\\inclusion};
+\node[block, right=of vincl] (vck) {Verify\\checkpoint};
+\node[block, below=1.4cm of ots] (vots) {Verify OTS\\vs Bitcoin};
+
+% Flows - top row
+\draw[line] (sensor) -- (canon);
+\draw[line] (canon) -- (hash);
+\draw[line] (hash) -- (merkle);
+
+% Flow from merkle down to seq
+\draw[line] (merkle) -- (merkle |- seq.north);
+\draw[line] (merkle |- seq.north) -- (seq);
+
+% Middle row flows
+\draw[line] (seq) -- (ckpt);
+\draw[line] (ckpt) -- (pub);
+\draw[line] (pub) -- (ots);
+
+% Flow from pub to artifacts
+\draw[line] (pub) -- (pub |- artifacts.north);
+\draw[line] (pub |- artifacts.north) -- (artifacts);
+
+% Flow from artifacts down
+\draw[line] (artifacts) -- (vfetch);
+
+% Bottom row flows
+\draw[line] (vfetch) -- (vhash);
+\draw[line] (vhash) -- (vincl);
+\draw[line] (vincl) -- (vck);
+
+% Flow from vck to vots
+\draw[line] (vck) -- (vck |- vots.west);
+\draw[line] (vck |- vots.west) -- (vots);
+
+% Flow from ots down to vots
+\draw[line] (ots) -- (vots);
+
+% Group boxes to emphasize "globality"
+\node[group=Local site]        (gLocal) [fit=(sensor)(canon)(hash)(merkle)(note)] {};
+\node[group=Global log service](gLog)   [fit=(seq)(ckpt)(pub)(ots)] {};
+\node[group=Public networks]   (gPub)   [fit=(artifacts)] {};
+\node[group=Verifier anywhere] (gVer)   [fit=(vfetch)(vhash)(vincl)(vck)(vots)] {};
+
+\end{tikzpicture}
+\caption{Track1 data flow demonstrating globality: local sensor data is hashed and committed through Merkle trees to public Bitcoin blockchain via OpenTimestamps, enabling independent verification anywhere without exposing raw telemetry.}
+\label{fig:globality}
+\end{figure}
+
+% Requires in preamble:
+% \usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,fit,shapes.geometric}
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+  node distance=1.4cm and 1.5cm,
+  block/.style = {draw, rounded corners, align=center, minimum width=2.6cm, minimum height=0.9cm, font=\small},
+  line/.style  = {-{Latex[length=2mm]}, thick},
+  group/.style = {draw, dashed, inner sep=0.3cm, rounded corners, label={[anchor=north west, font=\footnotesize, inner sep=2pt]north west:#1}}
+]
+
+% Top row: Local site processing
+\node[block] (sensor) {Sensor data\\{\scriptsize(temp, humidity)}};
+\node[block, right=of sensor] (canon) {Canonicalize\\\& normalize};
+\node[block, right=of canon]  (hash)  {Hash\\{\scriptsize(SHA-256)}};
+\node[block, right=of hash]   (merkle){Merkle\\batching};
+
+% Middle row: Global log service
+\node[block, below=2.2cm of sensor] (seq) {Sequence\\Integrate};
+\node[block, right=of seq] (ckpt) {Checkpoint\\+ witness};
+\node[block, right=of ckpt] (pub) {Publish\\checkpoint};
+\node[block, right=of pub] (ots) {OTS\\Bitcoin anchor};
+
+% Note between top and middle
+\node[below=0.8cm of hash, align=center, font=\scriptsize, text width=5cm] (note)
+  {\textit{Raw data stays local; only hashed commitments leave the site.}};
+
+% Artifacts node
+\node[block, below=2.2cm of seq] (artifacts) {Public artifacts\\{\scriptsize(checkpoint, proofs)}};
+
+% Bottom row: Verifier operations
+\node[block, below=2.2cm of artifacts] (vfetch) {Fetch payload\\+ proofs};
+\node[block, right=of vfetch] (vhash) {Recompute\\hash};
+\node[block, right=of vhash] (vincl) {Verify Merkle\\inclusion};
+\node[block, right=of vincl] (vck) {Verify\\checkpoint};
+\node[block, below=1.4cm of ots] (vots) {Verify OTS\\vs Bitcoin};
+
+% Flows - top row
+\draw[line] (sensor) -- (canon);
+\draw[line] (canon) -- (hash);
+\draw[line] (hash) -- (merkle);
+
+% Flow from merkle down to seq
+\draw[line] (merkle) -- (merkle |- seq.north);
+\draw[line] (merkle |- seq.north) -- (seq);
+
+% Middle row flows
+\draw[line] (seq) -- (ckpt);
+\draw[line] (ckpt) -- (pub);
+\draw[line] (pub) -- (ots);
+
+% Flow from pub to artifacts
+\draw[line] (pub) -- (pub |- artifacts.north);
+\draw[line] (pub |- artifacts.north) -- (artifacts);
+
+% Flow from artifacts down
+\draw[line] (artifacts) -- (vfetch);
+
+% Bottom row flows
+\draw[line] (vfetch) -- (vhash);
+\draw[line] (vhash) -- (vincl);
+\draw[line] (vincl) -- (vck);
+
+% Flow from vck to vots
+\draw[line] (vck) -- (vck |- vots.west);
+\draw[line] (vck |- vots.west) -- (vots);
+
+% Flow from ots down to vots
+\draw[line] (ots) -- (vots);
+
+% Group boxes to emphasize "globality"
+\node[group=Local site]        (gLocal) [fit=(sensor)(canon)(hash)(merkle)(note)] {};
+\node[group=Global log service](gLog)   [fit=(seq)(ckpt)(pub)(ots)] {};
+\node[group=Public networks]   (gPub)   [fit=(artifacts)] {};
+\node[group=Verifier anywhere] (gVer)   [fit=(vfetch)(vhash)(vincl)(vck)(vots)] {};
+
+\end{tikzpicture}
+\caption{Track1 data flow demonstrating globality: local sensor data is hashed and committed through Merkle trees to public Bitcoin blockchain via OpenTimestamps, enabling independent verification anywhere without exposing raw telemetry.}
+\label{fig:globality}
+\end{figure}
+
 \subsection{Low-Power IoT Cryptography}
 
 \textbf{TinyCrypt, ARM mbed TLS:} Lightweight crypto libraries for microcontrollers. Demonstrate feasibility of AES-GCM and ECC on constrained devices.\ Track1 uses PyNaCl (libsodium wrapper) for gateway crypto while pods use minimal nonce construction (salt8 + counter).
@@ -147,8 +392,6 @@ Track1 targets heritage sites requiring \textbf{multi-decade autonomy} and \text
 
 \textbf{OTS cost:} One proof per day regardless of fact count.\ Cost fixed at \textasciitilde\$0.001/day (Bitcoin transaction fees amortized across all OTS calendar users).
 
-\textbf{Storage:} 1000 facts/day × 500 bytes/fact × 365 days = 180 MB/year.\ Manageable for multi-decade deployments.
-
 \subsection{Deployment Assumptions}
 
 \textbf{Bitcoin blockchain continuity:} Assumes Bitcoin network operates for verification timeframe (decades).\ If Bitcoin becomes unavailable, OTS proofs remain but require alternative verification mechanisms.
@@ -190,3 +433,8 @@ Track1 targets heritage sites requiring \textbf{multi-decade autonomy} and \text
 \textbf{Test coverage:} 84\% coverage with 181 tests provides confidence but not proof of correctness.\ Formal verification out of scope for M\#4.
 
 \textbf{Known attack vectors:} Physical pod tampering, gateway compromise, replay attacks beyond window size.\ Documented in ADR-002 threat model.
+
+\subsection{Stakeholder expectations and ethical scope management}
+Field stakeholders occasionally push comfort-zone technologies (e.g., generic image watermarking or steganography) even when they do not match the telemetry problem space. Heritage pods emit scalar facts; there are no images today. Implementing watermarking to appease expectations would misrepresent delivered functionality and divert scarce energy budget. Instead, the project documents alternative tracks (Option B QIM watermarking, Option C PyO3/Rust port) in ADRs, clearly labeling them as future work contingent on hardware funding and bench instrumentation.
+
+Equipment discussions are treated transparently: new hardware (oscilloscope, FPGA stimulus, bio-impedance rigs) must map to a concrete experiment plan tied to documented milestones. Until funding is committed, Track1 prioritizes the achievable Option A pipeline and avoids promising features ("watermark" keywords) that are not implemented. This preserves integrity of reporting and maintains trust with community partners who rely on verifiable telemetry rather than speculative features.
