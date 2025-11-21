@@ -1,0 +1,34 @@
+name: ots-cal
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - 'scripts/gateway/**'
+      - 'docs/ots-verification.md'
+      - '.github/workflows/ots-cal.yml'
+      - 'tox.ini'
+
+jobs:
+  ots-cal:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install tox and docker client
+        run: |
+          pip install tox
+          sudo apt-get update
+          sudo apt-get install -y docker.io
+
+      - name: Run real OTS integration tests against local calendar
+        env:
+          DOCKER_HOST: unix:///var/run/docker.sock
+        run: |
+          tox -e ots-cal
