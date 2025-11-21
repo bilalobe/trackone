@@ -10,4 +10,4 @@ Ultra--low-power MCU, simple provisioning, reproducible hashing.
 \subsection{Threat model}
 Passive RF eavesdropping; active injection/replay; rogue gateway; physical capture (NVM readout).
 Out of scope: side-channels; jamming.
-Mitigations: framed anti-replay (ADR-002), deterministic artifacts and public timestamping (ADR-003).
+Mitigations: framed anti-replay (ADR-002); deterministic artifacts and public timestamping (ADR-003); \textbf{peer attestation of day roots} (Ed25519 quorum) to reduce single-gateway trust; optional \textbf{parallel RFC~3161 TSA anchoring} (ADR-015) alongside OTS for PKI-backed timing.
