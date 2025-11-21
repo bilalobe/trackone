@@ -4,7 +4,13 @@ Schema loading and validation tests extracted from test_gateway_pipeline.py
 """
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import pytest
+
+# Import helpers from the actual implementation so tests can reuse them.
+from scripts.gateway.merkle_batcher import load_schemas, validate_against_schema
 
 
 class TestSchemaValidation:
@@ -47,3 +53,19 @@ class TestSchemaValidation:
         }
 
         validate_against_schema(header, schemas["block_header"], "Invalid header")
+
+    def test_ots_meta_files_match_schema(self):
+        """All OTS metadata JSON files under proofs/ should conform to ots_meta schema."""
+        schemas = load_schemas()
+        if "ots_meta" not in schemas:
+            pytest.skip("ots_meta schema not available")
+
+        repo_root = Path(__file__).resolve().parents[2]
+        proofs_dir = repo_root / "proofs"
+        meta_files = sorted(proofs_dir.glob("*.ots.meta.json"))
+        if not meta_files:
+            pytest.skip("No OTS meta files found under proofs/")
+
+        for path in meta_files:
+            obj = json.loads(path.read_text(encoding="utf-8"))
+            validate_against_schema(obj, schemas["ots_meta"], f"OTS meta {path.name}")

@@ -20,7 +20,7 @@ def test_verify_ots_accepts_placeholder(
     tmp_path: Path, verify_cli, write_ots_placeholder
 ):
     """verify_ots should accept OTS_PROOF_PLACEHOLDER files."""
-    ots_path = write_ots_placeholder(tmp_path, "2025-10-07")
+    ots_path, meta_path = write_ots_placeholder(tmp_path, "2025-10-07")
     assert verify_cli.verify_ots(ots_path) is True
 
 
@@ -92,11 +92,103 @@ class TestVerifyCliMainPlaceholder:
         day_bin = out_dir / "day" / "2025-10-07.bin"
         assert day_bin.exists()
 
-        # Create placeholder OTS proof
-        ots_path = write_ots_placeholder(out_dir, "2025-10-07")
+        # Create placeholder OTS proof and meta sidecar
+        ots_path, meta_path = write_ots_placeholder(out_dir, "2025-10-07")
         assert ots_path.exists()
+        assert meta_path.exists()
 
         # Run verify_cli against the output
         verify_args = ["--root", str(out_dir), "--facts", str(facts_dir)]
         rc = verify_cli.main(verify_args)
         assert rc == 0
+
+
+def test_require_ots_rejects_placeholder(
+    tmp_path: Path,
+    merkle_batcher,
+    verify_cli,
+    write_sample_facts_fixture,
+    sample_facts,
+    write_ots_placeholder,
+):
+    """When --require-ots is set, placeholder .ots files should cause verification to fail."""
+    facts_dir = tmp_path / "facts"
+    out_dir = tmp_path / "out"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    write_sample_facts_fixture(facts_dir, sample_facts)
+
+    args = [
+        "--facts",
+        str(facts_dir),
+        "--out",
+        str(out_dir),
+        "--site",
+        "test-site",
+        "--date",
+        "2025-10-07",
+    ]
+    assert merkle_batcher.main(args) == 0
+
+    # Create placeholder proof and write ots_meta into workspace proofs/
+    write_ots_placeholder(out_dir, "2025-10-07")
+
+    verify_args = [
+        "--root",
+        str(out_dir),
+        "--facts",
+        str(facts_dir),
+        "--require-ots",
+    ]
+    # require-ots should treat placeholders as invalid -> non-zero exit
+    assert verify_cli.main(verify_args) != 0
+
+
+def test_require_ots_accepts_real_ots(
+    tmp_path: Path,
+    merkle_batcher,
+    verify_cli,
+    write_sample_facts_fixture,
+    sample_facts,
+    monkeypatch,
+):
+    """When --require-ots is set, a real 'ots' executable that verifies should allow success."""
+    facts_dir = tmp_path / "facts"
+    out_dir = tmp_path / "out"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    write_sample_facts_fixture(facts_dir, sample_facts)
+
+    args = [
+        "--facts",
+        str(facts_dir),
+        "--out",
+        str(out_dir),
+        "--site",
+        "test-site",
+        "--date",
+        "2025-10-07",
+    ]
+    assert merkle_batcher.main(args) == 0
+
+    # Create a realistic .ots file and a fake 'ots' binary that returns success
+    day_bin = out_dir / "day" / "2025-10-07.bin"
+    ots_path = day_bin.with_suffix(day_bin.suffix + ".ots")
+    ots_path.write_text("REAL_PROOF_BYTES\n", encoding="utf-8")
+
+    fake_ots = tmp_path / "ots"
+    fake_ots.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    fake_ots.chmod(fake_ots.stat().st_mode | stat.S_IEXEC)
+
+    monkeypatch.setattr(shutil, "which", lambda _: str(fake_ots))
+
+    verify_args = [
+        "--root",
+        str(out_dir),
+        "--facts",
+        str(facts_dir),
+        "--require-ots",
+    ]
+
+    rc = verify_cli.main(verify_args)
+    assert rc == 0

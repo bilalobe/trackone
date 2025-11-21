@@ -6,6 +6,7 @@ Common sample data used across multiple test suites.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -71,3 +72,94 @@ def crypto_test_vectors_path() -> Path | None:
     if path.exists():
         return path
     return None
+
+
+@pytest.fixture
+def built_day_artifacts(
+    tmp_path: Path,
+    merkle_batcher,
+    write_sample_facts_fixture,
+    sample_facts,
+    write_ots_placeholder,
+) -> dict[str, Path]:
+    """Build a minimal day.bin + .ots setup under a fresh temporary directory.
+
+    Returns a mapping with:
+    - root: output root directory
+    - facts_dir: directory with JSON fact files
+    - day_bin: path to day/YYYY-MM-DD.bin
+    - ots_path: path to day/YYYY-MM-DD.bin.ots
+    - date: the date string used ("2025-10-07")
+    """
+    facts_dir = tmp_path / "facts"
+    out_dir = tmp_path / "out"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    write_sample_facts_fixture(facts_dir, sample_facts)
+
+    date = "2025-10-07"
+    args = [
+        "--facts",
+        str(facts_dir),
+        "--out",
+        str(out_dir),
+        "--site",
+        "test-site",
+        "--date",
+        date,
+    ]
+    assert merkle_batcher.main(args) == 0
+
+    day_bin = out_dir / "day" / f"{date}.bin"
+    assert day_bin.exists()
+
+    ots_path, meta_path = write_ots_placeholder(out_dir, date)
+    assert ots_path.exists()
+    assert meta_path.exists()
+
+    return {
+        "root": out_dir,
+        "facts_dir": facts_dir,
+        "day_bin": day_bin,
+        "ots_path": ots_path,
+        "date": Path(date),
+    }
+
+
+@pytest.fixture
+def mutate_day_bin() -> Callable[[Path], None]:
+    """Return a function that corrupts a day.bin file in a minimal, detectable way."""
+
+    def _mutate(path: Path) -> None:
+        with path.open("ab") as f:
+            f.write(b"X")
+
+    return _mutate
+
+
+@pytest.fixture
+def mutate_ots_file() -> Callable[[Path], tuple[bytes, bytes]]:
+    """Return a function that mutates an .ots file and yields (original, mutated) bytes.
+
+    Useful for tests that want to restore the original contents after assertions.
+    For stationary stubs, this corrupts the embedded SHA-256 hash.
+    """
+
+    def _mutate(path: Path) -> tuple[bytes, bytes]:
+        original = path.read_bytes()
+
+        # Check if this is a stationary stub and corrupt the hash if so
+        if original.startswith(b"STATIONARY-OTS:"):
+            # Corrupt the hash by replacing the last character with 'X'
+            mutated = original.rstrip()
+            if len(mutated) > 16:  # Has a hash
+                mutated = mutated[:-1] + b"X"
+            mutated += b"\n"
+        else:
+            # For real OTS proofs, append bytes
+            mutated = original + b"\n# upgraded proof bytes (simulated)\n"
+
+        path.write_bytes(mutated)
+        return original, mutated
+
+    return _mutate
