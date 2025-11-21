@@ -131,6 +131,57 @@ You can also pass CLI flags to individual scripts (see `--help` on each):
 - `merkle_batcher.py` supports `--facts`, `--out`, `--site`, `--date`, `--validate-schemas`.
 - `verify_cli.py` supports `--root` and `--facts`.
 
+## OpenTimestamps configuration
+
+The gateway uses OpenTimestamps (OTS) to anchor daily Merkle roots. There are
+three environment variables that control how the OTS client behaves:
+
+- `OTS_STATIONARY_STUB`
+
+  - When set to `1`, `scripts/gateway/ots_anchor.py` does **not** call the real
+    `ots` binary. Instead it writes a deterministic stub proof
+    (`STATIONARY-OTS:<sha256(day.bin)>`) and an `ots_meta` sidecar. This mode is
+    used by the test suite to avoid slow or flaky network calls.
+
+  - Default in tests (via `tests/conftest.py`): `OTS_STATIONARY_STUB=1`.
+
+  - To exercise the real OTS client, unset or override this variable:
+
+    ```bash
+    OTS_STATIONARY_STUB=0 pytest -m real_ots
+    ```
+
+- `OTS_CALENDARS`
+
+  - Optional comma-separated list of calendar URLs that is forwarded to the
+    underlying `ots` client via the `OTS_CALENDARS` environment variable.
+
+  - Example (stationary calendar first, then public):
+
+    ```bash
+    export OTS_CALENDARS="http://127.0.0.1:8468,https://a.pool.opentimestamps.org"
+    python scripts/gateway/ots_anchor.py out/site_demo/day/2025-10-07.bin
+    ```
+
+- `RUN_REAL_OTS`
+
+  - Used by a small set of integration tests (marked `real_ots`) to control
+    whether they should exercise the real `ots` client.
+
+  - These tests are **skipped by default**. To run them (for example against a
+    locally running OTS calendar), use:
+
+    ```bash
+    export OTS_STATIONARY_STUB=0
+    export OTS_CALENDARS="http://127.0.0.1:8468"
+    export RUN_REAL_OTS=1
+    pytest -m real_ots tests/integration/test_ots_integration.py
+    ```
+
+In day-to-day development and CI, you do not need to configure anything: tests
+run in stationary stub mode and still enforce the `ots_meta` + artifact hashing
+contract without talking to external calendaring services.
+
 ## Project layout
 
 - `scripts/`
