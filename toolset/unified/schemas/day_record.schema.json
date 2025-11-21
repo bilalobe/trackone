@@ -3,7 +3,7 @@
   "$id": "https://example.org/schemas/day_record.schema.json",
   "title": "Day Record",
   "type": "object",
-  "description": "Daily record referencing one or more batch headers, chain linkage, and day-level Merkle root.",
+  "description": "Daily record referencing one or more batch headers, chain linkage, and day-level Merkle root. OTS proofs are external artifacts and MUST NOT be embedded in this JSON.",
   "properties": {
     "version": {
       "type": "integer",
@@ -60,12 +60,6 @@
               "type": "string",
               "pattern": "^[0-9a-f]{64}$"
             }
-          },
-          "ots_proof": {
-            "type": [
-              "string",
-              "null"
-            ]
           }
         },
         "required": [

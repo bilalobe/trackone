@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/schemas/ots_meta.schema.json",
+  "title": "OpenTimestamps Day Artifact Metadata",
+  "type": "object",
+  "description": "Sidecar metadata for an OpenTimestamps (OTS) proof anchoring a day-level artifact. This JSON is not part of the Merkle tree and MUST NOT be hashed into day_root.",
+  "properties": {
+    "milestone": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Project milestone label associated with this artifact (e.g., m4)."
+    },
+    "day": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "description": "UTC date (YYYY-MM-DD) of the anchored day artifact."
+    },
+    "artifact": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Relative path to the canonical artifact file that was stamped (e.g., out/site_demo/day/2025-10-07.bin)."
+    },
+    "artifact_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "Hex-encoded SHA-256 of the artifact at the time of stamping."
+    },
+    "ots_proof": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Relative path to the corresponding .ots proof file."
+    },
+    "ots_client_version": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Version string of the ots client used to generate or upgrade the proof."
+    },
+    "bitcoin": {
+      "type": "object",
+      "description": "Bitcoin anchoring details derived from the OTS proof.",
+      "properties": {
+        "height": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "blockhash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "merkleroot": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "height",
+        "blockhash",
+        "merkleroot"
+      ],
+      "additionalProperties": false
+    },
+    "verified_at_utc": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 timestamp when the OTS proof was last verified."
+    }
+  },
+  "required": [
+    "milestone",
+    "day",
+    "artifact",
+    "artifact_sha256",
+    "ots_proof",
+    "ots_client_version",
+    "bitcoin",
+    "verified_at_utc"
+  ],
+  "additionalProperties": false
+}

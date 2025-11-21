@@ -3,7 +3,7 @@
   "$id": "https://example.org/schemas/block_header.schema.json",
   "title": "Merkle Block Header",
   "type": "object",
-  "description": "Header for a batch of facts committed via Merkle root and optionally OTS anchored.",
+  "description": "Header for a batch of facts committed via Merkle root. OTS proofs are external artifacts; this header may at most carry a reference path, not embedded proof bytes.",
   "properties": {
     "version": {
       "type": "integer",
@@ -42,13 +42,6 @@
         "pattern": "^[0-9a-f]{64}$"
       },
       "description": "Sorted leaf hashes for auditor verification."
-    },
-    "ots_proof": {
-      "type": [
-        "string",
-        "null"
-      ],
-      "description": "Optional OpenTimestamps proof (base64/hex or binary-encoded)."
     }
   },
   "required": [
