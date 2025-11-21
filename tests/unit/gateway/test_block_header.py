@@ -10,7 +10,8 @@ import json
 class TestBlockHeader:
     """Test BlockHeader functionality."""
 
-    def test_block_header_with_none_ots_proof(self, merkle_batcher):
+    def test_block_header_basic_creation(self, merkle_batcher):
+        """BlockHeader should be created without ots_proof field."""
         header = merkle_batcher.BlockHeader(
             version=1,
             site_id="test",
@@ -19,28 +20,16 @@ class TestBlockHeader:
             merkle_root="a" * 64,
             count=0,
             leaf_hashes=[],
-            ots_proof=None,
         )
 
         d = header.to_dict()
-        assert d["ots_proof"] is None
-
-    def test_block_header_with_ots_proof(self, merkle_batcher):
-        header = merkle_batcher.BlockHeader(
-            version=1,
-            site_id="test",
-            day="2025-10-07",
-            batch_id="test-2025-10-07-00",
-            merkle_root="a" * 64,
-            count=1,
-            leaf_hashes=["b" * 64],
-            ots_proof="base64encodedproof",
-        )
-
-        d = header.to_dict()
-        assert d["ots_proof"] == "base64encodedproof"
+        assert "ots_proof" not in d
+        assert d["version"] == 1
+        assert d["site_id"] == "test"
+        assert d["count"] == 0
 
     def test_block_header_serialization_roundtrip(self, merkle_batcher):
+        """BlockHeader should serialize and deserialize correctly."""
         header = merkle_batcher.BlockHeader(
             version=1,
             site_id="test-site",
@@ -49,7 +38,6 @@ class TestBlockHeader:
             merkle_root="a" * 64,
             count=3,
             leaf_hashes=["b" * 64, "c" * 64, "d" * 64],
-            ots_proof=None,
         )
 
         # Convert to dict and back to JSON
@@ -61,3 +49,4 @@ class TestBlockHeader:
         assert loaded["version"] == 1
         assert loaded["site_id"] == "test-site"
         assert loaded["count"] == 3
+        assert "ots_proof" not in loaded

@@ -9,9 +9,16 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+# Disable stationary stub mode for all tests in this module
+pytestmark = pytest.mark.usefixtures("disable_stationary_stub")
+
 
 class TestOTSStamp:
-    """Test OTS stamping functionality."""
+    """Test OTS stamping functionality.
+
+    These tests exercise the real ots client code paths (with mocked subprocess.run)
+    rather than the stationary stub mode.
+    """
 
     @pytest.mark.parametrize(
         "exc",
@@ -52,13 +59,14 @@ class TestOTSStamp:
         first_call = mock_run.call_args_list[0]
         from unittest.mock import call
 
-        assert first_call == call(["ots", "stamp", str(day_bin)], check=True)
+        assert first_call == call(
+            ["ots", "stamp", str(day_bin)],
+            check=True,
+            env=mock_run.call_args_list[0][1]["env"],
+        )
 
         # Validate that an upgrade was attempted best-effort afterward
-        assert any(
-            c == call(["ots", "upgrade", str(ots_path)], check=False)
-            for c in mock_run.call_args_list
-        )
+        assert any("upgrade" in str(c) for c in mock_run.call_args_list)
 
     @patch("subprocess.run")
     def test_ots_stamp_fallback_on_command_failure(

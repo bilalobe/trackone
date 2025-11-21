@@ -35,7 +35,6 @@ def test_pipeline_empty_facts_produces_empty_batch(
     write_ots_placeholder,
     run_verify_cli,
     list_facts,
-    day,
 ):
     """Pipeline should handle gracefully when no frames produce facts."""
     temp_dirs["root"].mkdir(parents=True, exist_ok=True)

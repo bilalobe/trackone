@@ -34,13 +34,13 @@ import pytest
 # globals() so pytest always sees the fixture callables regardless of how
 # pytest is invoked or what the current working directory is.
 _fixture_modules = [
-    "time_fixtures",
-    "gateway_fixtures",
-    "pod_sim_fixtures",
-    "directory_fixtures",
-    "sample_fixtures",
-    "fileio_fixtures",
-    "pipeline_fixtures",
+    "time_fixtures",  # test_date, test_timestamp, day
+    "gateway_fixtures",  # frame_verifier, merkle_batcher, verify_cli, ots_anchor, crypto_utils, pod_sim
+    "directory_fixtures",  # facts_dir, out_dir, temp_workspace, temp_dirs
+    "sample_fixtures",  # sample_facts, sample_test_vectors, built_day_artifacts, mutate_*
+    "fileio_fixtures",  # write_sample_facts_fixture, write_frame_json, append_frame_json, write_device_table, list_facts
+    "ots_fixtures",  # disable_stationary_stub, enable_stationary_stub, ots_calendars
+    "pipeline_fixtures",  # write_frames, write_ots_placeholder, run_merkle_batcher, run_verify_cli, run_pipeline
 ]
 
 # Import fixture modules from the canonical `tests.fixtures` package only.
@@ -227,6 +227,7 @@ def seed_rng(worker_namespace: str):
     random.seed(seed)  # rng-ok: deterministic seeding for reproducible tests
     os.environ.setdefault("PYTHONHASHSEED", str(seed))
     os.environ.setdefault("TEST_TIME_OFFSET", str(seed % 13))
+    os.environ.setdefault("OTS_STATIONARY_STUB", "1")
 
 
 @pytest.fixture(scope="session")

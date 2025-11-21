@@ -1,10 +1,19 @@
 #!/usr/bin/env python3
 """
-Tests for OTS anchor main behavior (moved from test_ots_anchor.py)
+Tests for OTS anchor main behavior
 """
 from __future__ import annotations
 
 from unittest.mock import patch
+
+import pytest
+
+
+# Use module-scoped autouse to disable stationary stub for all tests in this module
+@pytest.fixture(scope="module", autouse=True)
+def _use_real_ots_client(disable_stationary_stub_module):
+    """Apply disable_stationary_stub_module to entire module."""
+    return disable_stationary_stub_module
 
 
 class TestOTSMain:
