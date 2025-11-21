@@ -1,6 +1,6 @@
 \section{Experiments}
 
-\subsection{Determinism (M\#0--M\#4)}
+\subsection{Determinism (M\#0--M\#5)}
 We verify deterministic Merkle root computation:
 \begin{itemize}[nosep]
     \item Same input facts \textrightarrow{} identical \texttt{merkle\_root} (hex)
@@ -10,7 +10,7 @@ We verify deterministic Merkle root computation:
 
 Test coverage includes: empty set, single fact, odd count, power-of-2 count, random filename ordering, Unicode edge cases.
 
-\subsection{Cryptographic Correctness (M\#4)}
+\subsection{Cryptographic Correctness (M\#4--M\#5)}
 \textbf{Deterministic AEAD vectors:} XChaCha20-Poly1305 test vectors in \texttt{crypto\_test\_vectors.json} verified against PyNaCl bindings.
 
 \textbf{Round-trip tests:}
@@ -23,7 +23,7 @@ Test coverage includes: empty set, single fact, odd count, power-of-2 count, ran
 
 \textbf{Property-based testing (Hypothesis):} TLV encoding robustness against truncated/malformed data; unknown tags ignored.
 
-\subsection{Security Testing (M\#4)}
+\subsection{Security Testing (M\#4--M\#5)}
 Tamper detection tests validate AEAD integrity:
 \begin{itemize}[nosep]
     \item \textbf{Ciphertext tampering}: Single-bit flip \textrightarrow{} tag verification fails
@@ -59,18 +59,36 @@ Complete workflow validated by \texttt{test\_end\_to\_end\_pipeline}:
 
 Exit code 0 confirms entire chain is cryptographically verifiable.
 
-\subsection{Test Coverage (M\#4)}
-\textbf{181 tests} across 11 test modules (some runs may skip 2 optional tests):
+\subsection{Peer Attestation (M\#5)}
+We validate \emph{peer attestation} of daily Merkle roots using Ed25519:
+\begin{itemize}[nosep]
+    \item Deterministic message format: \texttt{trackone:day-root:v1|<site>|<day>|<root>}
+    \item Signature generation via \texttt{scripts/gateway/peer\_attestation.py}
+    \item Quorum checks: $k$ of $n$ signatures required (configurable fixture)
+    \item Negative tests: wrong context, wrong root, unknown public key \textrightarrow{} verification fails
+\end{itemize}
+
+\subsection{TSA Verification (M\#5)}
+Optional parallel RFC~3161 TSA responses (\texttt{*.tsr}) are validated when present:
+\begin{itemize}[nosep]
+    \item Timestamp token parsed; message imprint compared to daily Merkle root
+    \item Certificate chain and signing time checked (skipped when offline)
+    \item Tests are optional and auto-skip without \texttt{tsr} artifacts
+\end{itemize}
+
+\subsection{Test Coverage (M\#5)}
+\textbf{200+ tests} across gateway and simulation modules (some runs may skip optional OTS/TSA tests):
 \begin{itemize}[nosep]
     \item \texttt{test\_crypto\_impl.py}, \texttt{test\_crypto\_vectors.py}
     \item \texttt{test\_framed\_ingest.py}, \texttt{test\_framed\_security.py}
     \item \texttt{test\_gateway\_pipeline.py}, \texttt{test\_merkle\_repro.py}
     \item \texttt{test\_replay\_edges.py}, \texttt{test\_tlv\_properties.py}
-    \item \texttt{test\_ots\_anchor.py} (NEW), \texttt{test\_pod\_sim.py} (NEW)
-    \item \texttt{test\_edge\_cases.py} (NEW)
+    \item \texttt{test\_ots\_anchor.py}, \texttt{test\_pod\_sim.py}
+    \item \texttt{test\_edge\_cases.py}
+    \item \texttt{test\_peer\_attestation.py} (NEW)
 \end{itemize}
 
-\textbf{Coverage: ~84\%} across gateway and pod\_sim modules (measured; coverage target: 85\%). Uncovered code primarily in CLI entry points and rare error branches.
+\textbf{Coverage: ~85\%} across gateway and pod\_sim modules (measured; coverage target: 85\%). Uncovered code primarily in CLI entry points and rare error branches.
 
 \subsection{Performance (M\#4)}
 Wall-time measurements on Ubuntu 24.04, Python 3.13, pytest runtime:
@@ -83,7 +101,7 @@ Wall-time measurements on Ubuntu 24.04, Python 3.13, pytest runtime:
     \texttt{frame\_verifier} (AEAD) & $<0.1$ s & $<0.5$ s \\
     \texttt{merkle\_batcher} & $<0.1$ s & $<0.5$ s \\
     \texttt{verify\_cli} & $<0.1$ s & $<0.5$ s \\
-    \textbf{Full test suite (181 tests)} & \multicolumn{2}{c}{\textbf{$\sim$18.9 s}} \\
+    \textbf{Full test suite (200+ tests)} & \multicolumn{2}{c}{\textbf{$\sim$20 s}} \\
     \hline
 \end{tabular}
 
@@ -107,7 +125,7 @@ Automated testing via GitHub Actions with \texttt{uv} package manager:
     \item \textbf{Coverage upload}: Codecov integration (Python 3.13 only)
 \end{itemize}
 
-All CI checks passing as of v0.0.1-m4 (October 21, 2025).
+All CI checks passing as of v0.0.1-m5 (November 20, 2025).
 
 \subsection{Benchmarking plan (ADR-011)}
 We will introduce repeatable micro-benchmarks using pytest markers and a small harness:
@@ -125,6 +143,7 @@ Some tests are intentionally skipped when optional artifacts are unavailable:
     \item Deterministic crypto vectors: \texttt{toolset/unified/crypto\_test\_vectors.json} not present \textrightarrow{} vector-matching tests are skipped
     \item Real OTS proofs: missing \texttt{ots} binary or Bitcoin headers \textrightarrow{} real integration tests are skipped
     \item Local artifacts (e.g., \texttt{out/site\_demo/...}): present only on certain machines; tests auto-detect and enable if found
+    \item Peer attestation fixtures (e.g., \texttt{*.peers.json}): generated on-the-fly or loaded when present
 \end{itemize}
 This avoids false negatives while keeping real-world checks opt-in and reproducible.
 
