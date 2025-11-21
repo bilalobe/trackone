@@ -62,7 +62,6 @@ class BlockHeader:
     merkle_root: str  # hex sha256
     count: int
     leaf_hashes: list[str]  # optional aid for auditors
-    ots_proof: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
@@ -96,7 +95,7 @@ def load_schemas() -> dict[str, Any]:
     """Load fact, block_header, and day_record schemas if available."""
     schemas: dict[str, Any] = {}
     schema_dir = Path(__file__).parent.parent.parent / "toolset" / "unified" / "schemas"
-    for name in ["fact", "block_header", "day_record"]:
+    for name in ["fact", "block_header", "day_record", "ots_meta"]:
         schema_path = schema_dir / f"{name}.schema.json"
         if schema_path.exists():
             try:
@@ -213,7 +212,6 @@ def main(argv: list[str] | None = None) -> int:
         merkle_root=root_hex,
         count=len(leaf_hashes),
         leaf_hashes=leaf_hashes,
-        ots_proof=None,
     )
 
     # Write block header

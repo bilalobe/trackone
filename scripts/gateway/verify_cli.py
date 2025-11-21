@@ -41,6 +41,11 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Any
 
+# Additional exit codes for OTS metadata / artifact issues
+EXIT_META_NOT_FOUND = 5
+EXIT_ARTIFACT_HASH_MISMATCH = 6
+EXIT_ARTIFACT_PATH_MISMATCH = 7
+
 
 def canonical_json(obj: Any) -> bytes:
     return json.dumps(obj, sort_keys=True, separators=(",", ":")).encode("utf-8")
@@ -64,12 +69,59 @@ def merkle_root(leaves: Iterable[bytes]) -> str:
     return layer[0].hex()
 
 
-def verify_ots(ots_path: Path) -> bool:
-    # Check for test placeholder first
+def verify_ots(
+    ots_path: Path,
+    allow_placeholder: bool = True,
+    expected_artifact_sha: str | None = None,
+) -> bool:
+    """Verify an OTS proof file.
+
+    If `allow_placeholder` is True, stationary OTS stubs are accepted.
+    If False, only real OTS proofs verified by the ots binary are valid.
+
+    Args:
+        ots_path: Path to the .ots proof file
+        allow_placeholder: Whether to accept stationary stubs (default True for backward compatibility)
+        expected_artifact_sha: Optional SHA-256 from ots_meta to validate against
+
+    Returns:
+        True if the proof is valid, False otherwise
+    """
+    # Check for stationary stub first
     try:
-        content = ots_path.read_text(encoding="utf-8").strip()
-        if content == "OTS_PROOF_PLACEHOLDER":
-            return True
+        raw = ots_path.read_bytes()
+
+        # Stationary stub pattern from ots_anchor (deterministic local proof)
+        if raw.startswith(b"STATIONARY-OTS:"):
+            # Stationary stubs are treated like placeholders - reject if allow_placeholder is False
+            if not allow_placeholder:
+                return False
+            # Extract hex digest from stub and validate against expected_artifact_sha
+            try:
+                parts = raw.split(b":", 1)
+                if len(parts) != 2:
+                    return False
+                hexpart = parts[1].strip().splitlines()[0]
+                try:
+                    stub_hex = hexpart.decode("ascii")
+                except Exception:
+                    return False
+                # If caller provided expected_artifact_sha (from meta), use that as the oracle.
+                if expected_artifact_sha:
+                    return stub_hex == expected_artifact_sha
+                # Otherwise, attempt to locate the day blob and compare its sha256.
+                # The .ots file is named <day>.bin.ots, so strip the .ots suffix to get <day>.bin
+                if ots_path.suffix == ".ots":
+                    day_candidate = ots_path.with_suffix("")
+                else:
+                    day_candidate = ots_path.with_suffix(".bin")
+                if day_candidate.exists():
+                    actual_sha = sha256(day_candidate.read_bytes()).hexdigest()
+                    return actual_sha == stub_hex
+                # No oracle available -> conservative reject
+                return False
+            except Exception:
+                return False
     except (OSError, UnicodeDecodeError):
         # If reading fails, fall back to attempting real OTS verification below.
         # Narrow exception avoids catching unrelated errors.
@@ -112,7 +164,28 @@ def main(argv: list[str] | None = None) -> int:
         default=Path("toolset/unified/examples"),
         help="Directory with fact JSON files to recompute the Merkle root",
     )
+
+    # OTS mode flags: mutually exclusive strict vs lenient
+    group = p.add_mutually_exclusive_group()
+    group.add_argument(
+        "--require-ots",
+        action="store_true",
+        help="Require a real OTS proof (placeholder not accepted).",
+    )
+    group.add_argument(
+        "--allow-placeholder",
+        action="store_true",
+        help="Allow placeholder OTS proofs (default behavior).",
+    )
+
     args = p.parse_args(argv)
+
+    # Decide placeholder policy. Default: allow placeholders for backward compatibility.
+    allow_placeholder = True
+    if args.require_ots:
+        allow_placeholder = False
+    elif args.allow_placeholder:
+        allow_placeholder = True
 
     root_dir = args.root
     facts_dir = args.facts
@@ -136,6 +209,55 @@ def main(argv: list[str] | None = None) -> int:
 
     day_bin_path = day_dir / f"{day}.bin"
     ots_path = day_bin_path.with_suffix(day_bin_path.suffix + ".ots")
+
+    # Optional: load OTS metadata sidecar if present and enforce artifact hash/path.
+    # We look for proofs/<day>.ots.meta.json relative to the repository root
+    # (one directory above the out/site_demo root).
+    repo_root = root_dir.parent
+    meta_path = repo_root / "proofs" / f"{day}.ots.meta.json"
+    if meta_path.exists():
+        try:
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        except Exception as exc:  # pragma: no cover - defensive
+            print(f"ERROR: Failed to parse OTS meta file {meta_path}: {exc}")
+            return EXIT_META_NOT_FOUND
+
+        artifact_rel = meta.get("artifact")
+        expected_sha = meta.get("artifact_sha256")
+        meta_ots_rel = meta.get("ots_proof")
+
+        # Resolve artifact path relative to repo root and compare
+        if isinstance(artifact_rel, str):
+            resolved_artifact = (repo_root / artifact_rel).resolve()
+            if resolved_artifact != day_bin_path.resolve():
+                print(
+                    f"ERROR: OTS meta artifact path mismatch. Meta artifact={resolved_artifact}, "
+                    f"expected day.bin={day_bin_path}"
+                )
+                return EXIT_ARTIFACT_PATH_MISMATCH
+
+        # Verify SHA-256 of day.bin matches artifact_sha256 from meta
+        if (
+            isinstance(expected_sha, str)
+            and len(expected_sha) == 64
+            and day_bin_path.exists()
+        ):
+            actual_sha = sha256(day_bin_path.read_bytes()).hexdigest()
+            if actual_sha != expected_sha:
+                print(
+                    f"ERROR: OTS meta artifact_sha256 mismatch. Expected={expected_sha}, Actual={actual_sha}"
+                )
+                return EXIT_ARTIFACT_HASH_MISMATCH
+
+        # If meta specifies an ots_proof path, ensure it points to the same file we plan to verify
+        if isinstance(meta_ots_rel, str):
+            resolved_meta_ots = (repo_root / meta_ots_rel).resolve()
+            if resolved_meta_ots != ots_path.resolve():
+                print(
+                    f"ERROR: OTS meta ots_proof path mismatch. Meta ots={resolved_meta_ots}, "
+                    f"expected {ots_path}"
+                )
+                return EXIT_ARTIFACT_PATH_MISMATCH
 
     # Read and canonicalize all facts
     fact_files = sorted(facts_dir.glob("*.json"))
@@ -161,7 +283,7 @@ def main(argv: list[str] | None = None) -> int:
     if not ots_path.exists():
         print(f"ERROR: OTS proof file not found: {ots_path}")
         return 3
-    if not verify_ots(ots_path):
+    if not verify_ots(ots_path, allow_placeholder=allow_placeholder):
         print(f"ERROR: OTS proof verification failed for {ots_path}")
         return 4
 
