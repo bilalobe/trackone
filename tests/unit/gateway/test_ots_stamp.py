@@ -59,14 +59,14 @@ class TestOTSStamp:
         first_call = mock_run.call_args_list[0]
         from unittest.mock import call
 
-        assert first_call == call(
-            ["ots", "stamp", str(day_bin)],
-            check=True,
-            env=mock_run.call_args_list[0][1]["env"],
-        )
+        assert first_call[0] == (["ots", "stamp", str(day_bin)],)
+        assert first_call[1]["check"] is True
 
         # Validate that an upgrade was attempted best-effort afterward
-        assert any("upgrade" in str(c) for c in mock_run.call_args_list)
+        assert any(
+            call_args[0][0][:2] == ["ots", "upgrade"]
+            for call_args in mock_run.call_args_list
+        )
 
     @patch("subprocess.run")
     def test_ots_stamp_fallback_on_command_failure(

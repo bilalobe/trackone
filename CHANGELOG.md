@@ -18,7 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OTS verification workflow installs the `opentimestamps-client` (`ots` CLI) so verification doesn’t skip when the binary is missing. `STRICT_VERIFY=1` is enforced on `main`.
 - Stationary OTS configuration knobs documented in `README.md` and `docs/ots-verification.md`:
   - `OTS_STATIONARY_STUB` to toggle stub vs real-client behavior.
-  - `OTS_CALENDARS` to select calendar URLs (stationary first, then public if desired).
+  - `OTS_CALENDARS` to select calendar URLs (local real calendar first, then public if desired).
   - `RUN_REAL_OTS` to gate slow, real-calendar integration tests.
 - New tox env `ots-cal` and GitHub Actions workflow `.github/workflows/ots-cal.yml` to run `real_ots` tests against a local OTS calendar container in CI.
 
