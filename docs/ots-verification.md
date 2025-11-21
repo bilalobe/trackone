@@ -52,7 +52,7 @@ Key points (ADR-007):
 
 Path filters: This workflow runs only when OTS-related files change (workflow, helper script, ADR-007, gateway OTS tools, or these docs).
 
-## Running the stationary calendar locally
+## Running a real OTS calendar locally
 
 For local development and CI-style testing against a real OTS calendar (instead
 of the stationary stub), you can run the official OTS calendar in Docker.
@@ -129,7 +129,7 @@ modes for stamping day blobs:
   - `OTS_STATIONARY_STUB=0` (or unset) and an `ots` binary available.
   - `ots_anchor.py` invokes `ots stamp` (and optionally `ots upgrade`) via a
     small helper that forwards `OTS_CALENDARS` to select calendars (e.g., a
-    local stationary calendar, then public pools).
+    local real calendar, then public pools).
   - `verify_cli.py` falls back to `ots verify` when a stub or placeholder is
     not recognized.
 

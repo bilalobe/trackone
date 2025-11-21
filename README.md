@@ -156,7 +156,7 @@ three environment variables that control how the OTS client behaves:
   - Optional comma-separated list of calendar URLs that is forwarded to the
     underlying `ots` client via the `OTS_CALENDARS` environment variable.
 
-  - Example (stationary calendar first, then public):
+  - Example (local real calendar first, then public):
 
     ```bash
     export OTS_CALENDARS="http://127.0.0.1:8468,https://a.pool.opentimestamps.org"
