@@ -1,13 +1,11 @@
 \section{Cryptographic Design (ADR-001, ADR-002, ADR-005, ADR-018)}
-% ADR reference labels for cross-referencing
-\newcommand{\adrlabellist}{% helper to avoid repeated label warnings
-}
-\label{adr:crypto-design}
-\label{adr:nonce-policy}
-\label{adr:ots}
-\label{adr:benchmarking}
-\label{adr:rust-pyo3}
-\label{adr:qim-watermarking}
+% The following labels are used for cross-referencing ADRs discussed in this section.
+\label{adr:crypto-design}      % ADR-001: Cryptographic Design
+\label{adr:nonce-policy}       % ADR-002: Nonce Policy
+\label{adr:ots}                % ADR-005: One-Time Signature
+\label{adr:benchmarking}       % ADR-018: Benchmarking
+\label{adr:rust-pyo3}          % ADR: Rust/PyO3 integration
+\label{adr:qim-watermarking}   % ADR: QIM Watermarking
 
 \textbf{Implementation:} PyNaCl (libsodium) for all cryptographic operations.
 

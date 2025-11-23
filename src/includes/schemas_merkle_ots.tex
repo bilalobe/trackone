@@ -134,27 +134,6 @@ bitcoin-cli -getinfo
 
 Once headers reach the attested block heights (extracted from \texttt{ots info <file.ots>}), verification succeeds without syncing full blocks.
 
-\subsubsection{CI verification strategy (ADR-007)}
-Syncing Bitcoin headers in CI is time-consuming (10--20 minutes for full catchup). Strategies (per ADR-007):
-
-\begin{itemize}[nosep]
-  \item \textbf{Cache Bitcoin datadir:} Persist \texttt{\textasciitilde/.bitcoin} between CI runs to reuse headers
-  \item \textbf{Wait for required heights:} Parse \texttt{ots info} output to extract \texttt{BitcoinBlockHeaderAttestation(<height>)}, poll \texttt{bitcoin-cli getblockchaininfo} until \texttt{headers >= max\_height}
-  \item \textbf{Timeout handling:} Set reasonable timeout (e.g., 10 minutes) for header sync in CI; on timeout, log ``verification deferred'' and continue
-  \item \textbf{Offline verification:} For historical artifacts with confirmed attestations, cache the relevant block headers or skip live verification in CI
-\end{itemize}
-
-\textbf{CI script outline (ADR-007):}
-\begin{verbatim}
-1. Start bitcoind in headers-only mode
-2. Extract required block heights from .ots files
-3. Wait until headers >= max(required_heights) or timeout
-4. Run ots verify on each proof; mark deferred on timeout
-5. Cache ~/.bitcoin for next run
-\end{verbatim}
-
-\textbf{Trade-off:} OTS provides trustless Bitcoin-anchored timestamps but requires Bitcoin P2P connectivity. For air-gapped deployments, verification must occur offline with pre-downloaded headers or trusted header feeds.
-
 \subsection{Schema validation}
 When \texttt{--validate-schemas} is enabled, validate against:
 \begin{itemize}[nosep]
