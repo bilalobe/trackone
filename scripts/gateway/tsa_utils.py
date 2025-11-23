@@ -2,8 +2,10 @@
 """Shared utilities for TSA and optional anchoring features."""
 from __future__ import annotations
 
+from typing import Any
 
-def _require_requests():
+
+def _require_requests() -> Any:
     """Import guard for optional 'requests' dependency.
 
     Raises:
