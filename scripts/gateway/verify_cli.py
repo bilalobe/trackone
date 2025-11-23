@@ -8,19 +8,24 @@ This script provides independent verification of the batching and anchoring proc
 1. Recomputes Merkle root from canonical fact files
 2. Compares recomputed root against block header (authoritative)
 3. Verifies OTS proof anchors the day.bin blob
+4. Optionally verifies RFC 3161 TSA timestamps (--verify-tsa)
+5. Optionally verifies peer co-signatures (--verify-peers)
 
 Exit codes:
-- 0: Success (root matches and OTS verified)
+- 0: Success (root matches and required anchors verified)
 - 1: Block header not found or invalid day field
 - 2: Merkle root mismatch
 - 3: OTS proof file not found
 - 4: OTS proof verification failed
+- 5: TSA verification failed (when --tsa-strict)
+- 6: Peer verification failed (when --peers-strict)
 
 This enables auditors to independently verify the gateway's claims without
 trusting the gateway operator or database.
 
 References:
 - ADR-003: Canonicalization, Merkle Policy, Daily OTS Anchoring
+- ADR-015: Parallel Anchoring (OTS + RFC 3161 TSA + Peer Signatures)
 
 Usage:
     # Verify using facts from default location
@@ -28,6 +33,14 @@ Usage:
 
     # Verify using custom facts directory
     python verify_cli.py --root out/site_demo --facts out/site_demo/facts
+
+    # Verify with TSA and peer checks (warn-only by default)
+    python verify_cli.py --root out/site_demo --facts out/site_demo/facts \
+        --verify-tsa --verify-peers
+
+    # Strict mode: fail on TSA/peer errors
+    python verify_cli.py --root out/site_demo --facts out/site_demo/facts \
+        --verify-tsa --tsa-strict --verify-peers --peers-strict
 """
 from __future__ import annotations
 
@@ -36,6 +49,7 @@ import json
 import os
 import shutil
 import subprocess  # nosec: B404 - invoking external 'ots' tool via validated full path
+import sys
 from collections.abc import Iterable
 from hashlib import sha256
 from pathlib import Path
@@ -151,6 +165,90 @@ def verify_ots(
         return False
 
 
+def verify_tsa(tsr_path: Path, day_bin: Path) -> bool:
+    """Verify RFC 3161 TSA timestamp response against day blob.
+
+    Returns True if:
+    - TSR file exists and contains valid timestamp
+    - Message imprint in TSR matches SHA-256 of day_bin
+    - openssl ts -verify succeeds (if openssl available)
+
+    Returns False otherwise.
+    """
+    if not tsr_path.exists() or not day_bin.exists():
+        return False
+
+    # Check if openssl is available
+    openssl_exe = shutil.which("openssl")
+    if not openssl_exe:
+        # No openssl available; best-effort check of metadata
+        tsr_json = tsr_path.with_suffix(".tsr.json")
+        if not tsr_json.exists():
+            return False
+        try:
+            meta = json.loads(tsr_json.read_text(encoding="utf-8"))
+            # Verify message imprint matches day_bin SHA-256
+            day_hash = sha256(day_bin.read_bytes()).hexdigest()
+            imprint = meta.get("message_imprint", "").replace(":", "").lower()
+            return imprint == day_hash  # type: ignore
+        except (json.JSONDecodeError, OSError):
+            return False
+
+    # Full verification with openssl
+    try:
+        result = subprocess.run(
+            [openssl_exe, "ts", "-verify", "-in", str(tsr_path), "-data", str(day_bin)],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        return result.returncode == 0
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
+        return False
+
+
+def verify_peer_signatures(
+    peer_attest_path: Path, site_id: str, day: str, day_root_hex: str
+) -> tuple[bool, int]:
+    """Verify peer co-signatures from peer attestation file.
+
+    Returns (all_valid, signature_count).
+    """
+    if not peer_attest_path.exists():
+        return False, 0
+
+    try:
+        data = json.loads(peer_attest_path.read_text(encoding="utf-8"))
+        signatures = data.get("signatures", [])
+        context = data.get("context", "trackone:day-root:v1").encode()
+
+        # Import peer_attestation helper
+        import sys
+        from pathlib import Path
+
+        gateway_dir = Path(__file__).parent
+        if str(gateway_dir) not in sys.path:
+            sys.path.insert(0, str(gateway_dir))
+
+        from peer_attestation import verify_peer_signature
+
+        valid_count = 0
+        for sig in signatures:
+            if verify_peer_signature(
+                site_id=site_id,
+                day=day,
+                day_root_hex=day_root_hex,
+                signature_hex=sig["signature_hex"],
+                pubkey_hex=sig["pubkey_hex"],
+                context=context,
+            ):
+                valid_count += 1
+
+        return valid_count == len(signatures) and len(signatures) > 0, len(signatures)
+    except (json.JSONDecodeError, OSError, KeyError, ImportError):
+        return False, 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(
         description="Verify Merkle root and OTS proof for a day"
@@ -163,6 +261,32 @@ def main(argv: list[str] | None = None) -> int:
         type=Path,
         default=Path("toolset/unified/examples"),
         help="Directory with fact JSON files to recompute the Merkle root",
+    )
+    p.add_argument(
+        "--verify-tsa",
+        action="store_true",
+        help="Verify RFC 3161 TSA timestamp (if present)",
+    )
+    p.add_argument(
+        "--tsa-strict",
+        action="store_true",
+        help="Treat TSA verification failure as fatal (exit 5)",
+    )
+    p.add_argument(
+        "--verify-peers",
+        action="store_true",
+        help="Verify peer co-signatures (if present)",
+    )
+    p.add_argument(
+        "--peers-strict",
+        action="store_true",
+        help="Treat peer verification failure as fatal (exit 6)",
+    )
+    p.add_argument(
+        "--peers-min",
+        type=int,
+        default=1,
+        help="Minimum peer signatures required (default: 1)",
     )
 
     # OTS mode flags: mutually exclusive strict vs lenient
@@ -286,6 +410,49 @@ def main(argv: list[str] | None = None) -> int:
     if not verify_ots(ots_path, allow_placeholder=allow_placeholder):
         print(f"ERROR: OTS proof verification failed for {ots_path}")
         return 4
+
+    # Optional TSA verification
+    if args.verify_tsa:
+        tsr_path = day_bin_path.parent / f"{day}.tsr"
+        if tsr_path.exists():
+            tsa_ok = verify_tsa(tsr_path, day_bin_path)
+            if tsa_ok:
+                print(f"TSA verification: OK ({tsr_path})")
+            else:
+                msg = f"TSA verification failed: {tsr_path}"
+                if args.tsa_strict:
+                    print(f"ERROR: {msg}")
+                    return 5
+                print(f"WARN: {msg}", file=sys.stderr)
+        else:
+            msg = f"TSA artifact not found: {tsr_path}"
+            if args.tsa_strict:
+                print(f"ERROR: {msg}")
+                return 5
+            print(f"WARN: {msg}", file=sys.stderr)
+
+    # Optional peer signature verification
+    if args.verify_peers:
+        peer_attest_path = day_bin_path.parent / "peers" / f"{day}.peers.json"
+        if peer_attest_path.exists():
+            site_id = block_header.get("site_id", "")
+            all_valid, sig_count = verify_peer_signatures(
+                peer_attest_path, site_id, day, recorded_root
+            )
+            if all_valid and sig_count >= args.peers_min:
+                print(f"Peer verification: OK ({sig_count} signatures)")
+            else:
+                msg = f"Peer verification failed: {sig_count} signatures, need {args.peers_min}, valid={all_valid}"
+                if args.peers_strict:
+                    print(f"ERROR: {msg}")
+                    return 6
+                print(f"WARN: {msg}", file=sys.stderr)
+        else:
+            msg = f"Peer attestation not found: {peer_attest_path}"
+            if args.peers_strict:
+                print(f"ERROR: {msg}")
+                return 6
+            print(f"WARN: {msg}", file=sys.stderr)
 
     print("OK: root matches and OTS verified")
     return 0

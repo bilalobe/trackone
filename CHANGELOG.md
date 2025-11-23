@@ -5,7 +5,24 @@ All notable changes to Track1 (Barnacle Sentinel) will be documented in this fil
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.0.1-m5] - 2025-11-18
+
+### Added
+
+- **Parallel anchoring support (ADR-015)**: TrackOne now supports optional RFC 3161 TSA timestamps and peer co-signatures alongside OpenTimestamps
+  - `run_pipeline_demo.py` supports `--tsa-url`, `--peer-config` flags to enable parallel anchoring
+  - `verify_cli.py` supports `--verify-tsa`, `--verify-peers` with strict/warn modes
+  - TSA artifacts (`*.tsq`, `*.tsr`, `*.tsr.json`) and peer signatures (`*.peers.json`) stored under `out/site_demo/day/`
+  - Pipeline manifest tracks TSA and peer artifacts for automated verification discovery
+  - Demo peer configuration at `toolset/demo_peer_config.json` for local testing
+  - New exit codes: 5=TSA failed (strict), 6=peer failed (strict)
+  - Documentation updates: README, `docs/ots-verification.md`, ADR-015
+- OTS verification workflow installs the `opentimestamps-client` (`ots` CLI) so verification doesn't skip when the binary is missing. `STRICT_VERIFY=1` is enforced on `main`.
+- Stationary OTS configuration knobs documented in `README.md` and `docs/ots-verification.md`:
+  - `OTS_STATIONARY_STUB` to toggle stub vs real-client behavior.
+  - `OTS_CALENDARS` to select calendar URLs (local real calendar first, then public if desired).
+  - `RUN_REAL_OTS` to gate slow, real-calendar integration tests.
+- New tox env `ots-cal` and GitHub Actions workflow `.github/workflows/ots-cal.yml` to run `real_ots` tests against a local OTS calendar container in CI.
 
 ### Changed
 
@@ -13,14 +30,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OTS verification workflow is now self-contained: it generates pipeline artifacts within the same job before verification, eliminating cross-workflow race conditions.
 - Default test runs now use a stationary OTS stub (`OTS_STATIONARY_STUB=1` via `tests/conftest.py`), eliminating slow and flaky calls to public OTS calendars while still enforcing `ots_meta` + artifact hashing.
 
-### Added
-
-- OTS verification workflow installs the `opentimestamps-client` (`ots` CLI) so verification doesn’t skip when the binary is missing. `STRICT_VERIFY=1` is enforced on `main`.
-- Stationary OTS configuration knobs documented in `README.md` and `docs/ots-verification.md`:
-  - `OTS_STATIONARY_STUB` to toggle stub vs real-client behavior.
-  - `OTS_CALENDARS` to select calendar URLs (local real calendar first, then public if desired).
-  - `RUN_REAL_OTS` to gate slow, real-calendar integration tests.
-- New tox env `ots-cal` and GitHub Actions workflow `.github/workflows/ots-cal.yml` to run `real_ots` tests against a local OTS calendar container in CI.
 
 ### Removed
 

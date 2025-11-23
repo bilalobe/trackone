@@ -71,7 +71,25 @@ python scripts/gateway/verify_cli.py \
   --facts out/site_demo/facts
 ```
 
-Exit codes: 0=OK, 1=missing/invalid block header, 2=Merkle mismatch, 3=missing OTS file, 4=proof failed.
+Optional: verify RFC 3161 TSA timestamps and peer co-signatures:
+
+```bash
+# Warn-only mode (default)
+python scripts/gateway/verify_cli.py \
+  --root out/site_demo \
+  --facts out/site_demo/facts \
+  --verify-tsa \
+  --verify-peers
+
+# Strict mode (fail on missing/invalid TSA or peer artifacts)
+python scripts/gateway/verify_cli.py \
+  --root out/site_demo \
+  --facts out/site_demo/facts \
+  --verify-tsa --tsa-strict \
+  --verify-peers --peers-strict --peers-min 2
+```
+
+Exit codes: 0=OK, 1=missing/invalid block header, 2=Merkle mismatch, 3=missing OTS file, 4=proof failed, 5=TSA failed (strict), 6=peer failed (strict).
 
 If `ots` is not installed, tests and demos can use a placeholder `.ots` proof written by the pipeline script; the verifier treats the string `OTS_PROOF_PLACEHOLDER` as success for local runs.
 
