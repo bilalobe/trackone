@@ -28,7 +28,7 @@ Existing solutions fail one or more requirements:
 \subsection{Contributions}
 
 This work presents Track1, an \textbf{open-source implementation} combining low-power cryptography, deterministic Merkle batching, and Bitcoin timestamping for heritage site telemetry.
-While individual components are well-established (AEAD encryption, Merkle trees, OpenTimestamps), Track1 is the \textbf{first open system} integrating them for ultra-low power LoRa deployments with public Bitcoin verification.
+While individual components are well-established (AEAD encryption, Merkle trees, OpenTimestamps), Track1 is the \textbf{first open system} integrating them for ultra-low power LoRa deployments with public Bitcoin verification — and, as of Milestone~5, adding \textbf{peer attestation} and optional \textbf{parallel RFC~3161 TSA anchoring} to harden trust against a single gateway operator.
 
 \textbf{Key contributions:}
 
@@ -58,10 +58,11 @@ While individual components are well-established (AEAD encryption, Merkle trees,
         \item Zero marginal cost per telemetry record
     \end{itemize}
 
-    \item \textbf{Production-ready implementation}
+    \item \textbf{Production-ready implementation (M\#5+)}
     \begin{itemize}[nosep]
-        \item PyNaCl-based gateway with 86\% test coverage (181 tests)
-        \item Comprehensive ADRs documenting design decisions
+        \item PyNaCl-based gateway with \~85\% test coverage (200+ tests)
+        \item Peer attestation toolchain for day roots (Ed25519 signatures, quorum policy)
+        \item Optional parallel RFC~3161 TSA anchoring (ADR-015) alongside OTS
         \item CI-verified OTS workflow (Bitcoin Core headers-only mode)
         \item Real Bitcoin attestation: Block 919384 (October 16, 2025)
     \end{itemize}
@@ -83,14 +84,14 @@ Guardtime KSI & Proprietary & Enterprise & None & No \\
 Cert.\ Transparency & Public (CT logs) & N/A & N/A & Yes \\
 \textbf{Track1} & \textbf{Bitcoin (OTS)} & \textbf{\$0.001} & \textbf{1.4 Wh} & \textbf{Yes (MIT)} \\
 \hline
-\end{tabular}
+\end{tabular}\label{tab:table}
 \end{table}
 
 \textbf{Novelty claim:} While Certificate Transparency (RFC 6962) and Guardtime KSI demonstrate Merkle timestamping at scale, and blockchain systems like Helium provide decentralized IoT infrastructure, Track1 is the \textbf{first open-source implementation} combining:
 \begin{itemize}[nosep]
     \item Ultra-low power radio (LoRa, <1kB/day)
     \item Edge AEAD encryption (gateway verifies, no cloud)
-    \item Zero-cost public auditability (Bitcoin via OTS, not per-message fees)
+    \item Zero-cost public auditability (Bitcoin via OTS, not per-message fees) with optional \emph{parallel} RFC~3161 TSA anchoring
 \end{itemize}
 
 This targets a \textbf{specific niche}: heritage sites requiring publicly-auditable telemetry where vendor lock-in is unacceptable and multi-decade sensor autonomy is mandatory.
@@ -119,10 +120,10 @@ Section 4 details cryptographic design (XChaCha20-Poly1305, HKDF, nonce construc
 Section 5 presents pipeline implementation (frame verification, Merkle batching, OTS anchoring).
 Section 6 documents schemas and canonicalization policy.
 Section 7 validates the system through experiments.
-Section 8 presents results (181 tests, 84\% coverage, Bitcoin block 919384 attestation).
+Section 8 presents results (200+ tests, \~85\% coverage, Bitcoin block 919384 attestation).
 Section 9 discusses related work and ethical considerations.
 Section 10 concludes with roadmap.
 
-\textbf{Current Status (v0.0.1-m4, October 22, 2025):}
-Production XChaCha20-Poly1305 AEAD, reproducible Merkle roots, real Bitcoin OTS anchoring verified, and comprehensive test suite (181 tests passing, 84\% coverage across gateway and pod\_sim modules).
-All ADRs accepted through ADR-009.
+\textbf{Current Status (v0.0.1-m5, November 20, 2025):}
+Production XChaCha20-Poly1305 AEAD; reproducible Merkle roots; real Bitcoin OTS anchoring verified; \textbf{peer attestation of day roots} (Ed25519) with quorum policy; optional parallel \textbf{RFC~3161 TSA} anchoring (ADR-015); and a comprehensive test suite (200+ tests passing, \~85\% coverage across gateway and pod\_sim modules).
+ADRs updated through ADR-015.

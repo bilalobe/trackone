@@ -1,4 +1,12 @@
 \section{Cryptographic Design (ADR-001, ADR-002, ADR-005, ADR-018)}
+% The following labels are used for cross-referencing ADRs discussed in this section.
+\label{adr:crypto-design}      % ADR-001: Cryptographic Design
+\label{adr:nonce-policy}       % ADR-002: Nonce Policy
+\label{adr:ots}                % ADR-005: One-Time Signature
+\label{adr:benchmarking}       % ADR-018: Benchmarking
+\label{adr:rust-pyo3}          % ADR: Rust/PyO3 integration
+\label{adr:qim-watermarking}   % ADR: QIM Watermarking
+
 \textbf{Implementation:} PyNaCl (libsodium) for all cryptographic operations.
 
 \textbf{Primitives:} X25519 + HKDF-SHA256 + XChaCha20-Poly1305; Ed25519; SHA-256.
@@ -16,7 +24,7 @@ Device table schema v1.0 enforces forward-only policy: requires \texttt{\_meta.v
 \subsection{Telemetry frame}
 Header: dev\_id(u16), msg\_type(u8), fc(u32), flags(u8); AEAD payload with XChaCha20-Poly1305.
 
-24-byte nonce construction: $\mathrm{nonce} = \mathrm{salt}_8 \| \mathrm{fc}_8 \| \mathrm{rand}_8$ \textit{(see ADR-018 for randomness and nonce policy)}
+24-byte nonce construction: $\mathrm{nonce} = \mathrm{salt}_8 \| \mathrm{fc}_8 \| \mathrm{rand}_8$ \textit{(see ADR~\ref{adr:nonce-policy} for randomness and nonce policy)}
 
 AAD (additional authenticated data): $\text{dev\_id} \| \text{msg\_type}$ binds header to ciphertext.
 
@@ -46,3 +54,15 @@ M\#3 migrated from \texttt{cryptography} + \texttt{pynacl} to PyNaCl-only:
     \item Deterministic test vectors regenerated with PyNaCl bindings
     \item Simplified maintenance and security updates
 \end{itemize}
+
+\subsection{Contrast with watermarking proposals}
+Classical watermarking (e.g., Quantization Index Modulation on analog signals) embeds auxiliary bits inside rich media streams. Track1 pods emit scalar telemetry only; there is no image pipeline and no spare energy for transform-domain embedding. Our threat model targets forged facts and replay, not exfiltration via media. Consequently, rather than hiding markers, we:\footnote{Documented in ADR~\ref{adr:nonce-policy} (nonce policy) and ADR~\ref{adr:ots} (OTS anchoring).}
+\begin{enumerate}[nosep]
+    \item Bind each fact cryptographically (AEAD + canonical JSON + Merkle leaf)
+    \item Anchor the batch root publicly (OTS/TSA)
+    \item Provide verifiers the ability to recompute and compare roots
+\end{enumerate}
+Signal-watermark concepts remain catalogued under Option~B as future research when higher-bandwidth biosignals are part of the payload.
+
+\subsection{Benchmarking and Rust roadmap}
+ADR~\ref{adr:benchmarking} (Benchmarking Strategy) defines suites to measure cryptographic throughput, Merkle construction time, and OTS latency. Those metrics will drive ADR~\ref{adr:rust-pyo3} (Rust/PyO3 integration) decisions: only when benchmarks show that Python hot paths jeopardize pod duty-cycle budgets do we port modules to Rust. Until then, PyNaCl-backed Python remains the authoritative implementation.

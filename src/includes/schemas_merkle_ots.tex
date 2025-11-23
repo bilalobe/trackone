@@ -95,6 +95,45 @@ Strategies (per ADR-007):
 \textbf{Trade-off:} OTS provides trustless Bitcoin-anchored timestamps but requires Bitcoin P2P connectivity.
 For air-gapped deployments, verification must occur offline with pre-downloaded headers or trusted header feeds.
 
+\subsubsection{Local verification workflow}
+OpenTimestamps verification requires Bitcoin block headers to validate the Merkle root attestations. The complete workflow:
+
+\begin{enumerate}[nosep]
+  \item \textbf{Generate OTS proof:} \texttt{ots stamp day/2025-10-07.bin} submits hash to calendar servers
+  \item \textbf{Upgrade proof:} \texttt{ots upgrade day/2025-10-07.bin.ots} fetches Bitcoin attestations (wait 1--6 hours for block confirmation)
+  \item \textbf{Verify proof:} \texttt{ots verify day/2025-10-07.bin.ots} checks Bitcoin block headers contain the committed hash
+\end{enumerate}
+
+Example verification output shows multiple attestations across calendar servers and final Bitcoin block confirmations:
+\begin{verbatim}
+verify BitcoinBlockHeaderAttestation(919388)
+verify BitcoinBlockHeaderAttestation(919384)
+verify BitcoinBlockHeaderAttestation(919418)
+\end{verbatim}
+
+\subsubsection{Bitcoin Core configuration for verification}
+Full Bitcoin blockchain sync is impractical for CI environments (831,862 blocks as of October 2025, $>$500 GB). OTS verification only requires \textbf{block headers} (not full blocks). See ADR-007 for CI policy and operational guidance.
+
+\begin{verbatim}
+# Headers-only/pruned mode (< 1 GB storage)
+bitcoind -daemon \
+  -listen=0 \
+  -blocksonly=1 \
+  -prune=550 \
+  -txindex=0 \
+  -dbcache=50 \
+  -maxconnections=8
+\end{verbatim}
+
+Monitor header sync progress:
+\begin{verbatim}
+bitcoin-cli -getinfo
+# Watch: Verification progress → 100%
+# Headers: 919,923 (current tip)
+\end{verbatim}
+
+Once headers reach the attested block heights (extracted from \texttt{ots info <file.ots>}), verification succeeds without syncing full blocks.
+
 \subsection{Schema validation}
 When \texttt{--validate-schemas} is enabled, validate against:
 \begin{itemize}[nosep]

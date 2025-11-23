@@ -1,7 +1,7 @@
 % Pipeline implementation notes
 \section{Gateway Pipeline Implementation}
 
-\subsection{Framed ingest (M\#1--M\#4)}
+\subsection{Framed ingest (M\#1--M\#5)}
 The gateway receives framed telemetry from simulated devices (pods), performs cryptographic verification, replay detection, and emits canonical facts for Merkle batching and OpenTimestamps (OTS) anchoring.
 
 \paragraph{Transport and frame shape}
@@ -84,21 +84,21 @@ Deterministic Merkle tree construction:
 Both block headers and day records validated against JSON schemas when \texttt{--validate-schemas} flag is set.
 
 \paragraph{Anchoring and verification}
-Day blob anchored with OpenTimestamps.
-Verification recomputes Merkle root from facts directory, compares to recorded block header, and verifies OTS proof timestamp.
+Day blob anchored with OpenTimestamps (OTS). Optionally, parallel RFC~3161 TSA anchoring stores \texttt{.tsr} responses adjacent to \texttt{.ots} proofs (ADR-015).
+Verification recomputes Merkle root from facts directory, compares to recorded block header, and verifies OTS and/or TSA proofs. In addition, \emph{peer attestation} provides immediate provenance: operators sign the daily root with Ed25519 and publish a quorum in \texttt{day/<YYYY-MM-DD>.peers.json}.
 
-\paragraph{Quick start (M\#4)}
+\paragraph{Quick start (M\#5)}
 \begin{verbatim}
 # Run complete pipeline
 make run
 
 # Run individual components
-make test           # 181 tests, ~84% measured coverage (local runs may skip 2 optional tests)
+make test           # 200+ tests, ~85% measured coverage (local runs may skip optional OTS/TSA tests)
 make test-cov       # with coverage report
 make check          # lint + format + test
 make ci             # full CI simulation
 \end{verbatim}
 
-The M\#4 pipeline: \texttt{pod\_sim --framed} $\rightarrow$ \texttt{frame\_verifier} (real AEAD) $\rightarrow$ \texttt{merkle\_batcher --validate-schemas} $\rightarrow$ \texttt{ots\_anchor} $\rightarrow$ \texttt{verify\_cli}
+The M\#5 pipeline: \texttt{pod\_sim --framed} $\rightarrow$ \texttt{frame\_verifier} (real AEAD) $\rightarrow$ \texttt{merkle\_batcher --validate-schemas} $\rightarrow$ \texttt{ots\_anchor} (and optionally TSA) $\rightarrow$ \texttt{peer\_attestation} $\rightarrow$ \texttt{verify\_cli}
 
 Pipeline fails fast if any verification step does not succeed.

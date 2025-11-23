@@ -147,8 +147,6 @@ Track1 targets heritage sites requiring \textbf{multi-decade autonomy} and \text
 
 \textbf{OTS cost:} One proof per day regardless of fact count.\ Cost fixed at \textasciitilde\$0.001/day (Bitcoin transaction fees amortized across all OTS calendar users).
 
-\textbf{Storage:} 1000 facts/day × 500 bytes/fact × 365 days = 180 MB/year.\ Manageable for multi-decade deployments.
-
 \subsection{Deployment Assumptions}
 
 \textbf{Bitcoin blockchain continuity:} Assumes Bitcoin network operates for verification timeframe (decades).\ If Bitcoin becomes unavailable, OTS proofs remain but require alternative verification mechanisms.
@@ -187,6 +185,11 @@ Track1 targets heritage sites requiring \textbf{multi-decade autonomy} and \text
 
 \textbf{Security vulnerabilities:} All cryptographic designs documented in ADRs. Independent security review encouraged (MIT license).\ No security-by-obscurity.
 
-\textbf{Test coverage:} 84\% coverage with 181 tests provides confidence but not proof of correctness.\ Formal verification out of scope for M\#4.
+\textbf{Test coverage:} ~85\% coverage with 181 tests provides confidence but not proof of correctness.\ Formal verification out of scope for M\#4.
 
 \textbf{Known attack vectors:} Physical pod tampering, gateway compromise, replay attacks beyond window size.\ Documented in ADR-002 threat model.
+
+\subsection{Stakeholder expectations and ethical scope management}
+Field stakeholders occasionally push comfort-zone technologies (e.g., generic image watermarking or steganography) even when they do not match the telemetry problem space. Heritage pods emit scalar facts; there are no images today. Implementing watermarking to appease expectations would misrepresent delivered functionality and divert scarce energy budget. Instead, the project documents alternative tracks (Option B QIM watermarking, Option C PyO3/Rust port) in ADRs, clearly labeling them as future work contingent on hardware funding and bench instrumentation.
+
+Equipment discussions are treated transparently: new hardware (oscilloscope, FPGA stimulus, bio-impedance rigs) must map to a concrete experiment plan tied to documented milestones. Until funding is committed, Track1 prioritizes the achievable Option A pipeline and avoids promising features ("watermark" keywords) that are not implemented. This preserves integrity of reporting and maintains trust with community partners who rely on verifiable telemetry rather than speculative features.

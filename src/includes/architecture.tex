@@ -101,7 +101,16 @@ The system is designed for offline-tolerant operation with eventual Bitcoin time
     \item Production Bitcoin anchoring confirmed (block 919384)
     \item Real OTS integration tests (optional, marked \texttt{@pytest.mark.real\_ots})
     \item Git LFS for binary OTS proofs
-    \item Enhanced test suite: 181 tests across the repository (some runs may skip two optional tests)
+    \item Enhanced test suite: 200+ tests across the repository (some runs may skip optional real-OTS tests)
+\end{itemize}
+
+\textbf{M\#5 (Peer Attestation \& Parallel Anchoring—ADR-015):}
+\begin{itemize}[nosep]
+    \item \emph{Peer Attestation:} gateways/operators sign daily Merkle roots with Ed25519; signatures written to \texttt{day/YYYY-MM-DD.peers.json}
+    \item Context-bound message format (\texttt{trackone:day-root:v1}) prevents cross-protocol replay
+    \item Quorum policy configurable (e.g., require $k$ of $n$ peer signatures)
+    \item Optional parallel RFC~3161 TSA anchoring runs alongside OTS; stores \texttt{.tsr} next to \texttt{.ots}
+    \item Verification CLI extended to accept OTS, TSA, and peer signature quorums
 \end{itemize}
 
 \subsection{Anchoring variants (ADR-015)}
@@ -109,7 +118,7 @@ Beyond OpenTimestamps, deployments MAY enable parallel RFC 3161 TSA anchoring:
 \begin{itemize}[nosep]
     \item Daily Merkle root submitted to one or more TSA endpoints (RFC 3161)
     \item Store returned \texttt{.tsr} responses alongside \texttt{.ots} proofs
-    \item Verification CLI can accept either OTS or TSA proofs for timestamp attestation
+    \item Verification CLI can accept either OTS or TSA proofs for timestamp attestation; peer signatures provide immediate provenance even before blockchain inclusion
 \end{itemize}
 Parallel anchoring improves resilience and caters to environments requiring PKI-backed timestamps.
 
@@ -124,7 +133,7 @@ Parallel anchoring improves resilience and caters to environments requiring PKI-
 
 \textbf{Python Runtime:}
 \begin{itemize}[nosep]
-    \item Python 3.11, 3.12, 3.13 (all tested in CI matrix)
+    \item Python 3.12, 3.13, 3.14 (all tested in CI matrix)
     \item Package manager: \texttt{uv} (fast, deterministic dependency resolution)
     \item Virtual environment required (isolation from system packages)
 \end{itemize}
@@ -192,7 +201,7 @@ Parallel anchoring improves resilience and caters to environments requiring PKI-
 
 \textbf{CI/CD (GitHub Actions / GitLab CI):}
 \begin{itemize}[nosep]
-    \item Python 3.11/3.12/3.13 matrix testing
+    \item Python 3.12/3.13/3.14 matrix testing
     \item Cached uv packages (5--10 second install)
     \item Cached Bitcoin headers (optional, for OTS verification jobs)
     \item Test execution: $<$2 minutes per Python version
@@ -225,3 +234,13 @@ Parallel anchoring improves resilience and caters to environments requiring PKI-
     \item \textbf{OTS calendar servers:} Multiple independent servers reduce single-point failure
     \item \textbf{PyNaCl integrity:} Library is installed from trusted sources (PyPI with hash verification)
 \end{itemize}
+
+\subsection{Deferred alternative channels}
+\textbf{Signal watermarking (Option B):} Experiments with Quantization Index Modulation (QIM) or other watermarking schemes live outside the current telemetry stack. They would augment the \emph{pod} block of Figure~1 by embedding authenticity into analog bio-impedance traces before AEAD.
+Because Track1 pods presently emit low-rate scalar telemetry (no images, no high-rate biosignals), dedicating energy budget to watermarking would provide no security benefit and would collide with the 1.4~Wh/day envelope. These techniques remain in the backlog for future hardware revisions and are documented in ADR-XXX.
+
+\textbf{Rust/PyO3 transition (Option C):} ADR-017 documents a roadmap to port gateway hot paths (AEAD, Merkle, OTS wrapping) to Rust crates exported via PyO3. The architecture diagram already isolates these responsibilities, so the transition becomes an internal replacement of \texttt{frame\_verifier.py}, \texttt{merkle\_batcher.py}, and \texttt{verify\_cli.py} modules.
+Until benchmarking (ADR-011) demonstrates a bottleneck that justifies the added toolchain complexity, the Python implementations remain the reference.
+
+In both cases the three-tier architecture stays intact: pods emit signed facts, gateways batch and anchor, and verifiers recompute evidence.
+Future channels simply plug into the pod/gateway boundary without rewriting the verifiability stack.

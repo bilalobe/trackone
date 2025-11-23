@@ -128,4 +128,16 @@ Track1 achieves its practical goal: verifiable telemetry for resource-constraine
 
 Next steps before broad pilot deployments: increase unit-test coverage to meet the 85\% target, add a small ledger UI for auditors (M\#5), and harden operational runbooks for air-gapped and intermittent networks.
 
-With 181 tests (2 skipped in some runs) and ongoing verification against live OpenTimestamps calendars, Track1 is positioned for pilot deployments in heritage sensor networks where long-term data integrity is paramount.
+With 200+ tests (2 skipped in some runs) and ongoing verification against live OpenTimestamps calendars, Track1 is positioned for pilot deployments in heritage sensor networks where long-term data integrity is paramount.
+
+\subsection{Positioning against alternative options}
+\textbf{Option A (delivered):} Verifiable telemetry ledger with AEAD, Merkle batching, and OTS/TSA anchoring (this report). Optimized for heritage pods with scalar data, 1.4~Wh/day budget, intermittent links.
+
+\textbf{Option B (deferred):} QIM or related watermarking on bio-impedance or image payloads. Requires instrumentation (oscilloscope, stimulus rigs) and higher bandwidth data streams. Captured as future research; no such payloads exist in M\#4 deployments.
+
+\textbf{Option C (roadmap):} Rust/PyO3 migration for gateway hot paths (ADR-017). Unlocks tighter determinism and lower CPU, contingent on ADR-011 benchmarking and post-0.1.0 stabilization.
+
+The strategy is deliberate: ship Option A, document B/C in ADRs, and gate their execution on hardware funding and benchmark evidence.
+
+\subsection{Release cadence and versioning}
+Track1 favors steady, verifiable releases over rapid feature drops. After v0.0.1-m4, the plan is to tag incremental 0.1.x updates once ledger automation and benchmarking (ADR-011) land, then stage larger changes (Rust modules, QIM experiments) as 0.2+ milestones. This cadence keeps auditors confident—each release arrives with reproducible artifacts, git-cliff changelog (ADR-016), and updated ADR references.
