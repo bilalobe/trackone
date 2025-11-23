@@ -20,7 +20,7 @@ def test_verify_ots_accepts_placeholder(
     tmp_path: Path, verify_cli, write_ots_placeholder
 ):
     """verify_ots should accept OTS_PROOF_PLACEHOLDER files."""
-    ots_path, meta_path = write_ots_placeholder(tmp_path, "2025-10-07")
+    ots_path = write_ots_placeholder(tmp_path, "2025-10-07")
     assert verify_cli.verify_ots(ots_path) is True
 
 
@@ -192,3 +192,177 @@ def test_require_ots_accepts_real_ots(
 
     rc = verify_cli.main(verify_args)
     assert rc == 0
+
+
+class TestVerifyCliTsaPeerIntegration:
+    """Integration tests for TSA and peer verification."""
+
+    def test_verify_with_tsa_warn_mode(
+        self,
+        tmp_path: Path,
+        merkle_batcher,
+        verify_cli,
+        write_sample_facts_fixture,
+        sample_facts,
+        write_ots_placeholder,
+    ):
+        """Verify CLI should warn when TSA artifact missing (non-strict)."""
+        facts_dir = tmp_path / "facts"
+        out_dir = tmp_path / "out"
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        write_sample_facts_fixture(facts_dir, sample_facts)
+
+        args = [
+            "--facts",
+            str(facts_dir),
+            "--out",
+            str(out_dir),
+            "--site",
+            "test-site",
+            "--date",
+            "2025-10-07",
+        ]
+        assert merkle_batcher.main(args) == 0
+
+        write_ots_placeholder(out_dir, "2025-10-07")
+
+        # Run with --verify-tsa but no TSA artifacts present
+        verify_args = [
+            "--root",
+            str(out_dir),
+            "--facts",
+            str(facts_dir),
+            "--verify-tsa",
+        ]
+        rc = verify_cli.main(verify_args)
+        # Should succeed with warning (non-strict)
+        assert rc == 0
+
+    def test_verify_with_tsa_strict_mode_fails(
+        self,
+        tmp_path: Path,
+        merkle_batcher,
+        verify_cli,
+        write_sample_facts_fixture,
+        sample_facts,
+        write_ots_placeholder,
+    ):
+        """Verify CLI should fail when TSA artifact missing (strict mode)."""
+        facts_dir = tmp_path / "facts"
+        out_dir = tmp_path / "out"
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        write_sample_facts_fixture(facts_dir, sample_facts)
+
+        args = [
+            "--facts",
+            str(facts_dir),
+            "--out",
+            str(out_dir),
+            "--site",
+            "test-site",
+            "--date",
+            "2025-10-07",
+        ]
+        assert merkle_batcher.main(args) == 0
+
+        write_ots_placeholder(out_dir, "2025-10-07")
+
+        # Run with --verify-tsa --tsa-strict but no TSA artifacts present
+        verify_args = [
+            "--root",
+            str(out_dir),
+            "--facts",
+            str(facts_dir),
+            "--verify-tsa",
+            "--tsa-strict",
+        ]
+        rc = verify_cli.main(verify_args)
+        # Should fail with exit code 5
+        assert rc == 5
+
+    def test_verify_with_peers_warn_mode(
+        self,
+        tmp_path: Path,
+        merkle_batcher,
+        verify_cli,
+        write_sample_facts_fixture,
+        sample_facts,
+        write_ots_placeholder,
+    ):
+        """Verify CLI should warn when peer attestation missing (non-strict)."""
+        facts_dir = tmp_path / "facts"
+        out_dir = tmp_path / "out"
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        write_sample_facts_fixture(facts_dir, sample_facts)
+
+        args = [
+            "--facts",
+            str(facts_dir),
+            "--out",
+            str(out_dir),
+            "--site",
+            "test-site",
+            "--date",
+            "2025-10-07",
+        ]
+        assert merkle_batcher.main(args) == 0
+
+        write_ots_placeholder(out_dir, "2025-10-07")
+
+        # Run with --verify-peers but no peer artifacts present
+        verify_args = [
+            "--root",
+            str(out_dir),
+            "--facts",
+            str(facts_dir),
+            "--verify-peers",
+        ]
+        rc = verify_cli.main(verify_args)
+        # Should succeed with warning (non-strict)
+        assert rc == 0
+
+    def test_verify_with_peers_strict_mode_fails(
+        self,
+        tmp_path: Path,
+        merkle_batcher,
+        verify_cli,
+        write_sample_facts_fixture,
+        sample_facts,
+        write_ots_placeholder,
+    ):
+        """Verify CLI should fail when peer attestation missing (strict mode)."""
+        facts_dir = tmp_path / "facts"
+        out_dir = tmp_path / "out"
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        write_sample_facts_fixture(facts_dir, sample_facts)
+
+        args = [
+            "--facts",
+            str(facts_dir),
+            "--out",
+            str(out_dir),
+            "--site",
+            "test-site",
+            "--date",
+            "2025-10-07",
+        ]
+        assert merkle_batcher.main(args) == 0
+
+        write_ots_placeholder(out_dir, "2025-10-07")
+
+        # Run with --verify-peers --peers-strict but no peer artifacts present
+        verify_args = [
+            "--root",
+            str(out_dir),
+            "--facts",
+            str(facts_dir),
+            "--verify-peers",
+            "--peers-strict",
+        ]
+        rc = verify_cli.main(verify_args)
+        # Should fail with exit code 6
+        assert rc == 6
