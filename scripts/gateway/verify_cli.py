@@ -302,6 +302,32 @@ def main(argv: list[str] | None = None) -> int:
         help="Allow placeholder OTS proofs (default behavior).",
     )
 
+    p.add_argument(
+        "--verify-tsa",
+        action="store_true",
+        help="Verify RFC 3161 TSA timestamp (if present)",
+    )
+    p.add_argument(
+        "--tsa-strict",
+        action="store_true",
+        help="Treat TSA verification failure as fatal (exit 5)",
+    )
+    p.add_argument(
+        "--verify-peers",
+        action="store_true",
+        help="Verify peer co-signatures (if present)",
+    )
+    p.add_argument(
+        "--peers-strict",
+        action="store_true",
+        help="Treat peer verification failure as fatal (exit 6)",
+    )
+    p.add_argument(
+        "--peers-min",
+        type=int,
+        default=1,
+        help="Minimum peer signatures required (default: 1)",
+    )
     args = p.parse_args(argv)
 
     # Decide placeholder policy. Default: allow placeholders for backward compatibility.
