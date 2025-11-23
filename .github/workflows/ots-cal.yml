@@ -21,11 +21,19 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install tox and docker client
+      - name: Install tox and ensure Docker
         run: |
           pip install tox
-          sudo apt-get update
-          sudo apt-get install -y docker.io
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Verify Docker availability
+        run: |
+          echo "Docker version:"
+          docker --version || true
+          echo "Docker info:"
+          docker info || true
 
       - name: Run real OTS integration tests against local calendar
         env:
