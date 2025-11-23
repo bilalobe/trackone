@@ -145,7 +145,7 @@ High‑level steps:
    - For each pod:
      - Ensure the gateway stores provisioning records and can map incoming frames to an anchored provisioning record.
    - For firmware releases:
-     - Publish a manifest (firmware hash, version, signing key) and optionally anchor its Merkle root via OTS as we anchor Provisioning Records (Birth Certificates) are signed by an offline Manufacturer Key. The Gateway possesses only the public verification key. A compromised Gateway cannot mint new fake devices; it can only accept or drop data from already‑provisioned devices.
+     - Publish a manifest (firmware hash, version, signing key) and optionally anchor its Merkle root via OTS. Provisioning Records (Birth Certificates) are signed by an offline Manufacturer Key. The Gateway possesses only the public verification key. A compromised Gateway cannot mint new fake devices; it can only accept or drop data from already‑provisioned devices.
    - On each frame, after AEAD verification and anti‑replay checks, the Gateway resolves device_id → Provisioning Record and attaches firmware_version and firmware_hash into the canonical Fact before Merkle batching.
 
 1. **Chain‑of‑trust documentation and tooling**

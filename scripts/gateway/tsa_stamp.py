@@ -12,18 +12,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+try:  # Support both package imports and direct script execution.
+    from .tsa_utils import _require_requests
+except ImportError:  # pragma: no cover - fallback when run as a script
+    from tsa_utils import _require_requests  # type: ignore
+
 DEFAULT_TSA_TIMEOUT = 30.0
 DEFAULT_CONTEXT = "trackone:tsa:v1"
-
-
-def _require_requests():
-    try:
-        import requests
-    except ModuleNotFoundError as exc:  # pragma: no cover - import guard
-        raise RuntimeError(
-            "Anchoring features require the 'requests' package. Install it with: pip install \"trackone[anchoring]\""
-        ) from exc
-    return requests
 
 
 @dataclass(slots=True)

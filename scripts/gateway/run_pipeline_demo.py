@@ -21,10 +21,16 @@ except ImportError:  # pragma: no cover - fallback when run as a script
         tsa_stamp_day_blob,
     )
 
-from peer_attestation import (
-    PeerAttestationError,
-    write_peer_attestations,
-)
+try:  # Support both package imports and direct script execution.
+    from .peer_attestation import (
+        PeerAttestationError,
+        write_peer_attestations,
+    )
+except ImportError:  # pragma: no cover - fallback when run as a script
+    from peer_attestation import (  # type: ignore
+        PeerAttestationError,
+        write_peer_attestations,
+    )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_OUT_DIR = "out/site_demo"
@@ -370,21 +376,10 @@ def main() -> None:
             TsaStampError,
             subprocess.CalledProcessError,
         ) as exc:
-            req_exc = _maybe_requests_exception()
-            caught_exceptions = (
-                (TsaStampError, req_exc, subprocess.CalledProcessError)
-                if req_exc
-                else (TsaStampError, subprocess.CalledProcessError)
-            )
-
-            if isinstance(exc, caught_exceptions):
-                message = f"[pipeline] WARN: TSA stamping failed ({exc})"
-                if args.tsa_strict:
-                    raise RuntimeError(message) from exc
-                print(message, file=sys.stderr)
-            else:
-                # Re-raise unexpected exceptions
-                raise
+            message = f"[pipeline] WARN: TSA stamping failed ({exc})"
+            if args.tsa_strict:
+                raise RuntimeError(message) from exc
+            print(message, file=sys.stderr)
     elif not tsa_url:
         print("[pipeline] INFO: TSA URL not configured; skipping RFC 3161 step")
 

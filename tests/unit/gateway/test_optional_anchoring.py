@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
@@ -28,20 +28,29 @@ def clear_requests_from_sys_modules(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_require_requests_raises_when_missing(monkeypatch: pytest.MonkeyPatch) -> None:
-    client_mod = importlib.import_module("scripts.gateway.tsa_http_client")
+    import builtins
+    
+    utils_mod = importlib.import_module("scripts.gateway.tsa_utils")
 
-    def fake_import(name: str, *args, **kwargs):  # type: ignore[override]
+    # Remove requests from sys.modules to ensure clean state
+    for name in list(sys.modules):
+        if name == "requests" or name.startswith("requests."):
+            del sys.modules[name]
+
+    # Patch builtins.__import__ to raise ModuleNotFoundError for 'requests'
+    original_import = builtins.__import__
+
+    def custom_import(name, *args, **kwargs):  # type: ignore
         if name == "requests":
             raise ModuleNotFoundError("No module named 'requests'")
-        return importlib.import_module(name)
+        return original_import(name, *args, **kwargs)
 
-    monkeypatch.setattr(client_mod, "importlib", importlib, raising=False)
-    monkeypatch.setattr(importlib, "import_module", fake_import)
+    monkeypatch.setattr(builtins, "__import__", custom_import)
 
     with pytest.raises(
         RuntimeError, match="Anchoring features require the 'requests' package"
     ):
-        client_mod._require_requests()  # type: ignore[attr-defined]
+        utils_mod._require_requests()  # type: ignore[attr-defined]
 
 
 def test_require_requests_returns_module_when_present(
@@ -49,8 +58,8 @@ def test_require_requests_returns_module_when_present(
 ) -> None:
     pytest.importorskip("requests")
 
-    client_mod = importlib.import_module("scripts.gateway.tsa_http_client")
-    requests_mod = client_mod._require_requests()  # type: ignore[attr-defined]
+    utils_mod = importlib.import_module("scripts.gateway.tsa_utils")
+    requests_mod = utils_mod._require_requests()  # type: ignore[attr-defined]
 
     assert getattr(requests_mod, "__name__", "") == "requests"
     assert hasattr(requests_mod, "post")

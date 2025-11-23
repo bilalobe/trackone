@@ -256,7 +256,7 @@ Given a blob (typically a day record such as `out/site_demo/day/YYYY-MM-DD.bin`)
 
 1. Compute a hash of the blob (default: SHA-256).
 1. Ask `openssl ts -query` to build a TSQ with that digest via the `-digest` option
-   (no `-sha256` short flags; behavior matches OpenSSL 3.5.x `ts -query -help`).
+   (no `-sha256` short flags; behavior matches OpenSSL 3.x `ts -query -help`).
 1. POST the TSQ to the TSA endpoint with `Content-Type: application/timestamp-query`.
 1. Save the binary TSR alongside the input (`YYYY-MM-DD.tsr`).
 1. Optionally call `openssl ts -reply -text` and merge metadata into `YYYY-MM-DD.tsr.json`

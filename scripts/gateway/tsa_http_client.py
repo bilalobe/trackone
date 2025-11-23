@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Literal
 
 from scripts.gateway.tsa_stamp import _parse_tsr_text
+from scripts.gateway.tsa_utils import _require_requests
 
 HASH_CHOICES: tuple[Literal["sha1", "sha224", "sha256", "sha384", "sha512"], ...] = (
     "sha1",
@@ -26,16 +27,6 @@ HASH_CHOICES: tuple[Literal["sha1", "sha224", "sha256", "sha384", "sha512"], ...
     "sha384",
     "sha512",
 )
-
-
-def _require_requests():
-    try:
-        import requests  # local import keeps dependency optional
-    except ModuleNotFoundError as exc:  # pragma: no cover - import guard
-        raise RuntimeError(
-            "Anchoring features require the 'requests' package. Install it with: pip install \"trackone[anchoring]\""
-        ) from exc
-    return requests
 
 
 def build_tsq(
