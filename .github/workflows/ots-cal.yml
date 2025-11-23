@@ -30,6 +30,7 @@ jobs:
 
       - name: Verify Docker availability
         run: |
+          echo "Docker version:"
           docker --version
           echo "Docker info:"
           docker info
