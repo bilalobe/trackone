@@ -5,22 +5,6 @@ Verify CLI integration tests extracted from test_gateway_pipeline.py
 from __future__ import annotations
 
 import json
-from collections.abc import Iterable
-from typing import TYPE_CHECKING, Any
-
-if TYPE_CHECKING:
-    # Provide typing-only stubs for names injected by conftest autouse fixture
-    def canonical_json(obj: Any) -> bytes:
-        ...
-
-    def verify_merkle_root(leaves: Iterable[bytes]) -> str:
-        ...
-
-    def merkle_root_from_leaves(leaves: Iterable[bytes]) -> tuple[str, list[str]]:
-        ...
-
-    def batcher_main(args: list) -> int:
-        ...
 
 
 class TestVerifyCli:
