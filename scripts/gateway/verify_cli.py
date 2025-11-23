@@ -223,9 +223,6 @@ def verify_peer_signatures(
         context = data.get("context", "trackone:day-root:v1").encode()
 
         # Import peer_attestation helper
-        import sys
-        from pathlib import Path
-
         gateway_dir = Path(__file__).parent
         if str(gateway_dir) not in sys.path:
             sys.path.insert(0, str(gateway_dir))

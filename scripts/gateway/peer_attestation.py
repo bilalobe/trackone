@@ -7,6 +7,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
+import nacl.exceptions
 from nacl.encoding import HexEncoder
 from nacl.signing import SigningKey, VerifyKey
 
@@ -148,9 +149,7 @@ def verify_peer_signature(
             bytes.fromhex(signature_hex),
         )
         return True
-    except (
-        Exception
-    ):  # pragma: no cover - libsodium raises nacl.exceptions.BadSignatureError
+    except nacl.exceptions.BadSignatureError:  # pragma: no cover
         return False
 
 
