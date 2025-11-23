@@ -1,7 +1,7 @@
 # ADR-020: Follow-up on Stationary OTS Calendar (ADR-014)
 
 Status: Accepted
-Date: 2025-11-23
+Date: 2025-11-20
 
 ## Context
 
@@ -157,7 +157,7 @@ acknowledging that the *server* side is currently stubbed.
 - **Documentation**
 
   - ADR-014 remains valid as a direction but should be read together with
-    this ADR: ADR-014 is about *intent*; ADR-019 is about the *current
+    this ADR: ADR-014 is about *intent*; ADR-020 is about the *current
     implementation reality*.
   - The README / `docs/ots-verification.md` should reference that the
     `ots-cal` env runs against an internal OTS toolchain sidecar rather
