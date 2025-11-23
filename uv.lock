@@ -392,14 +392,14 @@ wheels = [
 
 [[package]]
 name = "hypothesis"
-version = "6.147.0"
+version = "6.148.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "sortedcontainers" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/f3/53/e19fe74671fd60db86344a4623c818fac58b813cc3efbb7ea3b3074dcb71/hypothesis-6.147.0.tar.gz", hash = "sha256:72e6004ea3bd1460bdb4640b6389df23b87ba7a4851893fd84d1375635d3e507", size = 468587, upload-time = "2025-11-06T20:27:29.682Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/4a/99/a3c6eb3fdd6bfa01433d674b0f12cd9102aa99630689427422d920aea9c6/hypothesis-6.148.2.tar.gz", hash = "sha256:07e65d34d687ddff3e92a3ac6b43966c193356896813aec79f0a611c5018f4b1", size = 469984, upload-time = "2025-11-18T20:21:17.047Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/b2/1b/932eddc3d55c4ed6c585006cffe6c6a133b5e1797d873de0bcf5208e4fed/hypothesis-6.147.0-py3-none-any.whl", hash = "sha256:de588807b6da33550d32f47bcd42b1a86d061df85673aa73e6443680249d185e", size = 535595, upload-time = "2025-11-06T20:27:23.536Z" },
+    { url = "https://files.pythonhosted.org/packages/b1/d2/c2673aca0127e204965e0e9b3b7a0e91e9b12993859ac8758abd22669b89/hypothesis-6.148.2-py3-none-any.whl", hash = "sha256:bf8ddc829009da73b321994b902b1964bcc3e5c3f0ed9a1c1e6a1631ab97c5fa", size = 536986, upload-time = "2025-11-18T20:21:15.212Z" },
 ]
 
 [[package]]
@@ -890,7 +890,7 @@ wheels = [
 
 [[package]]
 name = "pytest"
-version = "9.0.0"
+version = "9.0.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "colorama", marker = "sys_platform == 'win32'" },
@@ -899,9 +899,9 @@ dependencies = [
     { name = "pluggy" },
     { name = "pygments" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/da/1d/eb34f286b164c5e431a810a38697409cca1112cee04b287bb56ac486730b/pytest-9.0.0.tar.gz", hash = "sha256:8f44522eafe4137b0f35c9ce3072931a788a21ee40a2ed279e817d3cc16ed21e", size = 1562764, upload-time = "2025-11-08T17:25:33.34Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/07/56/f013048ac4bc4c1d9be45afd4ab209ea62822fb1598f40687e6bf45dcea4/pytest-9.0.1.tar.gz", hash = "sha256:3e9c069ea73583e255c3b21cf46b8d3c56f6e3a1a8f6da94ccb0fcf57b9d73c8", size = 1564125, upload-time = "2025-11-12T13:05:09.333Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/72/99/cafef234114a3b6d9f3aaed0723b437c40c57bdb7b3e4c3a575bc4890052/pytest-9.0.0-py3-none-any.whl", hash = "sha256:e5ccdf10b0bac554970ee88fc1a4ad0ee5d221f8ef22321f9b7e4584e19d7f96", size = 373364, upload-time = "2025-11-08T17:25:31.811Z" },
+    { url = "https://files.pythonhosted.org/packages/0b/8b/6300fb80f858cda1c51ffa17075df5d846757081d11ab4aa35cef9e6258b/pytest-9.0.1-py3-none-any.whl", hash = "sha256:67be0030d194df2dfa7b556f2e56fb3c3315bd5c8822c6951162b92b32ce7dad", size = 373668, upload-time = "2025-11-12T13:05:07.379Z" },
 ]
 
 [[package]]
@@ -1318,12 +1318,15 @@ name = "trackone"
 version = "0.0.1"
 source = { editable = "." }
 dependencies = [
-    { name = "black" },
     { name = "jsonschema" },
     { name = "pynacl" },
+    { name = "requests" },
 ]
 
 [package.optional-dependencies]
+anchoring = [
+    { name = "requests" },
+]
 dev = [
     { name = "bandit" },
     { name = "black" },
@@ -1336,12 +1339,6 @@ dev = [
     { name = "mypy" },
     { name = "opentimestamps-client" },
     { name = "pip-audit" },
-    { name = "pytest" },
-    { name = "pytest-benchmark" },
-    { name = "pytest-cov" },
-    { name = "pytest-mock" },
-    { name = "pytest-timeout" },
-    { name = "pytest-xdist" },
     { name = "ruff" },
     { name = "smmap" },
     { name = "time-machine" },
@@ -1351,17 +1348,20 @@ test = [
     { name = "hypothesis" },
     { name = "opentimestamps-client" },
     { name = "pytest" },
+    { name = "pytest-benchmark" },
     { name = "pytest-cov" },
+    { name = "pytest-mock" },
+    { name = "pytest-timeout" },
+    { name = "pytest-xdist" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "bandit", marker = "extra == 'dev'", specifier = ">=1.7.8" },
-    { name = "black", specifier = ">=25.9.11" },
-    { name = "black", marker = "extra == 'dev'", specifier = ">=24.0.0" },
+    { name = "black", marker = "extra == 'dev'", specifier = ">=25.9.11" },
     { name = "hatchling", marker = "extra == 'dev'", specifier = ">=1.27.0" },
-    { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.142.2,<7.0" },
-    { name = "hypothesis", marker = "extra == 'test'", specifier = ">=6.142.2,<7.0" },
+    { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.148.1" },
+    { name = "hypothesis", marker = "extra == 'test'", specifier = ">=6.148.2" },
     { name = "jsonschema", specifier = ">=4.23.0" },
     { name = "maturin", marker = "extra == 'dev'", specifier = "==1.10.0" },
     { name = "mdformat", marker = "extra == 'dev'", specifier = "==1.0.0" },
@@ -1372,21 +1372,20 @@ requires-dist = [
     { name = "opentimestamps-client", marker = "extra == 'test'", specifier = ">=0.7.2" },
     { name = "pip-audit", marker = "extra == 'dev'", specifier = ">=2.7.3" },
     { name = "pynacl", specifier = "==1.6.1" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = "==9.0.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.4.2" },
-    { name = "pytest", marker = "extra == 'test'", specifier = ">=8.4.2" },
-    { name = "pytest-benchmark", marker = "extra == 'dev'", specifier = "==5.1.0" },
-    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=6.0.0" },
+    { name = "pytest", marker = "extra == 'test'", specifier = ">=9.0.1" },
+    { name = "pytest-benchmark", marker = "extra == 'test'", specifier = ">=5.1.0" },
     { name = "pytest-cov", marker = "extra == 'test'", specifier = ">=6.0.0" },
-    { name = "pytest-mock", marker = "extra == 'dev'", specifier = ">=3.10.0" },
-    { name = "pytest-timeout", marker = "extra == 'dev'", specifier = ">=2.3.0" },
-    { name = "pytest-xdist", marker = "extra == 'dev'", specifier = ">=3.1.0" },
+    { name = "pytest-mock", marker = "extra == 'test'", specifier = ">=3.10.0" },
+    { name = "pytest-timeout", marker = "extra == 'test'", specifier = ">=2.3.0" },
+    { name = "pytest-xdist", marker = "extra == 'test'", specifier = ">=3.1.0" },
+    { name = "requests", specifier = ">=2.32.3" },
+    { name = "requests", marker = "extra == 'anchoring'", specifier = ">=2.32.3" },
     { name = "ruff", marker = "extra == 'dev'", specifier = "==0.14.4" },
     { name = "smmap", marker = "extra == 'dev'", specifier = "==6.0.0" },
     { name = "time-machine", marker = "extra == 'dev'", specifier = ">=2.14.0" },
     { name = "uv", marker = "extra == 'dev'", specifier = "==0.9.8" },
 ]
-provides-extras = ["dev", "test"]
+provides-extras = ["test", "dev", "anchoring"]
 
 [[package]]
 name = "trove-classifiers"
