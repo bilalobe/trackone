@@ -5,13 +5,31 @@ Verify CLI integration tests extracted from test_gateway_pipeline.py
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    # Provide typing-only stubs for names injected by conftest autouse fixture
+    def canonical_json(obj: Any) -> bytes:
+        ...
+
+    def verify_merkle_root(leaves: Iterable[bytes]) -> str:
+        ...
+
+    def merkle_root_from_leaves(leaves: Iterable[bytes]) -> tuple[str, list[str]]:
+        ...
+
+    def batcher_main(args: list) -> int:
+        ...
 
 
 class TestVerifyCli:
-    def test_merkle_root_computation_matches_batcher(self, sample_facts):
-        leaves = [canonical_json(f) for f in sample_facts]
-        verify_root = verify_merkle_root(leaves)
-        batcher_root, _ = merkle_root_from_leaves(leaves)
+    def test_merkle_root_computation_matches_batcher(
+        self, sample_facts, verify_cli, merkle_batcher
+    ):
+        leaves = [merkle_batcher.canonical_json(f) for f in sample_facts]
+        verify_root = verify_cli.merkle_root(leaves)
+        batcher_root, _ = merkle_batcher.merkle_root_from_leaves(leaves)
         assert verify_root == batcher_root
 
     def test_end_to_end_verification(
@@ -20,6 +38,8 @@ class TestVerifyCli:
         sample_facts,
         write_sample_facts_fixture,
         write_ots_placeholder,
+        merkle_batcher,
+        verify_cli,
     ):
         write_sample_facts_fixture(temp_workspace["facts_dir"], sample_facts)
         batcher_args = [
@@ -32,7 +52,7 @@ class TestVerifyCli:
             "--date",
             "2025-10-07",
         ]
-        assert batcher_main(batcher_args) == 0
+        assert merkle_batcher.main(batcher_args) == 0
 
         write_ots_placeholder(temp_workspace["out_dir"], "2025-10-07")
 
@@ -41,9 +61,9 @@ class TestVerifyCli:
         for fpath in fact_files:
             with fpath.open("r", encoding="utf-8") as f:
                 obj = json.load(f)
-            leaves.append(canonical_json(obj))
+            leaves.append(merkle_batcher.canonical_json(obj))
 
-        recomputed_root = verify_merkle_root(leaves)
+        recomputed_root = verify_cli.merkle_root(leaves)
 
         block_path = temp_workspace["out_dir"] / "blocks" / "2025-10-07-00.block.json"
         block_header = json.loads(block_path.read_text())

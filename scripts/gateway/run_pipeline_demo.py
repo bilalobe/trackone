@@ -45,7 +45,7 @@ def _maybe_requests_exception() -> type[BaseException] | None:
     try:
         import requests
 
-        return requests.RequestException
+        return requests.RequestException  # type: ignore[return-value,unused-ignore]
     except ModuleNotFoundError:
         return None
 
