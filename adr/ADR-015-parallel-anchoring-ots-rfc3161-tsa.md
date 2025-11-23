@@ -1,8 +1,18 @@
 # ADR-015: Parallel Anchoring with OpenTimestamps and RFC 3161 TSA
 
-**Status**: Proposed
+**Status**: Accepted (Implemented 2025-11-18)
 **Date**: 2025-11-06
 **Milestone Target**: M#5 (post 0.1.0 hardening)
+
+## Implementation Summary
+
+- **Pipeline**: `run_pipeline_demo.py` supports `--tsa-url`, `--peer-config` flags to enable parallel anchoring
+- **Verification**: `verify_cli.py` supports `--verify-tsa`, `--verify-peers` with strict/warn modes
+- **Artifacts**: TSA (`*.tsq`, `*.tsr`, `*.tsr.json`) and peer (`*.peers.json`) stored under `out/site_demo/day/`
+- **Manifest**: Pipeline manifest tracks TSA and peer artifacts for automated verification discovery
+- **Tests**: Integration tests cover warn/strict modes for TSA and peer verification
+- **Demo config**: `toolset/demo_peer_config.json` provides sample peer keys for local testing
+- **Exit codes**: 5=TSA failed (strict), 6=peer failed (strict)
 
 ## Context
 
