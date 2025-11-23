@@ -58,7 +58,9 @@ from typing import Any
 try:  # Support both package imports and direct script execution.
     from .peer_attestation import verify_peer_signature
 except ImportError:  # pragma: no cover - fallback when run as a script
-    from peer_attestation import verify_peer_signature  # type: ignore[import-not-found,no-redef]
+    from peer_attestation import (
+        verify_peer_signature,  # type: ignore[import-not-found,no-redef]
+    )
 
 # Additional exit codes for OTS metadata / artifact issues
 EXIT_META_NOT_FOUND = 5
