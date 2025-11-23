@@ -44,9 +44,10 @@ DEFAULT_FRAME_WINDOW = 64
 def _maybe_requests_exception() -> type[BaseException] | None:
     try:
         import requests
+
+        return requests.RequestException
     except ModuleNotFoundError:
         return None
-    return requests.RequestException
 
 
 def env_flag(name: str, default: bool = False) -> bool:

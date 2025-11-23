@@ -55,6 +55,11 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Any
 
+try:  # Support both package imports and direct script execution.
+    from .peer_attestation import verify_peer_signature
+except ImportError:  # pragma: no cover - fallback when run as a script
+    from peer_attestation import verify_peer_signature  # type: ignore[import-not-found,no-redef]
+
 # Additional exit codes for OTS metadata / artifact issues
 EXIT_META_NOT_FOUND = 5
 EXIT_ARTIFACT_HASH_MISMATCH = 6
@@ -221,13 +226,6 @@ def verify_peer_signatures(
         data = json.loads(peer_attest_path.read_text(encoding="utf-8"))
         signatures = data.get("signatures", [])
         context = data.get("context", "trackone:day-root:v1").encode()
-
-        # Import peer_attestation helper
-        gateway_dir = Path(__file__).parent
-        if str(gateway_dir) not in sys.path:
-            sys.path.insert(0, str(gateway_dir))
-
-        from peer_attestation import verify_peer_signature
 
         valid_count = 0
         for sig in signatures:

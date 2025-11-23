@@ -68,7 +68,7 @@ def sign_day_root(
     signing_key_hex: str,
     context: bytes = DEFAULT_CONTEXT,
 ) -> PeerSignature:
-    signing_key = SigningKey(signing_key_hex, encoder=HexEncoder)  # type: ignore
+    signing_key = SigningKey(signing_key_hex, encoder=HexEncoder)
     signature = signing_key.sign(
         attestation_message(site_id, day, day_root_hex, context)
     ).signature
@@ -142,7 +142,7 @@ def verify_peer_signature(
     pubkey_hex: str,
     context: bytes = DEFAULT_CONTEXT,
 ) -> bool:
-    verify_key = VerifyKey(pubkey_hex, encoder=HexEncoder)  # type: ignore
+    verify_key = VerifyKey(pubkey_hex, encoder=HexEncoder)
     try:
         verify_key.verify(
             attestation_message(site_id, day, day_root_hex, context),
