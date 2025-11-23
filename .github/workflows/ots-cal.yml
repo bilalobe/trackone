@@ -26,14 +26,13 @@ jobs:
           pip install tox
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v3
 
       - name: Verify Docker availability
         run: |
-          echo "Docker version:"
-          docker --version || true
+          docker --version
           echo "Docker info:"
-          docker info || true
+          docker info
 
       - name: Run real OTS integration tests against local calendar
         env:
