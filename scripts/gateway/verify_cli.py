@@ -259,6 +259,32 @@ def main(argv: list[str] | None = None) -> int:
         default=Path("toolset/unified/examples"),
         help="Directory with fact JSON files to recompute the Merkle root",
     )
+    p.add_argument(
+        "--verify-tsa",
+        action="store_true",
+        help="Verify RFC 3161 TSA timestamp (if present)",
+    )
+    p.add_argument(
+        "--tsa-strict",
+        action="store_true",
+        help="Treat TSA verification failure as fatal (exit 5)",
+    )
+    p.add_argument(
+        "--verify-peers",
+        action="store_true",
+        help="Verify peer co-signatures (if present)",
+    )
+    p.add_argument(
+        "--peers-strict",
+        action="store_true",
+        help="Treat peer verification failure as fatal (exit 6)",
+    )
+    p.add_argument(
+        "--peers-min",
+        type=int,
+        default=1,
+        help="Minimum peer signatures required (default: 1)",
+    )
 
     # OTS mode flags: mutually exclusive strict vs lenient
     group = p.add_mutually_exclusive_group()

@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Demo peer configuration at `toolset/demo_peer_config.json` for local testing
   - New exit codes: 5=TSA failed (strict), 6=peer failed (strict)
   - Documentation updates: README, `docs/ots-verification.md`, ADR-015
-- OTS verification workflow installs the `opentimestamps-client` (`ots` CLI) so verification doesn’t skip when the binary is missing. `STRICT_VERIFY=1` is enforced on `main`.
+- OTS verification workflow installs the `opentimestamps-client` (`ots` CLI) so verification doesn't skip when the binary is missing. `STRICT_VERIFY=1` is enforced on `main`.
 - Stationary OTS configuration knobs documented in `README.md` and `docs/ots-verification.md`:
   - `OTS_STATIONARY_STUB` to toggle stub vs real-client behavior.
   - `OTS_CALENDARS` to select calendar URLs (local real calendar first, then public if desired).
