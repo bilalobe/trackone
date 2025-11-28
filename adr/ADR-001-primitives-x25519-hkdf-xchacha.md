@@ -66,6 +66,7 @@ nonce/aad/plain/tag.
 - **Key rotation:** signed "rotate" command from gateway; derive `CK' = HKDF‑Expand(PRK, "rotate:epoch=E", 32)`; persist
   new epoch and reset the replay window.
   +**Key rotation automation:** roadmap for the rotation workflow exists (signed rotate command, HKDF-based epoch derivation), but automation is not yet wired. Long-term deployments must perform these updates manually until the M#5 "weekly ratcheting" target (tagged as `0.0.1+N-m5`) delivers the scheduled, automated rotation service; future ADRs will codify how and where the automation runs.
+  +**Weekly ratchet fulfillment (ADR-022):** the `Weekly Ratchet` GitHub Actions workflow now exercises `tox -e ots-cal`, `tox -e ots`, and `tox -e slow` with `RUN_REAL_OTS=1`, tags the successful run as `v0.0.1+N-m5`, and uploads a `ratchet.json` artifact detailing the CI run, calendars, and milestones. Operators should treat the latest tag as the canonical epoch reference when scheduling manual rotations or validating anchor freshness; missing tags signal that fallback/manual rotation must occur.
 
 ## Ledger Interface (non‑secret decisions)
 
