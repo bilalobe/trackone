@@ -66,6 +66,7 @@ except ImportError:  # pragma: no cover - fallback when run as a script
 EXIT_META_NOT_FOUND = 5
 EXIT_ARTIFACT_HASH_MISMATCH = 6
 EXIT_ARTIFACT_PATH_MISMATCH = 7
+EXIT_OTS_FAILED = 4
 
 
 def canonical_json(obj: Any) -> bytes:
@@ -340,6 +341,7 @@ def main(argv: list[str] | None = None) -> int:
     # (one directory above the out/site_demo root).
     repo_root = root_dir.parent
     meta_path = repo_root / "proofs" / f"{day}.ots.meta.json"
+    meta: dict[str, Any] | None = None
     if meta_path.exists():
         try:
             meta = json.loads(meta_path.read_text(encoding="utf-8"))
@@ -404,13 +406,25 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 2
 
-    # Verify OTS proof
-    if not ots_path.exists():
-        print(f"ERROR: OTS proof file not found: {ots_path}")
-        return 3
-    if not verify_ots(ots_path, allow_placeholder=allow_placeholder):
-        print(f"ERROR: OTS proof verification failed for {ots_path}")
-        return 4
+    # Verify OTS proof if present
+    rc_ots = 0
+    if ots_path is not None and ots_path.exists():
+        expected_sha_from_meta: str | None = None
+        if meta is not None:
+            sha_val = meta.get("artifact_sha256")
+            if isinstance(sha_val, str):
+                expected_sha_from_meta = sha_val
+        ok = verify_ots(
+            ots_path,
+            allow_placeholder=allow_placeholder,
+            expected_artifact_sha=expected_sha_from_meta,
+        )
+        if not ok:
+            print(f"ERROR: OTS proof verification failed for {ots_path}")
+            rc_ots = EXIT_OTS_FAILED
+
+    if rc_ots != 0:
+        return rc_ots
 
     # Optional TSA verification
     if args.verify_tsa:
