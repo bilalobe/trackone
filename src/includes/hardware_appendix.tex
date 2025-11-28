@@ -1,0 +1,125 @@
+% Hardware appendix for full analog details
+\appendix
+\section{Reference Pod Hardware}
+\label{appendix:hardware}
+
+This appendix provides a full, component-level reference design for a subterranean irrigation pod.
+It is intended as a detailed example; TrackOne treats the hardware as interchangeable so long as the digital frame contract (NDJSON framed records with AEAD + nonce construction) is respected.
+
+\subsection{Design goals}
+\begin{itemize}[nosep]
+  \item Low power: operate on small battery budgets (target: 1.4 Wh/day)
+  \item Accurate analog sensing for soil moisture, temperature, and battery voltage
+  \item Deterministic timestamping and per-record AEAD sealing on the MCU
+  \item Simple, well-documented BOM for rapid prototyping
+\end{itemize}
+
+\subsection{Schematic overview}
+Figure~\ref{fig:pod-schematic} shows the high-level schematic.
+A minimal parts list follows.
+
+% Note: switched to external schematic link to avoid missing-file build issues in CI.
+\begin{figure}[h]
+  \centering
+  % Schematic PDF lives under project `docs/schematics/` as a companion artifact.
+  \fbox{\parbox[c][3cm][c]{0.9\linewidth}{Reference pod schematic available: \texttt{docs/schematics/pod\_reference\_schematic.pdf}}}
+  \caption{Reference pod schematic (electrodes, INA125P, ADS1115, STM32L4)}
+  \label{fig:pod-schematic}
+\end{figure}
+
+\subsection{Analog front-end}
+The analog front-end targets low-frequency soil moisture probes (resistive) and small thermistor-based temperature sensors.
+
+\paragraph{Electrodes}
+Two stainless steel electrodes placed in soil; driven in a 4-wire or half-bridge configuration depending on probe type.
+
+\paragraph{Instrumentation amplifier}
+INA125P configured with gain $G\approx100$ (set by R\_G) to amplify microvolt-to-millivolt level differential signals from electrodes. Input protection diodes and anti-aliasing RC filter (cutoff \textasciitilde{}100~Hz) protect ADC input.
+
+\paragraph{ADC}
+ADS1115 (16-bit differential ADC, I\textsuperscript{2}C) with PGA set to match amplifier output range. Sample rate: configurable (8--860 SPS), default: 80 SPS with burst sampling to save power.
+
+\subsection{MCU and firmware}
+STM32L476RG (ARM Cortex-M4, low-power) performs sampling, builds TLV payloads, constructs nonce per ADR-002 (salt8 || fc || rand), and performs AEAD (libsodium via a hardware-accelerated crypto library or software fallback). A small flash-backed counter prevents reuse of nonces across deep-sleep cycles.
+
+\paragraph{Power management}
+Duty-cycling with low-power modes; wake-up, sample 8--16 readings, average, seal with AEAD, transmit frame, back to deep sleep. RTC provides daily time reference for day-chunking.
+
+\subsection{Parts list (example)}
+\begin{itemize}[nosep]
+  \item INA125P -- Instrumentation amplifier (TI)
+  \item ADS1115 -- 16-bit ADC (Texas Instruments)
+  \item STM32L0xx -- MCU (STMicroelectronics)
+  \item Coin cell/battery pack + power switching MOSFET
+  \item LoRa radio or UART bridge module (as deployment requires)
+\end{itemize}
+
+\subsection{Firmware responsibilities}
+\begin{itemize}[nosep]
+  \item Maintain per-device frame counter (non-volatile)
+  \item Construct 24-byte nonce: salt8 || fc (u64) || rand8
+  \item Encrypt payload with XChaCha20-Poly1305 and emit NDJSON frame
+  \item Provide device provisioning interface to set \texttt{ck\_up} and \texttt{salt8}
+\end{itemize}
+
+\subsection{Provenance and timestamping}
+To preserve an immutable audit trail we keep cryptographic timestamps and proofs as separate sidecar artifacts rather than mutating JSON records after the day root is published. The recommended sidecar convention used by TrackOne is:
+\begin{itemize}[nosep]
+  \item \texttt{day/YYYY-MM-DD.bin} -- the binary day artifact (immutable once written)
+  \item \texttt{day/YYYY-MM-DD.bin.ots} -- the binary OTS proof (detached)
+  \item \texttt{proofs/YYYY-MM-DD.bin.meta.json} -- a small metadata manifest containing at minimum the \texttt{artifact\_sha256} and any calendar/milestone details
+\end{itemize}
+
+Verification tooling SHOULD follow this order:
+\begin{enumerate}[nosep]
+  \item Hash the local artifact and compare to \texttt{meta.artifact\_sha256}. Fail fast if mismatched.
+  \item Only after the hash matches, load and verify the OTS proof against the artifact. This prevents "proof stuffing" attacks (reusing a proof for a different artifact name).
+  \item Keep the original JSON day record unchanged once the day root is calculated and anchored.
+\end{enumerate}
+
+This appendix documents the sidecar layout and the minimal metadata schema (see \texttt{proofs/ots\_meta.schema.json} in the repo).
+
+\subsection{Immutability and sidecars}
+Do not include large binary proofs inline in JSON; instead the metadata sidecar binds the artifact to the proof via the \texttt{artifact\_sha256} field. Filenames SHOULD be tightly coupled (same stem) to make globbing and archival straightforward (for example: \texttt{tar czf 2025-10-07.tgz day/2025-10-07.bin proofs/2025-10-07.bin.*}).
+
+\subsection{Testing and CI notes}
+To make OTS-dependent tests reliable and CI-friendly we support a "stationary calendar" testing mode and environment variables that select calendars. Key options:
+\begin{itemize}[nosep]
+  \item \texttt{OTS\_STATIONARY\_STUB=1} -- cause stamping tools to write a small stub proof + meta manifest instead of invoking remote calendars. Useful for unit tests and fast CI iterations.
+  \item \texttt{OTS\_CALENDARS} -- comma-separated local/remote calendar endpoints (used by integration tests when exercising real OTS flows).
+\end{itemize}
+
+A minimal developer workflow is:
+\begin{enumerate}[nosep]
+  \item For fast local tests / CI: set \texttt{OTS\_STATIONARY\_STUB=1} (or use the provided tox env \texttt{ots-cal}) and run the test-suite.
+  \item To run real OTS tests: start the local calendar container (see \texttt{docker-compose.ots.yml}) and point \texttt{OTS\_CALENDARS} to the container endpoints; these tests should be gated in CI to an opt-in job with resource/time limits.
+\end{enumerate}
+
+\subsection{OTA updates}
+OTAs for deployed pods are feasible but must be treated as a high-risk operation for fielded devices in heritage-sensitive sites. Recommendations:
+\begin{itemize}[nosep]
+  \item Use signed update images (Ed25519) and verify signatures on the device before applying.
+  \item Provide a short-lived recovery window (double-bank or staged bootloader) to avoid bricking in the event of interrupted updates.
+  \item Restrict remote update capability behind authenticated gateway(s); prefer manual physical updates for initial pilots.
+\end{itemize}
+
+\subsection{Safety considerations}
+Even though these pods are low-power, the project should maintain a safety plan that lists potential mishaps, mitigations, and traceability. At minimum:
+\begin{itemize}[nosep]
+  \item Identify potential unsafe behaviors (e.g., pump activation causing flooding, electrical shorting in wet soil).
+  \item Define mitigations (hardware current-limits, watchdogs, conservative duty-cycles, user notifications).
+  \item Keep traceable documents (requirements, architecture, test plans) linked to code and tests.
+\end{itemize}
+
+\subsection{Changelog for appendix}
+\begin{itemize}[nosep]
+  \item 2025-11-14: Added OTS sidecar policy and CI notes (stationary calendar stub and \texttt{OTS\_CALENDARS}).
+  \item 2025-11-14: Added OTA guidance and safety-plan reminders.
+\end{itemize}
+
+\subsection{Notes and limitations}
+This appendix is a reference design, not a certified production schematic.
+PCB layout, impedance matching for electrodes, and environmental sealing are out-of-scope. Use this appendix as a starting point for hardware teams; adapt amplifier gains, ADC PGA, and sampling rates to target sensors and deployment conditions.
+
+\section*{Acknowledgments}
+Thanks to the TrackOne hardware contributors for initial prototypes and feedback.

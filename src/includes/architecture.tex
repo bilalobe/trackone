@@ -244,3 +244,77 @@ Until benchmarking (ADR-011) demonstrates a bottleneck that justifies the added 
 
 In both cases the three-tier architecture stays intact: pods emit signed facts, gateways batch and anchor, and verifiers recompute evidence.
 Future channels simply plug into the pod/gateway boundary without rewriting the verifiability stack.
+
+\subsection{Architecture Decision Matrix}
+To help visualise how each major component defends different system goals, the diagram in Figure~\ref{fig:arch-matrix} arranges the five primary components (rows) against the five focal concerns (columns). Each cell concisely captures the key responsibility or behaviour relevant to that axis. This 5x5 matrix makes it easy to explain trade-offs during reviews and spec sign-off.
+
+% Proper 5x5 likelihood x impact matrix
+\begin{figure}[ht]
+  \centering
+  \begin{tikzpicture}[scale=1, every node/.style={font=\small}, inner sep=1pt]
+    % parameters (use pgfmath to avoid \def warnings)
+    \pgfmathsetmacro{\cellsize}{1.3} % cell width/height (numeric, units applied where needed)
+    \pgfmathsetmacro{\n}{5} % grid size
+    \pgfmathtruncatemacro{\NminusOne}{\n-1}
+
+    % styles
+    \tikzset{cell/.style={draw=black, minimum width=\cellsize cm, minimum height=\cellsize cm, anchor=south west}}
+    \tikzset{risk/.style={fill=red!70,text=white,rounded corners=2pt,font=\footnotesize,align=center,inner sep=2pt}}
+    \tikzset{medrisk/.style={fill=orange!60,text=black,rounded corners=2pt,font=\scriptsize,align=center,inner sep=2pt}}
+    \tikzset{opp/.style={fill=green!60,text=black,rounded corners=2pt,font=\scriptsize,align=center,inner sep=2pt}}
+    \tikzset{legend/.style={font=\footnotesize}}
+
+    % draw grid
+    \foreach \x in {0,...,\NminusOne} {
+      \foreach \y in {0,...,\NminusOne} {
+        \node[cell] (c\x\y) at ({\x*\cellsize},{\y*\cellsize}) {};
+      }
+    }
+
+    % axes labels
+    \node[font=\small, anchor=west] at ({\n*\cellsize + 0.5},{0.5*\cellsize}) {Likelihood $\rightarrow$};
+    \node[font=\small, anchor=south] at ({-0.8},{\n*\cellsize + 0.5}) {Impact $\uparrow$};
+
+    % numeric ticks
+    \foreach \i in {1,...,\n} { \node[font=\footnotesize] at ({(\i-0.5)*\cellsize}, -0.25) {\i}; }
+    \foreach \j in {1,...,\n} { \node[font=\footnotesize] at (-0.25, {(\j-0.5)*\cellsize} ) {\j}; }
+
+    % helper macro to place markers at (likelihood,impact) with label
+    \newcommand{\placeMarker}[4]{% #1=likelihood 1..5, #2=impact 1..5, #3=style, #4=label
+      \pgfmathsetmacro{\mx}{(#1-0.5)*\cellsize}
+      \pgfmathsetmacro{\my}{(#2-0.5)*\cellsize}
+      \node[#3] at ({\mx},{\my}) {#4};
+    }
+
+    % place risk/opportunity markers (likelihood, impact)
+    % CF-1: False positive verification -> likelihood 4, impact 5
+    \placeMarker{4}{5}{risk}{CF-1\\False-pos verification}
+    % CF-2: Calendar equivocation -> likelihood 3, impact 5
+    \placeMarker{3}{5}{risk}{CF-2\\Calendar equivocation}
+    % AT-5 metadata loss -> likelihood 3, impact 3 (medium risk)
+    \placeMarker{3}{3}{medrisk}{AT-5\\Meta loss}
+    % Hardware failure -> likelihood 4, impact 3
+    \placeMarker{4}{3}{medrisk}{Hardware\\failure}
+    % Stationary calendar opportunity -> likelihood 3, impact 3 (placed near AT-5 but offset)
+    \pgfmathsetmacro{\ox}{(3-0.5)*\cellsize + 0.25}
+    \pgfmathsetmacro{\oy}{(3-0.5)*\cellsize - 0.25}
+    \node[opp] at ({\ox},{\oy}) {Stationary\\calendar (CI)};
+    % Predictable audits opportunity -> likelihood 5, impact 5
+    \placeMarker{5}{5}{opp}{Predictable\\audits}
+    % Peer attestation -> likelihood 2, impact 5
+    \placeMarker{2}{5}{opp}{Peer\\attestation}
+
+    % legend box
+    \begin{scope}[shift={(0,-1.8)}]
+      \node[legend, anchor=north west] at (0,0) {\textbf{Legend}:};
+      \node[risk, anchor=north west] at ({1.2},{0}) {Critical risk};
+      \node[medrisk, anchor=north west] at ({3.0},{0}) {Medium risk};
+      \node[opp, anchor=north west] at ({4.6},{0}) {Opportunity};
+    \end{scope}
+
+    % frame
+    \draw[thick] (0,0) rectangle ({\n*\cellsize},{\n*\cellsize});
+  \end{tikzpicture}
+  \caption{5$\times$5 likelihood (x) by impact (y) risk/opportunity matrix. Cells indexed 1..5 (low..high). Markers show prioritized risks (red/orange) and opportunities (green).}
+  \label{fig:arch-matrix}
+\end{figure}
