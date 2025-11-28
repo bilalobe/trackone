@@ -29,6 +29,7 @@ requires_real_ots = pytest.mark.skipif(
 )
 
 
+@pytest.mark.real_ots
 @requires_real_ots
 def test_ots_stamp_with_real_ots(tmp_path: Path, ots_anchor):
     """Test real OTS stamping if 'ots' binary is available."""
@@ -50,6 +51,7 @@ def test_ots_stamp_with_real_ots(tmp_path: Path, ots_anchor):
     assert b"OTS_PROOF_PLACEHOLDER" not in data or len(data) > 100
 
 
+@pytest.mark.real_ots
 @requires_real_ots
 def test_verify_ots_with_real_ots_proof(tmp_path: Path, verify_cli, ots_anchor):
     """Test verify_ots with a real OTS proof if 'ots' binary is available."""

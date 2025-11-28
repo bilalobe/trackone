@@ -191,6 +191,15 @@ def gateway_modules(load_module):
                 return None
 
             try:
+                # Ensure gateway directory is on sys.path so module-level and
+                # fallback imports (e.g., 'peer_attestation') succeed when the
+                # module uses relative imports or plain module imports.
+                import sys
+
+                gw_dir_str = str(cls._gw_dir)
+                if gw_dir_str not in sys.path:
+                    sys.path.insert(0, gw_dir_str)
+
                 module = load_module(module_name, module_path)
                 cls._cache[module_name] = module
                 return module
@@ -398,6 +407,7 @@ def _expose_gateway_symbols(request, gateway_modules):
                 # attributes from gateway module (if available) to the
                 # existing callable to preserve some behavior.
 
+                gw = None
                 with contextlib.suppress(Exception):
                     gw = gateway_modules.get(gw_mod_name)
 

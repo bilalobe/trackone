@@ -92,7 +92,9 @@ def write_ots_placeholder(ots_anchor):
         ots_path = day_bin.with_suffix(day_bin.suffix + ".ots")
         proofs_dir = out_dir.parent / "proofs"
 
-        # Use ots_anchor helper to create placeholder .ots and write meta in proofs_dir
+        # In tests we want deterministic, offline behavior.
+        # Always route through ots_anchor.ots_stamp, which already honors
+        # OTS_STATIONARY_STUB and writes the meta sidecar.
         ots_anchor.ots_stamp(day_bin, ots_path, proofs_dir=proofs_dir)
 
         meta_path = proofs_dir / f"{day}.ots.meta.json"

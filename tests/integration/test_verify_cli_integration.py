@@ -20,7 +20,8 @@ def test_verify_ots_accepts_placeholder(
     tmp_path: Path, verify_cli, write_ots_placeholder
 ):
     """verify_ots should accept OTS_PROOF_PLACEHOLDER files."""
-    ots_path = write_ots_placeholder(tmp_path, "2025-10-07")
+    # write_ots_placeholder returns (ots_path, meta_path); unpack both for clarity
+    ots_path, _meta = write_ots_placeholder(tmp_path, "2025-10-07")
     assert verify_cli.verify_ots(ots_path) is True
 
 
