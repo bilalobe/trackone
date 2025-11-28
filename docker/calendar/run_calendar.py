@@ -1,7 +1,28 @@
+import http.server
 import os
+import socketserver
 import subprocess
 import sys
-import time
+from contextlib import suppress
+
+PORT = int(os.environ.get("OTS_CAL_PORT", "8468"))
+CALENDARS = os.environ.get(
+    "OTS_CALENDARS",
+    "https://a.pool.opentimestamps.org,https://b.pool.opentimestamps.org",
+)
+
+
+class HealthHandler(http.server.SimpleHTTPRequestHandler):
+    def do_GET(self):  # noqa: N802
+        if self.path in ("/", "/health", "/ready"):
+            body = b"OK\n"
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        else:
+            self.send_error(404)
 
 
 def main() -> int:
@@ -21,50 +42,24 @@ def main() -> int:
     end-to-end without pretending to be an actual HTTP calendar.
     """
 
-    calendars = os.environ.get(
-        "OTS_CALENDARS", "https://a.pool.opentimestamps.org"
-    ).strip()
-    interval = float(os.environ.get("OTS_CLIENT_PING_INTERVAL", "60"))
+    # Optionally warm-up by pinging calendars once; ignore failures here.
+    print(f"Starting OTS client sidecar. Using calendars= {CALENDARS}")
+    with suppress(Exception):
+        subprocess.run(
+            ["ots", "--help"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
 
-    print(
-        "Starting OTS client sidecar. Using calendars=",
-        calendars,
-        "; ping interval=",
-        interval,
-        flush=True,
-    )
-
-    # Main loop: periodically hit `opentimestamps-client` in a
-    # read-only/help-like mode to ensure tooling is present.
-    while True:
+    with socketserver.TCPServer(("0.0.0.0", PORT), HealthHandler) as httpd:
+        print(f"[calendar] listening on 0.0.0.0:{PORT}")
         try:
-            # This is intentionally a no-op / help-style invocation; it
-            # exercises the CLI wiring without mutating state.
-            proc = subprocess.run(
-                [
-                    sys.executable,
-                    "-m",
-                    "opentimestamps_client",
-                    "--help",
-                ],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                check=False,
-                text=True,
-            )
-            print("[ots-client] exit=", proc.returncode, flush=True)
-            # Do not fail the container if the command returns non-zero;
-            # log and continue so tests can still proceed.
+            httpd.serve_forever()
         except KeyboardInterrupt:
-            print(
-                "Received KeyboardInterrupt; shutting down OTS client sidecar.",
-                flush=True,
-            )
-            return 0
-        except Exception as exc:  # pragma: no cover - defensive
-            print(f"[ots-client] unexpected error: {exc}", file=sys.stderr, flush=True)
-
-        time.sleep(interval)
+            print("[calendar] shutting down", file=sys.stderr)
+            httpd.server_close()
+    return 0
 
 
 if __name__ == "__main__":  # pragma: no cover

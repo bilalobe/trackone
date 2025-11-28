@@ -61,16 +61,14 @@ jobs:
         id: start_calendar
         run: |
           set -uo pipefail
-          # Run the calendar container detached and publish port 8468
           cid=$(docker run -d -p 8468:8468 --name trackone_ots_calendar ots/calendar:latest)
-          echo "container_id=$cid" >> $GITHUB_OUTPUT
+          echo "cid=$cid" >> "$GITHUB_OUTPUT"
 
       - name: Wait for local calendar to be ready
         run: |
           set -uo pipefail
-          cid=$(cat $GITHUB_OUTPUT | sed -n 's/^container_id=//p' | tr -d '\n') || true
+          cid="${{ steps.start_calendar.outputs.cid }}"
           echo "Waiting for local calendar (container ${cid:-unknown}) on http://127.0.0.1:8468"
-          # Retry loop with timeout
           tries=0
           until curl -fsS -o /dev/null http://127.0.0.1:8468/ || [ $tries -ge 30 ]; do
             tries=$((tries+1))
@@ -78,8 +76,10 @@ jobs:
           done
           if [ $tries -ge 30 ]; then
             echo '::error::Local OTS calendar did not become ready in time.'
-            docker logs ${cid:-} || true
-            docker stop ${cid:-} || true
+            if [ -n "${cid:-}" ]; then
+              docker logs "$cid" || true
+              docker stop "$cid" || true
+            fi
             exit 1
           fi
           echo 'Local OTS calendar ready.'
