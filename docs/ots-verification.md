@@ -157,86 +157,117 @@ use the same pattern: start a local `ots-calendar` container, set
 only the `real_ots` tests. This gives ADR-014 a concrete, reproducible path
 from the stationary stub in unit tests to a real calendar in CI.
 
+## Local OTS calendar sidecar (stationary calendar)
+
+For CI-conscious real-OTS testing we provide a lightweight Docker sidecar that
+runs a long-lived HTTP health endpoint and validates the `opentimestamps`
+client stack without depending on public calendars during test bring-up.
+
+- Image: `ots/calendar:latest` (built from `docker/calendar/Dockerfile`).
+- Entry point: `run_calendar.py`.
+- Port: `8468` (configurable via `OTS_CAL_PORT`).
+- Health: responds `200 OK` with body `OK\n` on `/`, `/health`, `/ready`.
+
+The sidecar does **not** implement a full OTS calendar protocol; instead it:
+
+1. Optionally probes the `ots` client (`ots --help`) on startup, to ensure the
+   binary and libraries are wired correctly.
+1. Exposes a stable HTTP endpoint so CI and local tests can wait for readiness
+   (no race with container startup).
+1. Keeps the container process alive so real-OTS tests can treat it as a
+   stationary calendar for integration and ratcheting.
+
+### Running the stationary calendar locally
+
+To build and run the local calendar on a developer machine:
+
+```bash
+cd /home/beb/GolandProjects/trackone
+
+# Build the image
+docker build -t ots/calendar:latest docker/calendar
+
+# Start the container (detached)
+cid=$(docker run -d -p 8468:8468 --name trackone_ots_calendar ots/calendar:latest)
+
+# Wait for it to be ready
+for i in $(seq 1 15); do
+  if curl -fsS http://127.0.0.1:8468/ >/dev/null 2>&1; then
+    echo "OK: calendar ready"
+    break
+  fi
+  sleep 2
+done
+
+# Inspect logs (optional)
+docker logs "$cid" | head
+
+# Stop and remove when done
+docker stop "$cid" && docker rm "$cid"
+```
+
+Set `OTS_CALENDARS` to prefer the local calendar during tests:
+
+```bash
+export OTS_CALENDARS="http://127.0.0.1:8468,https://a.pool.opentimestamps.org,https://b.pool.opentimestamps.org"
+export OTS_STATIONARY_STUB=0  # ensure real-OTS mode for ratchets
+```
+
+### CI profiles and stationary calendar
+
+We use three main CI profiles around OTS:
+
+- `ots-cal` (see `.github/workflows/ots-cal.yml`):
+  - Builds `ots/calendar:latest`.
+  - Starts the container locally on the runner.
+  - Runs `tox -e ots-cal` with `OTS_CALENDARS` pointing at the local calendar
+    (plus public pools as a secondary).
+- `ots-verify` (see `.github/workflows/ots-verify.yml`):
+  - Generates real OTS proofs for `out/site_demo/day/*.bin` and verifies them
+    against Bitcoin headers using `bitcoind` / `bitcoin-cli`.
+  - Uses `scripts/ci/ots_verify.sh` as the orchestrator.
+- Weekly ratchet (`weekly-ratchet.yml`):
+  - Builds and runs the local calendar sidecar.
+  - Executes `tox -e ots-cal`, `tox -e ots`, and `tox -e slow` with
+    `RUN_REAL_OTS=1` and `OTS_STATIONARY_STUB=0`.
+  - Parses tox logs to ensure real-OTS tests actually ran and that no
+    `Failed! Timestamp not complete` messages slipped by when `STRICT_REAL_OTS=1`.
+
+The stationary calendar fits into this picture as a **deterministic local
+anchor** used to:
+
+- Avoid flakiness from public calendars during CI bring-up.
+- Ensure the OTS client paths are exercised regularly (even when public
+  calendars are slow or unreachable).
+- Provide a clear upgrade path toward ADR-020 (stationary OTS calendar) while
+  keeping tests fast and reproducible.
+
+### Stationary vs. placeholder behavior in verification
+
+`verify_cli` now treats OTS proofs as immutable sidecars:
+
+- The day record (`*.json`) and day blob (`*.bin`) are hashed into a Merkle
+  tree; only the blob affects the `day_root`.
+- OTS proofs live in separate `*.bin.ots` files, with metadata in
+  `proofs/<day>.ots.meta.json` describing:
+  - the artifact path (`artifact`),
+  - its SHA-256 (`artifact_sha256`),
+  - and the proof path (`ots_proof`).
+- During verification, `verify_cli`:
+  - recomputes `sha256(day.bin)` and compares it to `artifact_sha256`;
+  - ensures `artifact` and `ots_proof` paths point at the expected files;
+  - passes `artifact_sha256` into `verify_ots` so that even stationary stubs
+    must match the recorded artifact hash.
+
+This guarantees that mutating `.ots` files alone does not change `day_root`,
+while mutating `*.bin` will break verification — exactly the "Mutable Proof
+Trap" we wanted to avoid.
+
 ## Troubleshooting
 
 - `bitcoind: command not found`: Ensure Bitcoin Core is installed and on PATH. In CI, the workflow exports PATH within the install step before invoking `bitcoind`.
 - `Could not connect to Bitcoin node`: Wait for headers to sync or increase timeout. Use the lenient mode on PRs to avoid failing reviews.
 - `ots verify` still fails after headers: Run `ots info <file.ots>` and confirm the `BitcoinBlockHeaderAttestation(<height>)` is ≤ current headers (`bitcoin-cli -getinfo`).
-
-## Stationary vs real calendar modes
-
-In addition to header-based verification, the gateway supports two OTS operating
-modes for stamping day blobs:
-
-- **Stationary stub mode** (used in tests and fast CI):
-
-  - Enabled by `OTS_STATIONARY_STUB=1` (this is the default in the pytest
-    suite via `tests/conftest.py`).
-  - `ots_anchor.py` does **not** call the real `ots` binary. Instead it writes a
-    deterministic stub proof of the form `STATIONARY-OTS:<sha256(day.bin)>` and
-    an `ots_meta` sidecar (`proofs/<day>.ots.meta.json`).
-  - `verify_cli.py` validates the stub by comparing the embedded hex digest
-    against the actual SHA-256 of `day.bin` (or the `artifact_sha256` from the
-    meta file). This gives strong immutability guarantees without network
-    traffic.
-
-- **Real calendar mode** (used in `real_ots` tests and ops):
-
-  - `OTS_STATIONARY_STUB=0` (or unset) and an `ots` binary available.
-  - `ots_anchor.py` invokes `ots stamp` (and optionally `ots upgrade`) via a
-    small helper that forwards `OTS_CALENDARS` to select calendars (e.g., a
-    local real calendar, then public pools).
-  - `verify_cli.py` falls back to `ots verify` when a stub or placeholder is
-    not recognized.
-
-### UML activity diagram
-
-The high-level flow from batching to verification, including stationary vs real
-calendar branches, is captured in the following Mermaid diagram:
-
-```mermaid
-flowchart TD
-    A[Start batch] --> B[Run merkle_batcher]
-    B --> C[Run ots_anchor day.bin]
-    C --> D{OTS_STATIONARY_STUB == 1?}
-    D -->|Yes| E[Write deterministic .ots]
-    E --> F[Write proofs/day.ots.meta.json]
-    D -->|No| G[run ots stamp with OTS_CALENDARS]
-    G --> H{.ots exists?}
-    H -->|No| I[Write placeholder .ots]
-    H -->|Yes| J[run ots upgrade best effort]
-    I --> K[Write proofs/day.ots.meta.json]
-    J --> K
-    F --> L[Verification start]
-    K --> L
-    L --> M[Load block header]
-    M --> N[Derive day_bin_path, ots_path]
-    N --> O{meta exists?}
-    O -->|Yes| P[Check artifact path & sha256]
-    P --> Q{mismatch?}
-    Q -->|Yes| R[Exit 6/7]
-    Q -->|No| S[Continue]
-    O -->|No| S
-    S --> T[Recompute Merkle root from facts]
-    T --> U{root match?}
-    U -->|No| V[Exit 2]
-    U -->|Yes| W{ots file exists?}
-    W -->|No| X[Exit 3]
-    W -->|Yes| Y[verify_ots allow_placeholder]
-    Y --> Z{verify_ots == True?}
-    Z -->|No| AA[Exit 4]
-    Z -->|Yes| AB[Exit 0: OK]
-```
-
-The `verify_ots` step recognizes three proof shapes:
-
-- `OTS_PROOF_PLACEHOLDER` (optional, allowed when `--allow-placeholder` is
-  effective).
-- `STATIONARY-OTS:<hex>` (checked against `artifact_sha256` or `sha256(day.bin)`).
-- Real OTS proofs verified via `ots verify` when a client is available.
-
-This diagram, together with ADR-014, describes the intended behavior for both
-local development and CI.
 
 ## Notes
 
