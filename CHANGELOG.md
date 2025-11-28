@@ -5,6 +5,34 @@ All notable changes to Track1 (Barnacle Sentinel) will be documented in this fil
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+
+## [0.0.1-m5.1] - 2025-11-28
+
+### Added
+- Stationary OTS calendar sidecar image (`ots/calendar:latest`) built from
+  `docker/calendar/` and used by the `ots-cal` and weekly ratchet workflows.
+- Simple HTTP health endpoint on port `8468` (paths `/`, `/health`, `/ready`)
+  to support deterministic readiness checks in CI and local testing.
+- Build-provenance attestation for the stationary calendar image using
+  `actions/attest-build-provenance`, stored alongside the image in GHCR for
+  supply-chain verification.
+
+### Changed
+- Tightened `verify_cli` and `verify_ots` coupling to use `artifact_sha256`
+  from `proofs/<day>.ots.meta.json`:
+  - Enforce that `artifact` in meta resolves to the same `day.bin` used by the
+    Merkle tree.
+  - Enforce that `artifact_sha256` matches `sha256(day.bin)`.
+  - Enforce that `ots_proof` in meta resolves to the `*.bin.ots` proof file.
+  - Pass `artifact_sha256` into `verify_ots` so even stationary stubs must
+    match the recorded artifact hash.
+- Updated weekly ratchet workflow to:
+  - Build and publish the stationary calendar image to GHCR.
+  - Attest calendar image provenance for traceability.
+  - Start a local calendar sidecar and prefer it in `OTS_CALENDARS`.
+  - Fail (in strict mode) when real-OTS runs are incomplete or fully skipped,
+    instead of silently treating them as success.
+
 ## [0.0.1-m5] - 2025-11-18
 
 ### Added
@@ -29,35 +57,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CI lint job now runs only lint/type/security tox envs instead of `tox -p`, preventing accidental test execution and reducing runtime.
 - OTS verification workflow is now self-contained: it generates pipeline artifacts within the same job before verification, eliminating cross-workflow race conditions.
 - Default test runs now use a stationary OTS stub (`OTS_STATIONARY_STUB=1` via `tests/conftest.py`), eliminating slow and flaky calls to public OTS calendars while still enforcing `ots_meta` + artifact hashing.
+- Tightened `verify_cli` and `verify_ots` coupling to use `artifact_sha256`
+  from `proofs/<day>.ots.meta.json`:
+  - Enforce that `artifact` in meta resolves to the same `day.bin` used by the
+    Merkle tree.
+  - Enforce that `artifact_sha256` matches `sha256(day.bin)`.
+  - Enforce that `ots_proof` in meta resolves to the `*.bin.ots` proof file.
+  - Pass `artifact_sha256` into `verify_ots` so even stationary stubs must
+    match the recorded artifact hash.
+- Updated weekly ratchet workflow to start the local calendar, prefer it in
+  `OTS_CALENDARS`, and fail (when strict) on incomplete real-OTS runs.
 
 ### Removed
 
 - CI no longer uploads `pipeline-day` artifacts from the pipeline job since OTS verification now generates and consumes artifacts locally.
 
-## [0.0.1-m4] - 2025-10-22
-
-### Added
-
-- Tox-first development workflow with new envs: `pipeline`, `ots`, `bench`, `precommit`, `readme`, `sha`, and `e2e`.
-- Optional OTS verification workflow in CI (`.github/workflows/ots-verify.yml`) with headers cache, pipeline pre-step, and manual dispatch.
-- Optional SHA verification workflow in CI (`.github/workflows/sha-verify.yml`) to compute/validate day blob hashes.
-- Markdown formatting in pre-commit using `mdformat`, including code-block formatting via `mdformat-ruff`.
-- Badges in README.
-- ADR-013 documenting Python version support policy (last three minors).
-- **OpenTimestamps proof verification**: End-to-end Bitcoin anchoring validated
-    - Proof metadata stored in `proofs/2025-10-07.ots.meta.json` with block height, hash, merkleroot
-    - OTS proof file `out/site_demo/day/2025-10-07.bin.ots` anchored to Bitcoin block 919384
-    - Verification transcript documented in LaTeX results (TeX report updated)
-- **Git LFS tracking** for `.ots` files via `.gitattributes`
-- **ADR-008**: Milestone M#4 completion and OTS verification workflow
-- **verify_cli.py**: Enhanced OTS verification with test placeholder support
-    - Checks for "OTS_PROOF_PLACEHOLDER" in test files before attempting real verification
-    - Enables test suite to pass with mock OTS files while validating production proofs
-- **Comprehensive test suite expansion**: Coverage increased from 68% → 85%
-  - New `test_ots_anchor.py`: 10 tests covering OTS stamping, CLI, fallbacks, and file handling (ots_anchor.py: 0% → 95%)
-  - New `test_pod_sim.py`: 31 tests for fact generation, TLV encoding, nonce construction, device tables (pod_sim.py: 26% → 81%)
-  - New `test_edge_cases.py`: 27 tests for merkle_batcher, verify_cli, canonical JSON, Merkle roots, schema validation
-  - Enhanced existing tests: Added Ed25519/HKDF edge cases, frame structure validation, parametrized tests
   - New `conftest.py`: Shared fixtures for workspace, sample facts, and device tables
 - **Test run summary**: 182 passed, 4 skipped (spot-check run: pytest full suite)
 
