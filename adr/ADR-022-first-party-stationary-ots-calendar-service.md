@@ -326,3 +326,39 @@ We will:
        - Operational responsibilities.
        - Security and audit requirements.
        - Interaction with ADR-015's parallel anchoring (OTS + TSA + peers).
+
+## Weekly ratchet automation
+
+To satisfy ADR-001's M#5 "weekly ratcheting" key-rotation target, we are wiring the
+first-party calendar into a dedicated GitHub Actions workflow (`Weekly Ratchet`)
+that runs every Monday at 03:00 UTC (and on manual dispatch). The workflow:
+
+- builds/boots the calendar sidecar, then runs `tox -e ots-cal`, `tox -e ots`, and
+  `tox -e slow` with `RUN_REAL_OTS=1` and an explicit
+  `OTS_CALENDARS="http://127.0.0.1:8468,https://a.pool.opentimestamps.org,https://b.pool.opentimestamps.org"`
+  chain;
+- fails fast if any tox env skips `real_ots` markers, if the required calendars are
+  missing, or if `OTS_STATIONARY_STUB` drifts from the expected `0` real-calendar
+  setting;
+- emits a `ratchet.json` artifact describing timestamp, CI run ID, commit SHA,
+  tox env outcomes, and the calendar configuration used; and
+- on successful runs against `main`, creates an annotated tag in the semantic form
+  `v0.0.1+N-m5`, where `N` increases monotonically with each ratchet.
+
+### Operational guidance for long-term deployments
+
+- **Anchor freshness:** Operators should watch for fresh `v0.0.1+N-m5` tags; if no new
+  tag lands within the expected weekly window, schedule a manual rotation and
+  investigate OTS/calendar health using the latest `ratchet.json` artifact.
+- **Manual rotations:** When a manual rotation is required (e.g., air-gapped sites or
+  maintenance windows), align it with the most recent ratchet tag to ensure the
+  derived epoch matches the last CI-verified anchor, then resume automation so
+  the next weekly tag reflects the updated state.
+- **Verification:** During audits, retrieve the `ratchet.json` artifact (stored for at
+  least two weeks) that corresponds to the tag anchoring the deployment. The
+  artifact records the `RUN_REAL_OTS` and `OTS_CALENDARS` values exercised in CI,
+  proving that anchors were produced with the agreed configuration.
+
+This loop closes ADR-001's automation gap while grounding the weekly cadence in a
+verifiable CI artifact + tag pair, so downstream schedulers can reason about
+rotation freshness without querying internal logs.
