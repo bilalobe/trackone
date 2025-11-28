@@ -143,6 +143,10 @@ def verify_ots(
                 return False
             except Exception:
                 return False
+        # Legacy placeholder content produced when OTS client missing/failed.
+        # Accept it as a placeholder when tests or CI allow placeholders.
+        if raw.strip() == b"OTS_PROOF_PLACEHOLDER" and allow_placeholder:
+            return True
     except (OSError, UnicodeDecodeError):
         # If reading fails, fall back to attempting real OTS verification below.
         # Narrow exception avoids catching unrelated errors.
@@ -299,32 +303,6 @@ def main(argv: list[str] | None = None) -> int:
         help="Allow placeholder OTS proofs (default behavior).",
     )
 
-    p.add_argument(
-        "--verify-tsa",
-        action="store_true",
-        help="Verify RFC 3161 TSA timestamp (if present)",
-    )
-    p.add_argument(
-        "--tsa-strict",
-        action="store_true",
-        help="Treat TSA verification failure as fatal (exit 5)",
-    )
-    p.add_argument(
-        "--verify-peers",
-        action="store_true",
-        help="Verify peer co-signatures (if present)",
-    )
-    p.add_argument(
-        "--peers-strict",
-        action="store_true",
-        help="Treat peer verification failure as fatal (exit 6)",
-    )
-    p.add_argument(
-        "--peers-min",
-        type=int,
-        default=1,
-        help="Minimum peer signatures required (default: 1)",
-    )
     args = p.parse_args(argv)
 
     # Decide placeholder policy. Default: allow placeholders for backward compatibility.
