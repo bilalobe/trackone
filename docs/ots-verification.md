@@ -182,7 +182,7 @@ The sidecar does **not** implement a full OTS calendar protocol; instead it:
 To build and run the local calendar on a developer machine:
 
 ```bash
-cd /home/beb/GolandProjects/trackone
+cd /path/to/trackone
 
 # Build the image
 docker build -t ots/calendar:latest docker/calendar
