@@ -167,6 +167,8 @@ python scripts/gateway/peer_attestation.py verify \
     \item ADR-016: Changelog policy (git-cliff integration)
     \item ADR-017: Rust core and PyO3 integration (latent migration plan)
     \item ADR-018: Cryptographic randomness and nonce policy
+    \item ADR-019: Rust gateway chain of trust
+    \item ADR-020: Safety net for OTS pipeline failures
 \end{itemize}
 
 \textbf{External artifacts:} Deterministic crypto vectors reside at \texttt{toolset/unified/crypto\_test\_vectors.json}; absence triggers intentional skips. Real OTS proofs (e.g., \texttt{out/site\_demo/day/*.bin.ots}) enable full anchoring tests; RFC 3161 TSA responses (\texttt{*.tsr}) may be stored alongside per ADR-015.
@@ -203,7 +205,7 @@ We use \texttt{ruff}, \texttt{mypy}, and \texttt{bandit} for linting, type check
 \textbf{CI/CD status:}
 \begin{itemize}[nosep]
     \item All tests passing: 181 tests (181 passed, 0 failed, 2 skipped)
-    \item Python 3.11/3.12/3.13 matrix: All versions pass
+    \item Python 3.12/3.13/3.14 matrix: All versions pass
     \item Static analysis: mypy clean, ruff clean, bandit clean
     \item Coverage threshold: 85\% (gateway + pod\_sim modules)
     \item Build time: $<$2 minutes (with uv caching)

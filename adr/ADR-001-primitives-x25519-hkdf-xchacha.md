@@ -25,7 +25,7 @@
   - HKDF‑Extract with a salt; HKDF‑Expand with context strings to derive uplink/downlink keys.
   - Implementation: `nacl.bindings.crypto_kdf_hkdf_sha256_extract/expand`
 - **AEAD (192-bit nonce):** XChaCha20‑Poly1305
-  - Encrypts telemetry payloads; provides integrity and confidentiality with a 192‑bit nonce.
+  - Encrypts telemetry payloads; provides integrity and confidentiality with 192‑bit nonce.
   - Implementation: `nacl.bindings.crypto_aead_xchacha20poly1305_ietf_encrypt/decrypt`
 - **AEAD (96-bit nonce):** ChaCha20-Poly1305 (IETF variant)
   - Used in tests and compatibility scenarios requiring 12-byte nonces.
@@ -62,9 +62,10 @@ nonce/aad/plain/tag.
 
 ## Replay and Rotation
 
-- **Replay protection:** gateway tracks highest FC per device with a sliding acceptance window (e.g., 64).
+- **Replay protection:** gateway tracks the highest FC per device with a sliding acceptance window (e.g., 64).
 - **Key rotation:** signed "rotate" command from gateway; derive `CK' = HKDF‑Expand(PRK, "rotate:epoch=E", 32)`; persist
-  new epoch and reset replay window.
+  new epoch and reset the replay window.
+  +**Key rotation automation:** roadmap for the rotation workflow exists (signed rotate command, HKDF-based epoch derivation), but automation is not yet wired. Long-term deployments must perform these updates manually until the M#5 "weekly ratcheting" target (tagged as `0.0.1+N-m5`) delivers the scheduled, automated rotation service; future ADRs will codify how and where the automation runs.
 
 ## Ledger Interface (non‑secret decisions)
 
@@ -103,7 +104,7 @@ Migrated from mixed `cryptography` + `pynacl` to `pynacl` only:
 
 ## Non‑decisions (future ADRs)
 
-- Exact wire encoding (CBOR vs compact binary) of frames and device table format.
+- Exact wire encoding (CBOR vs. compact binary) of frames and device table format.
 - PQC roadmap (Dilithium/Kyber) at gateways; pods remain classic.
 - BLE/UART provisioning vs LoRa bootstrap.
 
@@ -111,7 +112,7 @@ Migrated from mixed `cryptography` + `pynacl` to `pynacl` only:
 
 - Provide end‑to‑end test vectors: (Ng, Np, Tpod, B, eP/eG, PRK, CK_up/down, nonce, aad, plain, cipher, tag).
 - Interop tests between pod simulator and Python verifier.
-- All test vectors generated with PyNaCl for deterministic, reproducible results.
+- All test vectors are generated with PyNaCl for deterministic, reproducible results.
 
 ## Operational Notes
 

@@ -1,143 +1,71 @@
 \section{Conclusion and Roadmap}
 
-\subsection{M\#4 Achievements}
+\subsection{M\#4 Achievements (TrackOne as Track One of Three)}
 
-Track1 (Barnacle Sentinel) has completed Milestone \#4, delivering a production-oriented, verifiable telemetry pipeline with Bitcoin-anchored timestamp proofs.
-The system demonstrates:
+Track1 (Barnacle Sentinel) has completed Milestone \#4, delivering a production-informed, verifiable telemetry pipeline with Bitcoin-anchored timestamp proofs. In the framing of ADR-022, this is \emph{Track One}: a hardened evidence pipeline rather than a full control system.
 
-\textbf{End-to-end cryptographic security:}
+\textbf{Evidence and integrity pipeline:}
 \begin{itemize}[nosep]
-    \item XChaCha20-Poly1305 AEAD encryption with 16-byte authentication tags
-    \item X25519 ECDH key agreement with HKDF-SHA256 key derivation
-    \item Ed25519 signature support for future device attestation
-    \item Replay protection with configurable 64-frame sliding window
-    \item Persistent state management across gateway restarts
+    \item XChaCha20-Poly1305 AEAD with X25519/HKDF-SHA256 and a 64-frame replay window provide strong confidentiality and integrity for framed uplink telemetry, with persistent state across gateway restarts.
+    \item Canonical JSON and hash-sorted Merkle trees (ADR-003) make day roots reproducible by independent verifiers regardless of ingestion order.
+    \item Daily OpenTimestamps anchoring to Bitcoin, plus a verification CLI, allow third parties to recompute roots from \texttt{facts/} and check proofs without trusting the gateway operator.
 \end{itemize}
 
-\textbf{Verifiable batching and anchoring:}
-\begin{itemize}[nosep]
-    \item Deterministic canonical JSON outputs suitable for byte-for-byte reproducibility
-    \item Hash-sorted Merkle tree construction (reduces ingestion-order bias)
-    \item Daily OpenTimestamps anchoring to the Bitcoin blockchain (calendar attestations)
-    \item Independent verification CLI for third-party auditors
-\end{itemize}
-
-\textbf{Production readiness (notes):}
-\begin{itemize}[nosep]
-    \item Test suite: 181 tests (2 skipped in some runs); coverage measurements currently report 83.8\% overall for gateway and pod simulation modules
-    \item Test categories: unit, integration, security, edge cases, and property-based tests
-    \item CI matrix: Python 3.11/3.12/3.13 (uv-based dependency management in CI as an experimental option)
-    \item Static analysis: mypy (type checks), ruff (linting), bandit (security scanning)
-    \item Git LFS used for large artifacts such as OTS proofs
-\end{itemize}
-
-The M\#4 milestone validates the core thesis: resource-constrained heritage sensors can achieve cryptographic verifiability without trusted intermediaries.
-Bitcoin timestamping provides public auditability while payload confidentiality is preserved through AEAD encryption.
+Together, these results validate the core thesis: resource-constrained subterranean pods can produce telemetry whose \emph{integrity and timing} are publicly auditable, even if later control logic and safety interlocks are implemented in other tracks.
 
 \subsection{Roadmap: M\#5 and Beyond}
 
-\textbf{Milestone \#5 (Planned—Q4 2025):}
+We organise follow-up work into near-term hardening of TrackOne and longer-term tracks for control and performance.
+
+\textbf{Near-term hardening (M\#5, TrackOne scope):}
 \begin{itemize}[nosep]
-    \item \textbf{Gateway Ledger Tab:} Web interface for auditors to browse blocks, day records, and OTS proofs
-        \begin{itemize}[nosep]
-            \item JSON API endpoints for programmatic access
-            \item Merkle proof generation for individual facts
-            \item Timeline visualization of day-chain continuity
-        \end{itemize}
-    \item \textbf{Automated OTS Workflow:} Configurable anchor and upgrade pipeline (cron or systemd timers)
-        \begin{itemize}[nosep]
-            \item Daily stamping at a configurable time (default: 00:10 UTC)
-            \item Scheduled \texttt{ots upgrade} runs for confirmation propagation
-            \item Notification hooks (webhook/email) for verification outcomes
-        \end{itemize}
-    \item \textbf{Outage Logger:} Connectivity monitoring and gap detection
-        \begin{itemize}[nosep]
-            \item Per-device expected telemetry cadence and alert thresholds
-            \item Outage event log with duration and affected devices
-        \end{itemize}
-    \item \textbf{Multi-day Verification:} Validate day-chain continuity
-        \begin{itemize}[nosep]
-            \item Verify chained \texttt{prev\_day\_root} links between consecutive days
-            \item Detect chain breaks or root mismatches and surface remediation steps
-        \end{itemize}
+    \item \textbf{Ledger and operator UX:} lightweight ``ledger'' views (CLI or web) for auditors to browse blocks, day records, proofs, and peer attestations, driven by a simple JSON API.
+    \item \textbf{Automated OTS workflow:} encode the manual anchor/upgrade steps into a small, testable job (cron or systemd) with clear states (pending, anchored, upgraded) and hooks for notifications.
+    \item \textbf{Outage and gap logging:} basic outage logger tracking expected pod cadence and surfacing missing data days as first-class events, aligned with the operational constraints of ADR-022.
+    \item \textbf{Multi-day verification:} convenience tooling to verify \texttt{prev\_day\_root} chains over multi-day windows and report breaks or ambiguous anchors.
 \end{itemize}
 
-\textbf{Future Enhancements (M\#6+):}
+\textbf{Longer-term enhancements (Track Two / Three and M\#6+):}
 \begin{itemize}[nosep]
-    \item \textbf{Key Rotation:} Implement ADR-001 key derivation and rotation schedules
-    \item \textbf{Device Attestation:} Ed25519 signature verification and revocation workflows
-    \item \textbf{Enhanced Proof Metadata:} Include build metadata (git SHA, build timestamp) and firmware versions
-    \item \textbf{Air-gapped Deployment Guide:} Offline verification procedures with signed header bundles
-    \item \textbf{Performance Benchmarking:} Throughput and Merkle batching performance targets
-    \item \textbf{Multi-site Aggregation:} Federated anchoring and cross-site Merkle roots
+    \item \textbf{Key rotation and attestation:} realise ADR-001 and ADR-006 with scheduled key rotation and Ed25519-based device attestation, including revocation workflows.
+    \item \textbf{Air-gapped and intermittent deployments:} codify offline verification procedures (signed header bundles, removable media workflows) for sites that cannot run full Bitcoin or continuous calendars.
+    \item \textbf{Performance and Rust core:} use ADR-011 benchmarks to decide when to introduce Rust/PyO3 hot paths (ADR-017) for Merkle and AEAD without changing the Python-facing API.
+    \item \textbf{Parallel anchoring and PKI:} productionise ADR-015 (RFC 3161 TSA alongside OTS) for deployments that require PKI-backed timestamps in addition to Bitcoin-based proofs.
 \end{itemize}
 
-\textbf{Standards and tooling (new):}
+\subsection{Operational Considerations (summary)}
+
+Operationally, TrackOne is ready for disciplined pilot deployments under the constraints in Section~\ref{sec:security} and ADR-022:
 \begin{itemize}[nosep]
-    \item \textbf{Benchmarks (ADR-011):} Establish repeatable performance suites and publish CSV + plots
-    \item \textbf{Changelog policy (ADR-016):} Adopt git-cliff for conventional, CI-generated releases
-    \item \textbf{Parallel anchoring (ADR-015):} Optional RFC 3161 TSA alongside OTS for PKI-backed deployments
-    \item \textbf{Rust core (ADR-017):} Explore PyO3 modules for hot paths (AEAD, Merkle) while preserving Python API
+    \item \textbf{Deployment profiles:} cloud-connected gateways can run full Bitcoin + public calendars; intermittently connected gateways batch OTS operations; air-gapped sites rely on manual export/import and signed header bundles.
+    \item \textbf{Sizing envelope:} current implementation comfortably supports small-to-medium pod fleets with typical cadences (e.g., one frame per 5 minutes per pod); Merkle computation remains practical for daily fact counts well below $10^6$.
+    \item \textbf{Safety net:} CI, schemas, and the safety-net mechanisms documented in Section~\ref{sec:security} must be kept enabled; TrackOne data should not yet be used as the sole basis for autonomous actuation without an additional safety case.
 \end{itemize}
 
-\subsection{Operational Considerations (clarified)}
+\subsection{Research Contributions}
 
-\textbf{Deployment scenarios:}
-\begin{itemize}[nosep]
-    \item \textbf{Cloud-connected:} Full automation with Bitcoin P2P and public OTS calendars
-    \item \textbf{Intermittent connectivity:} Queue OTS operations and batch during uplink windows
-    \item \textbf{Air-gapped:} Manual OTS export/import via removable media; pre-signed header bundles for offline verification
-\end{itemize}
-
-\textbf{Scalability characteristics:}
-\begin{itemize}[nosep]
-    \item \textbf{Pod count:} Linear growth in frame ingestion (tested at small scale; further benchmarking planned)
-    \item \textbf{Frame rate:} Configurable per-pod cadence (typical: one frame / 5 minutes)
-    \item \textbf{Daily batch size:} $O(n \log n)$ Merkle computation (practical for $n < 10^6$ facts)
-    \item \textbf{OTS overhead:} One proof per day regardless of fact count (fixed recurring cost)
-\end{itemize}
-
-\subsection{Research Contributions (hedged and clarified)}
-
-This work presents Track1, a \textbf{practical, open reference implementation} that integrates well-known cryptographic components and timestamping workflows for a focused deployment niche: heritage sites requiring long-term data verifiability without vendor lock-in.
+This work presents Track1 as a \textbf{practical, open reference implementation} that integrates well-known cryptographic components and timestamping workflows for a focused deployment niche: subterranean heritage and irrigation sites requiring long-term data verifiability without vendor lock-in.
 
 \textbf{Key insights:}
 \begin{enumerate}[nosep]
-    \item \textbf{Ultra-low power adaptation:} XChaCha20-Poly1305 AEAD with LoRa duty cycle constraints enables multi-year battery operation in typical configurations
-
-    \item \textbf{Deterministic batching:} Canonical JSON and hash-sorted Merkle trees ensure reproducible roots for independent verification
-
-    \item \textbf{Negligible marginal-cost anchoring:} Daily OpenTimestamps batching amortizes per-fact blockchain costs; after initial node/setup overhead the per-fact incremental cost is effectively negligible compared with commercial timestamping services\footnote{Initial Bitcoin node setup and header synchronization are one-time costs; ongoing node maintenance is small and amortized over many facts.}
-
-    \item \textbf{Open implementation and reproducibility:} A documented reference implementation, ADRs, and test artifacts enable third-party auditors to reproduce verification results
+    \item \textbf{Ultra-low power adaptation:} XChaCha20-Poly1305 AEAD with LoRa-friendly framing and duty-cycle constraints enables multi-year battery operation in typical scalar-telemetry configurations.
+    \item \textbf{Deterministic batching:} Canonical JSON and hash-sorted Merkle trees ensure reproducible roots for independent verification, even under non-deterministic ingestion order and partial failures.
+    \item \textbf{Negligible marginal-cost anchoring:} Daily OpenTimestamps batching amortizes per-fact blockchain costs; after initial node/setup overhead, the incremental cost is effectively negligible compared with commercial timestamping services.\footnote{Initial Bitcoin node setup and header synchronization are one-time costs; ongoing node maintenance is small and amortized over many facts.}
+    \item \textbf{Open implementation and reproducibility:} A documented reference implementation, ADRs, test artifacts, and a LaTeX report enable third-party auditors to reproduce verification results and reason about design trade-offs.
 \end{enumerate}
 
-\textbf{Comparison with prior art (concise):}
+\textbf{Positioning vs. prior art:}
 \begin{itemize}[nosep]
-    \item \textbf{Certificate Transparency / Trillian:} Merkle-based transparency model; Track1 adapts Merkle anchoring to IoT telemetry and uses Bitcoin as the public anchor rather than a dedicated CT log operator
-    \item \textbf{Guardtime KSI:} KSI provides enterprise timestamping with different trust and licensing assumptions; Track1 is an open reference tied to Bitcoin for public attestations
-    \item \textbf{Helium / blockchain-native LoRa networks:} Alternative cost and trust models; Track1 targets a different operational trade-off (daily batching, minimal per-device power)
-    \item \textbf{Commercial IoT platforms:} Vendor-managed telemetry and logs; Track1 emphasizes independent verification and avoidance of vendor lock-in
+    \item \textbf{CT/Trillian:} Track1 adopts Merkle transparency concepts but for IoT telemetry instead of TLS certificates, using Bitcoin as the public anchor rather than dedicated CT log operators.
+    \item \textbf{Guardtime KSI:} Provides similar timestamping capabilities under different trust and licensing assumptions; Track1 fills the niche of an open, Bitcoin-backed reference stack.
+    \item \textbf{Helium / blockchain-native LoRa:} Focus on network economics and coverage; Track1 instead targets duty-cycle- and power-constrained pods with daily batching and independent verification.
+    \item \textbf{Commercial IoT platforms:} Typically centralise telemetry and logging under vendor control; Track1 emphasises auditor independence and forwards-compatibility via open formats and ADRs.
 \end{itemize}
 
-Track1 targets a \textbf{well-defined niche}: publicly-auditable telemetry for heritage sites where curators need long-lived verifiability that survives organizational changes.
+\subsection{Final Remarks and Versioning}
 
-\subsection{Final Remarks (updated)}
+Track1 achieves its immediate goal: a verifiability-first evidence pipeline for resource-constrained subterranean pods, with clearly documented limits and operational constraints. Milestone \#4 delivers a solid foundation with reproducible artifacts, ADRs, and a security/safety net that can support pilot deployments under the guardrails of ADR-022.
 
-Track1 achieves its practical goal: verifiable telemetry for resource-constrained sensors without trusted intermediaries.\ Milestone \#4 delivers a solid foundation with documented artifacts and reproducible verification steps.
+Short term, the focus is on hardening TrackOne for pilots: keeping test coverage at or above the agreed threshold, adding a minimal ledger UI, and turning the documented operational procedures into maintained runbooks. Medium term, the release cadence favours steady, auditable updates over rapid feature drops: incremental 0.1.x versions as ledger automation and benchmarking (ADR-011) land, followed by 0.2+ milestones for larger shifts (Rust modules, watermarking experiments) once justified by benchmarks and funding.
 
-Next steps before broad pilot deployments: increase unit-test coverage to meet the 85\% target, add a small ledger UI for auditors (M\#5), and harden operational runbooks for air-gapped and intermittent networks.
-
-With 200+ tests (2 skipped in some runs) and ongoing verification against live OpenTimestamps calendars, Track1 is positioned for pilot deployments in heritage sensor networks where long-term data integrity is paramount.
-
-\subsection{Positioning against alternative options}
-\textbf{Option A (delivered):} Verifiable telemetry ledger with AEAD, Merkle batching, and OTS/TSA anchoring (this report). Optimized for heritage pods with scalar data, 1.4~Wh/day budget, intermittent links.
-
-\textbf{Option B (deferred):} QIM or related watermarking on bio-impedance or image payloads. Requires instrumentation (oscilloscope, stimulus rigs) and higher bandwidth data streams. Captured as future research; no such payloads exist in M\#4 deployments.
-
-\textbf{Option C (roadmap):} Rust/PyO3 migration for gateway hot paths (ADR-017). Unlocks tighter determinism and lower CPU, contingent on ADR-011 benchmarking and post-0.1.0 stabilization.
-
-The strategy is deliberate: ship Option A, document B/C in ADRs, and gate their execution on hardware funding and benchmark evidence.
-
-\subsection{Release cadence and versioning}
-Track1 favors steady, verifiable releases over rapid feature drops. After v0.0.1-m4, the plan is to tag incremental 0.1.x updates once ledger automation and benchmarking (ADR-011) land, then stage larger changes (Rust modules, QIM experiments) as 0.2+ milestones. This cadence keeps auditors confident—each release arrives with reproducible artifacts, git-cliff changelog (ADR-016), and updated ADR references.
+The overall strategy remains deliberate: ship and maintain Option~A (this evidence pipeline) as a trustworthy base, keep Options~B/C (watermarking, Rust core) explicitly documented in ADRs, and only advance them when the hardware, benchmarks, and safety analysis justify expanding the system's scope beyond TrackOne.

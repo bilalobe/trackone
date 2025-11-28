@@ -98,6 +98,24 @@ Each ADR captures context, the decision, consequences, and alternatives.
   Status: Accepted
   Summary: Standardize OS‑backed CSPRNG usage across Python and Rust; prohibit non‑CSPRNG APIs in crypto contexts; define AEAD nonce sizes and salt policy (16–32 bytes), provide `crypto_rng.py` helper, and require test fakes for deterministic tests.
 
+### Calendar, Verification & Safety
+
+- **ADR‑019: Rust gateway chain of trust for the stationary calendar**
+  Status: Accepted
+  Summary: Treat the stationary calendar as a named component in the TraceOne chain of trust; move gateway logic into Rust, run OTS anchoring through the calendar + public pools, and document provable paths from pods to Bitcoin headers.
+
+- **ADR‑020: Stationary calendar follow-up**
+  Status: Accepted
+  Summary: Clarifies that the current `docker/calendar` container is a tooling sidecar, not a real HTTP calendar, and that `tox -e ots-cal` intentionally keeps `RUN_REAL_OTS=0` while relying on public calendars for production proofs.
+
+- **ADR‑021: Safety net for the OTS pipeline**
+  Status: Proposed
+  Summary: Defines SIL-style impact levels for verification/anchoring components, mandates observability/logging for calendar selection, and ties CI/test coverage to OTS proof integrity so misconfigurations fail loudly.
+
+- **ADR‑022: First-party stationary OTS calendar service in CI**
+  Status: Proposed
+  Summary: Proposes a minimal first-party HTTP calendar for CI/dev (hosted via `docker/calendar` and `tox -e ots-cal`), keeps production on public calendars, and outlines phased migration, config, and documentation requirements.
+
 ### Platform Evolution
 
 ## Tooling & Performance

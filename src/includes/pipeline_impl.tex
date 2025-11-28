@@ -102,3 +102,7 @@ make ci             # full CI simulation
 The M\#5 pipeline: \texttt{pod\_sim --framed} $\rightarrow$ \texttt{frame\_verifier} (real AEAD) $\rightarrow$ \texttt{merkle\_batcher --validate-schemas} $\rightarrow$ \texttt{ots\_anchor} (and optionally TSA) $\rightarrow$ \texttt{peer\_attestation} $\rightarrow$ \texttt{verify\_cli}
 
 Pipeline fails fast if any verification step does not succeed.
+
+\subsection{Reference pod hardware}
+\label{sec:reference-hardware}
+TrackOne treats pod hardware specifics as a reference implementation. The gateway expects pods to emit framed NDJSON per Section~\ref{sec:reference-hardware} (header, base64 nonce, ciphertext, tag) and to provide a secure uplink key (\texttt{ck\_up}) per the device table schema (ADR-006). A full, component-level description of a reference analog front-end (electrodes, INA125P instrumentation amplifier, ADS1115 ADC, and an STM32L4-class MCU) is provided in the Appendix titled ``Reference Pod Hardware'' for readers who require circuit-level detail. For TrackOne itself, the critical contract is the digital frame shape, nonce/salt construction, and AEAD semantics; hardware may vary so long as those contracts are met.
