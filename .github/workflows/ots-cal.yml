@@ -40,19 +40,13 @@ jobs:
           echo "Docker info:"
           docker info
 
-      - name: Start local OTS calendar
-        id: start_calendar
-        run: |
-          cid=$(docker run -d -p 8468:8468 --name trackone_ots_calendar ots/calendar:latest)
-          echo "cid=$cid" >> "$GITHUB_OUTPUT"
-
       - name: Wait for calendar health
         run: |
           echo "Waiting for local calendar on http://127.0.0.1:8468"
           for i in $(seq 1 30); do
             if curl -fsS http://127.0.0.1:8468/ >/dev/null 2>&1; then
-          echo "Local OTS calendar ready."
-          exit 0
+              echo "Local OTS calendar ready."
+              exit 0
             fi
             sleep 2
           done
