@@ -12,7 +12,8 @@ mypy>=1.0.0
 bandit>=1.7.8
 pip-audit>=2.7.3
 time-machine>=2.14.0
-hatchling>=1.27.0
+maturin>=1.7,<2.0
+tox-uv>=1.16.0
 types-jsonschema
 mdformat==1.0.0
 mdformat-gfm==1.0.0
