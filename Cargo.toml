@@ -14,4 +14,4 @@ license = "MIT"
 authors = ["BILAL <elkhatabibilal@gmail.com>"]
 
 [workspace.dependencies]
-pyo3 = { version = "0.22", features = ["extension-module"], default-features = true }
+pyo3 = { version = "0.27", features = ["extension-module"] }
