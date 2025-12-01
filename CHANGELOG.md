@@ -6,13 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## [Unreleased]
+## [0.0.1-m6] - 2025-12-01
 
 ### Added
-- Introduced a Rust workspace to host shared core logic and gateway/pod crates (ADR-017):
+- Introduced a Rust workspace to host shared core logic and gateway/pod crates (ADR-017). These crates are **foundational only** in this pre-release phase; the production gateway and pipeline remain driven by the existing Python implementation:
   - `crates/trackone-core` — platform-agnostic Rust crate for protocol and crypto
     primitives; intended home for Merkle, crypto, and protocol invariants used
-    by both gateway and pod.
+    by both gateway and pod (not yet wired into the live pipeline).
   - `crates/trackone-gateway` — Rust `cdylib` crate exposed to Python via PyO3
     and built with `maturin`; will gradually wrap `trackone-core` and surface
     optimized operations to Python callers.
@@ -31,8 +31,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Switched Python packaging backend from `hatchling` to `maturin` in
   `pyproject.toml`, keeping the existing `scripts` package as the Python
   surface while letting `maturin` build the Rust-backed wheel.
-- Upgraded PyO3 to `0.27` and updated PyO3/PyO3-macros usage in `crates/trackone-gateway` to match the newer API surface (pymodule/submodule registration). This enables building the extension against Python 3.14.
-- CI: standardized jobs that build or install the Rust extension (`lint`, `pipeline`, and `build-wheel`) to use Python 3.14 so tox envs and maturin build steps run consistently across the matrix.
+- Upgraded PyO3 to `0.27` and updated PyO3/PyO3-macros usage in
+  `crates/trackone-gateway` to match the newer API surface
+  (pymodule/submodule registration). This enables building the extension
+  against Python 3.14 while still treating the Rust layer as an internal
+  implementation detail.
+- CI: standardized jobs that build or install the Rust extension (`lint`,
+  `pipeline`, and `build-wheel`) to use Python 3.14 so tox envs and maturin
+  build steps run consistently across the matrix.
+Confirmed that we remain in the 0.0.x pre-release era: 0.0.1-m6 formalizes the Rust workspace, PyO3 0.27, and Python 3.14 CI as internal scaffolding; CLI/API behavior is unchanged.
 - Updated README and ADR-017 to document the Rust workspace layout, crates, and
   phased migration plan from Python-only implementations to Rust-backed
   primitives.
