@@ -1,14 +1,64 @@
-\section{Requirements and Threat Model}
+\section{System Requirements}
+\label{sec:system-requirements}
 
-\subsection{Functional}
-Sub-kB/day, intermittent links, device $\rightarrow$ gateway verification, daily public timestamp proof.
-Anti-replay windowed acceptance at the gateway (default $w{=}64$), deterministic/canonical hashing for reproducibility.
+This section captures the functional requirements, non-functional requirements, and constraints for the Barnacle Pod gateway and ledger system. Each requirement is written in a verifiable form and avoids prescribing implementation details unless mandated by external constraints.
 
-\subsection{Non-functional}
-Ultra--low-power MCU, simple provisioning, reproducible hashing.
+\subsection{Functional Requirements}
+\label{sec:functional-requirements}
 
-% --- Insert: Project scope and roadmap ---
-\subsection{Project scope and roadmap}
+\begin{description}[style=nextline]
+  \item[FR-1 Ingest sensor frames] The system shall ingest radio frames from all configured sensors and associate each frame with a unique device identifier.
+
+  \item[FR-2 Anti-replay window] The system shall maintain, per device, a replay window over a monotonically increasing frame counter. Frames within the configured sliding window that have not been seen before shall be accepted; duplicate or stale frames shall be rejected.
+
+  \item[FR-3 Ledger writing] The system shall write accepted facts to a daily ledger file (\texttt{day.bin}) in a format suitable for Merkle tree construction and external verification.
+
+  \item[FR-4 Audit logging] The system shall emit audit logs for all received frames, including rejected, malformed, or replayed frames, to a separate audit channel (e.g., syslog or metrics).
+
+  \item[FR-5 Merkle batch generation] The system shall periodically batch ledger entries into a Merkle tree, producing a root hash and associated metadata for each day.
+
+  \item[FR-6 OTS stamping] The system shall produce an external timestamping (OTS) proof for each daily Merkle root and store that proof alongside the corresponding ledger artifacts.
+
+  \item[FR-7 Verification tooling] The system shall provide a command-line tool that verifies a given \texttt{day.bin} and its associated OTS proof, failing verification if any ledger entry has been modified or removed.
+
+  \item[FR-8 Configuration management] The system shall load device configuration (keys, salts, IDs) from a well-defined configuration file, and shall fail safely if configuration is missing or inconsistent.
+
+  \item[FR-9 Error handling] The system shall detect and report configuration, decryption, and I/O errors, and shall not silently drop frames or modify ledger data without emitting an error.
+\end{description}
+
+\subsection{Non-Functional Requirements}
+\label{sec:non-functional-requirements}
+
+\begin{description}[style=nextline]
+  \item[NFR-1 Integrity] The system shall guarantee that any modification of \texttt{day.bin} or its associated metadata after OTS stamping is detectable by the verification tooling.
+
+  \item[NFR-2 Separation of concerns] The system shall maintain a clean separation between the ledger (truth) and audit logs (noise, attacks, malformed input). No rejected or replayed frames shall appear in the ledger.
+
+  \item[NFR-3 Performance] The system shall be capable of processing at least $N$ frames per second (to be specified per deployment) on the target hardware while maintaining anti-replay and ledger invariants.
+
+  \item[NFR-4 Dependability] Under normal operating conditions (no disk failure, no configuration corruption), the system shall not lose accepted frames; any I/O failure shall be surfaced as an explicit error.
+
+  \item[NFR-5 Testability] Each requirement in this section shall be verifiable by at least one of: automated test, inspection, or analysis. Vague requirements (e.g., ``fast'') shall be refined into measurable criteria.
+
+  \item[NFR-6 Maintainability] Architectural decisions (e.g., anti-replay policy, ledger vs.\ audit separation) shall be documented as Architecture Decision Records (ADRs) and kept consistent with the implementation and tests.
+\end{description}
+
+\subsection{Constraints}
+\label{sec:constraints}
+
+\begin{description}[style=nextline]
+  \item[C-1 Platform] The gateway software shall run on a Linux-based system using Python as the primary implementation language (with Rust extensions for core logic).
+
+  \item[C-2 Cryptography] The system shall use approved cryptographic primitives and libraries as specified by project policy (XChaCha20-Poly1305, Ed25519, SHA-256), and shall not implement bespoke cryptographic algorithms.
+
+  \item[C-3 Counter wrap-around] For the Barnacle Pod deployment profile, 32-bit frame counter wrap-around is considered out-of-policy due to its negligible probability within the system lifetime. Any observed wrap-around shall be treated as a provisioning or firmware error.
+
+  \item[C-4 Storage format] Daily ledger files (\texttt{day.bin} and associated JSON/metadata) shall be written in backward-compatible formats once deployed, or accompanied by a documented migration path.
+
+  \item[C-5 Logging and privacy] Audit logs shall not contain sensitive key material. Device identifiers and counters may be logged; secret keys and seeds shall never be logged in plaintext.
+\end{description}
+
+\subsection{Project Scope and Roadmap}
 TrackOne is explicitly framed as ``Track One of Three'': the core pipeline that provides ingestion, cryptographic integrity, deterministic batching, and public anchoring. It is an intentionally narrow, verifiability-first track whose deliverables are:
 \begin{itemize}[nosep]
   \item A hardened ingestion pipeline (framed NDJSON + AEAD semantics) and replay protection;
@@ -17,39 +67,70 @@ TrackOne is explicitly framed as ``Track One of Three'': the core pipeline that 
   \item Operational guidance and minimal hardware reference that satisfy the digital contract (frame shape, nonce construction, provisioning).
 \end{itemize}
 
-Features reserved for later tracks (Track Two / Three) include field-deployable control loops, sophisticated on-pod actuation safety interlocks, large-scale analytics and UI, and long-running automated key-rotation/PKI operations. Position TrackOne as an MVP that is ``production-informed'' but not yet a full safety-certified control system.
+Features reserved for later tracks (Track Two / Three) include field-deployable control loops, sophisticated on-pod actuation safety interlocks, large-scale analytics and UI, and long-running automated key-rotation/PKI operations. TrackOne is positioned as an MVP that is ``production-informed'' but not yet a full safety-certified control system.
 
-% --- Insert: Operational and environmental constraints ---
-\subsection{Operational and environmental constraints}
+\subsection{Operational and Environmental Constraints}
 For subterranean irrigation deployments, the physical environment and service model materially change requirements. We therefore set explicit operational constraints that must be observed when deploying TrackOne artifacts in the field:
 \begin{itemize}[nosep]
-  \item Deployment tolerance: pods are expected to be wet, buried, and inaccessible for long durations; hardware must therefore favour robustness and conservative scheduling for maintenance windows.
-  \item Maximum allowed downtime (gateway+backend) for a site: configurable, typical value 24 hours; longer outages must be escalated to human operators.
-  \item Acceptable data loss: define a site-specific bound (e.g., no more than 0.5\% of day's facts lost) beyond which operator rollback or manual audit is required.
-  \item Sampling frequency: default 1--10 samples per hour per pod depending on sensor; higher rates must be justified by an explicit risk/benefit analysis.
-  \item Firmware update policy: updates must support atomic rollback and require an operator-confirmed maintenance window; over-the-air auto-update that can change actuation logic is out-of-scope for TrackOne and deferred to Track Two.
-  \item Storage limits: on-device and gateway storage quotas must be set; when storage is full, pods/gateway must stop non-essential writes and raise an alert to operator channels rather than silently dropping telemetry.
+  \item \textbf{Deployment tolerance:} Pods are expected to be wet, buried, and inaccessible for long durations; hardware must therefore favour robustness and conservative scheduling for maintenance windows.
+  \item \textbf{Maximum allowed downtime:} Configurable per site (typical value 24 hours); longer outages must be escalated to human operators.
+  \item \textbf{Acceptable data loss:} Define a site-specific bound (e.g., no more than 0.5\% of day's facts lost) beyond which operator rollback or manual audit is required.
+  \item \textbf{Sampling frequency:} Default 1--10 samples per hour per pod depending on sensor; higher rates must be justified by an explicit risk/benefit analysis.
+  \item \textbf{Firmware update policy:} Updates must support atomic rollback and require an operator-confirmed maintenance window; over-the-air auto-update that can change actuation logic is out-of-scope for TrackOne.
+  \item \textbf{Storage limits:} On-device and gateway storage quotas must be set; when storage is full, pods/gateway must stop non-essential writes and raise an alert to operator channels rather than silently dropping telemetry.
 \end{itemize}
 
-% --- strengthen threat model ---
-\subsection{Threat model}
-Passive RF eavesdropping; active injection/replay; rogue gateway; physical capture (NVM readout). Additionally, for irrigation deployments we explicitly consider:
+\subsection{Threat Model}
+The system faces passive RF eavesdropping, active injection/replay, rogue gateways, and physical capture (NVM readout). Additionally, for irrigation deployments we explicitly consider:
+
+\begin{description}
+  \item[Communication loss] Prolonged uplink outages and partial replication windows; consequences include delayed anchoring and postponed verification.
+  \item[Clock drift / time sync failures] Incorrect timestamps can corrupt day-chunk boundaries and complicate forensic recomputation.
+  \item[Loss/corruption of field logs] Storage device failures or accidental truncation of \texttt{out/} artifacts.
+  \item[Unsafe actuation] If the system is later used to drive valves/relays, corrupted inputs or stale data may cause over- or under-irrigation with real-world consequences.
+\end{description}
+
+\noindent \textbf{Mitigations:}
 \begin{itemize}[nosep]
-  \item Communication loss: prolonged uplink outages and partial replication windows; consequences include delayed anchoring and postponed verification.
-  \item Clock drift / time sync failures: incorrect timestamps can corrupt day-chunk boundaries and complicate forensic recomputation.
-  \item Loss/corruption of field logs: storage device failures or accidental truncation of \texttt{out/} artifacts.
-  \item Unsafe actuation: if the system is later used to drive valves/relays, corrupted inputs or stale data may cause over- or under-irrigation with real-world consequences.
+  \item \textbf{Communication loss:} Offline-tolerant \emph{Supernode Train} architecture (ADR-019).
+  Gateways build daily Merkle trees and \texttt{day.bin} locally even when uplink is down; \texttt{ots\_anchor} retries anchoring until connectivity returns.
+  Integrity of \texttt{day.bin} is independent of anchor time.
+  \item \textbf{Clock drift:} Facts are assigned to days by gateway ingest time, not pod RTC time. Frame counters (\texttt{fc}) and AEAD verification gate acceptance; pod time is treated as salt/flavour only.
+  Day-chunk boundaries follow NTP-disciplined gateway clocks.
+  \item \textbf{Log integrity:} Peer replication between gateways (ADR-019) ensures redundant copies of Merkle-anchored artifacts; \texttt{verify\_cli} detects local corruption before use.
+  \item \textbf{Unsafe actuation:} TrackOne is sensor-only.
+  Any future actuation layer must use authenticated, replay-protected downlink frames and follow the \emph{Passive First} doctrine (latching valves, limited energy, human-in-the-loop).
 \end{itemize}
 
-Out of scope: side-channels; jamming. Mitigations: framed anti-replay (ADR-002); deterministic artifacts and public timestamping (ADR-003); \textbf{peer attestation of day roots} (Ed25519 quorum) to reduce single-gateway trust; optional \textbf{parallel RFC~3161 TSA anchoring} (ADR-015) alongside OTS for PKI-backed timing.
+\subsection{Irrigation-Specific Requirements}
+To support \textbf{traceability} and operational safety in irrigation contexts, we add a small set of testable, measurable requirements that must be in scope for any deployment using TrackOne artifacts:
 
-% --- Insert: irrigation-specific requirements (concise, testable) ---
-\subsection{Irrigation-specific requirements (traceable)}
-To support traceability and operational safety in irrigation contexts, we add a small set of testable, measurable requirements that must be in scope for any deployment using TrackOne artifacts:
-\begin{itemize}[nosep]
-  \item R-1 (Maximum acceptability of delayed anchoring): For any given day, anchors (OTS proofs) must be present within 72 hours of day end or the system must mark the day as ``pending anchor'' and notify operators.
-  \item R-2 (Maximum tolerable data loss): Daily fact loss must not exceed X\% (site-defined; default 0.5\%). Exceeding this triggers operator review and a preservation workflow.
-  \item R-3 (Sampling \& action separation): Control decisions that affect irrigation volumes MUST not be taken on facts that are older than T hours (default: 24 h) without human confirmation.
-  \item R-4 (Update rollback): Any firmware update that modifies actuation logic must support a verified rollback mechanism and be staged to a small pilot group for at least 7 days before full rollout.
-  \item R-5 (Auditability): All critical operator actions (e.g., manual valve overrides, firmware promote) must be logged with operator identity, timestamp, and Merkle-anchored proof of the day's root that covers the action metadata.
-\end{itemize}
+\begin{description}[style=nextline]
+  \item[R-1 Maximum anchoring delay] For any given day, anchors (OTS proofs) must be present within 72 hours of day end or the system must mark the day as ``pending anchor'' and notify operators.
+  \item[R-2 Maximum tolerable data loss] Daily fact loss must not exceed site-defined limits (default 0.5\%). Exceeding this triggers operator review.
+  \item[R-3 Sampling \& action separation] Control decisions that affect irrigation volumes MUST not be taken on facts that are older than $T$ hours (default: 24 h) without human confirmation.
+  \item[R-4 Update rollback] Any firmware update that modifies actuation logic must support a verified rollback mechanism and be staged to a small pilot group for at least 7 days before full rollout.
+  \item[R-5 Auditability] All critical operator actions (e.g., manual valve overrides, firmware promote) must be logged with operator identity, timestamp, and Merkle-anchored proof of the day's root that covers the action metadata.
+\end{description}
+
+\subsection{Traceability and Verification}
+\label{sec:requirements-traceability}
+
+Requirements are verified via specific automated tests in the CI pipeline:
+
+\begin{table}[h]
+\centering
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Req ID} & \textbf{Requirement Description} & \textbf{Verification Artifact / Test} \\ \hline
+FR-2 & Anti-replay window & \texttt{test\_replay\_window\_unit\_invariants} \\ \hline
+FR-3 & Ledger writing & \texttt{test\_merkle\_batcher\_integration} \\ \hline
+FR-5 & Merkle batching & \texttt{test\_merkle\_determinism} \\ \hline
+FR-6 & OTS Stamping & \texttt{test\_ots\_integration} \\ \hline
+NFR-1 & Integrity & \texttt{verify\_cli} (End-to-End) \\ \hline
+NFR-2 & Separation of Concerns & \texttt{test\_merkle\_batcher\_sees\_duplicate\_free\_fc} \\ \hline
+R-1 & Anchoring Delay & \texttt{test\_ots\_retry\_logic} (Simulated outage) \\ \hline
+\end{tabular}
+\caption{Requirements Traceability Matrix}
+\label{tab:req-traceability}
+\end{table}
