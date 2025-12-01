@@ -124,11 +124,11 @@ Requirements are verified via specific automated tests in the CI pipeline:
 \hline
 \textbf{Req ID} & \textbf{Requirement Description} & \textbf{Verification Artifact / Test} \\ \hline
 FR-2 & Anti-replay window & \texttt{test\_replay\_window\_unit\_invariants} \\ \hline
-FR-3 & Ledger writing & \texttt{test\_merkle\_batcher\_integration} \\ \hline
+FR-3 & Ledger writing & \texttt{test\_merkle\_batcher\_sees\_duplicate\_free\_fc\_sets} \\ \hline
 FR-5 & Merkle batching & \texttt{test\_merkle\_determinism} \\ \hline
 FR-6 & OTS Stamping & \texttt{test\_ots\_integration} \\ \hline
 NFR-1 & Integrity & \texttt{verify\_cli} (End-to-End) \\ \hline
-NFR-2 & Separation of Concerns & \texttt{test\_merkle\_batcher\_sees\_duplicate\_free\_fc} \\ \hline
+NFR-2 & Separation of Concerns & \texttt{test\_merkle\_batcher\_sees\_duplicate\_free\_fc\_sets} \\ \hline
 R-1 & Anchoring Delay & \texttt{test\_ots\_retry\_logic} (Simulated outage) \\ \hline
 \end{tabular}
 \caption{Requirements Traceability Matrix}
