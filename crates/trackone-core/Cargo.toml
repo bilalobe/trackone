@@ -1,0 +1,26 @@
+[package]
+name = "trackone-core"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+# Core cryptographic primitives
+# When adding actual crypto logic, use:
+# sha2 = "0.10"
+# blake3 = "1.5"
+# ed25519-dalek = "2.1"
+# x25519-dalek = "2.0"
+
+[dev-dependencies]
+
+[features]
+default = ["std"]
+std = []
+# Future: alloc feature for no_std with allocator
+# alloc = []
+
+[lib]
+doctest = false
