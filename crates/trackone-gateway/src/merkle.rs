@@ -6,7 +6,7 @@ fn placeholder_root() -> &'static str {
 }
 
 pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
-    let sub = PyModule::new_bound(parent.py(), "merkle")?;
+    let sub = PyModule::new(parent.py(), "merkle")?;
     sub.add_function(wrap_pyfunction!(placeholder_root, &sub)?)?;
     parent.add_submodule(&sub)?;
     Ok(())

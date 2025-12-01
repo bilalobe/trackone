@@ -6,7 +6,8 @@ fn version() -> &'static str {
 }
 
 pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
-    let sub = PyModule::new_bound(parent.py(), "crypto")?;
+    // In PyO3 0.27, create submodule directly via add_submodule with PyModule::new
+    let sub = PyModule::new(parent.py(), "crypto")?;
     sub.add_function(wrap_pyfunction!(version, &sub)?)?;
     parent.add_submodule(&sub)?;
     Ok(())

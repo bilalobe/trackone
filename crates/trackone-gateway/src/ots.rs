@@ -6,7 +6,7 @@ fn placeholder_ots() -> &'static str {
 }
 
 pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
-    let sub = PyModule::new_bound(parent.py(), "ots")?;
+    let sub = PyModule::new(parent.py(), "ots")?;
     sub.add_function(wrap_pyfunction!(placeholder_ots, &sub)?)?;
     parent.add_submodule(&sub)?;
     Ok(())
