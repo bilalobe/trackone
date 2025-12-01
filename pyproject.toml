@@ -19,7 +19,7 @@ classifiers = [
 
 [project.optional-dependencies]
 test = [
-    "hypothesis>=6.148.2",
+    "hypothesis>=6.148.5",
     "opentimestamps-client>=0.7.2",
     "pytest>=9.0.1",
     "pytest-benchmark>=5.2.3",
@@ -29,11 +29,12 @@ test = [
     "pytest-xdist>=3.1.0",
 ]
 dev = [
+    "bandit>=1.7.8",
+    "black>=25.9.11",
     "hypothesis>=6.148.1",
     "mdformat==1.0.0",
     "mdformat-gfm==1.0.0",
     "mdformat-ruff==0.1.3",
-    "maturin==1.10.0",
     "mypy>=1.0.0",
     "opentimestamps-client>=0.7.2",
     "pip-audit>=2.7.3",
@@ -41,9 +42,6 @@ dev = [
     "smmap==6.0.0",
     "time-machine>=2.14.0",
     "uv==0.9.8",
-    "bandit>=1.7.8",
-    "black>=25.9.11",
-    "hatchling>=1.27.0",
 ]
 anchoring = [
     "requests>=2.32.3",
@@ -60,40 +58,27 @@ Changelog = "https://github.com/bilalobe/trackone/blob/main/CHANGELOG.md"
 # trackone-cli = "trackone.cli:main"
 
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["maturin>=1.7,<2.0"]
+build-backend = "maturin"
 
-# Hatchling build configuration
-[tool.hatch.build.targets.wheel]
-packages = ["scripts"]
-# Include only the package source code; exclude tests and build artifacts
+# Maturin build configuration
+[tool.maturin]
+# PyO3 bindings for Rust cdylib (gateway crate in workspace)
+manifest-path = "crates/trackone-gateway/Cargo.toml"
+bindings = "pyo3"
+module-name = "trackone_core"
+# Python sources in scripts/ are handled separately by standard Python packaging
+python-source = "scripts"
+include = [
+    "scripts/**/*.py",
+    "LICENSE",
+    "README.md",
+]
 exclude = [
     "scripts/**/__pycache__",
     "scripts/**/*.pyc",
-    ".git",
-    "build",
-    "dist",
-    "out",
 ]
 
-[tool.hatch.build.targets.sdist]
-include = [
-    "scripts",
-    "toolset",
-    "adr",
-    "requirements.txt",
-    "requirements-dev.txt",
-    "LICENSE",
-    "README.md",
-    "CHANGELOG.md",
-    "Makefile",
-]
-exclude = [
-    "*.pyc",
-    "__pycache__",
-    ".git",
-    "out",
-]
 
 # Pytest configuration
 [tool.pytest.ini_options]

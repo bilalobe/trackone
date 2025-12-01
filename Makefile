@@ -236,3 +236,33 @@ test-one: ## Run a single test or selection quickly: make test-one TEST="tests/u
 ots-verify: ## Verify OTS proofs locally (uses headers-only bitcoind; STRICT_VERIFY=0 by default)
 	@echo "[make] Verifying OTS proofs via tox..."
 	STRICT_VERIFY=$${STRICT_VERIFY:0} TIMEOUT_SECS=$${TIMEOUT_SECS:-600} OUT_DIR=$(OUT_DIR)/day tox -e ots
+
+.PHONY: build-wheel
+build-wheel: ## Build wheel with maturin
+	@echo "[make] Building wheel with maturin..."
+	tox -e maturin-build
+	@echo "[make] ✓ Wheel built in target/wheels/"
+
+.PHONY: cargo-test
+cargo-test: ## Run Rust workspace tests
+	@echo "[make] Running Rust tests..."
+	cargo test --workspace
+	@echo "[make] ✓ Rust tests passed"
+
+.PHONY: cargo-check
+cargo-check: ## Check Rust workspace compilation
+	@echo "[make] Checking Rust workspace..."
+	cargo check --workspace --all-targets
+	@echo "[make] ✓ Rust workspace OK"
+
+.PHONY: cargo-fmt
+cargo-fmt: ## Format Rust code
+	@echo "[make] Formatting Rust code..."
+	cargo fmt --all
+	@echo "[make] ✓ Rust code formatted"
+
+.PHONY: cargo-clippy
+cargo-clippy: ## Run clippy on Rust workspace
+	@echo "[make] Running clippy..."
+	cargo clippy --workspace --all-targets -- -D warnings
+	@echo "[make] ✓ Clippy passed"
