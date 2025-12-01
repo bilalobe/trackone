@@ -200,16 +200,59 @@ In day-to-day development and CI, you do not need to configure anything: tests
 run in stationary stub mode and still enforce the `ots_meta` + artifact hashing
 contract without talking to external calendaring services.
 
+## Rust core and PyO3 gateway
+
+TrackOne now includes a Rust workspace used to host the shared core logic and a
+Python-facing gateway extension (ADR-017):
+
+- `crates/trackone-core` — platform-agnostic Rust crate for protocol and crypto
+  primitives (currently a stub, intended home for Merkle, crypto, and protocol
+  invariants).
+- `crates/trackone-gateway` — Rust `cdylib` crate exposed to Python via PyO3 and
+  built with `maturin`. This crate will gradually wrap `trackone-core` and
+  surface optimized operations to Python.
+- `crates/trackone-pod-fw` — Rust crate for future pod/firmware logic, depending
+  on `trackone-core`.
+
+Python packaging uses `maturin` as the build backend in `pyproject.toml`. Wheels
+are built from the `trackone-gateway` crate and installed alongside the
+`scripts` package. For most contributors, the Rust layer is optional:
+
+- To build the wheel locally:
+
+  ```bash
+  make build-wheel
+  # or
+  tox -e maturin-build
+  ```
+
+- To run Rust tests and checks:
+
+  ```bash
+  make cargo-test      # cargo test --workspace
+  make cargo-check     # cargo check --workspace --all-targets
+  make cargo-fmt       # cargo fmt --all
+  make cargo-clippy    # cargo clippy --workspace --all-targets -- -D warnings
+  ```
+
+The Python API and CLI remain the canonical interface; Rust is an internal
+implementation detail used to accelerate hot paths and to support future
+firmware/pod work.
+
 ## Project layout
 
 - `scripts/`
   - `pod_sim/` — simulator for framed telemetry (`pod_sim.py`)
   - `gateway/` — gateway components: `frame_verifier.py`, `merkle_batcher.py`, `ots_anchor.py`, `verify_cli.py`, `run_pipeline.sh`
+- `crates/`
+  - `trackone-core/` — shared Rust core (protocol + crypto, ADR-017)
+  - `trackone-gateway/` — PyO3/maturin gateway extension crate
+  - `trackone-pod-fw/` — future pod/firmware crate depending on `trackone-core`
 - `toolset/` — examples and test vectors (e.g., `toolset/unified/examples/`)
 - `tests/` — unit, integration, e2e, and benchmark suites
 - `adr/` — Architecture Decision Records and index
 - `docs/` — additional documentation (if present)
-- `out/` — generated artifacts (git‑ignored)
+- `out/` — generated artifacts (git-ignored)
 
 See `adr/README.md` for the full ADR index and implementation status.
 
