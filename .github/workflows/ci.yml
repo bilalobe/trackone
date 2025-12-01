@@ -13,10 +13,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.14
+      - name: Set up Python 3.13
         uses: actions/setup-python@v5
         with:
-          python-version: '3.14'
+          python-version: '3.13'
 
       - name: Cache pip and uv
         uses: actions/cache@v4
@@ -53,7 +53,6 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-
         include:
           - python-version: '3.12'
             toxenv: py312
@@ -108,10 +107,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.14
+      - name: Set up Python 3.13
         uses: actions/setup-python@v5
         with:
-          python-version: '3.14'
+          python-version: '3.13'
 
       - name: Cache pip and uv
         uses: actions/cache@v4
@@ -141,10 +140,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.14
+      - name: Set up Python 3.13
         uses: actions/setup-python@v5
         with:
-          python-version: '3.14'
+          python-version: '3.13'
 
       - name: Cache pip and uv
         uses: actions/cache@v4
@@ -165,7 +164,7 @@ jobs:
       - name: Upload wheel artifact
         uses: actions/upload-artifact@v4
         with:
-          name: wheel-py314
+          name: wheel-py313
           path: target/wheels/*.whl
           if-no-files-found: error
           retention-days: 7
