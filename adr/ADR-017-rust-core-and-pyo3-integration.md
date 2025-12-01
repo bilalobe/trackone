@@ -1,6 +1,6 @@
-# ADR-017: Rust Core and PyO3 Integration Strategy (Latent Goal)
+# ADR-017: Rust Core and PyO3 Integration Strategy
 
-**Status**: Proposed
+**Status**: Accepted
 **Date**: 2025-11-06
 **Milestone Target**: M#6 (post 0.1.0)
 
@@ -20,7 +20,13 @@ Constraints:
 
 ## Decision
 
-Adopt a phased migration to a Rust core crate with PyO3 bindings, used opportunistically by Python (feature‑flag), preserving the Python API surface. The Rust crate exposes canonicalization, hashing, Merkle, and (later) AEAD/signatures; Python keeps orchestration (I/O, OTS/TSA, CLI).
+Adopt a phased migration to a Rust core crate with PyO3 bindings, wired through a Cargo workspace and built with `maturin` as the Python packaging backend. The Rust core is now present in the repo as a workspace with:
+
+- `trackone-core` (Rust library crate)
+- `trackone-gateway` (Rust `cdylib` crate exposed to Python via PyO3/maturin)
+- `trackone-pod-fw` (Rust firmware crate, currently a stub depending on `trackone-core`)
+
+Python remains the orchestrator (I/O, OTS/TSA, CLI), and the Rust crates are used to progressively take over performance-sensitive paths.
 
 ### Scope (initial)
 
@@ -67,10 +73,10 @@ Adopt a phased migration to a Rust core crate with PyO3 bindings, used opportuni
 
 ## Rollout Plan
 
-- Phase 0 (ship latent): Land crate + bindings; keep off by default; ensure wheels build; run parity tests in CI.
-- Phase 1 (enable hashing/Merkle): Default to Rust for canonicalization+Merkle when extension present.
-- Phase 2 (crypto): Gate AEAD/Ed25519 behind feature flag; enable after vectors and misuse tests stabilize.
-- Phase 3 (default on): Use Rust path by default; keep env flag to disable.
+- Phase 0 (land workspace, latent core): Land the Rust workspace (`trackone-core`, `trackone-gateway`, `trackone-pod-fw`) and basic PyO3 integration; build wheels with `maturin` in CI, but keep Python behavior unchanged.
+- Phase 1 (enable hashing/Merkle): Default to Rust for canonicalization+Merkle when the extension is present, keeping Python fallbacks.
+- Phase 2 (crypto): Gate AEAD/Ed25519 behind feature flags; enable after vectors and misuse tests stabilize.
+- Phase 3 (default on): Use the Rust path by default; keep env flag to disable.
 - Phase 4 (optional): Publish a small Rust CLI verifier for auditors (no Python runtime).
 
 ## Implementation Notes
