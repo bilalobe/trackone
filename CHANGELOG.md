@@ -6,6 +6,39 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [Unreleased]
+
+### Added
+- Introduced a Rust workspace to host shared core logic and gateway/pod crates (ADR-017):
+  - `crates/trackone-core` — platform-agnostic Rust crate for protocol and crypto
+    primitives; intended home for Merkle, crypto, and protocol invariants used
+    by both gateway and pod.
+  - `crates/trackone-gateway` — Rust `cdylib` crate exposed to Python via PyO3
+    and built with `maturin`; will gradually wrap `trackone-core` and surface
+    optimized operations to Python callers.
+  - `crates/trackone-pod-fw` — Rust crate for future pod/firmware logic,
+    depending on `trackone-core`.
+- Added basic Rust workspace tooling:
+  - `make cargo-test`, `make cargo-check`, `make cargo-fmt`, `make cargo-clippy`
+    for running tests, checks, formatting, and clippy across the Rust
+    workspace.
+  - `tox` environment `maturin-build` to build wheels via `maturin`, and a
+    `build-wheel` GitHub Actions job that uses
+    `maturin build --manifest-path crates/trackone-gateway/Cargo.toml` to
+    produce the PyO3-backed wheel artifact.
+
+### Changed
+- Switched Python packaging backend from `hatchling` to `maturin` in
+  `pyproject.toml`, keeping the existing `scripts` package as the Python
+  surface while letting `maturin` build the Rust-backed wheel.
+- Updated CI configuration to keep using `tox` for test/lint jobs while adding
+  a dedicated `build-wheel` job that builds the PyO3/maturin gateway wheel
+  from the Rust workspace.
+- Updated README and ADR-017 to document the Rust workspace layout, crates, and
+  phased migration plan from Python-only implementations to Rust-backed
+  primitives.
+
+
 ## [0.0.1-m5.1] - 2025-11-28
 
 ### Added
