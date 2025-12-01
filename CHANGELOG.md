@@ -31,9 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Switched Python packaging backend from `hatchling` to `maturin` in
   `pyproject.toml`, keeping the existing `scripts` package as the Python
   surface while letting `maturin` build the Rust-backed wheel.
-- Updated CI configuration to keep using `tox` for test/lint jobs while adding
-  a dedicated `build-wheel` job that builds the PyO3/maturin gateway wheel
-  from the Rust workspace.
+- Upgraded PyO3 to `0.27` and updated PyO3/PyO3-macros usage in `crates/trackone-gateway` to match the newer API surface (pymodule/submodule registration). This enables building the extension against Python 3.14.
+- CI: standardized jobs that build or install the Rust extension (`lint`, `pipeline`, and `build-wheel`) to use Python 3.14 so tox envs and maturin build steps run consistently across the matrix.
 - Updated README and ADR-017 to document the Rust workspace layout, crates, and
   phased migration plan from Python-only implementations to Rust-backed
   primitives.
