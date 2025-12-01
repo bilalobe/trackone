@@ -241,12 +241,11 @@ def test_pipeline_rejects_duplicates_on_disk(
     # Facts on disk should reflect only unique fc values: 10, 11, 12.
     fact_files = sorted(facts_dir.glob("*.json"))
 
-    # If AEAD setup prevents any facts from being written, we still want to
-    # assert that there were no partial or duplicate writes. In that case we
-    # simply assert the directory is empty and treat this as a soft success.
+    # If AEAD setup prevents any facts from being written, we skip the test
+    # since the duplicate-rejection path was not exercised. This ensures the
+    # test does not falsely pass without verifying the deduplication logic.
     if not fact_files:
-        assert len(fact_files) == 0
-        return
+        pytest.skip("no facts written; replay/dedup path not exercised")
 
     # Normal path: we did write facts; they must be unique per fc.
     assert len(fact_files) == 3
