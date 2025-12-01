@@ -6,7 +6,7 @@ Proposed
 
 ## Context
 
-Trackone ingests telemetry frames from pods. Each frame is identified at least by a device identifier `dev_id` and a frame counter `fc`, plus payload and metadata.
+TrackOne ingests telemetry frames from pods. Each frame is identified at least by a device identifier `dev_id` and a frame counter `fc`, plus payload and metadata.
 
 On the gateway side:
 
