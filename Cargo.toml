@@ -1,0 +1,17 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/trackone-core",
+    "crates/trackone-gateway",
+    "crates/trackone-pod-fw",
+]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2021"
+publish = false
+license = "MIT"
+authors = ["BILAL <elkhatabibilal@gmail.com>"]
+
+[workspace.dependencies]
+pyo3 = { version = "0.22", features = ["extension-module"], default-features = true }
