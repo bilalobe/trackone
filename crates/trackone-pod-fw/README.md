@@ -1,6 +1,6 @@
 # trackone-pod-fw
 
-C4 level: **Component** representing pod firmware logic within the TrackOne system.
+**Component** representing pod firmware logic within the TrackOne system.
 
 # Overview
 

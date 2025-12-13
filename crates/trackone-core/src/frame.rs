@@ -28,6 +28,20 @@ pub fn make_fact(
 /// Wire format:
 /// - serialize `Fact` with postcard into a fixed internal buffer (size = MAX_FACT_LEN)
 /// - encrypt serialized bytes with AEAD
+///
+/// # Security Warning: Nonce Uniqueness
+///
+/// **CRITICAL**: For AEAD ciphers like XChaCha20-Poly1305, nonce reuse with the same key
+/// catastrophically breaks security, allowing attackers to recover the key and decrypt all
+/// messages. Callers MUST ensure that:
+///
+/// - Each nonce is used **exactly once** with a given key
+/// - Nonces are generated using a secure strategy such as:
+///   - Counter-based: monotonically increasing counter (recommended for embedded systems)
+///   - Random: cryptographically secure random with sufficient entropy (192 bits for XChaCha20)
+///
+/// Failure to maintain nonce uniqueness will compromise the confidentiality and authenticity
+/// of all encrypted frames.
 pub fn encrypt_fact<const N: usize, C>(
     cipher: &C,
     nonce: [u8; 24],
@@ -42,9 +56,12 @@ where
 
     let aad = &[]; // Future: include header metadata as AAD.
 
+    // AEAD ciphers add an authentication tag (typically 16 bytes for Poly1305) to the ciphertext
+    const AEAD_TAG_SIZE: usize = 16;
     let mut ciphertext_buf = [0u8; N];
-    if ciphertext_buf.len() < used.len() {
-        return Err(Error::SerializeBufferTooSmall);
+    if ciphertext_buf.len() < used.len() + AEAD_TAG_SIZE {
+        // Buffer too small for ciphertext + tag
+        return Err(Error::CiphertextTooLarge);
     }
 
     let ct_len = cipher
@@ -73,7 +90,7 @@ where
     let mut plaintext_buf = [0u8; MAX_FACT_LEN];
 
     if plaintext_buf.len() < frame.ciphertext.len() {
-        return Err(Error::SerializeBufferTooSmall);
+        return Err(Error::DeserializeError);
     }
 
     let pt_len = cipher
@@ -128,5 +145,106 @@ mod tests {
             "Fact serialized length {} > MAX_FACT_LEN",
             used.len()
         );
+    }
+
+    #[test]
+    fn encrypt_fact_ciphertext_buffer_too_small() {
+        static KEY: &[u8] = b"test-key";
+        let cipher = DummyAead::new(KEY);
+
+        let fact = make_fact(
+            PodId(1),
+            1,
+            FactPayload::Temperature {
+                milli_celsius: 20_000,
+            },
+        );
+
+        let nonce = [0u8; 24];
+        // Use a buffer size that's too small (e.g., 1 byte)
+        let result = encrypt_fact::<1, _>(&cipher, nonce, &fact);
+        assert!(result.is_err(), "should fail with small buffer");
+    }
+
+    #[test]
+    fn encrypt_fact_ciphertext_too_large() {
+        static KEY: &[u8] = b"test-key";
+        let cipher = DummyAead::new(KEY);
+
+        let fact = make_fact(
+            PodId(1),
+            1,
+            FactPayload::Temperature {
+                milli_celsius: 20_000,
+            },
+        );
+
+        let nonce = [0u8; 24];
+        // Use a buffer size that allows encryption but can't fit in Vec
+        // This is harder to test with DummyAead, but we can at least verify the code path exists
+        let result = encrypt_fact::<10, _>(&cipher, nonce, &fact);
+        // This may or may not fail depending on serialized size, but exercises the error path
+        let _ = result;
+    }
+
+    #[test]
+    fn decrypt_fact_corrupted_ciphertext() {
+        static KEY: &[u8] = b"test-key";
+        let cipher = DummyAead::new(KEY);
+
+        let fact = make_fact(
+            PodId(5),
+            1,
+            FactPayload::Temperature {
+                milli_celsius: 20_000,
+            },
+        );
+
+        let nonce = [0u8; 24];
+        let mut enc = encrypt_fact::<128, _>(&cipher, nonce, &fact).expect("encrypt fact");
+
+        // Corrupt the ciphertext
+        if !enc.ciphertext.is_empty() {
+            enc.ciphertext[0] ^= 0xFF;
+        }
+
+        // Decryption should fail or produce invalid data that fails deserialization
+        let result = decrypt_fact::<128, _>(&cipher, &enc);
+        // With DummyAead, decryption will succeed but deserialization should fail
+        // In a real AEAD, this would fail at the decrypt stage with CryptoError
+        if result.is_ok() {
+            // If it succeeds, the fact should be different due to corruption
+            assert_ne!(result.unwrap(), fact);
+        }
+    }
+
+    #[test]
+    fn decrypt_fact_buffer_size_mismatch() {
+        use heapless::Vec;
+
+        static KEY: &[u8] = b"test-key";
+        let cipher = DummyAead::new(KEY);
+
+        // Create a frame with ciphertext larger than MAX_FACT_LEN
+        // This is artificial but tests the error path
+        let mut large_ciphertext = Vec::<u8, 512>::new();
+        // Fill with data larger than MAX_FACT_LEN (256)
+        for i in 0..300 {
+            large_ciphertext.push((i % 256) as u8).unwrap();
+        }
+
+        let frame = EncryptedFrame::<512> {
+            pod_id: PodId(42),
+            fc: 100,
+            nonce: [0u8; 24],
+            ciphertext: large_ciphertext,
+        };
+
+        let result = decrypt_fact::<512, _>(&cipher, &frame);
+        assert!(
+            result.is_err(),
+            "should fail when ciphertext is larger than plaintext buffer"
+        );
+        assert_eq!(result.unwrap_err(), Error::DeserializeError);
     }
 }

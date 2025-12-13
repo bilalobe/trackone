@@ -40,10 +40,57 @@ pub trait AeadDecrypt {
 /// Dummy AEAD implementation used only for tests to validate plumbing.
 #[cfg(any(test, feature = "dummy-aead"))]
 pub mod dummy {
+    // === SECURITY WARNING ===
+    //
+    // The `dummy-aead` feature enables a non-secure, XOR-based AEAD implementation
+    // intended ONLY for testing and development. It provides NO confidentiality and
+    // NO authentication. DO NOT USE IN PRODUCTION.
+    //
+    // To ensure this is not accidentally used in production, we emit a compile-time
+    // error if the `dummy-aead` feature is enabled in a non-test, non-debug build.
+    //
+    // To disable this feature in production, ensure your Cargo.toml does NOT enable
+    // `dummy-aead`, and do not pass `--features dummy-aead` when building for release.
+    //
+    // Example (Cargo.toml):
+    // [features]
+    // default = []
+    // dummy-aead = []
+    //
+    // Example (build command):
+    // cargo build --release --no-default-features
+    //
+    // If you see a compile error below, you are attempting to build with `dummy-aead`
+    // enabled in a non-test, non-debug build. Remove the feature before proceeding.
+    #[cfg(all(feature = "dummy-aead", not(test), not(debug_assertions)))]
+    compile_error!("The `dummy-aead` feature is enabled in a non-test, non-debug build. This is UNSAFE and must not be used in production. Remove the `dummy-aead` feature.");
+
     use super::{AeadDecrypt, AeadEncrypt};
     use crate::types::Error;
 
-    /// Extremely simple XOR-based AEAD for testing only.
+    /// **SECURITY WARNING: DO NOT USE IN PRODUCTION!**
+    ///
+    /// `DummyAead` is an extremely simple XOR-based AEAD implementation for testing
+    /// and development only. It provides **NO confidentiality** and **NO authentication**.
+    ///
+    /// # ⚠️ Never use this in production code!
+    ///
+    /// To avoid accidental use, ensure the `dummy-aead` feature is **not** enabled in
+    /// production builds. For example, in your `Cargo.toml`:
+    ///
+    /// ```toml
+    /// [features]
+    /// default = []
+    /// dummy-aead = []
+    /// ```
+    ///
+    /// And build with:
+    /// ```sh
+    /// cargo build --release --no-default-features
+    /// ```
+    ///
+    /// If you see a compile error about `dummy-aead` in release builds, remove the
+    /// feature before proceeding.
     pub struct DummyAead {
         key: &'static [u8],
     }
@@ -118,4 +165,28 @@ pub mod dummy {
             assert_eq!(&out[..pt_len], plaintext);
         }
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn symmetric_key_instantiation() {
+        let key = SymmetricKey::<32>([42u8; 32]);
+        assert_eq!(key.0[0], 42);
+        assert_eq!(key.0[31], 42);
+    }
+
+    #[test]
+    fn symmetric_key_clone() {
+        let key1 = SymmetricKey::<32>([42u8; 32]);
+        let key2 = key1.clone();
+        assert_eq!(key1.0, key2.0);
+    }
+
+    // Note: Testing actual zeroization on drop is challenging in safe Rust
+    // because we can't safely inspect memory after drop. The zeroize crate
+    // itself has tests that verify the zeroization behavior works correctly.
+    // Here we verify that the type compiles and can be used as expected.
 }
