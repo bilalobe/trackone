@@ -1,0 +1,10 @@
+[package]
+name = "trackone-constants"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+# intentionally empty
