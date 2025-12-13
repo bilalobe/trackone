@@ -4,14 +4,23 @@ members = [
     "crates/trackone-core",
     "crates/trackone-gateway",
     "crates/trackone-pod-fw",
+    "crates/trackone-constants",
 ]
 
 [workspace.package]
-version = "0.0.1"
+version = "0.1.0-alpha.1"
 edition = "2021"
 publish = false
 license = "MIT"
 authors = ["BILAL <elkhatabibilal@gmail.com>"]
+repository = "https://github.com/bilalobe/trackone"
 
 [workspace.dependencies]
 pyo3 = { version = "0.27", features = ["extension-module"] }
+
+[profile.release]
+lto = true
+codegen-units = 1
+opt-level = "z"
+strip = true
+panic = "abort"
