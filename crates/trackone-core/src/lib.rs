@@ -10,33 +10,22 @@
 #![cfg_attr(not(debug_assertions), deny(warnings))]
 
 /// Protocol version string
-pub const VERSION: &str = "0.0.1";
+pub const VERSION: &str = "0.1.0-alpha.1";
 
-/// Core cryptographic primitives module
-pub mod crypto {
-    //! Cryptographic primitives: HKDF, X25519, XChaCha20-Poly1305, Ed25519
-    //!
-    //! This module will contain wrappers around crypto libraries that are
-    //! compatible with both std and no_std environments.
-}
+/// Core shared types for frames, identifiers, and errors.
+pub mod types;
 
-/// Merkle tree and batching logic
-pub mod merkle {
-    //! Merkle tree construction, canonical JSON serialization,
-    //! and proof generation/verification.
-}
+/// Cryptographic abstractions and key/nonce types.
+pub mod crypto;
 
-/// Protocol frame and ledger structures
-pub mod protocol {
-    //! Frame formats, ledger entries, and wire protocol definitions
-    //! shared between gateway and pod.
-}
+/// Frame construction, encryption, and serialization helpers.
+pub mod frame;
 
-/// OpenTimestamps structures and helpers
-pub mod ots {
-    //! OTS proof construction and verification primitives
-    //! (calendar-agnostic).
-}
+/// Gateway-only Merkle tree helpers, enabled via the `gateway` feature.
+#[cfg(feature = "gateway")]
+pub mod merkle;
+
+pub use trackone_constants::MAX_FACT_LEN;
 
 #[cfg(test)]
 mod tests {
@@ -44,6 +33,16 @@ mod tests {
 
     #[test]
     fn version_sanity() {
-        assert_eq!(VERSION, "0.0.1");
+        assert_eq!(VERSION, "0.1.0-alpha.1");
+    }
+
+    #[test]
+    fn types_compile() {
+        use crate::types::{FrameCounter, PodId};
+
+        let pod = PodId(42);
+        let fc: FrameCounter = 7;
+        assert_eq!(pod.0, 42);
+        assert_eq!(fc, 7);
     }
 }

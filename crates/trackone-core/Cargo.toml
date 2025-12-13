@@ -5,22 +5,52 @@ edition.workspace = true
 publish.workspace = true
 license.workspace = true
 authors.workspace = true
-
-[dependencies]
-# Core cryptographic primitives
-# When adding actual crypto logic, use:
-# sha2 = "0.10"
-# blake3 = "1.5"
-# ed25519-dalek = "2.1"
-# x25519-dalek = "2.0"
-
-[dev-dependencies]
+repository = "https://github.com/bilalobe/trackone"
 
 [features]
-default = ["std"]
+# Default to std for host/gateway development and testing.
+# Downstream crates (e.g., pod firmware) should disable default features
+# to build in true no_std mode.
+default = ["std", "dummy-aead"]
+
+# Enable use of the Rust standard library.
 std = []
-# Future: alloc feature for no_std with allocator
-# alloc = []
+
+# Gateway-only helpers (e.g., Merkle tree) that may assume std and
+# are not intended for very small MCUs.
+# Currently this only pulls in sha2, but we keep it as a separate
+# feature so gateway crates can opt in explicitly.
+gateway = ["sha2", "std"]
+
+# Enable the built-in dummy AEAD implementation used for tests and
+# examples. Downstream users targeting production firmware should
+# disable this feature.
+dummy-aead = []
+
+[dependencies]
+# Core data-structure support for no_std environments.
+heapless = { version = "0.8", default-features = false }
+
+# Serialization support; postcard itself is no_std-capable, but we
+# keep features minimal for now. We can refine features as needed
+# once concrete formats are stabilized.
+postcard = { version = "1", default-features = false }
+
+# Serde for (de)serializing core types.
+serde = { version = "1", default-features = false, features = ["derive"] }
+
+# Hashing for Merkle trees and other gateway-only uses.
+sha2 = { version = "0.10", default-features = false, optional = true }
+
+# Zeroize secret key material on drop.
+zeroize = { version = "1", default-features = false, features = ["derive"] }
+
+# Workspace constants dependency
+trackone-constants = { path = "../trackone-constants" }
+
+[dev-dependencies]
+# No special dev-dependencies yet; tests rely on the same core crates.
 
 [lib]
+# Keep doctests disabled for now until public API and examples stabilize.
 doctest = false
