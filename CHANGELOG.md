@@ -5,44 +5,57 @@ All notable changes to Track1 (Barnacle Sentinel) will be documented in this fil
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0-alpha.1] - 2025-12-12
+
+### Added
+- Implemented the first usable skeleton of the `trackone-core` Rust crate (ADR-017 follow-up), intended as the shared protocol/crypto layer for both gateway and pod:
+  - `types` module with `PodId`, `FrameCounter`, `Fact`, `FactPayload`, and a bounded `EncryptedFrame<N>` using `heapless::Vec` for `no_std`-friendly ciphertext storage.
+  - `crypto` module exposing `AeadEncrypt`/`AeadDecrypt` traits and a `SymmetricKey` type, plus a feature-gated `dummy-aead` XOR-based implementation for tests and examples.
+  - `frame` module wiring postcard serialization to AEAD, with `make_fact`, `encrypt_fact`, and `decrypt_fact` helpers that implement the canonical wire format: postcard-encoded `Fact` encrypted into an `EncryptedFrame`.
+  - `merkle` module (behind the `gateway` feature) providing SHA-256 based `hash_frame` and `merkle_root` helpers for gateway-side batching and anchoring.
+- Promoted `MAX_FACT_LEN` to a workspace-level constants crate `crates/trackone-constants` and re-exported it from `trackone-core` as `trackone_core::MAX_FACT_LEN` so all crates share the canonical serialized `Fact` size (256 bytes).
+- Added a unit test ensuring a representative `Fact` serializes within `MAX_FACT_LEN`.
+- Workspace wiring and package metadata updates:
+  - Added `crates/trackone-constants` to the workspace and re-exported `MAX_FACT_LEN` from `trackone-core`.
+  - Set workspace-managed versioning so all member crates inherit `0.1.0-alpha.1` via `version.workspace = true`.
+  - Set `trackone-core` `package.repository` to `https://github.com/bilalobe/trackone` for crates.io metadata.
+- Crate wiring and build hygiene:
+  - `trackone-gateway` now depends on `trackone-core` with `features = ["gateway"]` so gateway builds enable Merkle helpers and `std`.
+  - `trackone-pod-fw` now depends on `trackone-core` with `default-features = false` so firmware builds opt out of `dummy-aead` and `std` by default.
+  - Moved the release profile (`[profile.release]`) to the workspace root `Cargo.toml` and removed per-crate profile definitions to avoid profile duplication warnings.
+- Documentation and developer ergonomics:
+  - Added concise per-crate README files (`trackone-core`, `trackone-gateway`, `trackone-pod-fw`, `trackone-constants`) describing responsibilities, dependencies, and including Mermaid `C4Context` diagrams for quick architecture context.
+
+### Changed
+- Versioning: standardized workspace-managed versioning; the workspace package version is `0.1.0-alpha.1` and member crates inherit it via `version.workspace = true`.
+- Feature model: `trackone-core` is `no_std`-first with an opt-in `std` feature. `gateway` pulls in `sha2` and `std`. The `dummy-aead` feature remains enabled by default for development/testing convenience; production firmware should build with `default-features = false`.
+- `frame` helpers updated to use `MAX_FACT_LEN` (workspace constant) instead of local magic numbers; error reporting refined (SerializeError, DeserializeError, SerializeBufferTooSmall, CiphertextTooLarge, CryptoError).
+- Build profiles: release profile options (LTO, opt-level, panic) are now centralized at the workspace root to ensure consistent release builds and silence duplicate-profile warnings.
+- Documentation: per-crate README files now provide classic architecture overviews and embedded Mermaid diagrams; `trackone-core` re-exports `MAX_FACT_LEN` for consumer convenience.
+- Documentation: reworded per-crate README files to a classic architecture style (Overview / Purpose / Responsibilities), removing the previous "C4 level" phrasing while keeping the Mermaid diagrams for visual context.
+
+### Notes
+- `MAX_FACT_LEN` is a policy knob (256 bytes) chosen for current payloads. If future `FactPayload` variants grow (e.g., diagnostic blobs), increase the constant and add or update tests to assert the new maximum.
+- Keeping `dummy-aead` enabled by default is a development convenience; firmware builds must opt out via `default-features = false` to avoid shipping the dummy AEAD.
+
 
 ## [0.0.1-m6] - 2025-12-01
 
 ### Added
 - Introduced a Rust workspace to host shared core logic and gateway/pod crates (ADR-017). These crates are **foundational only** in this pre-release phase; the production gateway and pipeline remain driven by the existing Python implementation:
-  - `crates/trackone-core` — platform-agnostic Rust crate for protocol and crypto
-    primitives; intended home for Merkle, crypto, and protocol invariants used
-    by both gateway and pod (not yet wired into the live pipeline).
-  - `crates/trackone-gateway` — Rust `cdylib` crate exposed to Python via PyO3
-    and built with `maturin`; will gradually wrap `trackone-core` and surface
-    optimized operations to Python callers.
-  - `crates/trackone-pod-fw` — Rust crate for future pod/firmware logic,
-    depending on `trackone-core`.
+  - `crates/trackone-core` — platform-agnostic Rust crate for protocol and crypto primitives; intended home for Merkle, crypto, and protocol invariants used by both gateway and pod (not yet wired into the live pipeline).
+  - `crates/trackone-gateway` — Rust `cdylib` crate exposed to Python via PyO3 and built with `maturin`; will gradually wrap `trackone-core` and surface optimized operations to Python callers.
+  - `crates/trackone-pod-fw` — Rust crate for future pod/firmware logic, depending on `trackone-core`.
 - Added basic Rust workspace tooling:
-  - `make cargo-test`, `make cargo-check`, `make cargo-fmt`, `make cargo-clippy`
-    for running tests, checks, formatting, and clippy across the Rust
-    workspace.
-  - `tox` environment `maturin-build` to build wheels via `maturin`, and a
-    `build-wheel` GitHub Actions job that uses
-    `maturin build --manifest-path crates/trackone-gateway/Cargo.toml` to
-    produce the PyO3-backed wheel artifact.
+  - `make cargo-test`, `make cargo-check`, `make cargo-fmt`, `make cargo-clippy` for running tests, checks, formatting, and clippy across the Rust workspace.
+  - `tox` environment `maturin-build` to build wheels via `maturin`, and a `build-wheel` GitHub Actions job that uses `maturin build --manifest-path crates/trackone-gateway/Cargo.toml` to produce the PyO3-backed wheel artifact.
 
 ### Changed
-- Switched Python packaging backend from `hatchling` to `maturin` in
-  `pyproject.toml`, keeping the existing `scripts` package as the Python
-  surface while letting `maturin` build the Rust-backed wheel.
-- Upgraded PyO3 to `0.27` and updated PyO3/PyO3-macros usage in
-  `crates/trackone-gateway` to match the newer API surface
-  (pymodule/submodule registration). This enables building the extension
-  against Python 3.14 while still treating the Rust layer as an internal
-  implementation detail.
-- CI: standardized jobs that build or install the Rust extension (`lint`,
-  `pipeline`, and `build-wheel`) to use Python 3.14 so tox envs and maturin
-  build steps run consistently across the matrix.
+- Switched Python packaging backend from `hatchling` to `maturin` in `pyproject.toml`, keeping the existing `scripts` package as the Python surface while letting `maturin` build the Rust-backed wheel.
+- Upgraded PyO3 to `0.27` and updated PyO3/PyO3-macros usage in `crates/trackone-gateway` to match the newer API surface (pymodule/submodule registration). This enables building the extension against Python 3.14 while still treating the Rust layer as an internal implementation detail.
+- CI: standardized jobs that build or install the Rust extension (`lint`, `pipeline`, and `build-wheel`) to use Python 3.14 so tox envs and maturin build steps run consistently across the matrix.
 Confirmed that we remain in the 0.0.x pre-release era: 0.0.1-m6 formalizes the Rust workspace, PyO3 0.27, and Python 3.14 CI as internal scaffolding; CLI/API behavior is unchanged.
-- Updated README and ADR-017 to document the Rust workspace layout, crates, and
-  phased migration plan from Python-only implementations to Rust-backed
-  primitives.
+- Updated README and ADR-017 to document the Rust workspace layout, crates, and phased migration plan from Python-only implementations to Rust-backed primitives.
 
 
 ## [0.0.1-m5.1] - 2025-11-28
