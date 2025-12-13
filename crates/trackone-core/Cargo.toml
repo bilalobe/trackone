@@ -16,10 +16,12 @@ default = ["std", "dummy-aead"]
 # Enable use of the Rust standard library.
 std = []
 
-# Gateway-only helpers (e.g., Merkle tree) that may assume std and
-# are not intended for very small MCUs.
-# Currently this only pulls in sha2, but we keep it as a separate
-# feature so gateway crates can opt in explicitly.
+# Gateway-only helpers (e.g., Merkle tree) that require the Rust standard library (`std`)
+# and are not compatible with `no_std + alloc` environments. The merkle module uses `Vec::with_capacity`
+# and `to_vec()` which require full `std` support. This feature is not intended for very small MCUs
+# or embedded systems without full `std` support.
+# Currently this pulls in sha2 and requires std. We keep it as a separate feature so gateway crates
+# can opt in explicitly.
 gateway = ["sha2", "std"]
 
 # Enable the built-in dummy AEAD implementation used for tests and
@@ -29,7 +31,7 @@ dummy-aead = []
 
 [dependencies]
 # Core data-structure support for no_std environments.
-heapless = { version = "0.8", default-features = false }
+heapless = { version = "0.8", default-features = false, features = ["serde"] }
 
 # Serialization support; postcard itself is no_std-capable, but we
 # keep features minimal for now. We can refine features as needed

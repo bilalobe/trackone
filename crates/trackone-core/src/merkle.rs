@@ -73,4 +73,54 @@ mod tests {
         let root2 = merkle_root(&leaves).expect("root");
         assert_eq!(root1, root2);
     }
+
+    #[test]
+    fn hash_frame_deterministic() {
+        use crate::types::{PodId, EncryptedFrame};
+        use heapless::Vec;
+
+        let mut ciphertext = Vec::<u8, 64>::new();
+        ciphertext.extend_from_slice(&[1, 2, 3, 4]).unwrap();
+
+        let frame = EncryptedFrame::<64> {
+            pod_id: PodId(42),
+            fc: 100,
+            nonce: [5u8; 24],
+            ciphertext,
+        };
+
+        let hash1 = hash_frame(&frame);
+        let hash2 = hash_frame(&frame);
+        assert_eq!(hash1, hash2, "same frame should produce same hash");
+    }
+
+    #[test]
+    fn hash_frame_different_frames_different_hashes() {
+        use crate::types::{PodId, EncryptedFrame};
+        use heapless::Vec;
+
+        let mut ciphertext1 = Vec::<u8, 64>::new();
+        ciphertext1.extend_from_slice(&[1, 2, 3, 4]).unwrap();
+
+        let frame1 = EncryptedFrame::<64> {
+            pod_id: PodId(42),
+            fc: 100,
+            nonce: [5u8; 24],
+            ciphertext: ciphertext1,
+        };
+
+        let mut ciphertext2 = Vec::<u8, 64>::new();
+        ciphertext2.extend_from_slice(&[1, 2, 3, 5]).unwrap(); // Different last byte
+
+        let frame2 = EncryptedFrame::<64> {
+            pod_id: PodId(42),
+            fc: 100,
+            nonce: [5u8; 24],
+            ciphertext: ciphertext2,
+        };
+
+        let hash1 = hash_frame(&frame1);
+        let hash2 = hash_frame(&frame2);
+        assert_ne!(hash1, hash2, "different frames should produce different hashes");
+    }
 }

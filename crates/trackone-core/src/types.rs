@@ -38,7 +38,7 @@ pub struct Fact {
 ///
 /// The ciphertext is stored in a bounded `heapless::Vec` to keep this
 /// usable in `no_std` environments without a heap.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EncryptedFrame<const N: usize> {
     pub pod_id: PodId,
     pub fc: FrameCounter,
@@ -103,5 +103,20 @@ mod tests {
 
         let decoded: Fact = postcard::from_bytes(used).expect("deserialize fact");
         assert_eq!(fact, decoded);
+    }
+
+    #[test]
+    fn error_display() {
+        assert_eq!(Error::CryptoError.to_string(), "crypto error");
+        assert_eq!(
+            Error::SerializeBufferTooSmall.to_string(),
+            "serialize buffer too small"
+        );
+        assert_eq!(Error::SerializeError.to_string(), "serialize error");
+        assert_eq!(Error::DeserializeError.to_string(), "deserialize error");
+        assert_eq!(
+            Error::CiphertextTooLarge.to_string(),
+            "ciphertext too large for frame capacity"
+        );
     }
 }

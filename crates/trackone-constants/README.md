@@ -1,6 +1,6 @@
 # trackone-constants
 
-C4 level: **Component** providing shared configuration constants for the TrackOne Rust workspace.
+**Component** providing shared configuration constants for the TrackOne Rust workspace.
 
 ## Purpose
 
