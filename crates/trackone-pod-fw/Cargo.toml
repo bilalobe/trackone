@@ -7,7 +7,7 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
-trackone-core = { path = "../trackone-core" }
+trackone-core = { path = "../trackone-core", default-features = false }
 
 [dev-dependencies]
 
