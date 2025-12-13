@@ -13,6 +13,6 @@ fn trackone_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     merkle::register(m)?;
     ots::register(m)?;
 
-    m.add("__version__", "0.0.1")?;
+    m.add("__version__", "0.1.0-alpha.1")?;
     Ok(())
 }

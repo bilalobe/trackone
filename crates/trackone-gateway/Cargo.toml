@@ -12,14 +12,7 @@ crate-type = ["cdylib"]
 doctest = false
 
 [dependencies]
-trackone-core = { path = "../trackone-core" }
+trackone-core = { path = "../trackone-core", features = ["gateway"] }
 pyo3.workspace = true
 
 [dev-dependencies]
-
-[profile.release]
-lto = true
-codegen-units = 1
-opt-level = "z"
-strip = true
-panic = "abort"
