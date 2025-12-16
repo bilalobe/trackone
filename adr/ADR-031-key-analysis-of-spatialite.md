@@ -45,7 +45,7 @@ We decide to:
    - Database artifacts that are part of the “evidence set” are hashed and, where applicable, anchored using OpenTimestamps (or equivalent).
    - We maintain a mapping from higher-level domain artifacts (reports, datasets) to their underlying SpatiaLite sources.
 1. **Document SpatiaLite’s role and limitations in the threat model**:
-   - Clarify what attacks SpatiaLite \*does not\* mitigate (e.g. compromise of the host, malicious extensions).
+   - Clarify what attacks SpatiaLite *does not* mitigate (e.g. compromise of the host, malicious extensions).
    - Clarify what mitigations we rely on from the broader stack (OS hardening, sandboxing, backups, etc.).
 
 ## Alternatives Considered

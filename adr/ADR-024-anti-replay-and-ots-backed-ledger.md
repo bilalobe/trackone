@@ -180,6 +180,6 @@ To enforce this ADR, we use a combination of unit, integration, and end-to-end t
 
 1. **Traceability into requirements**
 
-   Section~\\ref{sec:requirements-traceability} of the main report links ADR-024 to concrete requirements (FR-2, FR-3, FR-11, NFR-1, NFR-2) and to specific tests. The requirements file `includes/requirements_threat.tex` contains a traceability matrix that names the replay/ledger tests, ensuring that future changes to replay policy or ledger wiring must update both tests and documentation.
+   The requirements traceability section of the main report links ADR-024 to concrete requirements (FR-2, FR-3, FR-11, NFR-1, NFR-2) and to specific tests. The requirements file contains a traceability matrix that names the replay/ledger tests, ensuring that future changes to replay policy or ledger wiring must update both tests and documentation.
 
 These tests live under `tests/integration` and `tests/e2e`, are wired into the tox matrix, and are exercised in CI profiles that cover both stubbed and real-OTS calendars (including the stationary calendar used by the weekly ratchet job).

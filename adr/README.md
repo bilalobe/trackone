@@ -102,7 +102,7 @@ Each ADR captures context, the decision, consequences, and alternatives.
   Status: Proposed
   Summary: Defines SIL-style impact levels for verification/anchoring components, mandates observability/logging for calendar selection, and ties CI/test coverage to OTS proof integrity so misconfigurations fail loudly.
 
-  - *Depends on*: ADR-003, ADR-007, ADR-008, ADR-021
+  - *Depends on*: ADR-003, ADR-007, ADR-008
   - *See also*: ADR-010, ADR-014, ADR-020, ADR-022, ADR-024, ADR-030
 
 - **ADR‑023: Prefer OTS for integrity and time anchoring over Git plumbing tools**
@@ -205,6 +205,10 @@ Each ADR captures context, the decision, consequences, and alternatives.
 - **ADR‑012: Parquet Export for Telemetry Facts (0.2.0+)**
   Status: Proposed
   Summary: Add optional Parquet exporter (columnar, partitioned by day/site) derived from canonical JSON; keeps JSON as source of truth for Merkle/OTS, improves analytical scans and storage efficiency.
+
+- **ADR‑031: SpatiaLite Adoption for Geospatial Telemetry**
+  Status: Proposed
+  Summary: Introduces SpatiaLite as the geospatial extension for SQLite to enable efficient storage, indexing, and querying of spatial telemetry data, supporting advanced geospatial analytics and interoperability with OGC standards.
 
 ### Future Roadmap
 
