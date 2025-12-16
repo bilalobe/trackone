@@ -26,7 +26,7 @@ We need a consistent way to:
 
 1. Represent SHTC3-class sensor **capabilities and limitations** (resolution, accuracy, operating range).
 1. Mark whether a reading is **raw** vs **summary**, and if summary: the aggregation semantics.
-3. Expose enough metadata in both canonical facts and SensorThings API to support downstream analysis (e.g., uncertainty handling, quality checks, cross-site comparison).
+1. Expose enough metadata in both canonical facts and SensorThings API to support downstream analysis (e.g., uncertainty handling, quality checks, cross-site comparison).
 
 ## Decision
 
