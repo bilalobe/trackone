@@ -1,7 +1,14 @@
-### ADR-023: Prefer OTS for integrity and time anchoring over Git plumbing tools
+# ADR-023: Prefer OTS for integrity and time anchoring over Git plumbing tools
 
 **Status**: Accepted
-**Date**: 2025‑11‑28
+**Date**: 2025-11-28
+**Related ADRs**:
+
+- ADR-014: Stationary OTS calendar (CI infrastructure)
+- ADR-020: Stationary OTS calendar follow-up (operations context)
+- ADR-021: Safety-net OTS pipeline verification (trust model)
+- ADR-024: Anti-replay and OTS-backed ledger (ledger semantics)
+- ADR-030: EnvFact schema and duty-cycled day.bin anchoring (ledger implementation)
 
 #### Context
 
@@ -121,9 +128,3 @@ When Git and OTS disagree, **OTS wins** for artifact provenance, because its cal
     - Script around Git plumbing for local diagnostics or developer UX.
 
   - But all such uses are **non‑normative**: they must not affect the core verification semantics or replace OTS proofs in any required check.
-
-#### Related decisions
-
-- ADR‑014: Stationary calendar sidecar for deterministic OTS behavior in CI.
-- ADR‑020: Safety‑net design for Merkle/OTS verification and ratchet enforcement.
-- Future ADR: Build and release provenance (container attestations) once GitHub attestation support is available for this repository.
