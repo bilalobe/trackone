@@ -19,8 +19,8 @@ TrackOne ingests environmental measurements from SHTC3-class temperature/humidit
   - Manufacturer-specified **accuracy** bands (e.g. ±0.3 °C, ±2 %RH) that differ from **resolution** (e.g. 0.01 °C, 0.01 %RH).
 - TrackOne already uses immutable "facts" as the canonical data model (see ADR-001, ADR-006, ADR-018).
 - We are adding OGC SensorThings / ArcGIS integration, where Sensors and ObservedProperties must be described, and Observations can represent either:
-- **Raw** samples (per-reading values), or
-- **Summaries** (aggregates over a time window, e.g. hourly/daily).
+  - **Raw** samples (per-reading values), or
+  - **Summaries** (aggregates over a time window, e.g. hourly/daily).
 
 We need a consistent way to:
 

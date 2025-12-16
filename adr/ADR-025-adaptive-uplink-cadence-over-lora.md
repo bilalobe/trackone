@@ -79,9 +79,9 @@ We introduce an **adaptive uplink cadence policy** driven by authenticated, comp
     - Bind the policy to a specific device or device group.
     - Be replay-resistant, by using `policy_epoch` and an AEAD nonce/sequence approach coherent with ADR-002 and ADR-024.
 - Downlink messages are scheduled **only in Class A-style RX windows**:
-- The device opens one or more short RX windows after each uplink.
-- The gateway schedules policy updates in these RX windows.
-- No continuous listening or Class C-like behavior is required; energy remains bounded.
+  - The device opens one or more short RX windows after each uplink.
+  - The gateway schedules policy updates in these RX windows.
+  - No continuous listening or Class C-like behavior is required; energy remains bounded.
 
 ### Gateway-Side Policy Computation
 
@@ -96,13 +96,13 @@ We introduce an **adaptive uplink cadence policy** driven by authenticated, comp
   - The proposed policy objects.
   - The resulting signed/AEAD-wrapped control messages.
 - Gateways write a **policy-change fact** into the TrackOne ledger (ADR-003, ADR-024, ADR-019) whenever:
-- A new `policy_epoch` is issued for a device or group.
-- A policy is rolled back or overridden.
+  - A new `policy_epoch` is issued for a device or group.
+  - A policy is rolled back or overridden.
 
 ### Device Behavior
 
 - On boot, the device:
-- Loads its persisted `policy_epoch` and latest policy.
+  - Loads its persisted `policy_epoch` and latest policy.
   - If no policy is present, uses a **safe default**:
     - E.g., `base_period_s` = configured baseline for the deployment profile.
     - `jitter_pct` = small default (e.g., 10%).
