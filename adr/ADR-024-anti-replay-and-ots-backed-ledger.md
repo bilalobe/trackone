@@ -1,8 +1,16 @@
 # ADR-024: Anti-replay and OTS-backed ledger semantics
 
-## Status
+**Status**: Proposed
+**Date**: 2025-11-28
+**Related ADRs**:
 
-Proposed
+- ADR-002: Replay window and device table (pod-side anti-replay)
+- ADR-003: Merkle canonicalization and OTS anchoring (ledger structure)
+- ADR-006: Forward-only schema and salt8 (schema discipline)
+- ADR-019: Gateway chain of trust (operational chain)
+- ADR-021: Safety-net OTS pipeline verification (verification invariants)
+- ADR-023: Prefer OTS for integrity (trust hierarchy)
+- ADR-030: EnvFact schema and duty-cycled day.bin anchoring (schema instantiation)
 
 ## Context
 
@@ -146,18 +154,32 @@ Why this matters: If you ever need to prove a sensor reading in court (or to a h
 
 ## Testing and CI
 
-To enforce this ADR, we will:
+To enforce this ADR, we use a combination of unit, integration, and end-to-end tests that exercise both the in-memory replay window and the on-disk ledger/OTS behavior.
 
-1. Add integration tests that:
-   - Drive `frame_verifier` + `merkle_batcher` with streams containing duplicates, reordering, and out-of-window frames.
+1. **Replay-window and Merkle-set invariants**
 
-- Assert that the set of `(dev_id, fc)` pairs present in facts consumed by `merkle_batcher` is:
-  - Duplicate-free per `(dev_id, fc)`.
-  - Consistent with the sliding-window invariant (accepting valid out-of-order frames inside the window; rejecting duplicates and frames that are stale or outside the window).
+   Integration tests under `tests/integration/test_replay_merkle_integration.py` drive `frame_verifier` and `merkle_batcher` end-to-end with streams that include duplicates, reordering, and out-of-window frames. They assert that:
 
-2. Optionally add an OTS integration test that:
-   - Builds a small synthetic `day.bin` from an accepted set of frames, stamps it with `ots_anchor`,
-   - Mutates the set with replays or out-of-window frames,
-   - And demonstrates that the mutated `day.bin` has a different hash and cannot share the same OTS proof.
+   - The set of `(dev_id, fc)` pairs present in the facts actually consumed by `merkle_batcher` is:
+     - Duplicate-free per `(dev_id, fc)`, and
+     - Consistent with the configured sliding-window invariant (accepting valid out-of-order frames inside the window; rejecting duplicates and frames that are stale or outside the window).
+   - On-disk artifacts in a temporary `facts/` and `out/` directory contain only the first accepted occurrence of each `(dev_id, fc)` pair. Replayed frames are visible only via audit-style output and do not result in extra JSON fact files.
 
-These tests will live under `tests/integration` and will be marked appropriately (e.g. `@pytest.mark.integration`, `@pytest.mark.real_ots`, `@pytest.mark.slow`) to integrate cleanly with the existing tox/CI profile.
+   One of these tests is explicitly scoped as a disk-level regression for ADR-024, e.g. `test_pipeline_rejects_duplicates_on_disk`, and is marked with `@pytest.mark.integration` (and, where relevant, `@pytest.mark.benchmark` for performance envelopes).
+
+1. **OTS integration and mutation resistance**
+
+   Where CI profiles permit real or stationary OTS interaction (see ADR-021 and calendar CI jobs), end-to-end tests:
+
+   - Build a small synthetic `day.bin` from an accepted, duplicate-free set of frames;
+   - Stamp it with `ots_anchor` and record the resulting proof and meta JSON;
+   - Mutate the set with replays or out-of-window frames and rebuild `day.bin`;
+   - Demonstrate that the mutated `day.bin` has a different hash and cannot share the same OTS proof. Verification via `verify_cli` fails for the tampered artifact.
+
+   These tests are marked with `@pytest.mark.integration` and additional markers such as `real_ots`, `slow`, or `requires_calendar` so that tox environments and CI workflows can select appropriate subsets (e.g. `tox -e ots-cal`, weekly ratchet jobs).
+
+1. **Traceability into requirements**
+
+   Section~\\ref{sec:requirements-traceability} of the main report links ADR-024 to concrete requirements (FR-2, FR-3, FR-11, NFR-1, NFR-2) and to specific tests. The requirements file `includes/requirements_threat.tex` contains a traceability matrix that names the replay/ledger tests, ensuring that future changes to replay policy or ledger wiring must update both tests and documentation.
+
+These tests live under `tests/integration` and `tests/e2e`, are wired into the tox matrix, and are exercised in CI profiles that cover both stubbed and real-OTS calendars (including the stationary calendar used by the weekly ratchet job).

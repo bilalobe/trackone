@@ -1,8 +1,18 @@
 # ADR-022: First-party stationary OTS calendar service in CI
 
-Status: Proposed
-Date: 2025-11-28
-Related: ADR-003, ADR-007, ADR-008, ADR-014, ADR-015, ADR-020, ADR-021
+**Status**: Proposed
+**Date**: 2025-11-28
+**Related ADRs**:
+
+- ADR-003: Merkle canonicalization and OTS anchoring
+- ADR-007: OTS CI verification and Bitcoin headers
+- ADR-008: M4 completion OTS workflow
+- ADR-014: Stationary OTS calendar (original concept)
+- ADR-015: Parallel RFC 3161 anchoring
+- ADR-020: Stationary OTS calendar follow-up (clarification)
+- ADR-021: Safety-net OTS pipeline verification (requirements)
+- ADR-024: Anti-replay and OTS-backed ledger (operational semantics)
+- ADR-030: EnvFact schema and duty-cycled day.bin anchoring
 
 ## Context
 

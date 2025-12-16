@@ -1,8 +1,19 @@
 # ADR-021: Safety net for OTS pipeline and verification
 
-- Status: Proposed
-- Date: 2025-11-25
-- Related: `ADR-003-merkle-canonicalization-and-ots-anchoring.md`, `ADR-007-ots-ci-verification-and-bitcoin-headers.md`, `ADR-008-m4-completion-ots-workflow.md`, `ADR-010-test-suite-refactor-structure-naming.md`, `ADR-014-stationary-ots-calendar.md`, `ADR-018-cryptographic-randomness-and-nonce-policy.md`, `ADR-020-stationary-ots-calendar-followup.md`
+**Status**: Proposed
+**Date**: 2025-11-25
+**Related ADRs**:
+
+- ADR-003: Merkle canonicalization and OTS anchoring
+- ADR-007: OTS CI verification and Bitcoin headers
+- ADR-008: M4 completion OTS workflow
+- ADR-010: Test suite refactor, structure, naming
+- ADR-014: Stationary OTS calendar
+- ADR-018: Cryptographic randomness and nonce policy
+- ADR-020: Stationary OTS calendar follow-up
+- ADR-022: First-party stationary OTS calendar service in CI
+- ADR-024: Anti-replay and OTS-backed ledger
+- ADR-030: EnvFact schema and duty-cycled day.bin anchoring
 
 ## Context
 
@@ -391,3 +402,16 @@ If any of these criteria regress (e.g., CI skips OTS tests, or proof metadata sc
   - Clear documentation and operator guidance.
 
 The intent is a practical, reviewable safety net that can evolve alongside the rest of the TrackOne architecture.
+
+## See also
+
+- [ADR-003: Merkle canonicalization and OTS anchoring](003-merkle-canonicalization-and-ots-anchoring.md)
+- [ADR-007: OTS CI verification and Bitcoin headers](007-ots-ci-verification-and-bitcoin-headers.md)
+- [ADR-008: M4 completion OTS workflow](008-m4-completion-ots-workflow.md)
+- [ADR-010: Test suite refactor, structure, naming](010-test-suite-refactor-structure-naming.md)
+- [ADR-014: Stationary OTS calendar](014-stationary-ots-calendar.md)
+- [ADR-018: Cryptographic randomness and nonce policy](018-cryptographic-randomness-and-nonce-policy.md)
+- [ADR-020: Stationary OTS calendar follow-up](020-stationary-ots-calendar-followup.md)
+- [ADR-022: First-party stationary OTS calendar service in CI](022-first-party-stationary-ots-calendar-service-in-ci.md)
+- [ADR-024: Anti-replay and OTS-backed ledger](024-anti-replay-and-ots-backed-ledger.md)
+- [ADR-030: EnvFact schema and duty-cycled day.bin anchoring](030-envfact-schema-and-duty-cycled-day.bin-anchoring.md)
