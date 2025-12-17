@@ -1,0 +1,38 @@
+version: 2
+
+updates:
+  # Python dependencies managed via pyproject/requirements + uv.lock
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    # Dependabot will look at pyproject.toml and requirements*.txt.
+    # uv.lock is intentionally *not* edited by Dependabot; maintainers/CI
+    # regenerate it with `uv lock` when constraints change.
+    allow:
+      - dependency-type: "direct"
+      - dependency-type: "indirect"
+    labels:
+      - "dependencies"
+      - "python"
+    open-pull-requests-limit: 5
+
+  # Rust workspace (trackone-core, trackone-gateway, trackone-pod-fw,...)
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "rust"
+    open-pull-requests-limit: 5
+
+  # GitHub Actions workflows, if/when they exist in .github/workflows
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "ci"
+    open-pull-requests-limit: 2
