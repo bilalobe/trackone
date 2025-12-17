@@ -25,7 +25,7 @@ jobs:
       STRICT_REAL_OTS: ${{ github.ref_name == 'main' && '1' || '0' }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -351,7 +351,7 @@ jobs:
           PY
 
       - name: Upload ratchet metadata
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ratchet-metadata-${{ github.run_id }}
           path: out/ratchet/ratchet.json
