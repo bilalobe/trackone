@@ -47,14 +47,14 @@ jobs:
     steps:
       - name: Checkout (normal events)
         if: github.event_name != 'pull_request_target'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           lfs: true
           fetch-depth: 0
 
       - name: Checkout PR head (when invoked via pull_request_target labeled)
         if: github.event_name == 'pull_request_target' && github.event.pull_request
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: ${{ github.event.pull_request.head.repo.full_name }}
           ref: ${{ github.event.pull_request.head.ref }}
@@ -68,7 +68,7 @@ jobs:
           python-version: '3.14'
 
       - name: Cache pip and uv
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cache/pip
@@ -76,7 +76,7 @@ jobs:
           key: ${{ runner.os }}-pipuv-${{ hashFiles('**/requirements*.txt') }}-${{ hashFiles('pyproject.toml') }}
 
       - name: Cache tox virtualenvs
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .tox
           key: ${{ runner.os }}-tox-ots-${{ hashFiles('tox.ini') }}-${{ hashFiles('**/requirements*.txt') }}-${{ hashFiles('pyproject.toml') }}
@@ -136,7 +136,7 @@ jobs:
 
       - name: Restore bitcoin headers cache
         if: steps.check_ots.outputs.found == 'true'
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.bitcoin
           key: bitcoin-headers-${{ runner.os }}-v${{ env.BITCOIN_CORE_VERSION }}
@@ -175,7 +175,7 @@ jobs:
 
       - name: Upload OTS proof bundle
         if: steps.check_ots.outputs.found == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ots-proof-bundle
           path: |
@@ -190,7 +190,7 @@ jobs:
 
       - name: Upload Bitcoin logs (on failure)
         if: failure() && steps.check_ots.outputs.found == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: bitcoin-logs
           path: |
@@ -202,7 +202,7 @@ jobs:
 
       - name: Save bitcoin headers cache
         if: steps.check_ots.outputs.found == 'true'
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.bitcoin
           key: bitcoin-headers-${{ runner.os }}-v${{ env.BITCOIN_CORE_VERSION }}-${{ github.run_id }}
