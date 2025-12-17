@@ -32,6 +32,18 @@ jobs:
       - name: Fetch tags
         run: git fetch --tags --force
 
+      - name: Initialize job summary
+        run: |
+          {
+            echo "# Weekly Ratchet"
+            echo
+            echo "- Run: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            echo "- Ref: \`${GITHUB_REF}\`"
+            echo "- SHA: \`${GITHUB_SHA}\`"
+            echo "- STRICT_REAL_OTS: \`${STRICT_REAL_OTS:-0}\`"
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Set up Python 3.14
         uses: actions/setup-python@v5
         with:
@@ -90,6 +102,12 @@ jobs:
           set -uo pipefail
           cid=$(docker run -d -p 8468:8468 --name trackone_ots_calendar ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }})
           echo "cid=$cid" >> "$GITHUB_OUTPUT"
+          {
+            echo "## Local calendar"
+            echo "- Container: \`$cid\`"
+            echo "- URL: http://127.0.0.1:8468"
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Wait for local calendar to be ready
         run: |
@@ -152,7 +170,13 @@ jobs:
           # prefer local calendar first
           OTS_CALENDARS: ${{ env.OTS_CALENDARS }}
           OTS_STATIONARY_STUB: '0'
-        run: tox -e ots-cal
+        run: |
+          tox -e ots-cal
+          {
+            echo "## Tox runs"
+            echo "- ots-cal: ✅"
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Run tox -e ots (real calendars)
         id: run_ots
@@ -162,7 +186,13 @@ jobs:
           # prefer local calendar first
           OTS_CALENDARS: ${{ env.OTS_CALENDARS }}
           OTS_STATIONARY_STUB: '0'
-        run: tox -e ots
+        run: |
+          tox -e ots
+          {
+            echo "## Tox runs"
+            echo "- ots: ✅"
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Enforce real OTS coverage
         run: |
