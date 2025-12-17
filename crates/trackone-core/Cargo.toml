@@ -31,7 +31,7 @@ dummy-aead = []
 
 [dependencies]
 # Core data-structure support for no_std environments.
-heapless = { version = "0.8", default-features = false, features = ["serde"] }
+heapless = { version = "0.9", default-features = false, features = ["serde"] }
 
 # Serialization support; postcard itself is no_std-capable, but we
 # keep features minimal for now. We can refine features as needed
