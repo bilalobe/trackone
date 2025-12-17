@@ -68,7 +68,7 @@ jobs:
           python-version: '3.14'
 
       - name: Cache pip and uv
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cache/pip
@@ -76,7 +76,7 @@ jobs:
           key: ${{ runner.os }}-pipuv-${{ hashFiles('**/requirements*.txt') }}-${{ hashFiles('pyproject.toml') }}
 
       - name: Cache tox virtualenvs
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .tox
           key: ${{ runner.os }}-tox-ots-${{ hashFiles('tox.ini') }}-${{ hashFiles('**/requirements*.txt') }}-${{ hashFiles('pyproject.toml') }}
@@ -136,7 +136,7 @@ jobs:
 
       - name: Restore bitcoin headers cache
         if: steps.check_ots.outputs.found == 'true'
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.bitcoin
           key: bitcoin-headers-${{ runner.os }}-v${{ env.BITCOIN_CORE_VERSION }}
@@ -202,7 +202,7 @@ jobs:
 
       - name: Save bitcoin headers cache
         if: steps.check_ots.outputs.found == 'true'
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.bitcoin
           key: bitcoin-headers-${{ runner.os }}-v${{ env.BITCOIN_CORE_VERSION }}-${{ github.run_id }}

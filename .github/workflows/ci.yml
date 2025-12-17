@@ -19,7 +19,7 @@ jobs:
           python-version: '3.14'
 
       - name: Cache pip and uv
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cache/pip
@@ -27,13 +27,13 @@ jobs:
           key: ${{ runner.os }}-pipuv-${{ hashFiles('**/requirements*.txt') }}-${{ hashFiles('pyproject.toml') }}
 
       - name: Cache tox virtualenvs
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .tox
           key: ${{ runner.os }}-tox-${{ hashFiles('tox.ini') }}-${{ hashFiles('**/requirements*.txt') }}-${{ hashFiles('pyproject.toml') }}-${{ hashFiles('.pre-commit-config.yaml') }}
 
       - name: Cache pre-commit
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cache/pre-commit
           key: ${{ runner.os }}-precommit-${{ hashFiles('.pre-commit-config.yaml') }}
@@ -70,7 +70,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Cache pip and uv
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cache/pip
@@ -78,7 +78,7 @@ jobs:
           key: ${{ runner.os }}-pipuv-${{ matrix.python-version }}-${{ hashFiles('**/requirements*.txt') }}-${{ hashFiles('pyproject.toml') }}
 
       - name: Cache tox virtualenvs
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .tox
           key: ${{ runner.os }}-tox-${{ matrix.toxenv }}-${{ hashFiles('tox.ini') }}-${{ hashFiles('**/requirements*.txt') }}-${{ hashFiles('pyproject.toml') }}-${{ hashFiles('.pre-commit-config.yaml') }}
@@ -113,7 +113,7 @@ jobs:
           python-version: '3.14'
 
       - name: Cache pip and uv
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cache/pip
@@ -121,7 +121,7 @@ jobs:
           key: ${{ runner.os }}-pipuv-pipeline-${{ hashFiles('**/requirements*.txt') }}-${{ hashFiles('pyproject.toml') }}
 
       - name: Cache tox virtualenvs
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .tox
           key: ${{ runner.os }}-tox-pipeline-${{ hashFiles('tox.ini') }}-${{ hashFiles('**/requirements*.txt') }}-${{ hashFiles('pyproject.toml') }}
@@ -146,7 +146,7 @@ jobs:
           python-version: '3.14'
 
       - name: Cache pip and uv
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cache/pip

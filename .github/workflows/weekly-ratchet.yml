@@ -50,7 +50,7 @@ jobs:
           python-version: '3.14'
 
       - name: Cache pip and uv
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cache/pip
@@ -58,7 +58,7 @@ jobs:
           key: ${{ runner.os }}-pipuv-weekly-${{ hashFiles('**/requirements*.txt') }}-${{ hashFiles('pyproject.toml') }}
 
       - name: Cache tox virtualenvs
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .tox
           key: ${{ runner.os }}-tox-weekly-${{ hashFiles('tox.ini') }}-${{ hashFiles('**/requirements*.txt') }}-${{ hashFiles('pyproject.toml') }}
