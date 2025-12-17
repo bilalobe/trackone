@@ -351,7 +351,7 @@ jobs:
           PY
 
       - name: Upload ratchet metadata
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ratchet-metadata-${{ github.run_id }}
           path: out/ratchet/ratchet.json

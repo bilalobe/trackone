@@ -175,7 +175,7 @@ jobs:
 
       - name: Upload OTS proof bundle
         if: steps.check_ots.outputs.found == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ots-proof-bundle
           path: |
@@ -190,7 +190,7 @@ jobs:
 
       - name: Upload Bitcoin logs (on failure)
         if: failure() && steps.check_ots.outputs.found == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: bitcoin-logs
           path: |
