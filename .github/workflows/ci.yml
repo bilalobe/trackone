@@ -93,7 +93,7 @@ jobs:
           tox -e ${{ matrix.toxenv }}
 
       - name: Upload coverage artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: coverage-${{ matrix.toxenv }}
           path: coverage.xml
@@ -162,7 +162,7 @@ jobs:
         run: maturin build --release --bindings pyo3 --manifest-path crates/trackone-gateway/Cargo.toml --out target/wheels
 
       - name: Upload wheel artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: wheel-py314
           path: target/wheels/*.whl
