@@ -25,7 +25,7 @@ jobs:
       STRICT_REAL_OTS: ${{ github.ref_name == 'main' && '1' || '0' }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
