@@ -174,8 +174,7 @@ jobs:
             exit 1
           fi
 
-          # Fail if pytest deselected all tests for -m real_ots (e.g., wrong markers)
-          if grep -E "0 selected" "${logs[@]}" >/dev/null; then
+          if grep -E 'collected .* / 0 selected' "${logs[@]}" >/dev/null; then
             echo '::error::Pytest deselected all real_ots tests (0 selected). Check markers and -m usage.'
             [ "${STRICT_REAL_OTS:-0}" = "1" ] && exit 1 || echo '::warning::Continuing because STRICT_REAL_OTS!=1'
           fi
