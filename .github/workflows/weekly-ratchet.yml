@@ -132,7 +132,7 @@ jobs:
       - name: Verify OTS calendar config
         run: |
           python - <<'PY'
-          import os, sys
+          import os
 
           # Prepend local calendar so local scheduler is preferred in tests
           local = 'http://127.0.0.1:8468'
@@ -145,9 +145,9 @@ jobs:
               if p not in seen:
                   seen.append(p)
                   uniq.append(p)
-          os.environ['OTS_CALENDARS'] = ','.join(uniq)
+          updated = ','.join(uniq)
 
-          calendars = [c.strip() for c in os.environ.get('OTS_CALENDARS', '').split(',') if c.strip()]
+          calendars = [c.strip() for c in updated.split(',') if c.strip()]
           required = {
               'https://a.pool.opentimestamps.org',
               'https://b.pool.opentimestamps.org',
@@ -159,8 +159,11 @@ jobs:
           if os.environ.get('OTS_STATIONARY_STUB') != '0':
               raise SystemExit('OTS_STATIONARY_STUB must remain disabled for ratchet runs')
 
-          # Export the updated list for downstream steps (this will appear in job env)
-          print('Updated OTS_CALENDARS=' + os.environ['OTS_CALENDARS'])
+          # IMPORTANT: persist for downstream steps via GITHUB_ENV
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as fh:
+              fh.write(f"OTS_CALENDARS={updated}\n")
+
+          print(f"Updated OTS_CALENDARS={updated}")
           PY
 
       - name: Run tox -e ots-cal
@@ -228,6 +231,11 @@ jobs:
           fi
 
           echo 'Verified ots env executed real calendar paths.'
+          {
+            echo "## Coverage checks"
+            echo "- ots env real-OTS gating: ✅"
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Run tox -e slow (real calendars)
         id: run_slow
@@ -236,7 +244,12 @@ jobs:
           RUN_REAL_OTS: '1'
           OTS_CALENDARS: ${{ env.OTS_CALENDARS }}
           OTS_STATIONARY_STUB: '0'
-        run: tox -e slow
+        run: |
+          tox -e slow
+          {
+            echo "- slow: ✅"
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Enforce slow env real coverage
         run: |
@@ -248,7 +261,8 @@ jobs:
             exit 1
           fi
 
-          if grep -E "0 selected" "${logs[@]}" >/dev/null; then
+          # IMPORTANT: match pytest's "collected X / 0 selected" format to avoid false positives from "40 selected"
+          if grep -E 'collected .* / 0 selected' "${logs[@]}" >/dev/null; then
             echo '::error::Pytest deselected all real_ots tests in slow env (0 selected).'
             [ "${STRICT_REAL_OTS:-0}" = "1" ] && exit 1 || echo '::warning::Continuing because STRICT_REAL_OTS!=1'
           fi
@@ -269,6 +283,10 @@ jobs:
           fi
 
           echo 'Verified slow env exercised real calendar paths.'
+          {
+            echo "- slow env real-OTS gating: ✅"
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Stop local OTS calendar
         if: always()
@@ -359,6 +377,10 @@ jobs:
           with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as fh:
               fh.write(f'tag={new_tag}\n')
           print(f'Next ratchet tag: {new_tag}')
+
+          # Add to summary
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as fh:
+              fh.write(f'\n## Tagging\n- Computed next tag: `{new_tag}`\n\n')
           PY
 
       - name: Annotate ratchet tag
@@ -370,3 +392,7 @@ jobs:
           git config user.email 'trackone-bot@users.noreply.github.com'
           git tag -a "$TAG" -m "Weekly ratchet ${GITHUB_RUN_ID} (tests: ots-cal, ots, slow)"
           git push origin "$TAG"
+          {
+            echo "- Pushed: \`$TAG\` ✅"
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
