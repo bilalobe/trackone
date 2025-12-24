@@ -90,7 +90,7 @@ jobs:
 
       - name: Attest calendar image provenance
         if: github.repository_owner_type == 'Organization' || github.event.repository.private == false
-        uses: actions/attest-build-provenance@v1
+        uses: actions/attest-build-provenance@v3
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           subject-digest: ${{ steps.build_calendar.outputs.digest }}
