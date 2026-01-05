@@ -1,0 +1,92 @@
+@startuml
+    skinparam backgroundColor transparent
+    skinparam shadowing false
+    skinparam nodesep 60
+    skinparam ranksep 50
+    skinparam componentStyle rectangle
+    skinparam arrowThickness 1.5
+    skinparam linetype ortho
+
+    title Virtualized Fleet Network for TrackOne Simulation (QEMU/k8s Setup)
+
+    cloud "Host Machine" {
+      [User/Admin] as User
+      [Wireshark Analyzer] as Wireshark
+    }
+
+    package "Kubernetes Cluster (e.g., Minikube)" {
+
+      package "Pod Fleet (Deployment, scaled replicas)" {
+        [QEMU Pod 1\n(Firmware in emulation/harness)] as Pod1
+        [QEMU Pod 2\n(Firmware in emulation/harness)] as Pod2
+        [QEMU Pod N\n(Firmware in emulation/harness)] as PodN
+
+        note bottom of Pod1
+        Runs trackone-pod-fw;
+        Telemetry over UDP.
+        Note: STM32 peripheral fidelity depends on
+        the chosen QEMU machine model/harness.
+        end note
+      }
+
+      [UDP Telemetry Service\n(Service: ClusterIP)] as UdpService
+      note bottom of UdpService
+      Fleet-to-server UDP ingress.
+      Reliability is best-effort unless the
+      application protocol adds ACK/retry.
+      end note
+
+      [Telemetry Gateway + SensorThings API\n(Deployment)] as Server
+      note right of Server
+      Parses/framing-validates UDP payloads;
+      Maps to OGC SensorThings entities;
+      Exposes HTTP API.
+      end note
+
+      database "SensorThings Storage\n(Postgres / Timeseries DB)" as DB
+
+      [HTTP API Exposure\n(Service + Ingress/LoadBalancer)] as HttpEdge
+
+      [Sensor Data Generator\n(Job/CronJob, optional)] as Generator
+      note left of Generator
+      Produces synthetic sensor facts;
+      Can emit UDP to the same ingress path.
+      end note
+
+      [ConfigMap/Secret\n(config + credentials)] as Config
+
+      package "Observability / Debug (optional)" {
+        [Packet Capture\n(DaemonSet or sidecar tcpdump)] as Capture
+        note bottom of Capture
+        For true packet capture, run capture where the
+        packets traverse (node or pod network namespace).
+        Port-forward is not L2 sniffing.
+        end note
+      }
+    }
+
+    Pod1 --> UdpService : UDP telemetry\n(port 5678)\n(frame: e.g., COBS/Postcard)
+    Pod2 --> UdpService : UDP telemetry
+    PodN --> UdpService : UDP telemetry
+    Generator ..> UdpService : Optional UDP injection
+
+    UdpService --> Server : UDP to gateway listener
+    Server --> DB : Persist\nThings/Datastreams/Observations
+    Server --> HttpEdge : HTTP API\n(/Things, /Observations, ...)
+
+    Config ..> Server : env/config
+    Config ..> Generator : env/config
+
+    Capture ..> UdpService : capture at node/pod netns
+    Wireshark ..> Capture : view pcap (copy/stream)
+
+    User ..> HttpEdge : query API (curl/browser)
+    User ..> Generator : trigger job (optional)
+
+    note top of Server
+    Time semantics:
+    - Ensure node time sync (NTP/chrony) or
+      define server-side timestamping rules.
+    end note
+
+    @enduml
