@@ -237,7 +237,8 @@ Parallel anchoring improves resilience and caters to environments requiring PKI-
 
 \subsection{Deferred alternative channels}
 \textbf{Signal watermarking (Option B):} Experiments with Quantization Index Modulation (QIM) or other watermarking schemes live outside the current telemetry stack. They would augment the \emph{pod} block of Figure~1 by embedding authenticity into analog bio-impedance traces before AEAD.
-Because Track1 pods presently emit low-rate scalar telemetry (no images, no high-rate biosignals), dedicating energy budget to watermarking would provide no security benefit and would collide with the 1.4~Wh/day envelope. These techniques remain in the backlog for future hardware revisions and are documented in ADR-XXX.
+Because Track1 pods presently emit low-rate scalar telemetry (no images, no high-rate biosignals), dedicating energy budget to watermarking would provide no security benefit and would collide with the 1.4~Wh/day envelope.
+These techniques remain in the backlog for future hardware revisions and are documented in ADR-XXX.
 
 \textbf{Rust/PyO3 transition (Option C):} ADR-017 documents a roadmap to port gateway hot paths (AEAD, Merkle, OTS wrapping) to Rust crates exported via PyO3. The architecture diagram already isolates these responsibilities, so the transition becomes an internal replacement of \texttt{frame\_verifier.py}, \texttt{merkle\_batcher.py}, and \texttt{verify\_cli.py} modules.
 Until benchmarking (ADR-011) demonstrates a bottleneck that justifies the added toolchain complexity, the Python implementations remain the reference.
@@ -246,7 +247,8 @@ In both cases the three-tier architecture stays intact: pods emit signed facts, 
 Future channels simply plug into the pod/gateway boundary without rewriting the verifiability stack.
 
 \subsection{Architecture Decision Matrix}
-To help visualise how each major component defends different system goals, the diagram in Figure~\ref{fig:arch-matrix} arranges the five primary components (rows) against the five focal concerns (columns). Each cell concisely captures the key responsibility or behaviour relevant to that axis. This 5x5 matrix makes it easy to explain trade-offs during reviews and spec sign-off.
+To help visualise how each major component defends different system goals, the diagram in Figure~\ref{fig:arch-matrix} arranges the five primary components (rows) against the five focal concerns (columns).
+Each cell concisely captures the key responsibility or behaviour relevant to that axis. This 5x5 matrix makes it easy to explain trade-offs during reviews and spec sign-off.
 
 % Proper 5x5 likelihood x impact matrix
 \begin{figure}[ht]
@@ -313,8 +315,55 @@ To help visualise how each major component defends different system goals, the d
     \end{scope}
 
     % frame
-    \draw[thick] (0,0) rectangle ({\n*\cellsize},{\n*\cellsize});
+    \draw[thick] (0,0) rectangle ({\n*\cellsize},{\n*\cellsize} );
   \end{tikzpicture}
   \caption{5$\times$5 likelihood (x) by impact (y) risk/opportunity matrix. Cells indexed 1..5 (low..high). Markers show prioritized risks (red/orange) and opportunities (green).}
   \label{fig:arch-matrix}
 \end{figure}
+
+\subsection{IoT edge model (RFC 9556)}
+\label{sec:arch-iot-edge}
+TrackOne intentionally places most \emph{security} and \emph{data management} functions at the Pod$\rightarrow$Gateway boundary.
+This follows the ``IoT edge'' model described in RFC~9556\cite{rfc9556}: constrained devices emit minimal, authenticated telemetry, while a more capable edge node (the gateway) performs protocol translation, replay defense, normalization, batching, and interoperability functions.
+
+\textbf{Key alignment with RFC 9556 Section 4:}
+\begin{table}[h]
+\centering
+\caption{TrackOne mapping to RFC 9556 IoT Edge Functions}
+\begin{tabular}{l p{8cm}}
+\toprule
+\textbf{RFC 9556 Function (Sec. 4)} & \textbf{TrackOne Implementation} \\
+\midrule
+Resource Constraints (4.1) & Ultra-low power pods with <1kB/day LoRa budget; gateway handles compute-heavy tasks. \\
+Security and Privacy (4.2) & Edge AEAD encryption (XChaCha20-Poly1305) and anti-replay window at gateway. \\
+Interoperability (4.3) & Projections to OGC SensorThings API from canonical facts. \\
+Scalability (4.4) & Daily Merkle batching for fleet-scale aggregation. \\
+Data Management (4.5) & Canonical JSON normalization and verifiable ledgers. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Concretely:
+\begin{itemize}[nosep]
+    \item Pods prioritize ultra-low-power sensing, framing, and authenticated uplink.
+    \item Gateways exhaust anti-replay, canonicalization, Merkle batching, and OpenTimestamps maintenance (stamp/upgrade).
+    \item External consumers (e.g., OGC SensorThings / ArcGIS dashboards) are fed from a read-only projection derived from the canonical ledger, not from pods directly.
+\end{itemize}
+
+\subsection{IoT edge model (RFC 9556)}
+\label{sec:arch-iot-edge}
+TrackOne intentionally places most \emph{security} and \emph{data management} functions at the Pod$\rightarrow$Gateway boundary.
+This follows the ``IoT edge'' model described in RFC~9556\cite{rfc9556}: constrained devices emit minimal, authenticated telemetry, while a more capable edge node (the gateway) performs protocol translation, replay defense, normalization, batching, and interoperability functions.
+
+Concretely:
+\begin{itemize}[nosep]
+    \item Pods prioritize ultra-low-power sensing, framing, and authenticated uplink.
+    \item Gateways exhaust anti-replay, canonicalization, Merkle batching, and OpenTimestamps maintenance (stamp/upgrade).
+    \item External consumers (e.g., OGC SensorThings / ArcGIS dashboards) are fed from a read-only projection derived from the canonical ledger, not from pods directly.
+\end{itemize}
+
+\subsection{Time semantics}
+\label{sec:arch-time-semantics}
+TrackOne distinguishes between \emph{phenomenon time} (when the physical phenomenon was observed) and \emph{ingest/result time} (when the gateway accepted and recorded it).
+All gateway-issued timestamps are treated as UTC and SHOULD be serialized using RFC~3339 profile of ISO~8601 (e.g., \texttt{2025-12-31T23:59:59Z}) \cite{rfc3339,iso8601}.
+Device-provided ``pod time'' is optional and is treated as advisory metadata only; day-chunk boundaries and ledger assignment follow the gateway clock.
