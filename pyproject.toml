@@ -7,7 +7,7 @@ license = { text = "MIT" }
 readme = "README.md"
 requires-python = ">=3.12,<4.0"
 dependencies = [
-    "pynacl==1.6.1",
+    "pynacl==1.6.2",
     "jsonschema>=4.23.0",
 ]
 classifiers = [
