@@ -1,7 +1,7 @@
 # ADR-032: Proposing an Informational RFC for Verifiable Telemetry Ledgers
 
 **Status**: Proposed
-**Date**: 2025-12-31
+**Date**: 2026-01-04
 **Related ADRs**:
 
 - ADR-003: Canonicalization and OTS anchoring (core ledger mechanics)
