@@ -237,7 +237,7 @@ Parallel anchoring improves resilience and caters to environments requiring PKI-
 
 \subsection{Deferred alternative channels}
 \textbf{Signal watermarking (Option B):} Experiments with Quantization Index Modulation (QIM) or other watermarking schemes live outside the current telemetry stack. They would augment the \emph{pod} block of Figure~1 by embedding authenticity into analog bio-impedance traces before AEAD.
-Because Track1 pods presently emit low-rate scalar telemetry (no images, no high-rate biosignals), dedicating energy budget to watermarking would provide no security benefit and would collide with the 1.4~Wh/day envelope.
+Because Track1 pods presently emit low-rate scalar telemetry (no images, no high-rate biosignals), dedicating energy budget to watermarking would provide no security benefit and would collide with the 1~Wh/day envelope.
 These techniques remain in the backlog for future hardware revisions and are documented in ADR-XXX.
 
 \textbf{Rust/PyO3 transition (Option C):} ADR-017 documents a roadmap to port gateway hot paths (AEAD, Merkle, OTS wrapping) to Rust crates exported via PyO3. The architecture diagram already isolates these responsibilities, so the transition becomes an internal replacement of \texttt{frame\_verifier.py}, \texttt{merkle\_batcher.py}, and \texttt{verify\_cli.py} modules.
@@ -315,7 +315,7 @@ Each cell concisely captures the key responsibility or behaviour relevant to tha
     \end{scope}
 
     % frame
-    \draw[thick] (0,0) rectangle ({\n*\cellsize},{\n*\cellsize} );
+    \draw[thick] (0,0) rectangle ({\n*\cellsize},{\n*\cellsize});
   \end{tikzpicture}
   \caption{5$\times$5 likelihood (x) by impact (y) risk/opportunity matrix. Cells indexed 1..5 (low..high). Markers show prioritized risks (red/orange) and opportunities (green).}
   \label{fig:arch-matrix}
@@ -350,20 +350,8 @@ Concretely:
     \item External consumers (e.g., OGC SensorThings / ArcGIS dashboards) are fed from a read-only projection derived from the canonical ledger, not from pods directly.
 \end{itemize}
 
-\subsection{IoT edge model (RFC 9556)}
-\label{sec:arch-iot-edge}
-TrackOne intentionally places most \emph{security} and \emph{data management} functions at the Pod$\rightarrow$Gateway boundary.
-This follows the ``IoT edge'' model described in RFC~9556\cite{rfc9556}: constrained devices emit minimal, authenticated telemetry, while a more capable edge node (the gateway) performs protocol translation, replay defense, normalization, batching, and interoperability functions.
-
-Concretely:
-\begin{itemize}[nosep]
-    \item Pods prioritize ultra-low-power sensing, framing, and authenticated uplink.
-    \item Gateways exhaust anti-replay, canonicalization, Merkle batching, and OpenTimestamps maintenance (stamp/upgrade).
-    \item External consumers (e.g., OGC SensorThings / ArcGIS dashboards) are fed from a read-only projection derived from the canonical ledger, not from pods directly.
-\end{itemize}
-
 \subsection{Time semantics}
 \label{sec:arch-time-semantics}
 TrackOne distinguishes between \emph{phenomenon time} (when the physical phenomenon was observed) and \emph{ingest/result time} (when the gateway accepted and recorded it).
-All gateway-issued timestamps are treated as UTC and SHOULD be serialized using RFC~3339 profile of ISO~8601 (e.g., \texttt{2025-12-31T23:59:59Z}) \cite{rfc3339,iso8601}.
+All gateway-issued timestamps are treated as UTC and SHOULD be serialized using RFC~3339 profile of ISO~8601 (e.g., \texttt{2026-06-15T14:30:00Z}) \cite{rfc3339,iso8601}.
 Device-provided ``pod time'' is optional and is treated as advisory metadata only; day-chunk boundaries and ledger assignment follow the gateway clock.
