@@ -1,18 +1,17 @@
 \section{Results}
 
-\subsection{Implementation Status (v0.0.1-m5)}
-\textbf{Release date:} November 20, 2025\\
-\textbf{Milestone:} M\#5—Peer Attestation \& Parallel Anchoring
+\subsection{Implementation Status}
+\textbf{Release date:} November 20, 2025
 
 \textbf{Implemented features:}
 \begin{itemize}[nosep]
-    \item Production XChaCha20-Poly1305 AEAD with PyNaCl (M\#3)
-    \item Device table schema v1.0 with forward-only policy (M\#3)
-    \item Replay window with persistent state across restarts (M\#2)
-    \item Deterministic Merkle batching with hash-sorted leaves (M\#1)
-    \item Daily OTS anchoring with verification CLI and Bitcoin attestation (M\#4)
-    \item \textbf{Peer attestation of day roots} with Ed25519 and quorum checks (M\#5)
-    \item \textbf{Parallel RFC~3161 TSA anchoring} (optional, ADR-015) with local verification when artifacts are available (M\#5)
+    \item Production XChaCha20-Poly1305 AEAD with PyNaCl
+    \item Device table schema v1.0 with forward-only policy
+    \item Replay window with persistent state across restarts
+    \item Deterministic Merkle batching with hash-sorted leaves
+    \item Daily OTS anchoring with verification CLI and Bitcoin attestation
+    \item Peer attestation of day roots with Ed25519 and quorum checks
+    \item Parallel RFC~3161 TSA anchoring (optional, ADR-015) with local verification when artifacts are available
     \item End-to-end verification: Merkle recomputation, OTS/TSA proof validation, and local header verification
     \item CI/CD: Multi-version Python testing, deterministic dependency resolution via \texttt{uv}
 \end{itemize}
@@ -23,7 +22,6 @@
     \item Test coverage: \textbf{200+ tests}; measured coverage for gateway and pod simulation modules approximately \textbf{85\%} (target: 85\%).
     \item Skipped/optional tests: A small number of integration tests are optional and may be skipped when external tools (OpenTimestamps client, Bitcoin headers) are unavailable; these skips are intentional and documented.
     \item Coverage gaps: Remaining gaps are concentrated in rare branches and CLI-only error paths that require external dependencies or live networks.
-    These were addressed in M\#5 where feasible; remaining items are rare CLI paths.
     \item Release readiness: Core verification functionality is production-ready: deterministic Merkle batching, stable AEAD primitives, replay protection, and Bitcoin-anchored OTS verification have been validated.
 \end{itemize}
 
@@ -31,7 +29,7 @@
 \begin{center}
 \begin{tabular}{lrl}
 \hline
-\textbf{Module} & \textbf{M\#4 (coverage)} & \textbf{Notes} \\
+\textbf{Module} & \textbf{Coverage} & \textbf{Notes} \\
 \hline
 \texttt{crypto\_utils.py} & 97\% & Cryptographic primitives and vectors validated \\
 \texttt{merkle\_batcher.py} & 90\% & Canonical JSON and deterministic tree construction \\
@@ -74,7 +72,7 @@
     \item Real OTS tests: Optional via \texttt{RUN\_REAL\_OTS=1} (requires \texttt{ots} binary)
 \end{itemize}
 
-\subsection{Milestone M\#4: Bitcoin Attestation Verified}
+\subsection{Bitcoin Attestation Verification}
 
 \textbf{Primary artifact:}\\
 File: \texttt{out/site\_demo/day/2025-10-07.bin}\\
