@@ -4,6 +4,20 @@
 \subsection{Framed ingest (M\#1--M\#5)}
 The gateway receives framed telemetry from simulated devices (pods), performs cryptographic verification, replay detection, and emits canonical facts for Merkle batching and OpenTimestamps (OTS) anchoring.
 
+% ---------------------------------------------------------------------------
+% Figure B1 – Gateway pipeline activity / sequence diagram
+% TODO: Convert the text pipeline into an activity/sequence diagram with actors: Pod, Gateway Ingest, Merkle Batcher, OTS Calendar, Verify CLI.
+% Annotate where anti-replay happens (frame_verifier), where ledger vs audit split lives (facts/day.bin vs logs), and where ots_meta + .bin.ots are stored.
+% Drop the image at: figs/gateway_pipeline_sequence.png
+% Placement: Gateway Pipeline Implementation section.
+\begin{figure}[h]
+  \centering
+  %\includegraphics[width=0.95\textwidth]{figs/gateway_pipeline_sequence.png}
+  \fbox{\parbox[c][3.0cm][c]{0.95\linewidth}{Gateway pipeline diagram placeholder (Pod → Ingest → Merkle Batcher → OTS → Verify CLI)}}
+  \caption{Gateway pipeline: pod emits framed NDJSON; gateway verifies (anti-replay), writes canonical facts; Merkle batcher produces day blob; OTS anchors; verification CLI recomputes and verifies proofs.}
+  \label{fig:gateway-pipeline}
+\end{figure}
+
 \paragraph{Transport and frame shape}
 Frames are emitted as NDJSON (one JSON object per line).
 Each frame contains:
@@ -15,6 +29,12 @@ Each frame contains:
   "tag":   base64(16 bytes authentication tag)
 }
 \end{verbatim}
+
+% PlantUML wire contract diagram (rendered to PNG during build).
+\begin{figure}[h]
+  \caption{TLV wire contract (encode/decode) and decoder robustness rules. Sources in \texttt{src/figs/uml\_tlv\_contract.puml}.}
+  \label{fig:uml-tlv-contract}
+\end{figure}
 
 \textbf{M\#4 implementation:} Full XChaCha20-Poly1305 AEAD with tag verification.
 The gateway decrypts \texttt{ct} using the device's \texttt{ck\_up}, verifies the authentication tag, and validates AAD binding to header fields.
@@ -51,7 +71,7 @@ Forward-only schema policy: no migrations, clean slate at milestone boundaries.
     "last_seen": "2025-10-13T12:34:56Z",
     ...
   }
-}
+}\label{verb:verbatim}
 \end{verbatim}
 
 Schema validated at runtime with clear regeneration guidance on version mismatch.
@@ -103,6 +123,29 @@ The M\#5 pipeline: \texttt{pod\_sim --framed} $\rightarrow$ \texttt{frame\_verif
 
 Pipeline fails fast if any verification step does not succeed.
 
-\subsection{Reference pod hardware}
-\label{sec:reference-hardware}
-TrackOne treats pod hardware specifics as a reference implementation. The gateway expects pods to emit framed NDJSON per Section~\ref{sec:reference-hardware} (header, base64 nonce, ciphertext, tag) and to provide a secure uplink key (\texttt{ck\_up}) per the device table schema (ADR-006). A full, component-level description of a reference analog front-end (electrodes, INA125P instrumentation amplifier, ADS1115 ADC, and an STM32L4-class MCU) is provided in the Appendix titled ``Reference Pod Hardware'' for readers who require circuit-level detail. For TrackOne itself, the critical contract is the digital frame shape, nonce/salt construction, and AEAD semantics; hardware may vary so long as those contracts are met.
+% The hardware reference design is documented once, in the Hardware Appendix.
+% We keep this chapter focused on software/dataflow contracts.
+% (See Appendix~\ref{appendix:hardware}.)
+%
+%\subsection{Reference pod hardware}
+%%\label{sec:reference-hardware}
+%%TrackOne treats pod hardware specifics as a reference implementation. The gateway expects pods to emit framed NDJSON per Section~\ref{sec:reference-hardware} (header, base64 nonce, ciphertext, tag) and to provide a secure uplink key (\texttt{ck\_up}) per the device table schema (ADR-006). A full, component-level description of a reference analog front-end (electrodes, INA125P instrumentation amplifier, ADS1115 ADC, and an STM32L4-class MCU) is provided in the Appendix titled ``Reference Pod Hardware'' for readers who require circuit-level detail. For TrackOne itself, the critical contract is the digital frame shape, nonce/salt construction, and AEAD semantics; hardware may vary so long as those contracts are met.
+
+% Note: if you need a cross-reference in the narrative, point to the appendix:
+% Appendix~\ref{appendix:hardware}.
+
+\subsection{Projection from TrackOne facts to SensorThings}
+The ingestion pipeline operates entirely on the internal TrackOne schema (\texttt{Fact}, \texttt{EnvFact}, day blobs, Merkle roots, OTS metadata). Only after daily artifacts are verified do we populate an external OGC SensorThings store, ensuring the public API remains a projection with cryptographic guarantees.
+
+\begin{enumerate}[nosep]
+  \item Canonical facts are written to disk and committed to the ledger (day Merkle root + OTS proof).
+  \item A gateway service scans verified \texttt{EnvFact} records and populates SensorThings entities:
+        \begin{itemize}[nosep]
+          \item \emph{Things} and \emph{Locations} per pod/site derived from \texttt{device\_id} metadata.
+          \item \emph{Datastreams} per \texttt{SampleType} (ambient air temperature, relative humidity, supply voltage, etc.).
+          \item \emph{Observations} per day (or sub-day window) using \texttt{phenomenon\_time\_*} and the summarised values.
+        \end{itemize}
+  \item Downstream tools (GIS clients, dashboards) consume SensorThings only and never see raw frames or unverifiable intermediate states.
+\end{enumerate}
+
+By describing SensorThings as a projection rather than the system of record, we can rebuild the public API from immutable TrackOne artifacts whenever query needs evolve without touching the pod firmware or verification logic.
