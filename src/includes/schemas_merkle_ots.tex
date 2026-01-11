@@ -31,6 +31,19 @@ Validated by \texttt{day\_record.schema.json}.
   \item If OTS client unavailable, write a placeholder and defer confirmation; proofs can be upgraded later.
 \end{itemize}
 
+% ---------------------------------------------------------------------------
+% Figure B2 – Merkle tree + OTS sidecar schematic
+% TODO: Create a conceptual diagram: left (facts → leaf hashes), middle (Merkle tree → root), right top (day.json/block header chain), right bottom (day.bin.ots + day.bin.meta.json). Emphasize: JSON remains mutable sans proof; proofs live as sidecars.
+% Drop the image at: figs/merkle_ots_sidecar.png
+% Placement: Near OTS policy and immutability discussion.
+\begin{figure}[h]
+  \centering
+  %\includegraphics[width=0.95\textwidth]{figs/merkle_ots_sidecar.png}
+  \fbox{\parbox[c][3.0cm][c]{0.95\linewidth}{Merkle root with OTS sidecar placeholder (facts → tree → root; JSON chain; .bin.ots + meta sidecar)}}
+  \caption{Conceptual view of Merkle batching with OTS sidecar. Changing \texttt{day.bin} changes the Merkle root; changing \texttt{*.ots} does not. Proofs and metadata live alongside immutable blobs, not inside JSON.}
+  \label{fig:merkle-ots-sidecar}
+\end{figure}
+
 \subsubsection{Local verification workflow}
 OpenTimestamps verification requires Bitcoin block headers to validate the Merkle root attestations.
 The complete workflow:
@@ -95,44 +108,6 @@ Strategies (per ADR-007):
 \textbf{Trade-off:} OTS provides trustless Bitcoin-anchored timestamps but requires Bitcoin P2P connectivity.
 For air-gapped deployments, verification must occur offline with pre-downloaded headers or trusted header feeds.
 
-\subsubsection{Local verification workflow}
-OpenTimestamps verification requires Bitcoin block headers to validate the Merkle root attestations. The complete workflow:
-
-\begin{enumerate}[nosep]
-  \item \textbf{Generate OTS proof:} \texttt{ots stamp day/2025-10-07.bin} submits hash to calendar servers
-  \item \textbf{Upgrade proof:} \texttt{ots upgrade day/2025-10-07.bin.ots} fetches Bitcoin attestations (wait 1--6 hours for block confirmation)
-  \item \textbf{Verify proof:} \texttt{ots verify day/2025-10-07.bin.ots} checks Bitcoin block headers contain the committed hash
-\end{enumerate}
-
-Example verification output shows multiple attestations across calendar servers and final Bitcoin block confirmations:
-\begin{verbatim}
-verify BitcoinBlockHeaderAttestation(919388)
-verify BitcoinBlockHeaderAttestation(919384)
-verify BitcoinBlockHeaderAttestation(919418)
-\end{verbatim}
-
-\subsubsection{Bitcoin Core configuration for verification}
-Full Bitcoin blockchain sync is impractical for CI environments (831,862 blocks as of October 2025, $>$500 GB). OTS verification only requires \textbf{block headers} (not full blocks). See ADR-007 for CI policy and operational guidance.
-
-\begin{verbatim}
-# Headers-only/pruned mode (< 1 GB storage)
-bitcoind -daemon \
-  -listen=0 \
-  -blocksonly=1 \
-  -prune=550 \
-  -txindex=0 \
-  -dbcache=50 \
-  -maxconnections=8
-\end{verbatim}
-
-Monitor header sync progress:
-\begin{verbatim}
-bitcoin-cli -getinfo
-# Watch: Verification progress → 100%
-# Headers: 919,923 (current tip)
-\end{verbatim}
-
-Once headers reach the attested block heights (extracted from \texttt{ots info <file.ots>}), verification succeeds without syncing full blocks.
 
 \subsection{Schema validation}
 When \texttt{--validate-schemas} is enabled, validate against:
@@ -142,3 +117,42 @@ When \texttt{--validate-schemas} is enabled, validate against:
   \item \texttt{day\_record.schema.json} (daily aggregates)
 \end{itemize}
 Validation is warning-only in M\#1 to preserve pipeline progress.
+
+\subsection{Environmental facts and SensorThings alignment}
+\label{subsec:env_facts_sensorthings}
+
+On the canonical side, environmental observations are represented as immutable facts with a forward-only schema. Each environmental fact (\texttt{EnvFact}) carries:
+\begin{itemize}
+  \item a \emph{sample type} (e.g., ambient temperature, relative humidity, supply voltage), encoded as a compact enumeration;
+  \item a phenomenon time interval $[t_\text{start}, t_\text{end}]$ in UTC seconds;
+  \item one or more statistical fields (instantaneous value, and/or min, max, mean, count over the window);
+  \item optional quality metadata (data sufficiency, stability index, or uncertainty);
+  \item an optional sensor channel identifier when multiple channels share a pod.
+\end{itemize}
+
+Separate, out-of-band sensor capability metadata describes each physical channel (resolution, accuracy, unit symbol, and a human label). That metadata is versioned and immutable once published, so that downstream consumers can reason about what a given channel\textemdash{}for example an SHTC3-class humidity/temperature sensor\textemdash{}can and cannot guarantee. This corresponds to the design captured in ADR--027.
+
+\subsection{Projection into OGC SensorThings API}
+\label{subsec:projection_sensorthings}
+
+The OGC SensorThings API is used as a read-only, deterministic projection over the canonical fact log, not as an independent system of record. ADR--028 defines the mapping:
+\begin{itemize}
+  \item pods and sites map to \emph{Things} with associated \emph{Locations} derived from deployment facts;
+  \item physical sensors and their capability metadata map to \emph{Sensors} and \emph{ObservedProperties};
+  \item per-quantity streams (e.g., temperature, humidity, battery state-of-charge) map to \emph{Datastreams}, with a clear separation between raw and summary streams;
+  \item each canonical environmental fact becomes one or more \emph{Observations} with \emph{phenomenonTime} taken from the interval above, \emph{resultTime} from the gateway ingest time, and \emph{result} equal to either an instantaneous value or a compact summary object.
+\end{itemize}
+
+All identifiers used in the SensorThings view are derived deterministically from canonical pod identifiers, sample types, and time intervals. This makes the SensorThings layer reproducible from the verifiable fact log and prevents divergence between the projection and the underlying ledger (cf.~ADR--028).
+
+\subsection{Daily environmental summaries and stability indices}
+\label{subsec:env_daily_summaries}
+
+To support long-term monitoring of subterranean microclimates, the gateway computes daily environmental summaries from raw facts, in UTC-aligned windows. ADR--029 formalizes the summary scheme:
+\begin{itemize}
+  \item for each (pod, sample type, day) triple, the system computes min, max, mean, count, and optionally standard deviation and percentiles over the day;
+  \item it derives intra-day and inter-day stability indices that quantify how stable a quantity is within a day and how much it drifts between consecutive days;
+  \item it attaches quality flags when data sufficiency thresholds are not met (e.g., too few samples, large gaps, or suspect variability).
+\end{itemize}
+
+These daily summaries are stored as dedicated canonical facts (with sample type set to a summary variant and an explicit aggregation method field) and projected into separate SensorThings Datastreams as complex Observations. This design keeps the on-pod telemetry simple (one uplink per day or per few hours), while still enabling rich, explainable trend analysis and heritage-focused use cases at the gateway and master-server level (cf.~ADR--029).
