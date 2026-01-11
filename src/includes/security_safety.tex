@@ -2,10 +2,11 @@
 \section{Security and Safety Net}
 \label{sec:security}
 
-This section summarises the threat model, security goals, plausible attacks, critical failures we wish to avoid, and the concrete countermeasures that TrackOne implements or recommends. The text deliberately focuses on the evidence pipeline: collection and aggregation of telemetry facts into daily blobs, deterministic Merkle batching and day roots, anchoring into the OpenTimestamps (OTS) ecosystem (public or stationary calendars), storage of proofs and metadata, and independent verification via \texttt{verify\_cli.py}. Physical attacks on sensors, network confidentiality, and full SIL/IEC 61508 compliance are out of scope for TrackOne; ADR-022 frames operational constraints and traceability for deployments.
+This section summarises the threat model, security goals, plausible attacks, critical failures we wish to avoid, and the concrete countermeasures that Track1 implements or recommends. The text deliberately focuses on the evidence pipeline: collection and aggregation of telemetry facts into daily blobs, deterministic Merkle batching and day roots, anchoring into the OpenTimestamps (OTS) ecosystem (public or stationary calendars), storage of proofs and metadata, and independent verification via \texttt{verify\_cli.py}. Physical attacks on sensors, network confidentiality, and full SIL/IEC 61508 compliance are out of scope for Track1; ADR-022 frames operational constraints and traceability for deployments.
 
 \subsection{Scope}
-We reason about the security of the TrackOne evidence pipeline from ingestion through long-term verifiability. Specifically included:
+We reason about the security of the TrackOne evidence pipeline from ingestion through long-term verifiability. We ground this section in the relevant ADRs: ADR-014/ADR-022 (stationary calendar and operational policy), ADR-019 (chain of custody and replication), ADR-024 (anti-replay and ledger vs. audit separation), and ADR-017 (Rust Track1-core). The cryptographic and Merkle logic may be implemented in both Python and Rust; the \emph{specification and shared tests} define correctness, not any specific language binding.
+Specifically included:
 \begin{itemize}[nosep]
   \item Collection and aggregation of telemetry / canonical facts into per-day blobs and Merkle trees (\texttt{facts/}, \texttt{day/*.bin}, \texttt{blocks/}).
   \item Construction and storage of per-day records (\texttt{day/YYYY-MM-DD.json}, \texttt{day/YYYY-MM-DD.bin}) and Merkle roots (\texttt{day\_root}).
@@ -45,29 +46,30 @@ We categorize adversaries by capability rather than actor name.
   \item \textbf{A2 — Storage adversary / insider:} can modify or delete files in storage (facts, day blobs, proofs, meta) but cannot break standard cryptographic primitives.
   \item \textbf{A3 — Malicious operator / misconfiguration:} can change environment variables, CI markers, or point verification at incorrect roots; may also disable tests accidentally or intentionally.
   \item \textbf{A4 — Buggy or compromised calendar:} a calendar that returns inconsistent proofs, signs incorrect commitments, or equivocates across clients.
+  \item \textbf{A5 — Cross-implementation divergence adversary:} exploits subtle differences between Python and Rust implementations (edge-case encoding, integer over/underflow, or crypto API misuse) to craft inputs that verify in one stack but not the other, sowing confusion or hiding tampering. Countermeasure: golden-corpus tests and CI equivalence gates for TrackOne-core.
 \end{itemize}
 
 \subsection{Representative attack scenarios}
 The table below summarises representative attacks (AT-*) used to reason about countermeasures and failure modes.
 
 \begin{table}[ht]
-\centering
-\caption{Representative attack scenarios (AT-*)}
-\begin{tabular}{p{3cm}p{4cm}p{8cm}}
-\toprule
-\textbf{Attack} & \textbf{Adversary} & \textbf{Description / strategy} \\
-\midrule
-AT-1: Post-hoc tampering & A2 (storage / insider) & Modify \texttt{day.bin} or constituent facts after anchoring; attempt to reuse or forge proofs to keep verification green. \\
-
-AT-2: Proof substitution (``stuffing'') & A2 / A1 & Copy a valid \texttt{.ots} from another artifact and rename it to match the target day; rely on superficial verifier checks that only test file presence. \\
-
-AT-3: Calendar equivocation & A1 / A4 & Run or compromise calendars that present different proof views to different verifiers (split-view), or return proofs for commitments not reflected on main Bitcoin chain. \\
-
-AT-4: CI / operator misconfiguration & A3 & Change CI markers or env vars so OTS/TSA checks are skipped or stubbed in CI while workflows still report green. \\
-
-AT-5: Metadata corruption / loss & A2 / non-malicious failure & Delete or corrupt \texttt{*.ots.meta.json} files making it ambiguous which proof corresponds to which artifact or whether an upgrade occurred. \\
-\bottomrule
-\end{tabular}
+  \centering
+  \caption{Representative attack scenarios (AT-*)}
+  \begin{tabular}{p{3cm}p{4.5cm}p{7.5cm}}
+    \toprule
+    \textbf{Attack} & \textbf{Adversary} & \textbf{Description / strategy} \\
+    \midrule
+    AT-1: Post-hoc tampering & A2 (storage / insider) & Modify \texttt{day.bin} or constituent facts after anchoring; attempt to reuse or forge proofs to keep verification green. \\
+    \addlinespace
+    AT-2: Proof substitution (``stuffing'') & A2 / A1 & Copy a valid \texttt{.ots} from another artifact and rename it to match the target day; rely on superficial verifier checks that only test file presence. \\
+    \addlinespace
+    AT-3: Calendar equivocation & A1 / A4 & Run or compromise calendars that present different proof views to different verifiers (split-view), or return proofs for commitments not reflected on main Bitcoin chain. \\
+    \addlinespace
+    AT-4: CI / operator misconfiguration & A3 & Change CI markers or env vars so OTS/TSA checks are skipped or stubbed in CI while workflows still report green. \\
+    \addlinespace
+    AT-5: Metadata corruption / loss & A2 / non-malicious failure & Delete or corrupt \texttt{*.ots.meta.json} files making it ambiguous which proof corresponds to which artifact or whether an upgrade occurred. \\
+    \bottomrule
+  \end{tabular}
 \end{table}
 
 \subsection{Critical failures}
@@ -120,65 +122,78 @@ The following groups the primary design choices and maps them to attacks and fai
   \item Site-specific operator playbooks (ADR-022) require a 72-hour pilot, staged rollouts, and explicit thresholds (storage, data loss) that trigger operator intervention rather than silent failure.
 \end{itemize}
 
-\subsection{Mechanism mapping (summary table)}
+\subsection{Mechanism mapping}
 \begin{table}[ht]
-\centering
-\caption{Mechanism mapping: attacks/failures to countermeasures}
-\begin{tabular}{p{3cm}p{5cm}p{6cm}}
-\toprule
-\textbf{Attack / Failure} & \textbf{Countermeasure} & \textbf{Mechanism} \\
-\midrule
-AT-1 / CF-1 (post-hoc tampering) & Merkle canonicalization; \texttt{day.bin} canonical; recompute+hash check & Any change to \texttt{day.bin} changes Merkle root; \texttt{verify\_cli} recomputes hashes and rejects mismatched proofs. \\
-\addlinespace
-AT-2 (proof substitution) & Meta schema + hash binding & Meta ties an artifact path and SHA to a proof; wrong proof = hash mismatch = reject. \\
-\addlinespace
-AT-3 / CF-2 (calendar equivocation) & Stationary calendar + explicit calendar config + logs & Stationary calendar yields deterministic proof behaviour in CI; logs and metrics expose equivocation or anomalies before acceptance. \\
-\addlinespace
-AT-4 / CF-4 (CI misconfig) & Tox env contracts, required markers, ADR-022 policies & CI fails PRs that remove or skip critical verification tests; markers gate \texttt{real\_ots} runs. \\
-\addlinespace
-AT-5 / CF-3 (meta loss) & Periodic enumerations, schema validation, archival scripts & Scripts detect missing meta/proof pairs and alert operators; backups and retention policies preserve proof history. \\
-\bottomrule
-\end{tabular}
+  \centering
+  \caption{Mechanism mapping: attacks/failures to countermeasures}
+  \begin{tabular}{p{3cm}p{5cm}p{7cm}}
+    \toprule
+    \textbf{Attack / Failure} & \textbf{Countermeasure} & \textbf{Mechanism} \\
+    \midrule
+    AT-1 / CF-1 (post-hoc tampering) & Merkle canonicalization; \texttt{day.bin} canonical; recompute+hash check & Any change to \texttt{day.bin} changes Merkle root; \texttt{verify\_cli} recomputes hashes and rejects mismatched proofs. \\
+    \addlinespace
+    AT-2 (proof substitution) & Meta schema + hash binding & Meta ties an artifact path and SHA to a proof; wrong proof = hash mismatch = reject. \\
+    \addlinespace
+    AT-3 / CF-2 (calendar equivocation) & Stationary calendar + explicit calendar config + logs & Stationary calendar yields deterministic proof behaviour in CI; logs and metrics expose equivocation or anomalies before acceptance. \\
+    \addlinespace
+    AT-4 / CF-4 (CI misconfig) & Tox env contracts, required markers, ADR-022 policies & CI fails PRs that remove or skip critical verification tests; markers gate \texttt{real\_ots} runs. \\
+    \addlinespace
+    AT-5 / CF-3 (meta loss) & Periodic enumerations, schema validation, archival scripts & Scripts detect missing meta/proof pairs and alert operators; backups and retention policies preserve proof history. \\
+    \addlinespace
+    Stationary OTS calendar sidecar (ADR-014/022) & Calendar equivocation, CI flakiness masking mis-anchors & Deterministic local endpoint plus explicit meta sidecars make anchoring state auditable in CI and staging. \\
+    \addlinespace
+    Anti-replay window + ledger/audit separation (ADR-024) & Duplicate/replayed frames polluting the ledger & Only unique \texttt{(device, fc)} pairs enter the Merkle set; replays logged to audit, never to ledger. \\
+    \addlinespace
+    Rust+Python equivalence tests (TrackOne-core) & Cross-implementation false positives/negatives & Shared golden corpus and CI gate enforce bit-identical outputs across implementations. \\
+    \bottomrule
+  \end{tabular}
 \end{table}
 
+\subsubsection{Stationary Calendar and Anti-Replay Safety Net}
+The combined stationary calendar and anti-replay design form the core of TrackOne's safety net:
+\begin{itemize}[nosep]
+  \item \textbf{Role of a stationary calendar:} A deterministic, locally controlled OTS endpoint for CI and internal deployments reduces dependence on public calendar flakiness and provides a stable target for weekly ``ratchet'' jobs that exercise real OTS flows.
+  \item \textbf{Anti-replay + ledger separation:} The replay window ensures each \texttt{(device\_id, frame\_counter)} contributes at most once to the day Merkle tree. Replayed or out-of-window frames are recorded in audit logs only, never in \texttt{day.bin} (ADR-024: ledger vs. audit separation).
+  \item \textbf{Behaviour under partial failures:} Even with uplink loss or calendar downtime we maintain deterministic \texttt{day.bin} and day roots locally; OTS proofs can be backfilled later without rewriting the ledger, and tampering is detectable via meta sidecars and proof verification.
+\end{itemize}
 \subsection{Opportunity and Risk matrices}
 
 \begin{table}[ht]
-\centering
-\caption{Opportunity matrix: benefits and leverage points for TrackOne}
-\begin{tabular}{p{3cm}p{8.5cm}p{2.5cm}}
-\toprule
-\textbf{Opportunity} & \textbf{Description} & \textbf{Impact} \\
-\midrule
-Predictable audits & Deterministic canonicalization + public anchoring enables low-cost third-party audits and reproducible evidence trails. & High \\
-\addlinespace
-Stationary calendar & Local calendar reduces CI flakiness and provides deterministic proof upgrade behaviour for integration testing. & Medium \\
-\addlinespace
-Peer attestation & Operator peer signatures provide immediate provenance and short-term assurance ahead of blockchain confirmation. & High \\
-\addlinespace
-Low marginal cost & Daily batching amortises anchoring cost across many facts, making long-term deployment economically feasible. & High \\
-\bottomrule
-\end{tabular}
+  \centering
+  \caption{Opportunity matrix: benefits and leverage points for TrackOne}
+  \begin{tabular}{p{3cm}p{8cm}p{4cm}}
+    \toprule
+    \textbf{Opportunity} & \textbf{Description} & \textbf{Impact} \\
+    \midrule
+    Predictable audits & Deterministic canonicalization + public anchoring enables low-cost third-party audits and reproducible evidence trails. & High \\
+    \addlinespace
+    Stationary calendar & Local calendar reduces CI flakiness and provides deterministic proof upgrade behaviour for integration testing. & Medium \\
+    \addlinespace
+    Peer attestation & Operator peer signatures provide immediate provenance and short-term assurance ahead of blockchain confirmation. & High \\
+    \addlinespace
+    Low marginal cost & Daily batching amortises anchoring cost across many facts, making long-term deployment economically feasible. & High \\
+    \bottomrule
+  \end{tabular}
 \end{table}
 
 \begin{table}[ht]
-\centering
-\caption{Risk matrix: primary risks, likelihood, and mitigation priority}
-\begin{tabular}{p{3cm}p{5.5cm}p{2cm}p{2.5cm}}
-\toprule
-\textbf{Risk} & \textbf{Description} & \textbf{Likelihood} & \textbf{Priority} \\
-\midrule
-False-positive verification & Verify CLI reports OK despite artifact tampering or proof mismatch & Low-Medium & High \\
-\addlinespace
-Calendar equivocation & Malicious or compromised calendar returns inconsistent proofs & Low & High \\
-\addlinespace
-Metadata loss / orphaned proofs & Missing or corrupted meta/json makes proof association ambiguous & Medium & Medium \\
-\addlinespace
-CI/Operator misconfiguration & Skipped \texttt{real\_ots} tests or stubbed mode used in prod & Medium & High \\
-\addlinespace
-Hardware failure modes & Sensor drift, electrode corrosion leading to mis-measurement & Medium-High & Medium \\
-\bottomrule
-\end{tabular}
+  \centering
+  \caption{Risk matrix: primary risks, likelihood, and mitigation priority}
+  \begin{tabular}{p{3cm}p{6.5cm}p{2cm}p{3.5cm}}
+    \toprule
+    \textbf{Risk} & \textbf{Description} & \textbf{Likelihood} & \textbf{Priority} \\
+    \midrule
+    False-positive verification & Verify CLI reports OK despite artifact tampering or proof mismatch & Low-Medium & High \\
+    \addlinespace
+    Calendar equivocation & Malicious or compromised calendar returns inconsistent proofs & Low & High \\
+    \addlinespace
+    Metadata loss / orphaned proofs & Missing or corrupted meta/json makes proof association ambiguous & Medium & Medium \\
+    \addlinespace
+    CI/Operator misconfiguration & Skipped \texttt{real\_ots} tests or stubbed mode used in prod & Medium & High \\
+    \addlinespace
+    Hardware failure modes & Sensor drift, electrode corrosion leading to mis-measurement & Medium-High & Medium \\
+    \bottomrule
+  \end{tabular}
 \end{table}
 
 \subsection{Risk/opportunity landscape matrix}
@@ -206,6 +221,16 @@ Hardware failure modes & Sensor drift, electrode corrosion leading to mis-measur
 \label{fig:risk-opportunity-matrix}
 \end{figure}
 
+\subsection{Resilience and Planning}
+The security mechanisms double as a resilience scaffold for field operations and GIS-based planning:
+\begin{itemize}[nosep]
+  \item \textbf{Safety net layering:} Anti-replay at ingest, deterministic per-day Merkle roots, and immutable sidecar proofs ensure that outages or partial failures do not corrupt history. This underpins RR-1 (backlog clearance) and lets operators resume anchoring after link loss without rewriting facts.
+  \item \textbf{Peer attestation as fast provenance:} A quorum of operator signatures on \texttt{day\_root} (RR-4) provides immediate trust for local decisions while public anchors are pending. Quorum parameters are site-tuned in ops policy and surfaced in dashboards.
+  \item \textbf{Stationary calendar for continuity:} When public calendars are unreliable, a stationary calendar provides predictable proofs (ADR-014). Artifacts are marked \emph{pending public anchor} (RR-3) to keep auditors aware while maintaining operational momentum.
+  \item \textbf{GIS-linked maintenance:} Verification anomalies (hash mismatches, missing proofs) and repeated RF failures are emitted as tasks with coordinates into the site GIS (RR-5), including safe approach routes and seasonal access windows defined in deployment runbooks.
+  \item \textbf{Evacuation/flood planning:} Flood sentinel events from pods near hydrological low points trigger a GIS layer update and operator playbooks (close valves, pause actuation, prioritize inspection). The evidence trail ensures post-event review is audit-ready.
+\end{itemize}
+
 \subsection{Discussion and limitations}
 We explicitly acknowledge the remaining risks and limits:
 \begin{itemize}[nosep]
@@ -213,3 +238,13 @@ We explicitly acknowledge the remaining risks and limits:
   \item We rely on Bitcoin as a long-lived root of trust; extreme systemic failures (large-scale chain reorgs, long-term protocol changes) would affect proof semantics. Mitigations include multi-protocol anchoring (TSA) and strong meta bookkeeping (ADR-015).
   \item Operational correctness requires disciplined deployment: misconfigured calendars or CI that treats stubbed OTS as production can undermine the safety net. ADR-022 and CI contracts mitigate this by making pilot/staging explicit and by failing PRs that lower test coverage or gate markers.
 \end{itemize}
+
+\subsection{Anti-replay ledger ADR (ADR-024)}
+ADR-024 formalises the ``ledger vs. audit'' separation for replay handling:
+\begin{itemize}[nosep]
+  \item The replay window is authoritative for what enters the day ledger. Each \texttt{dev\_id, fc} pair is consumed at most once and either lands in the canonical ledger (\texttt{facts/}) or is logged as a rejected replay/out-of-window event.
+  \item Auditable duplicates remain visible in the audit log, but \textbf{never} in the Merkle set for the day; this keeps Merkle roots clean and makes replays evident without polluting the evidence trail.
+  \item Integration tests (\texttt{test\_pipeline\_rejects\_duplicates\_on\_disk}) simulate duplicates/out-of-window frames and assert that only unique facts hit the filesystem and that Merkle batching sees deduplicated sets.
+  \item An optional synthetic day blob is stamped/verified to ensure anti-replay behaviour holds even when OTS anchoring is active.
+\end{itemize}
+This ADR closes the ``Mutable Proof Trap'' by tying replay policy directly to ledger semantics and proofs.
