@@ -14,8 +14,7 @@
 \usepackage{booktabs}
 \usetikzlibrary{arrows.meta,positioning,fit,shapes.geometric}
 
-\title{Ultra--Low-Power, Verifiable Telemetry for Heritage Sensors (Track~1)}
-\author{BILAL}
+\title{Publicly‑Verifiable, Ultra‑Low‑Power LoRa Telemetry for Subterranean Heritage Sites}\author{BILAL}
 \date{\today}
 
 \begin{document}
@@ -23,16 +22,25 @@
     \tableofcontents
 
     \input{includes/intro}
+    \input{includes/acknowledgments}
     \input{includes/requirements_threat}
     \input{includes/security_safety}
     \input{includes/architecture}
     \input{includes/crypto_design}
     \input{includes/pipeline_impl}
-    \input{includes/schemas_merkle_ots}
+    \input{includes/business_rules_sensorthings}
+    %\input{includes/schemas_merkle_ots}
     \input{includes/experiments}
     \input{includes/results}
+    \input{includes/site_planning}
     \input{includes/discussion_ethics}
+
+    % Hide appendices from TOC
+    \addtocontents{toc}{\protect\setcounter{tocdepth}{0}}
+    \appendix
     \input{includes/hardware_appendix}
+    \addtocontents{toc}{\protect\setcounter{tocdepth}{2}}
+
     \input{includes/conclusion}
 
     \bibliographystyle{plain}
