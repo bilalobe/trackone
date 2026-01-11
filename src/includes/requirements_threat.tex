@@ -69,6 +69,17 @@ TrackOne is explicitly framed as ``Track One of Three'': the core pipeline that 
 
 Features reserved for later tracks (Track Two / Three) include field-deployable control loops, sophisticated on-pod actuation safety interlocks, large-scale analytics and UI, and long-running automated key-rotation/PKI operations. TrackOne is positioned as an MVP that is ``production-informed'' but not yet a full safety-certified control system.
 
+\subsection{Heritage deployment tracks}
+TrackOne is explicitly positioned as \textbf{Track One of Three}. Each track increases scope while preserving the verifiability guarantees:
+\begin{itemize}[nosep]
+  \item \textbf{Track One (this report):} Evidence pipeline for sensor pods---AEAD framing, replay protection, canonical facts, Merkle batching, Bitcoin anchoring (OTS), and independent verification tooling. Hardware requirements stop at the digital contract (nonce construction, sealed facts).
+  \item \textbf{Track Two (Rust gateway + actuation safety):} Rust first-class gateway crates (maturin exports) replace Python hot paths, with deterministic scheduling, OTA safety scaffolding, and certified anti-replay modules for control loops. This is where downlink/authenticated actuation lives.
+  \item \textbf{Track Three (Pod intelligence + bio-sensing):} Embedded Rust firmware (STM32L0/L4, RISC-V variants) with Physarum bio-impedance sensing,
+  adaptive sampling, and on-pod anomaly detection.
+  TrackOne’s digital contract remains unchanged; new pods simply produce compliant frames.
+\end{itemize}
+This scoping keeps requirements concrete and prevents speculative features from diluting the verifiability focus of Track One.
+
 \subsection{Operational and Environmental Constraints}
 For subterranean irrigation deployments, the physical environment and service model materially change requirements. We therefore set explicit operational constraints that must be observed when deploying TrackOne artifacts in the field:
 \begin{itemize}[nosep]
@@ -78,29 +89,60 @@ For subterranean irrigation deployments, the physical environment and service mo
   \item \textbf{Sampling frequency:} Default 1--10 samples per hour per pod depending on sensor; higher rates must be justified by an explicit risk/benefit analysis.
   \item \textbf{Firmware update policy:} Updates must support atomic rollback and require an operator-confirmed maintenance window; over-the-air auto-update that can change actuation logic is out-of-scope for TrackOne.
   \item \textbf{Storage limits:} On-device and gateway storage quotas must be set; when storage is full, pods/gateway must stop non-essential writes and raise an alert to operator channels rather than silently dropping telemetry.
+  \item \textbf{Stationary calendar usage:} Use of the stationary calendar in CI and weekly ``ratchet'' jobs is MANDATORY when public OTS pools are unstable.
+  \item \textbf{Embedded viability:} At least one Cortex-M0+/M4 and one RISC-V firmware or softcore build SHALL be kept
+      in-tree and exercised regularly (stress harness or FPGA target) to guarantee that TrackOne-core behaves identically
+      across MCU families.
+  \item \item \textbf{GIS-constrained placement:} Sensor pod placements SHALL be drawn from pre-approved GIS polygons (see Section~\ref{sec:site_planning}), not arbitrary coordinates.
 \end{itemize}
 
-\subsection{Threat Model}
-The system faces passive RF eavesdropping, active injection/replay, rogue gateways, and physical capture (NVM readout). Additionally, for irrigation deployments we explicitly consider:
+\subsection{GIS-Informed Pod Placement Constraints}
+For subterranean irrigation corridors (khettara-like tunnels) and adjacent heritage structures, pod placement must be planned with basic geospatial constraints that can be encoded in deployment runbooks:
+\begin{itemize}[nosep]
+  \item \textbf{Buffer zones:} Maintain minimum stand-off distances from protected masonry, inscriptions, and water intakes (site-specific, e.g., 30--50~cm) to preserve reversibility and avoid damage.
+  \item \textbf{Radio propagation:} Prefer line-of-sight along shafts; where bends or thick walls exist, introduce relay pods at bends mapped in GIS to keep link budgets within margins.
+  \item \textbf{Hydrology overlays:} Avoid low points identified by flood maps for primary pods; place flood sentinels explicitly at risk points to trigger maintenance/evacuation procedures.
+  \item \textbf{Access waypoints:} Every pod should be within a serviceable reach from registered maintenance paths; the GIS plan must list approach routes and safe access times (seasonal constraints).
+  \item \textbf{Cultural heritage constraints:} Mounts must be non-invasive (adhesive/straps) and removable; no drilling or permanent fixtures without curator approval.
+\end{itemize}
 
-\begin{description}
-  \item[Communication loss] Prolonged uplink outages and partial replication windows; consequences include delayed anchoring and postponed verification.
-  \item[Clock drift / time sync failures] Incorrect timestamps can corrupt day-chunk boundaries and complicate forensic recomputation.
-  \item[Loss/corruption of field logs] Storage device failures or accidental truncation of \texttt{out/} artifacts.
-  \item[Unsafe actuation] If the system is later used to drive valves/relays, corrupted inputs or stale data may cause over- or under-irrigation with real-world consequences.
+\subsection{Spatial Database Requirements}
+To keep GIS reasoning close to the verifiable pipeline while avoiding heavyweight external services, TrackOne MAY use a
+Spatialite-backed SQLite database for pod placement, maintenance routes, and hydrology overlays. We require:
+
+\begin{description}[style=nextline]
+  \item[SD-1 Single source of spatial truth] Site polygons, buffer zones, and approved maintenance routes SHALL be
+    stored in a version-controlled Spatialite database. Generated pod placement plans MUST reference this database
+    rather than ad-hoc shapefiles.
+  \item[SD-2 Read-side separation] The ingest and ledger paths SHALL treat the Spatialite database as read-only state.
+    Failure or corruption of spatial indices MUST NOT compromise ledger integrity; it can only degrade planning and
+    visualization.
+  \item[SD-3 Export compatibility] Spatialite contents SHALL be exportable to standard GIS formats (e.g., GeoPackage,
+    Shapefile) for use in QGIS/ArcGIS without loss of topology or metadata relevant to pod placement.
 \end{description}
 
-\noindent \textbf{Mitigations:}
-\begin{itemize}[nosep]
-  \item \textbf{Communication loss:} Offline-tolerant \emph{Supernode Train} architecture (ADR-019).
-  Gateways build daily Merkle trees and \texttt{day.bin} locally even when uplink is down; \texttt{ots\_anchor} retries anchoring until connectivity returns.
-  Integrity of \texttt{day.bin} is independent of anchor time.
-  \item \textbf{Clock drift:} Facts are assigned to days by gateway ingest time, not pod RTC time. Frame counters (\texttt{fc}) and AEAD verification gate acceptance; pod time is treated as salt/flavour only.
-  Day-chunk boundaries follow NTP-disciplined gateway clocks.
-  \item \textbf{Log integrity:} Peer replication between gateways (ADR-019) ensures redundant copies of Merkle-anchored artifacts; \texttt{verify\_cli} detects local corruption before use.
-  \item \textbf{Unsafe actuation:} TrackOne is sensor-only.
-  Any future actuation layer must use authenticated, replay-protected downlink frames and follow the \emph{Passive First} doctrine (latching valves, limited energy, human-in-the-loop).
-\end{itemize}
+\subsection{Threat Model (Summary)}
+\label{sec:threat-model-summary}
+
+We consider adversaries and failure modes along four main axes:
+
+\begin{description}[style=nextline]
+  \item[T-1 Replay and ledger pollution] Attackers or misbehaving devices may replay, duplicate, or reorder frames to
+    corrupt the ledger and confuse operators. \textbf{Countered by:} FR-2, FR-3, FR-11, NFR-2, RR-2, and tests in
+    \texttt{tests/integration/test\_replay\_merkle\_*.py}.
+  \item[T-2 Timestamp and calendar manipulation] Calendars (public or stationary) may be unavailable, inconsistent, or
+    malicious, leading to incomplete or misleading OTS proofs. \textbf{Countered by:} FR-6, FR-10, NFR-1, NFR-7,
+    RR-1--RR-3, R-1, and the weekly ``ratchet'' CI job.
+  \item[T-3 Cross-implementation divergence] Python and Rust gateways may disagree on Fact encoding, Merkle roots, or
+    AEAD semantics, creating silent integrity splits. \textbf{Countered by:} FR-12, NFR-8, golden-corpus tests, and the
+    TrackOne-core stress harnesses for Cortex-M0+/M4 and RISC-V.
+  \item[T-4 Surface expansion via APIs and GIS] Higher-layer services (SensorThings API, Spatialite-backed GIS queries,
+    dashboards) may be abused to exfiltrate data, overload the system, or introduce inconsistent views of the ground
+    truth. \textbf{Countered by:} NFR-5, NFR-6, GIS-related constraints, future ADR-030/031 on OGC SensorThings and
+    Spatialite, and dedicated gateway hardening.
+\end{description}
+
+A more detailed attacker model and mapping to countermeasures is given in Section~\ref{sec:security}.
 
 \subsection{Irrigation-Specific Requirements}
 To support \textbf{traceability} and operational safety in irrigation contexts, we add a small set of testable, measurable requirements that must be in scope for any deployment using TrackOne artifacts:
@@ -111,6 +153,85 @@ To support \textbf{traceability} and operational safety in irrigation contexts, 
   \item[R-3 Sampling \& action separation] Control decisions that affect irrigation volumes MUST not be taken on facts that are older than $T$ hours (default: 24 h) without human confirmation.
   \item[R-4 Update rollback] Any firmware update that modifies actuation logic must support a verified rollback mechanism and be staged to a small pilot group for at least 7 days before full rollout.
   \item[R-5 Auditability] All critical operator actions (e.g., manual valve overrides, firmware promote) must be logged with operator identity, timestamp, and Merkle-anchored proof of the day's root that covers the action metadata.
+\end{description}
+
+\subsection{SensorThings and API Projection Requirements}
+TrackOne treats OGC SensorThings-style APIs and MQTT bindings as \emph{projections} of the canonical Fact stream, not
+as authoritative storage. To keep the attack surface narrow while remaining standards-aligned, we require:
+
+\begin{description}[style=nextline]
+  \item[SA-1 Canonical-to-API mapping] All SensorThings ``Things'', ``Locations'', ``Datastreams'', and ``Observations''
+    exposed by the gateway SHALL be derived from immutable Facts (e.g., \texttt{EnvFact}) that are part of a Merkle
+    day-set. No API-only records may exist without a corresponding Fact.
+  \item[SA-2 Phenomenon vs.\ result time] The gateway SHALL map \texttt{EnvFact.phenomenon\_time\_*} to
+    \texttt{phenomenonTime} and \texttt{Fact.ingest\_time} to \texttt{resultTime} in SensorThings payloads to preserve
+    the distinction between when a measurement was made and when it was processed.
+  \item[SA-3 API hardening] SensorThings REST and MQTT endpoints SHALL validate inputs against strict schemas, enforce
+    rate limits, and avoid exposing raw keys or internal identifiers. API misuse SHALL not be able to inject or modify
+    ledger Facts; at most it can affect cached projections.
+  \item[SA-4 Read-only by default] Public SensorThings endpoints SHALL be read-only with respect to the core ledger.
+    Any write-capable API (e.g., for site metadata) MUST be authenticated and kept off the critical ingest path.
+\end{description}
+
+\subsection{Calendar, Anti-Replay, and Implementation Requirements}
+\label{sec:calendar-anti-replay-impl-reqs}
+\textbf{Functional requirements:}
+\begin{description}[style=nextline]
+  \item[FR-10 Stationary calendar anchoring] The system SHALL support a stationary OTS calendar for CI and long-running deployments. Every \texttt{day.bin} produced by the pipeline SHALL either: (a) obtain an OTS proof within a bounded delay (e.g., 24~h), or (b) be explicitly marked as ``pending'' and retried until either success or operator intervention.
+  \item[FR-11 Anti-replay invariants] For each \texttt{(device\_id, frame\_counter)} pair, at most one Fact SHALL be accepted into the Merkle set for a given day. Duplicate frames or stale counters MUST be rejected by the Verifier and visible in audit logs but NOT present in \texttt{day.bin} or the day Merkle tree.
+  \item[FR-12 Cross-implementation equivalence] The Rust TrackOne-core implementation SHALL produce bit-for-bit identical results to the Python reference for: Fact serialization, Merkle root computation, and AEAD encryption/decryption for a canonical golden corpus of test inputs.
+  \item[FR-13 Multi-ISA determinism] TrackOne-core SHALL produce identical Facts, Merkle roots, and AEAD ciphertexts
+    across supported ISA targets (e.g., ARM Cortex-M0+/M4, RISC-V softcores) for a shared golden corpus.
+\end{description}
+
+\textbf{Non-functional requirements:}
+\begin{description}[style=nextline]
+  \item[NFR-7 Anchoring resilience] The system SHOULD remain verifiable when public calendars are unavailable, by relying on a stationary calendar and later reconciliation proofs.
+  \item[NFR-8 Implementation consistency] Divergence between Python and Rust implementations MUST be detectable via automated tests in CI, and SHALL fail the pipeline.
+\end{description}
+
+\subsection{Resilience Requirements}
+We add concise, testable targets that express how the pipeline maintains useful service across outages and partial failures:
+\begin{description}[style=nextline]
+  \item[RR-1 Anchor backlog clearance] After an uplink outage of up to 7 days, gateways shall clear the OTS anchoring backlog within 48~hours of connectivity restoration while preserving per-day artifact immutability.
+  \item[RR-2 Multi-gateway replication] In multi-gateway deployments, day artifacts shall be replicated to at least one peer within 24~hours (ADR-019 Supernode Train) to bound single-node loss.
+  \item[RR-3 Stationary calendar fallbacks] When public calendars are unavailable, stationary calendar proofs shall be accepted with a visible \emph{pending public anchor} status in meta until upgraded.
+  \item[RR-4 Peer attestation quorum] Day roots shall collect at least $q$ operator signatures (default $q{=}2$ of $n$) before being marked \emph{attested} in operator dashboards.
+  \item[RR-5 GIS-linked maintenance] Pods flagged by flood sentinel events or repeated RF failures must enter a GIS task list within 24~hours, including route and safety notes for field teams.
+\end{description}
+
+\subsection{Energy Budget and Coin-Cell Viability}
+For buried pods powered by small primary cells (e.g., CR2032) or harvesters plus a storage element, we explicitly
+separate average energy use (mAh / Wh) from peak current viability (ability to sustain LoRa TX bursts):
+\begin{itemize}[nosep]
+  \item \textbf{Assumed cell:} CR2032-class, $\approx 200$~mAh usable at low drain, $E \approx 0.6$~Wh at 3.0~V.
+  \item \textbf{Mission duration:} 6~months ($\approx 4320$~h).
+  \item \textbf{Sleep current target:} $I_{\\text{sleep}} \le 5\\,\\mu\text{A}$ (MCU + leakage + powered-down sensors).
+  \item \textbf{Uplink cadence:} 1--4 uplinks/day, each carrying a compact summary (typically $< 80$~B).
+  \item \textbf{LoRa TX envelope:} $I_{\\text{tx}} \\in [40,120]$~mA, airtime 0.5--2.0~s per uplink depending on SF/payload.
+\end{itemize}
+We use the following duty-cycle model for capacity estimates:
+\begin{equation}
+  E_{\\text{wake}} \\approx V \\cdot (I_{\\text{mcu}} t_{\\text{mcu}} + I_{\\text{sensor}} t_{\\text{sensor}} + I_{\\text{tx}} t_{\\text{tx}} + I_{\\text{rx}} t_{\\text{rx}}),
+\end{equation}
+with total charge over the mission
+\begin{equation}
+  Q_{\\text{total}} \\approx I_{\\text{sleep}} T_{\\text{mission}} + N_{\\text{wake}} \\cdot \\frac{E_{\\text{wake}}}{V}.
+\end{equation}
+Under representative parameters (sleep 5~$\\mu$A, 1--4 uplinks/day, $t_{\\text{tx}} \\le 2$~s) we obtain $Q_{\\text{total}} \\approx
+30$--65~mAh over 6~months: \\emph{feasible on a single CR2032 by energy}. However, peak current and voltage sag during
+LoRa TX require a reservoir capacitor (or supercap) and in practice motivate either two cells in parallel or a
+harvester + storage element.
+
+We therefore state explicit, testable requirements:
+\begin{description}[style=nextline]
+  \item[ER-1 Coin-cell budget] A reference pod configuration (MCU + SHTC3-only sensing, 1 uplink/day, $t_{\\text{tx}} \\le 1$~s at
+    moderate SF) SHALL demonstrate a measured average current $I_{\\text{avg}} \\le 20\\,\\mu$A over a 7-day endurance test.
+  \item[ER-2 Peak-current mitigation] Pods using CR2032-class cells MUST include a local reservoir capacitor sized to
+    keep supply voltage within the MCU and radio operating bounds during LoRa TX peaks. Designs that cannot meet this
+    SHALL use a different cell chemistry or an energy-harvesting front-end (e.g., BQ25570 + supercap).
+  \item[ER-3 Reporting of assumptions] Deployment runbooks SHALL record assumed uplink cadence, SF/bandwidth, and
+    worst-case airtime so that operators can relate field conditions back to the energy model presented here.
 \end{description}
 
 \subsection{Traceability and Verification}
@@ -127,9 +248,17 @@ FR-2 & Anti-replay window & \texttt{test\_replay\_window\_unit\_invariants} \\ \
 FR-3 & Ledger writing & \texttt{test\_merkle\_batcher\_sees\_duplicate\_free\_fc\_sets} \\ \hline
 FR-5 & Merkle batching & \texttt{test\_merkle\_determinism} \\ \hline
 FR-6 & OTS Stamping & \texttt{test\_ots\_integration} \\ \hline
+FR-10 & Stationary calendar anchoring & \texttt{tests/e2e/test\_ots\_calendar\_pipeline.py} \\ \hline
+FR-11 & Anti-replay invariants & \texttt{tests/integration/test\_replay\_merkle\_*.py} \\ \hline
+FR-12 & Cross-implementation equivalence & \texttt{tests/integration/test\_rust\_core\_equiv.py} \\ \hline
+FR-13 & Multi-ISA determinism & TrackOne-core SHALL produce identical Facts, Merkle roots, and AEAD ciphertexts across supported ISA targets (e.g., ARM Cortex-M0+/M4, RISC-V softcores) for a shared golden corpus. \\ \hline
 NFR-1 & Integrity & \texttt{verify\_cli} (End-to-End) \\ \hline
 NFR-2 & Separation of Concerns & \texttt{test\_merkle\_batcher\_sees\_duplicate\_free\_fc\_sets} \\ \hline
+NFR-7 & Anchoring resilience & CI job ratchet with stationary calendar \\ \hline
+NFR-8 & Implementation consistency & Rust + Python golden corpus comparison tests \\ \hline
 R-1 & Anchoring Delay & \texttt{test\_ots\_retry\_logic} (Simulated outage) \\ \hline
+SA-1/SA-2 & SensorThings mapping & \texttt{tests/integration/test\_sensorthings\_projection.py} \\ \hline
+SD-1/SD-2 & Spatialite spatial integrity & \texttt{tests/integration/test\_spatialite\_site\_db.py} \\ \hline
 \end{tabular}
 \caption{Requirements Traceability Matrix}
 \label{tab:req-traceability}
