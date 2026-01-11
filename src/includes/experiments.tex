@@ -190,3 +190,47 @@ We extend coverage accounting and pre-release checks to include:
   \item Firmware stress binaries (\emph{host\_stress}, \emph{qemu\_stress}, \emph{m0\_stress}) as part of the release checklist.
   \item New \texttt{ots-cal} tox environment and corresponding CI job.
 \end{itemize}
+
+\subsection{Rust TrackOne-core Equivalence Experiments}
+We validate that the Rust implementation (\emph{trackone-core}) produces bit-for-bit identical results to the Python reference for a shared golden corpus:
+\begin{itemize}[nosep]
+  \item \textbf{Corpus:} facts/frames derived from \texttt{tests/fixtures/} and day replay fixtures used across CI.
+  \item \textbf{Checks:} Canonical JSON serialization (RFC~8785); Merkle root computation; AEAD encrypt/decrypt of canonical payloads.
+  \item \textbf{Method:} Python vs.
+  Rust results compared under CI; any divergence fails the pipeline (see NFR-8).
+  \item \textbf{Result:} No divergences observed across the corpus; reproducible across architectures.
+\end{itemize}
+
+\paragraph{Note on canonical encodings}
+TrackOne uses multiple encodings with different purposes:
+\begin{itemize}[nosep]
+  \item \textbf{Wire:} compact Serde/Postcard for LoRa-friendly telemetry frames.
+  \item \textbf{Canonical JSON:} RFC~8785 (JCS) for audit-friendly, cross-language deterministic JSON.
+  \item \textbf{Canonical CBOR:} RFC~8949 deterministically encoded CBOR for deterministic hashing/commitments where a compact binary form is useful (ADR--034; \cite{rfc8949}).
+\end{itemize}
+
+\subsection{Embedded Firmware Stress Experiments}
+We exercise the embedded frame builder and crypto across host and QEMU targets to establish viability for L0-class MCUs:
+\begin{itemize}[nosep]
+  \item \textbf{Host stress}: \emph{host\_stress} achieves $\sim$5.6\,M frames/s on x86\_64; max frame 56~B; $\sim$1~KiB stack usage.
+  \item \textbf{QEMU M4}: \emph{qemu\_stress} runs 1{,}000 iterations with 56~B frames; stack guard intact; no errors.
+  \item \textbf{QEMU M0+}: \emph{m0\_stress} (\texttt{thumbv6m-none-eabi}) runs 100 iterations with 56~B frames; 256~B guard remains untouched.
+  \item \textbf{Implication}: Code size (\textasciitilde{}3.5~KiB text) and RAM headroom meet STM32L0 budgets; wire-format is stable across architectures.
+\end{itemize}
+
+\subsection{Stationary Calendar Evaluation}
+We evaluate stationary calendar behaviour in CI and local runs:
+\begin{itemize}[nosep]
+  \item \textbf{Setup}: \texttt{tox -e ots-cal} with \texttt{docker-compose.ots.yml} standing up a local calendar and stationary stub.
+  \item \textbf{Metrics}: Latency and stability compared to public OTS pools; failure modes (downtime, equivocation) captured in logs.
+  \item \textbf{Weekly ratchet}: A scheduled profile exercises real OTS flows with \texttt{STRICT\_REAL\_OTS=1} so failures are not hidden.
+  \item \textbf{Outcome}: Deterministic proofs in CI; clear \emph{pending public anchor} semantics when public calendars are unavailable.
+\end{itemize}
+
+\subsection{Coverage and Pre-release Checks}
+We extend coverage accounting and pre-release checks to include:
+\begin{itemize}[nosep]
+  \item Rust tests (\texttt{cargo test -p trackone-core}) linked to Python tests via the golden corpus.
+  \item Firmware stress binaries (\emph{host\_stress}, \emph{qemu\_stress}, \emph{m0\_stress}) as part of the release checklist.
+  \item New \texttt{ots-cal} tox environment and corresponding CI job.
+\end{itemize}
