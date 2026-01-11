@@ -1,0 +1,49 @@
+\section{Site Planning and Resilience in Ouarzazate}
+\label{sec:site_planning}
+
+\subsection{Ouarzazate Site Context}
+Ouarzazate sits in a semi-arid climate with historic khettara/foggara subterranean water channels. Our deployment constraints prioritize non-intrusive sensing and authenticity of context:
+\begin{itemize}[nosep]
+  \item \textbf{Semi-arid conditions:} Large diurnal swings, dust, and seasonal flash-flood risk in wadis inform placement and maintenance windows.
+  \item \textbf{Heritage:} Khettara alignments and associated masonry demand reversible mounting (no drilling) and minimal visual/physical impact.
+  \item \textbf{Non-intrusive sensing:} Pods focus on RH/T, flood sentinel, and (future) bio-impedance coverage without altering flow or fabric.
+\end{itemize}
+
+\subsection{GIS Layers and Placement Methodology}
+Planning relies on OpenStreetMap/GEOFABRIK layers and DEM overlays:
+\begin{itemize}[nosep]
+  \item \textbf{OSM layers (Geofabrik extract):} water, waterways, landuse, natural, roads, places.
+  \item \textbf{Derived overlays:} Khettara alignments/channel networks; elevation (DEM from SRTM or similar) for flood basin inference.
+  \item \textbf{Method:} Overlay alignments with land use and access; score candidate sites by coverage, accessibility, and redundancy; select from pre-approved polygons and route maintenance accordingly.
+\end{itemize}
+Coordinates and polygons are versioned alongside deployment manifests.
+
+% ---------------------------------------------------------------------------
+% Figure A2 – Micro-site DEM cross-section
+% TODO: Use QGIS profile tool across a khettara/terrace system; annotate pod depth and gallery location; optionally show gateway on higher terrain.
+% Drop the image at: figs/microsite_dem_cross_section.png
+% Placement: Deployment / Evaluation / Site Planning section.
+\begin{figure}[h]
+  \centering
+  %\includegraphics[width=0.9\textwidth]{figs/microsite_dem_cross_section.png}
+  \fbox{\parbox[c][3.0cm][c]{0.9\linewidth}{Micro-site DEM cross-section placeholder (elevation vs distance with pod depth and gallery annotations)}}
+  \caption{Elevation cross-section across a khettara segment showing pod depths, gallery location, and above-ground gateway placement.}
+  \label{fig:dem-cross-section}
+\end{figure}
+
+\subsection{Resilience and Quality Attributes (ISO~25010)}
+We tie siting choices to relevant quality attributes:
+\begin{itemize}[nosep]
+  \item \textbf{Reliability:} At least two pods per critical segment; redundant coverage across bends and RF shadows.
+  \item \textbf{Security:} Pods placed in protected locations with clear gateway and calendar placement; verifiability maintained via stationary calendar when public pools are unstable.
+  \item \textbf{Maintainability:} Avoid inaccessible shafts; GIS planning favors reachable sites and efficient maintenance routes.
+\end{itemize}
+These attributes link to requirements in Section~\ref{sec:system-requirements} (FR-2, FR-6, RR-5; NFR-1/NFR-2) and to the safety net in Section~\ref{sec:security}.
+
+\subsection{Traceability from Plan to Deployment}
+Validation ties pod IDs to GIS coordinates:
+\begin{itemize}[nosep]
+  \item Pod IDs are bound to coordinates within approved polygons; a simple GIS script checks that no pods are orphaned or outside legal regions.
+  \item Pre-deployment checks ensure coordinates fall within the designated polygons and that maintenance paths exist.
+  \item This validation is part of the release pipeline and is traceable back to the requirements matrix (Section~\ref{sec:requirements-traceability}).
+\end{itemize}
