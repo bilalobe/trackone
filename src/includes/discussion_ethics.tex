@@ -179,6 +179,9 @@ Deploying TrackOne in irrigation contexts requires clear operational playbooks. 
 
 \textbf{Metadata leakage:} Frame timing and pod IDs are visible to LoRa eavesdroppers.\ XChaCha20 encryption hides payload content but not traffic patterns.
 
+\textbf{Open standards and reuse:} Publishing a SensorThings-compatible API means heritage authorities and researchers can consume TrackOne telemetry with off-the-shelf clients; GIS and hydrology feeds can be joined without bespoke adapters.
+The canonical TrackOne facts and OTS-anchored Merkle roots underpin that API, so the public view is a projection over an immutable ledger rather than a mutable database without provenance.
+
 \subsection{Environmental Impact}
 
 \textbf{Battery disposal:} CR2032 lithium cells require proper recycling.\ Multi-year autonomy reduces disposal frequency vs.\ annually-replaced batteries.
@@ -204,4 +207,14 @@ Deploying TrackOne in irrigation contexts requires clear operational playbooks. 
 \subsection{Stakeholder expectations and ethical scope management}
 Field stakeholders occasionally push comfort-zone technologies (e.g., generic image watermarking or steganography) even when they do not match the telemetry problem space. Heritage pods emit scalar facts; there are no images today. Implementing watermarking to appease expectations would misrepresent delivered functionality and divert scarce energy budget. Instead, the project documents alternative tracks (Option B QIM watermarking, Option C PyO3/Rust port) in ADRs, clearly labeling them as future work contingent on hardware funding and bench instrumentation.
 
-Equipment discussions are treated transparently: new hardware (oscilloscope, FPGA stimulus, bio-impedance rigs) must map to a concrete experiment plan tied to documented milestones. Until funding is committed, Track1 prioritizes the achievable Option A pipeline and avoids promising features (``watermark'' keywords) that are not implemented. This preserves integrity of reporting and maintains trust with community partners who rely on verifiable telemetry rather than speculative features.
+Equipment discussions are treated transparently: new hardware (oscilloscope, FPGA stimulus%, bio-impedance rigs
+) must map to a concrete experiment plan tied to documented milestones. Until funding is committed, Track1 prioritizes the achievable Option A pipeline and avoids promising features (``watermark'' keywords) that are not implemented. This preserves integrity of reporting and maintains trust with community partners who rely on verifiable telemetry rather than speculative features.
+
+%\subsection{Physarum/Khettara metaphors: stewardship, resilience, and planning}
+%Design metaphors are not decoration; they shape operational choices. The \emph{Physarum} colony suggests distributed, self-healing sensing with tiny energy budgets; the \emph{khettara} evokes long-lived, low-maintenance infrastructure. TrackOne reflects both by:
+%\begin{itemize}[nosep]
+%  \item favoring verifiable evidence over heavy online services (peer attestation + daily anchors rather than always-on cloud);
+%  \item encoding continuity tools that match field realities (stationary calendar during outages, backlog clearance, immutable sidecars);
+%  \item integrating GIS constraints in deployment (buffer zones, access routes, flood sentinels) so resilience is planned, not improvised.
+%\end{itemize}
+%These metaphors also discipline trade-offs: we avoid invasive mounts and high-frequency telemetry that jeopardize heritage fabric or battery life, and we accept slower, scheduled anchoring in exchange for multi-year autonomy. Stewardship, in this framing, is the commitment to leave an auditable, reversible trace that future curators can verify without depending on a single vendor or server.
