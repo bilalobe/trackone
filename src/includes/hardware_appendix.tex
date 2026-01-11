@@ -1,125 +1,97 @@
 % Hardware appendix for full analog details
-\appendix
-\section{Reference Pod Hardware}
-\label{appendix:hardware}
+% NOTE: \appendix should be issued once in the main document, not inside an include file.
 
-This appendix provides a full, component-level reference design for a subterranean irrigation pod.
-It is intended as a detailed example; TrackOne treats the hardware as interchangeable so long as the digital frame contract (NDJSON framed records with AEAD + nonce construction) is respected.
+\section{Pod Hardware and Firmware}
+\label{sec:hardware_pod}
 
-\subsection{Design goals}
+This appendix documents the Barnacle Pod V0 hardware platform and the embedded firmware that implements TrackOne's digital contract. It summarizes the analog interface, stress tests, and safety considerations for the production baseline, as well as experimental lab platforms.
+
+\subsection{Hardware Overview}
+High-level composition of Barnacle Pod V0:
 \begin{itemize}[nosep]
-  \item Low power: operate on small battery budgets (target: 1.4 Wh/day)
-  \item Accurate analog sensing for soil moisture, temperature, and battery voltage
-  \item Deterministic timestamping and per-record AEAD sealing on the MCU
-  \item Simple, well-documented BOM for rapid prototyping
+  \item \textbf{MCU:} STM32L072CBT6 (Cortex-M0+) or STM32L476 (Cortex-M4) variants; both are supported by the firmware stack.
+  \item \textbf{Radio:} SX1276-based 868\,MHz LoRa transceiver (e.g., Ra-01H/RFM95 module).
+  \item \textbf{Energy harvester:} BQ25570 with PV/supercap or Li-ion storage.
+  \item \textbf{Reference sensor:} SHTC3 RH/T sensor in the electronics pocket.
+  %\item \textbf{Future channels:} Bio-impedance, coverage petals, and flood pins are planned but not fully populated on V0.
 \end{itemize}
+KiCad sources live under the project hardware path; Pod V0 is a “digital + power core” stepping stone that proves the contract and power envelope.
 
-\subsection{Schematic overview}
-Figure~\ref{fig:pod-schematic} shows the high-level schematic.
-A minimal parts list follows.
-
-% Note: switched to external schematic link to avoid missing-file build issues in CI.
+% ---------------------------------------------------------------------------
+% Figure C1 – 3D render of the pod V0 PCB
+% TODO: When KiCad design stabilizes, export top-side and perspective PNGs from KiCad 3D viewer.
+% Callouts in caption or a separate diagram: STM32L0 MCU, BQ25570 harvester, SX1276 + matching + U.FL, SHTC3, debug headers, PV/supercap connectors.
+% Drop the image at: figs/pod_v0_pcb_3d.png (and optionally figs/pod_v0_pcb_3d_persp.png)
+% Placement: Hardware Appendix.
 \begin{figure}[h]
   \centering
-  % Schematic PDF lives under project `docs/schematics/` as a companion artifact.
-  \fbox{\parbox[c][3cm][c]{0.9\linewidth}{Reference pod schematic available: \texttt{docs/schematics/pod\_reference\_schematic.pdf}}}
-  \caption{Reference pod schematic (electrodes, INA125P, ADS1115, STM32L4)}
-  \label{fig:pod-schematic}
+  % Use extension-less filename to keep LaTeX happy across drivers.
+  \includegraphics[width=0.9\textwidth]{figs/pod_v0_pcb_3d}
+  \caption{Pod V0 PCB 3D render. Key components: STM32L0 MCU, BQ25570 energy harvester, SX1276 LoRa radio with U.FL, SHTC3 RH/T sensor, debug headers, PV/supercap connectors.}
+  \label{fig:pod-pcb-3d}
 \end{figure}
 
-\subsection{Analog front-end}
-The analog front-end targets low-frequency soil moisture probes (resistive) and small thermistor-based temperature sensors.
-
-\paragraph{Electrodes}
-Two stainless steel electrodes placed in soil; driven in a 4-wire or half-bridge configuration depending on probe type.
-
-\paragraph{Instrumentation amplifier}
-INA125P configured with gain $G\approx100$ (set by R\_G) to amplify microvolt-to-millivolt level differential signals from electrodes. Input protection diodes and anti-aliasing RC filter (cutoff \textasciitilde{}100~Hz) protect ADC input.
-
-\paragraph{ADC}
-ADS1115 (16-bit differential ADC, I\textsuperscript{2}C) with PGA set to match amplifier output range. Sample rate: configurable (8--860 SPS), default: 80 SPS with burst sampling to save power.
-
-\subsection{MCU and firmware}
-STM32L476RG (ARM Cortex-M4, low-power) performs sampling, builds TLV payloads, constructs nonce per ADR-002 (salt8 || fc || rand), and performs AEAD (libsodium via a hardware-accelerated crypto library or software fallback). A small flash-backed counter prevents reuse of nonces across deep-sleep cycles.
-
-\paragraph{Power management}
-Duty-cycling with low-power modes; wake-up, sample 8--16 readings, average, seal with AEAD, transmit frame, back to deep sleep. RTC provides daily time reference for day-chunking.
-
-\subsection{Parts list (example)}
+\subsection{Reference Bill of Materials}
+Summary of the BOM for Barnacle Pod V0:
 \begin{itemize}[nosep]
-  \item INA125P -- Instrumentation amplifier (TI)
-  \item ADS1115 -- 16-bit ADC (Texas Instruments)
-  \item STM32L0xx -- MCU (STMicroelectronics)
-  \item Coin cell/battery pack + power switching MOSFET
-  \item LoRa radio or UART bridge module (as deployment requires)
+  \item \textbf{MCU:} STM32L072CBT6 (Cortex-M0+) or STM32L476 (Cortex-M4).
+  \item \textbf{Radio:} SX1276-based LoRa transceiver (868\,MHz).
+  \item \textbf{Sensors:} SHTC3 (RH/T) and ADS1115 (16-bit ADC).
+  \item \textbf{Analog:} INA125P instrumentation amplifier for differential signals.
+  \item \textbf{Power:} BQ25570 energy harvester with PV/supercap support.
+  \item \textbf{Passives:} 0603 Yageo capacitors, W\"urth LEDs, and NRS4018T inductors.
+\end{itemize}
+Manufacturer part numbers (MPNs) are populated in KiCad symbol fields for pick-ready FAB/BOM exports.
+
+\subsection{Sensor Interface and Analog Front-End}
+The Barnacle Pod V0 uses a hybrid analog/digital sensing architecture. A reference humidity and temperature sensor (SHTC3) provides environmental context over I\textsuperscript{2}C, while specialized analog stages handle low-frequency resistive or differential signals.
+
+\paragraph{Precision ADC}
+The platform supports the ADS1115 (16-bit differential ADC, I\textsuperscript{2}C) with a programmable gain amplifier (PGA) to match various sensor output ranges. Default sampling is 80\,SPS with burst-mode operation to minimize power consumption.
+
+\paragraph{Instrumentation Amplifier}
+For microvolt-to-millivolt level differential signals (e.g., bio-impedance or specialized soil probes), an INA125P instrumentation amplifier can be configured with gain $G \approx 100$. Input protection diodes and an anti-aliasing RC filter (cutoff $\approx 100$\,Hz) protect the ADC inputs.
+
+\paragraph{Power Management}
+The system utilizes a BQ25570 nano-power energy harvester. It manages energy from PV cells or supercapacitors, ensuring stable operation even under low-light conditions. A small flash-backed counter prevents nonce reuse across deep-sleep cycles, maintaining cryptographic invariants (cf.~ADR-002).
+
+\subsection{Firmware Architecture}
+Firmware modules and responsibilities:
+\begin{itemize}[nosep]
+  \item \textbf{HAL:} \texttt{stm32l0xx-hal} / \texttt{stm32l4xx-hal} for MCU abstraction.
+  \item \textbf{Sensor layer:} SHTC3 over I\textsuperscript{2}C and ADS1115 driver for analog channels.
+  \item \textbf{TrackOne layer:} Frame counters (persistent), AEAD (XChaCha20-Poly1305), \emph{FrameBuilder} logic.
+  \item \textbf{Transport:} UART logging and SX1276 LoRa radio path.
 \end{itemize}
 
-\subsection{Firmware responsibilities}
+\subsection{Stress Tests on Cortex-M0+ and M4}
+Evidence that the firmware fits MCU budgets and remains wire-compatible:
 \begin{itemize}[nosep]
-  \item Maintain per-device frame counter (non-volatile)
-  \item Construct 24-byte nonce: salt8 || fc (u64) || rand8
-  \item Encrypt payload with XChaCha20-Poly1305 and emit NDJSON frame
-  \item Provide device provisioning interface to set \texttt{ck\_up} and \texttt{salt8}
+  \item Host stress: 5.6\,M frames/s on x86\_64 for max 56\,B frames; \textasciitilde1\,KiB stack usage.
+  \item QEMU M4 (\emph{qemu\_stress}): 1{,}000 iterations, 56\,B frames; stack guard intact.
+  \item QEMU M0+ (\emph{m0\_stress}, \texttt{thumbv6m-none-eabi}): 100 iterations, 56\,B frames; 256\,B guard untouched.
+\end{itemize}
+Implications: \textasciitilde3.5\,KiB text fits L0 flash budgets; stack headroom is safe for pod firmware; frame format stable across architectures. Embedded outputs are verified by the same gateway pipeline to ensure identical Merkle roots.
+
+\subsection{Hardware Safety and Threats}
+Focus on physical and environmental considerations; cryptographic and ledger safety is addressed in Section~\ref{sec:security}.
+\begin{itemize}[nosep]
+  \item \textbf{Environmental risk:} Mitigation of flood risk, corrosion, PV degradation, and seasonal effects.
+  \item \textbf{Power stability:} Brownout behavior is managed by the BQ25570 and supercap; non-volatile counters prevent rollback (anti-replay invariant).
+  \item \textbf{Installation:} Non-invasive, removable attachments; refer to site planning (Section~\ref{sec:site_planning}).
+  \item \textbf{OTA Updates:} Supported via signed images (Ed25519) with a staged bootloader for recovery, restricted to authenticated gateways.
 \end{itemize}
 
-\subsection{Provenance and timestamping}
-To preserve an immutable audit trail we keep cryptographic timestamps and proofs as separate sidecar artifacts rather than mutating JSON records after the day root is published. The recommended sidecar convention used by TrackOne is:
+
+\subsection{Experimental Lab Platform (RISC-V / FPGA)}
+\label{subsec:riscv_fpga_gateway}
+
+In addition to the STM32L0/L4 pod baseline, we have experimented with a RISC-V softcore running on an FPGA board (Terasic DE10-Lite) as a gateway and lab-side platform.
+Using LiteX to generate a SoC with a VexRiscv CPU, on-board SDRAM, and simple peripherals, we can:
 \begin{itemize}[nosep]
-  \item \texttt{day/YYYY-MM-DD.bin} -- the binary day artifact (immutable once written)
-  \item \texttt{day/YYYY-MM-DD.bin.ots} -- the binary OTS proof (detached)
-  \item \texttt{proofs/YYYY-MM-DD.bin.meta.json} -- a small metadata manifest containing at minimum the \texttt{artifact\_sha256} and any calendar/milestone details
+  \item Run the Rust gateway and verification stack (cf.~ADR--019) on a soft RISC-V core or an attached single-board computer, while the FPGA handles timing-sensitive I/O or radio PHY integration.
+  \item Perform hardware-in-the-loop tests of adaptive uplink cadence policies (ADR--025) and OTA control channels (ADR--026) under controlled loss and duty-cycle constraints.
+  \item Drive real-time feeds into the SensorThings projection and daily summary pipelines (ADRs~027--029) to validate that canonical facts and projections remain consistent under stress.
 \end{itemize}
 
-Verification tooling SHOULD follow this order:
-\begin{enumerate}[nosep]
-  \item Hash the local artifact and compare to \texttt{meta.artifact\_sha256}. Fail fast if mismatched.
-  \item Only after the hash matches, load and verify the OTS proof against the artifact. This prevents "proof stuffing" attacks (reusing a proof for a different artifact name).
-  \item Keep the original JSON day record unchanged once the day root is calculated and anchored.
-\end{enumerate}
-
-This appendix documents the sidecar layout and the minimal metadata schema (see \texttt{proofs/ots\_meta.schema.json} in the repo).
-
-\subsection{Immutability and sidecars}
-Do not include large binary proofs inline in JSON; instead the metadata sidecar binds the artifact to the proof via the \texttt{artifact\_sha256} field. Filenames SHOULD be tightly coupled (same stem) to make globbing and archival straightforward (for example: \texttt{tar czf 2025-10-07.tgz day/2025-10-07.bin proofs/2025-10-07.bin.*}).
-
-\subsection{Testing and CI notes}
-To make OTS-dependent tests reliable and CI-friendly we support a "stationary calendar" testing mode and environment variables that select calendars. Key options:
-\begin{itemize}[nosep]
-  \item \texttt{OTS\_STATIONARY\_STUB=1} -- cause stamping tools to write a small stub proof + meta manifest instead of invoking remote calendars. Useful for unit tests and fast CI iterations.
-  \item \texttt{OTS\_CALENDARS} -- comma-separated local/remote calendar endpoints (used by integration tests when exercising real OTS flows).
-\end{itemize}
-
-A minimal developer workflow is:
-\begin{enumerate}[nosep]
-  \item For fast local tests / CI: set \texttt{OTS\_STATIONARY\_STUB=1} (or use the provided tox env \texttt{ots-cal}) and run the test-suite.
-  \item To run real OTS tests: start the local calendar container (see \texttt{docker-compose.ots.yml}) and point \texttt{OTS\_CALENDARS} to the container endpoints; these tests should be gated in CI to an opt-in job with resource/time limits.
-\end{enumerate}
-
-\subsection{OTA updates}
-OTAs for deployed pods are feasible but must be treated as a high-risk operation for fielded devices in heritage-sensitive sites. Recommendations:
-\begin{itemize}[nosep]
-  \item Use signed update images (Ed25519) and verify signatures on the device before applying.
-  \item Provide a short-lived recovery window (double-bank or staged bootloader) to avoid bricking in the event of interrupted updates.
-  \item Restrict remote update capability behind authenticated gateway(s); prefer manual physical updates for initial pilots.
-\end{itemize}
-
-\subsection{Safety considerations}
-Even though these pods are low-power, the project should maintain a safety plan that lists potential mishaps, mitigations, and traceability. At minimum:
-\begin{itemize}[nosep]
-  \item Identify potential unsafe behaviors (e.g., pump activation causing flooding, electrical shorting in wet soil).
-  \item Define mitigations (hardware current-limits, watchdogs, conservative duty-cycles, user notifications).
-  \item Keep traceable documents (requirements, architecture, test plans) linked to code and tests.
-\end{itemize}
-
-\subsection{Changelog for appendix}
-\begin{itemize}[nosep]
-  \item 2025-11-14: Added OTS sidecar policy and CI notes (stationary calendar stub and \texttt{OTS\_CALENDARS}).
-  \item 2025-11-14: Added OTA guidance and safety-plan reminders.
-\end{itemize}
-
-\subsection{Notes and limitations}
-This appendix is a reference design, not a certified production schematic.
-PCB layout, impedance matching for electrodes, and environmental sealing are out-of-scope. Use this appendix as a starting point for hardware teams; adapt amplifier gains, ADC PGA, and sampling rates to target sensors and deployment conditions.
-
-\section*{Acknowledgments}
-Thanks to the TrackOne hardware contributors for initial prototypes and feedback.
+This RISC-V/FPGA platform is explicitly scoped as \emph{experimental} and serves as a flexible laboratory environment to explore richer gateway behaviors without risking changes to production pod firmware.
