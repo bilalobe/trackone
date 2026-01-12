@@ -1,0 +1,13 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ots-calendar
+  namespace: trackone
+spec:
+  template:
+    spec:
+      volumes:
+        - name: ots-calendar-data
+          emptyDir: null
+          persistentVolumeClaim:
+            claimName: ots-calendar-data

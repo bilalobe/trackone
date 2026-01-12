@@ -1,0 +1,11 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ots-calendar
+  namespace: trackone
+spec:
+  template:
+    spec:
+      containers:
+        - name: ots-calendar
+          imagePullPolicy: IfNotPresent

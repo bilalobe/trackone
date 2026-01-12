@@ -1,0 +1,11 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trackone-gateway
+  namespace: trackone
+spec:
+  template:
+    spec:
+      containers:
+        - name: gateway
+          imagePullPolicy: Never

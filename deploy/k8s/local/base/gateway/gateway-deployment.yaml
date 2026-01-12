@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trackone-gateway
+  namespace: trackone
+  labels:
+    app.kubernetes.io/name: trackone-gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: trackone-gateway
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: trackone-gateway
+    spec:
+      containers:
+        - name: gateway
+          # Placeholder image. In local dev, you'll typically:
+          # - build and load it into your local cluster, or
+          # - point to a registry.
+          image: trackone/gateway:local
+          imagePullPolicy: IfNotPresent
+          env:
+            # Prefer local stationary calendar for deterministic CI/dev.
+            - name: OTS_CALENDARS
+              value: http://ots-calendar:8468
+            - name: DATABASE_URL
+              value: postgresql://trackone:trackone@postgres:5432/trackone
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
