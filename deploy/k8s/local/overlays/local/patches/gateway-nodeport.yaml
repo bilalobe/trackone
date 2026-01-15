@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: trackone-gateway
+  namespace: trackone
+spec:
+  type: NodePort
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      nodePort: 30080

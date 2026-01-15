@@ -1,0 +1,18 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+# Local/dev conveniences.
+patches:
+  - path: patches/gateway-nodeport.yaml
+  - path: patches/ots-calendar-deployment-pvc.yaml
+  - path: patches/postgres-statefulset-pvc.yaml
+
+  # Local images: minikube doesn't have access to private/local images unless you load them.
+  - path: patches/gateway-imagepull-never.yaml
+
+  # Choose one of the following depending on whether you run a remote calendar image or build your own.
+  # - path: patches/ots-calendar-imagepull-ifnotpresent.yaml
+  - path: patches/ots-calendar-image-local.yaml

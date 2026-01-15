@@ -1,0 +1,34 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ots-calendar
+  namespace: trackone
+  labels:
+    app.kubernetes.io/name: ots-calendar
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ots-calendar
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ots-calendar
+    spec:
+      containers:
+        - name: ots-calendar
+          image: ots/calendar:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8468
+          env:
+            - name: OTS_LOG_LEVEL
+              value: info
+          volumeMounts:
+            # NOTE: calendar state persistence is provided via a PVC in the local overlay.
+            - name: ots-calendar-data
+              mountPath: /var/lib/ots-calendar
+      volumes:
+        - name: ots-calendar-data
+          emptyDir: {}

@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: trackone-gateway
+  namespace: trackone
+  labels:
+    app.kubernetes.io/name: trackone-gateway
+spec:
+  selector:
+    app.kubernetes.io/name: trackone-gateway
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+  type: ClusterIP

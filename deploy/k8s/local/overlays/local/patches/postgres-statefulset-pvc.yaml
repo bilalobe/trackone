@@ -1,0 +1,13 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: trackone
+spec:
+  template:
+    spec:
+      volumes:
+        - name: pgdata
+          emptyDir: null
+          persistentVolumeClaim:
+            claimName: pgdata
