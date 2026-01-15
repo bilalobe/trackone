@@ -1,33 +1,40 @@
-# Local Kubernetes deployment (kustomize)
+# TrackOne local Kubernetes deployment
 
-This folder provides a minimal, *readable* local Kubernetes topology for TrackOne.
+This folder contains a **local/dev** Kubernetes setup (kustomize base + overlay).
 
-- `base/` defines the canonical, environment-agnostic resources.
-- `overlays/local/` adds developer conveniences (NodePort, persistent volumes).
+## What gets deployed
+The `deploy/k8s/local/overlays/local` overlay deploys only these workloads:
 
-## Render the manifest
+- `ots-calendar` (Deployment)
+- `trackone-gateway` (Deployment)
+- `postgres` (StatefulSet)
 
-```bash
-cd /home/beb/GolandProjects/trackone
-kubectl kustomize deploy/k8s/local/overlays/local > /tmp/trackone-k8s-local.yaml
-```
-
-## Apply / delete (local cluster)
+You can verify the rendered resources with:
 
 ```bash
-kubectl apply -f /tmp/trackone-k8s-local.yaml
-kubectl -n trackone get all
-
-# Cleanup
-kubectl delete -f /tmp/trackone-k8s-local.yaml
+kubectl kustomize deploy/k8s/local/overlays/local | grep -E '^kind:'
 ```
 
-## Components
+## What the "other crates" are
+The other Rust workspace crates (`trackone-core`, `trackone-constants`, `trackone-pod-fw`) are **libraries / firmware**, not long-running services.
 
-- **ots-calendar**: stationary OTS calendar sidecar, provides deterministic HTTP readiness (`:8468`).
-- **postgres**: local DB for gateway / projections.
-- **trackone-gateway**: placeholder deployment with `/health` readiness/liveness.
+They do have Dockerfiles (build-only images) so you can build them reproducibly and load them into Minikube, but they are **not** deployed as `Deployment`s by default.
 
-## Diagrams
+Images:
 
-See `docs/trackone-k8s-local.puml`.
+- `trackone/core:local`
+- `trackone/constants:local`
+- `trackone/pod-fw:local`
+
+Build them into Minikube (docker driver) with:
+
+```bash
+scripts/minikube-build-local-images.sh
+```
+
+Run one to sanity-check it:
+
+```bash
+eval "$(minikube -p minikube docker-env)"
+docker run --rm trackone/core:local
+```

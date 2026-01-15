@@ -11,13 +11,13 @@ cloud "Local Kubernetes Cluster" as K8s {
   frame "namespace: trackone" as NS {
 
     node "trackone-gateway (Deployment)" as GW {
-      [gateway container] as GWc
+      [gateway container\n(Python FastAPI + Rust PyO3 ext)] as GWc
       () "http:8080" as GWhttp
       GWc - GWhttp
     }
 
     node "ots-calendar (Deployment)" as CAL {
-      [ots/calendar:latest] as CALc
+      [trackone/ots-calendar:local] as CALc
       () "http:8468" as CALhttp
       CALc - CALhttp
     }
@@ -26,6 +26,12 @@ cloud "Local Kubernetes Cluster" as K8s {
       [postgres:16] as PGc
       () "pg:5432" as PGport
       PGc - PGport
+    }
+
+    queue "Build Jobs (one-shot)" as JOBS {
+      [trackone-core-build (Job)\ntrackone/core:local] as JCORE
+      [trackone-constants-build (Job)\ntrackone/constants:local] as JCONST
+      [trackone-pod-fw-build (Job)\ntrackone/pod-fw:local] as JPOD
     }
 
     artifact "PVC ots-calendar-data" as PVCal
@@ -41,17 +47,31 @@ GWhttp --> PGport : DATABASE_URL=postgresql://...@postgres:5432/trackone
 CALc ..> PVCal : mount /var/lib/ots-calendar
 PGc ..> PVCpg : mount /var/lib/postgresql/data
 
+note right of JOBS
+  These are build-only crate images.
+  They run once and exit.
+
+  They exist so "the diagram"
+  can be applied as real resources
+  in the namespace.
+end note
+
 note right of GW
-  Gateway image is placeholder:
+  Local gateway image:
   trackone/gateway:local
 
   /health is used for
   readiness + liveness.
+
+  The container runs a small
+  Python HTTP server that imports
+  the Rust extension module
+  (trackone_core).
 end note
 
 note bottom of CAL
-  stationary calendar sidecar
-  for deterministic CI + dev
+  deterministic stationary calendar
+  for local dev + CI
 end note
 
 @enduml

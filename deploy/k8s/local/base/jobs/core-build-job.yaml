@@ -1,0 +1,24 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: trackone-core-build
+  namespace: trackone
+  labels:
+    app.kubernetes.io/name: trackone-core-build
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: trackone-core-build
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: core-build
+          image: trackone/core:local
+          imagePullPolicy: Never
+          env:
+            - name: TRACKONE_CORE_FEATURES
+              value: "std,gateway"
+            - name: TRACKONE_CORE_NO_DEFAULT_FEATURES
+              value: "0"

@@ -15,3 +15,7 @@ resources:
 
   - gateway/gateway-deployment.yaml
   - gateway/gateway-service.yaml
+
+  - jobs/core-build-job.yaml
+  - jobs/constants-build-job.yaml
+  - jobs/pod-fw-build-job.yaml
