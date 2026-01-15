@@ -1,0 +1,57 @@
+@startuml
+' TrackOne local k8s topology (human-first diagram)
+
+skinparam style strictuml
+skinparam componentStyle rectangle
+skinparam shadowing false
+
+actor "Developer" as Dev
+
+cloud "Local Kubernetes Cluster" as K8s {
+  frame "namespace: trackone" as NS {
+
+    node "trackone-gateway (Deployment)" as GW {
+      [gateway container] as GWc
+      () "http:8080" as GWhttp
+      GWc - GWhttp
+    }
+
+    node "ots-calendar (Deployment)" as CAL {
+      [ots/calendar:latest] as CALc
+      () "http:8468" as CALhttp
+      CALc - CALhttp
+    }
+
+    database "postgres (StatefulSet)" as PG {
+      [postgres:16] as PGc
+      () "pg:5432" as PGport
+      PGc - PGport
+    }
+
+    artifact "PVC ots-calendar-data" as PVCal
+    artifact "PVC pgdata" as PVCpg
+  }
+}
+
+Dev --> GWhttp : NodePort 30080 (local overlay)
+
+GWhttp --> CALhttp : OTS_CALENDARS=http://ots-calendar:8468
+GWhttp --> PGport : DATABASE_URL=postgresql://...@postgres:5432/trackone
+
+CALc ..> PVCal : mount /var/lib/ots-calendar
+PGc ..> PVCpg : mount /var/lib/postgresql/data
+
+note right of GW
+  Gateway image is placeholder:
+  trackone/gateway:local
+
+  /health is used for
+  readiness + liveness.
+end note
+
+note bottom of CAL
+  stationary calendar sidecar
+  for deterministic CI + dev
+end note
+
+@enduml
