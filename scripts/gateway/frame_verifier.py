@@ -18,6 +18,7 @@ References:
 - ADR-002: Telemetry Framing, Nonce/Replay Policy
 - ADR-006: Forward-only schema policy (XChaCha only, no ChaCha/salt4)
 """
+
 from __future__ import annotations
 
 import argparse

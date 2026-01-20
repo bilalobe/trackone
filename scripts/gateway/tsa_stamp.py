@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """RFC 3161 timestamp helper for TrackOne day blobs."""
+
 from __future__ import annotations
 
 import argparse

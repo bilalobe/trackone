@@ -26,6 +26,7 @@ References:
 - ADR-001/002: Cryptographic primitives and nonce/replay policy (XChaCha20-Poly1305 with 192-bit nonce)
 - ADR-006: Forward-only schema policy (salt8 only, no salt4/migrations)
 """
+
 from __future__ import annotations
 
 import argparse
