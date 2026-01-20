@@ -13,6 +13,7 @@ Suppressions:
 
 Exit 1 on findings, 0 otherwise.
 """
+
 from __future__ import annotations
 
 import ast

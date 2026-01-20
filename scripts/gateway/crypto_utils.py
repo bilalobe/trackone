@@ -14,6 +14,7 @@ Primitives:
 
 Migration from cryptography to PyNaCl completed 2025-10-12 (see ADR-005).
 """
+
 from __future__ import annotations
 
 import hashlib

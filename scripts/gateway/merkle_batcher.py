@@ -27,6 +27,7 @@ Usage:
         --date 2025-10-07 \\
         --validate-schemas
 """
+
 from __future__ import annotations
 
 import argparse

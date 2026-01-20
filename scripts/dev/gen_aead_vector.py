@@ -9,6 +9,7 @@ Vector fields (hex except fc which is int):
 - ChaCha: key, salt4, fc, rand4, nonce, aad, plaintext, ciphertext, tag
 - XChaCha: key, salt8, fc, rand8, nonce, aad, plaintext, ciphertext, tag
 """
+
 from __future__ import annotations
 
 import json
