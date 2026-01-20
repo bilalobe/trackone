@@ -42,6 +42,7 @@ Usage:
     python verify_cli.py --root out/site_demo --facts out/site_demo/facts \
         --verify-tsa --tsa-strict --verify-peers --peers-strict
 """
+
 from __future__ import annotations
 
 import argparse

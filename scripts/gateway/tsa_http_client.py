@@ -8,6 +8,7 @@ This tool implements the simple plan discussed with the user:
 
 It reuses the parsing helper from tsa_stamp.py to keep metadata format consistent.
 """
+
 from __future__ import annotations
 
 import argparse

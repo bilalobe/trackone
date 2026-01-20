@@ -2,21 +2,25 @@
 
 \subsection{Overview}
 
-Track1 implements a three-tier architecture: \textbf{Pod} (sensor + radio) $\rightarrow$ \textbf{Gateway} (verify + batch + anchor) $\rightarrow$ \textbf{Verification} (independent auditor).
+TrackOne implements a three-tier architecture: \textbf{Pod} (sensor + radio) $\rightarrow$ \textbf{Gateway} (verify + batch + anchor) $\rightarrow$ \textbf{Verification} (independent auditor).
 The system is designed for offline-tolerant operation with eventual Bitcoin timestamping.
 
 \textbf{Core dataflow:}
 \begin{enumerate}[nosep]
-    \item Pods generate telemetry and transmit encrypted frames via LoRa/serial
-    \item Gateway decrypts frames, enforces replay protection, writes canonical facts
-    \item Daily batch process computes Merkle root and produces day blob
-    \item OpenTimestamps anchors day blob to Bitcoin blockchain
-    \item Independent verifiers recompute Merkle root and validate OTS proof
+\item Pods generate telemetry and transmit authenticated frames over a constrained link (LoRa / serial).
+\item The gateway validates frames (authenticity + anti-replay) and writes \emph{canonical facts}.
+\item Canonical facts are deterministically batched into a per-day artifact (\texttt{day.bin}) and a Merkle root commitment.
+\item The day artifact (or its hash) is anchored via OpenTimestamps; proofs are upgraded until they include a Bitcoin attestation.
+\item Independent verifiers recompute evidence from canonical facts and validate the anchoring proof.
 \end{enumerate}
+
+\paragraph{Ledger vs. projection (clean-room separation)}
+The authoritative record is the append-only \emph{ledger} (canonical facts + day artifacts). Any database, dashboard, or standards API (e.g., OGC SensorThings) is treated as a \emph{projection} of that ledger.
+This separation is deliberate: the ledger contains only accepted, replay-checked facts; rejected or malformed frames are visible only in audit logs and never enter the Merkle set for a day.
 
 \begin{figure}[h]
     \centering
-    %\includegraphics[width=0.85\linewidth]{figs/architecture.pdf}
+%\includegraphics[width=0.85\linewidth]{figs/architecture.pdf}
     \caption{High-level architecture: Pods $\rightarrow$ framed uplink $\rightarrow$ Gateway (verify/canonicalize) $\rightarrow$ Merkle batch $\rightarrow$ OTS anchor}
 \end{figure}
 
@@ -24,400 +28,141 @@ The system is designed for offline-tolerant operation with eventual Bitcoin time
 % PlantUML figures (rendered to PNG during build).
 % Sources live in src/figs/*.puml and are rendered via: make report-figs
 \begin{figure}[h]
-  \centering
-  \includegraphics[width=0.92\textwidth]{figs/uml_replay_window}
-  \caption{Replay window policy as a sliding, duplicate-free acceptance state machine (ADR--024).}
-  \label{fig:uml-replay-window}
+    \centering
+    \includegraphics[width=0.92\textwidth]{figs/uml_replay_window}
+    \caption{Replay window policy as a sliding, duplicate-free acceptance state machine (ADR--024).}
+    \label{fig:uml-replay-window}
 \end{figure}
 
 \begin{figure}[h]
-  \centering
-  \includegraphics[width=0.92\textwidth]{figs/uml_day_merkle_ots_boundaries}
-  \caption{Immutability boundaries between \texttt{day.bin}, Merkle roots, and upgradeable OpenTimestamps proofs (ADR--030).}
-  \label{fig:uml-immutability-boundaries}
+    \centering
+    \includegraphics[width=0.92\textwidth]{figs/uml_day_merkle_ots_boundaries}
+    \caption{Immutability boundaries between \texttt{day.bin}, Merkle roots, and upgradeable OpenTimestamps proofs (ADR--030).}
+    \label{fig:uml-immutability-boundaries}
 \end{figure}
 
 % ---------------------------------------------------------------------------
 % Figure C2 – Pod electronics block diagram
-% TODO: Draw simple boxes: PV/supercap/harvester → 3V3 rail; STM32L0 MCU; SX1276 LoRa; Bio-sensing front-end (TLV + electrodes); RH/T sensor → Gateway/TTGO/Raspberry Pi.
+% TODO: Draw simple boxes: PV/supercap/harvester \to 3V3 rail; STM32L0 MCU; SX1276 LoRa; Bio-sensing front-end; RH/T sensor \to Gateway.
 % Drop the image at: figs/pod_block_diagram.png
 % Placement: Architecture / System Design.
 \begin{figure}[h]
-  \centering
-  %\includegraphics[width=0.9\textwidth]{figs/pod_block_diagram.png}
-  \fbox{\parbox[c][3.0cm][c]{0.9\linewidth}{Pod electronics block diagram placeholder (power → MCU → radio; sensors/front-end)}}
-  \caption{Pod electronics block diagram: energy harvester and storage feeding 3V3 rail, STM32L0 MCU with RH/T sensor% and bio-sensing front-end
-  , and SX1276 LoRa radio uplinking to the gateway.}
-  \label{fig:pod-block-diagram}
+    \centering
+%\includegraphics[width=0.9\textwidth]{figs/pod_block_diagram.png}
+    \caption{Pod electronics block diagram: energy storage feeding a 3V3 rail, an STM32-class MCU with sensors/front-end, and an SX1276-class LoRa radio uplinking to the gateway.}
+    \label{fig:pod-block-diagram}
 \end{figure}
 
-\subsection{Component Responsibilities}
+\subsection{Component Responsibilities (architectural)}
+\label{subsec:arch-responsibilities}
 
-\textbf{Pod Simulator (\texttt{pod\_sim.py}):}
+This section describes responsibilities at the \emph{architectural contract} level (what each component must ensure), rather than listing implementation scripts.
+
+\paragraph{Pod (device)}
 \begin{itemize}[nosep]
-    \item Generates synthetic telemetry facts (temperature, battery, location)
-    \item Encodes payloads as compact TLV (Type-Length-Value) structures
-    \item Constructs frame headers: \texttt{device\_id}, \texttt{msg\_type}, \texttt{frame\_counter}, \texttt{flags}
-    \item Builds nonces: \texttt{salt8 || fc\_u32 || padding} (24 bytes for XChaCha20)
-    \item Encrypts payloads with XChaCha20-Poly1305 AEAD (or plaintext stub for M\#1)
-    \item Emits NDJSON frames to stdout or file (gateway ingestion format)
+\item Samples sensors and forms \emph{environment facts} (\texttt{EnvFact}) with \emph{phenomenon time} semantics (start/end for summaries).
+\item Emits authenticated frames containing a monotonic \texttt{frame\_counter}.
+\item Operates under tight energy constraints via duty-cycling (transmit, then optional short RX window).
 \end{itemize}
 
-\textbf{Frame Verifier (\texttt{frame\_verifier.py}):}
+\paragraph{Gateway (ingest + ledger)}
 \begin{itemize}[nosep]
-    \item Parses NDJSON frames from pod uplink
-    \item Decrypts ciphertext with XChaCha20-Poly1305, validates 16-byte authentication tag
-    \item Enforces replay protection: sliding 64-frame window per \texttt{device\_id}
-    \item Rejects duplicate \texttt{frame\_counter}, backward jumps, out-of-window frames
-    \item Persists replay state to \texttt{replay\_state.json} (survives gateway restarts)
-    \item Writes canonical fact JSON to \texttt{facts/} directory
+\item Verifies authenticity (AEAD) and enforces anti-replay.
+\item Writes canonical facts (append-only) and maintains minimal mutable state required for replay enforcement.
+\item Batches accepted facts into deterministic per-day artifacts and produces Merkle commitments.
+\item Performs anchoring (OpenTimestamps stamp + upgrade) and retains proofs for independent verification.
 \end{itemize}
 
-\textbf{Merkle Batcher (\texttt{merkle\_batcher.py}):}
+\paragraph{Verifier (independent audit)}
 \begin{itemize}[nosep]
-    \item Reads all canonical fact files for a given day
-    \item Computes deterministic canonical JSON (sorted keys, no whitespace)
-    \item Hashes each fact with SHA-256, sorts hashes lexicographically
-    \item Builds Merkle tree with pairwise hashing (duplicate-last for odd layers)
-    \item Emits block header: \texttt{merkle\_root}, \texttt{count}, \texttt{leaf\_hashes}, \texttt{day}, \texttt{site\_id}
-    \item Produces day blob (\texttt{day/YYYY-MM-DD.bin}) and day record (\texttt{day/YYYY-MM-DD.json})
-    \item Validates artifacts against JSON schemas (\texttt{block.schema.json}, \texttt{day.schema.json})
+\item Rebuilds Merkle roots from canonical facts and checks them against day commitments.
+\item Verifies cryptographic timestamp evidence (OTS proofs and/or TSA proofs if enabled).
+\item Does not require trust in gateway runtime, only in the published artifacts and cryptographic assumptions.
 \end{itemize}
 
-\textbf{OTS Anchor (\texttt{ots\_anchor.py}):}
+\subsection{Time Semantics}
+\label{subsec:arch-time}
+
+TrackOne distinguishes two times:
 \begin{itemize}[nosep]
-    \item Invokes \texttt{ots stamp <day.bin>} to submit SHA-256 to calendar servers
-    \item Creates \texttt{day.bin.ots} proof file (binary format with attestations)
-    \item Falls back to a placeholder text file if \texttt{ots} binary unavailable (test/CI support)
-    \item Proof metadata stored in \texttt{proofs/*.ots.meta.json} (block height, hash, merkleroot)
+\item \textbf{phenomenonTime}: when the observed phenomenon occurred (in \texttt{EnvFact.phenomenon\_time\_start/end}).
+\item \textbf{resultTime / ingest\_time}: when the gateway accepted the fact into the ledger (in \texttt{Fact.ingest\_time}).
+\end{itemize}
+This separation allows pods to operate with weak or absent RTCs while the gateway defines day boundaries for batching.
+
+\subsection{Rust Workspace and Pipeline Boundaries}
+\label{subsec:arch-rust-boundaries}
+
+TrackOne is organised as a multi-crate Rust workspace, with clear layering between protocol primitives, embedded firmware, and gateway integration:
+\begin{itemize}[nosep]
+\item \texttt{trackone-core}: no\_std-capable core (fact schema, AEAD frame helpers, Merkle helpers, deterministic commitment serialization).
+\item \texttt{trackone-pod-fw}: bare-metal firmware crate (STM32-class targets), reusing \texttt{trackone-core} types and framing logic.
+\item \texttt{trackone-gateway}: host-side integration (via PyO3/maturin where appropriate) that uses \texttt{trackone-core} for hot loops.
+\item \texttt{trackone-constants}: workspace-wide shared constants (e.g., \texttt{MAX\_FACT\_LEN}) to keep sizing policies consistent.
+\end{itemize}
+This split lets the verification logic remain stable while implementation languages and deployment envelopes evolve.
+
+\subsection{Anchoring Variants (ADR-015)}
+Beyond OpenTimestamps, deployments MAY enable parallel RFC~3161 TSA anchoring:
+\begin{itemize}[nosep]
+\item Daily Merkle root submitted to one or more TSA endpoints (RFC 3161)
+\item Store returned \texttt{.tsr} responses alongside \texttt{.ots} proofs
+\item Verification tools can accept either OTS or TSA proofs for timestamp attestation; peer signatures provide immediate provenance even before blockchain inclusion
 \end{itemize}
 
-\textbf{Verification CLI (\texttt{verify\_cli.py}):}
+\subsubsection{Stationary Calendar as an Architectural Component}
+The stationary calendar is treated as an architectural component (not merely a test trick): it provides a local, deterministic calendar endpoint for development and controlled integration tests.
+It does not replace on-chain verification; it improves pipeline resilience by decoupling day artifact production from public calendar availability.
+
+% ---------------------------------------------------------------------------
+% NOTE: Legacy script-level pipeline descriptions (pod_sim.py, frame_verifier.py,
+% merkle_batcher.py, ots_anchor.py, verify_cli.py) were intentionally removed
+% from this chapter to keep it architectural. Those details belong in developer
+% documentation and code comments, not in the system architecture narrative.
+
+\subsection{Embedded Validation Architecture}
+The embedded validation stack ensures that the on-pod implementation is wire-compatible with gateway tooling:
 \begin{itemize}[nosep]
-    \item Independent tool for third-party auditors (no gateway trust required)
-    \item Recomputes Merkle root from canonical fact files
-    \item Compares recomputed root against block header (authoritative source)
-    \item Verifies OTS proof with \texttt{ots verify} (requires Bitcoin Core headers)
-    \item Returns exit codes: 0 (success), 1 (header missing), 2 (root mismatch), 3 (proof missing), 4 (proof invalid)
-\end{itemize}
-
-\subsection{Pipeline Workflow (per ADRs)}
-
-\textbf{M\#1 (Stub AEAD—ADR-004):}
-\begin{itemize}[nosep]
-    \item Framing implemented with plaintext payloads (crypto stub)
-    \item Replay window active and tested
-    \item Merkle batching and OTS anchoring with placeholder proofs
-    \item End-to-end integration validated
-\end{itemize}
-
-\textbf{M\#2 (Real AEAD—ADR-002):}
-\begin{itemize}[nosep]
-    \item XChaCha20-Poly1305 encryption enabled
-    \item Nonce construction: \texttt{salt8 || fc\_u64 || random8}
-    \item AAD: \texttt{device\_id || msg\_type} (prevents context confusion)
-    \item TLV payload encoding for compact on-air size
-\end{itemize}
-
-\textbf{M\#3 (PyNaCl Migration—ADR-005):}
-\begin{itemize}[nosep]
-    \item Single cryptographic library (PyNaCl) for all primitives
-    \item Device table schema v1.0 with forward-only policy (ADR-006)
-    \item Test vectors validated against reference implementation
-    \item 85\% code coverage with comprehensive security tests
-\end{itemize}
-
-\textbf{M\#4 (OTS Verification—ADR-008):}
-\begin{itemize}[nosep]
-    \item Production Bitcoin anchoring confirmed (block 919384)
-    \item Real OTS integration tests (optional, marked \texttt{@pytest.mark.real\_ots})
-    \item Git LFS for binary OTS proofs
-    \item Enhanced test suite: 200+ tests across the repository (some runs may skip optional real-OTS tests)
-\end{itemize}
-
-\textbf{M\#5 (Peer Attestation \& Parallel Anchoring—ADR-015):}
-\begin{itemize}[nosep]
-    \item \emph{Peer Attestation:} gateways/operators sign daily Merkle roots with Ed25519; signatures written to \texttt{day/YYYY-MM-DD.peers.json}
-    \item Context-bound message format (\texttt{trackone:day-root:v1}) prevents cross-protocol replay
-    \item Quorum policy configurable (e.g., require $k$ of $n$ peer signatures)
-    \item Optional parallel RFC~3161 TSA anchoring runs alongside OTS; stores \texttt{.tsr} next to \texttt{.ots}
-\end{itemize}
-
-\subsubsection{Rust Core and Embedded Stack (ADR-017, ADR-019)}
-The TrackOne pipeline retains Python as the orchestration layer, but performance-critical crypto/Merkle paths are now first-class Rust components:
-\begin{itemize}[nosep]
-  \item \textbf{Rust TrackOne-core crate:} Provides Merkle hashing, AEAD primitives, and OTS meta handling. Exposed to Python (PyO3/FFI) where throughput matters; mirrors the Python reference implementation against a shared golden corpus.
-  \item \textbf{Gateway / CLI crates:} Rust binaries/libraries for high-throughput verify and batch operations (e.g., \emph{verify\_cli}, \emph{merkle\_batcher} ports) used in CI and auditor tooling.
-  \item \textbf{Embedded firmware crate (trackone-pod-fw):} Shared logic for pods (Cortex-M0+/M4): frame counters, AEAD, frame encoding; self-tests and QEMU-based stress harness; minimal HAL glue for STM32L0/L4.
-\end{itemize}
-Python still orchestrates the pipeline and filesystem semantics; Rust owns the hot loops and is kept equivalent to Python by CI tests.
-
-\subsection{Anchoring variants (ADR-015)}
-Beyond OpenTimestamps, deployments MAY enable parallel RFC 3161 TSA anchoring:
-\begin{itemize}[nosep]
-    \item Daily Merkle root submitted to one or more TSA endpoints (RFC 3161)
-    \item Store returned \texttt{.tsr} responses alongside \texttt{.ots} proofs
-    \item Verification CLI can accept either OTS or TSA proofs for timestamp attestation; peer signatures provide immediate provenance even before blockchain inclusion
-\end{itemize}
-Parallel anchoring improves resilience and caters to environments requiring PKI-backed timestamps.
-
-\subsubsection{Stationary calendar as an architectural component}
-The stationary calendar is elevated from a testing idea to an \emph{actual component} of the architecture:
-\begin{itemize}[nosep]
-  \item Exposed as a local HTTP endpoint (container or service) and addressed via \texttt{OTS\_CALENDARS}; fast stub mode toggled by \texttt{OTS\_STATIONARY\_STUB} in CI.
-  \item Used in CI for deterministic proof behaviour and in weekly ``ratchet'' jobs that exercise real OTS flows without relying on public pool stability.
-  \item Logically separate from Bitcoin header verification (which may use headers-only Bitcoin Core peers); stationary calendar does not weaken on-chain verification.
-\end{itemize}
-
-\subsection{Platform Dependencies}
-
-\textbf{Operating System:}
-\begin{itemize}[nosep]
-    \item Linux (tested: openSUSE Tumbleweed, Ubuntu 24.04)
-    \item Kernel: 5.15+ (modern Python compatibility)
-    \item Architecture: x86\_64, ARM64 (Raspberry Pi 4 tested for gateway role)
-\end{itemize}
-
-\textbf{Python Runtime:}
-\begin{itemize}[nosep]
-    \item Python 3.12, 3.13, 3.14 (all tested in CI matrix)
-    \item Package manager: \texttt{uv} (fast, deterministic dependency resolution)
-    \item Virtual environment required (isolation from system packages)
-\end{itemize}
-
-\textbf{Core Dependencies:}
-\begin{itemize}[nosep]
-    \item \texttt{pynacl} (1.5.0+): XChaCha20-Poly1305, X25519, Ed25519, HKDF-SHA256
-        \begin{itemize}[nosep]
-            \item Wraps libsodium (audited C library)
-            \item Provides constant-time implementations (timing-attack resistance)
-        \end{itemize}
-    \item \texttt{jsonschema} (4.19.0+): Schema validation for block/day records
-        \begin{itemize}[nosep]
-            \item Draft 7 JSON Schema support
-            \item Validation of required fields, types, formats
-        \end{itemize}
-\end{itemize}
-
-\textbf{Testing Dependencies:}
-\begin{itemize}[nosep]
-    \item \texttt{pytest} (8.0+): Test framework with fixtures and parametrization
-    \item \texttt{pytest-cov} (4.1+): Coverage measurement and HTML reporting
-    \item \texttt{pytest-xdist} (3.5+): Parallel test execution (faster CI)
-    \item \texttt{pytest-mock} (3.12+): Mock fixtures for subprocess calls
-    \item \texttt{hypothesis} (6.92+): Property-based testing for cryptographic properties
-\end{itemize}
-
-\textbf{Development Tools:}
-\begin{itemize}[nosep]
-    \item \texttt{mypy} (1.7+): Static type checking (gradual typing, --strict mode)
-    \item \texttt{ruff} (0.1+): Fast linter and formatter (replaces flake8, isort, black)
-    \item \texttt{bandit} (1.7+): Security static analysis (ADR-009 hardening)
-\end{itemize}
-
-\textbf{Optional External Tools:}
-\begin{itemize}[nosep]
-    \item \texttt{opentimestamps-client} (0.7.2+): \texttt{ots} binary for stamping/verification
-        \begin{itemize}[nosep]
-            \item Python package: \texttt{pip install opentimestamps-client}
-            \item Provides: \texttt{ots stamp}, \texttt{ots upgrade}, \texttt{ots verify}, \texttt{ots info}
-        \end{itemize}
-    \item \texttt{bitcoin-core} (27.0+): \texttt{bitcoind} for local OTS verification
-        \begin{itemize}[nosep]
-            \item Headers-only mode: \texttt{-prune=550 -blocksonly=1}
-            \item Storage: $<$1 GB (vs. $>$500 GB full node)
-            \item Initial sync: 10--20 minutes (one-time cost)
-        \end{itemize}
-\end{itemize}
-
-\textbf{Build System:}
-\begin{itemize}[nosep]
-    \item \texttt{make}: Unified command interface (\texttt{make test}, \texttt{make run}, \texttt{make coverage})
-    \item \texttt{uv}: Fast Python package installer (5--10× faster than pip)
-    \item \texttt{git-lfs}: Large file storage for binary OTS proofs
-\end{itemize}
-
-\subsection{Deployment Profiles}
-
-\textbf{Development (local laptop):}
-\begin{itemize}[nosep]
-    \item Python + uv + pytest (core testing)
-    \item Optional: \texttt{ots} binary for real OTS tests
-    \item No Bitcoin Core required (tests use placeholders)
-\end{itemize}
-
-\textbf{CI/CD (GitHub Actions / GitLab CI):}
-\begin{itemize}[nosep]
-    \item Python 3.12/3.13/3.14 matrix testing
-    \item Cached uv packages (5--10 second install)
-    \item Cached Bitcoin headers (optional, for OTS verification jobs)
-    \item Test execution: $<$2 minutes per Python version
-\end{itemize}
-
-\textbf{Production Gateway (Raspberry Pi 4 / cloud VM):}
-\begin{itemize}[nosep]
-    \item Python 3.11+ with PyNaCl and dependencies
-    \item OpenTimestamps client for daily anchoring
-    \item Bitcoin Core (headers-only) for local verification
-    \item Persistent storage: \texttt{out/} directory, \texttt{replay\_state.json}
-    \item Cron jobs: Daily \texttt{ots stamp} at 00:10 UTC, weekly \texttt{ots upgrade}
-\end{itemize}
-
-\textbf{Auditor Workstation (any Linux machine):}
-\begin{itemize}[nosep]
-    \item Python 3.11+ with jsonschema
-    \item OpenTimestamps client (for \texttt{ots verify})
-    \item Bitcoin Core (headers-only, can be remote RPC)
-    \item Input: Fact files, block headers, day blobs, OTS proofs
-    \item Output: Verification report (Merkle root match, OTS validity)
-\end{itemize}
-
-\subsubsection{Embedded Validation Architecture}
-The embedded validation stack ensures that the on-pod implementation is wire-compatible with the gateway and verifier:
-\begin{itemize}[nosep]
-  \item \textbf{Host stress harness (\emph{host\_stress}):} Validates frame builder and crypto at scale on x86\_64, producing canonical frames that are fed to the same verification pipeline.
-  \item \textbf{QEMU-based stress binaries (\emph{qemu\_stress}, \emph{m0\_stress}):} Exercise Cortex-M4 and Cortex-M0+ builds to confirm bounded stack usage, maximum frame size ceilings (56~B), and portability across MCU classes.
-  \item \textbf{Feedback loop:} Embedded outputs are ingested by the gateway (or \emph{verify\_cli}) to assert wire compatibility and identical Merkle roots for the golden corpus.
+\item Host and QEMU stress harnesses validate bounded stack usage and a fixed maximum frame size budget.
+\item Golden corpora (facts + frames) are used to assert that independent implementations produce identical commitments.
 \end{itemize}
 
 \subsection{Security Assumptions}
-
 \begin{itemize}[nosep]
-    \item \textbf{Pod security:} Pods are physically secure; keys not extractable
-    \item \textbf{Gateway trust:} Gateway may log/store facts, but cannot forge OTS proofs
-    \item \textbf{Bitcoin security:} Bitcoin blockchain is immutable (51\% attack infeasible)
-    \item \textbf{OTS calendar servers:} Multiple independent servers reduce single-point failure
-    \item \textbf{PyNaCl integrity:} Library is installed from trusted sources (PyPI with hash verification)
+\item \textbf{Pod security:} Pods may be physically accessible; keys should be provisioned to limit blast radius.
+\item \textbf{Gateway trust:} Gateway may buffer and store facts, but cannot forge cryptographic timestamp evidence.
+\item \textbf{Anchoring security:} Bitcoin attestation provides a high-cost global timestamp reference.
+\item \textbf{Calendars:} Multiple independent calendar endpoints reduce single-point failure.
 \end{itemize}
-
-\subsection{Deferred alternative channels}
-\textbf{Signal watermarking (Option B):} Experiments with Quantization Index Modulation (QIM) or other watermarking schemes live outside the current telemetry stack. %They would augment the \emph{pod} block of Figure~1 by embedding authenticity into analog bio-impedance traces before AEAD.
-%Because Track1 pods presently emit low-rate scalar telemetry (no images, no high-rate biosignals), dedicating energy budget to watermarking would provide no security benefit and would collide with the 1.4~Wh/day envelope.
-These techniques remain in the backlog for future hardware revisions and are documented in ADR-XXX.
-
-\textbf{Rust core (status):} We have implemented a Rust \emph{trackone-core} crate that mirrors the Python reference implementation and is used for performance-critical crypto and Merkle operations (via PyO3 where appropriate). Python remains the orchestration layer, and both implementations are tested against a shared golden corpus to ensure bit-for-bit equivalence.
-
-In both cases the three-tier architecture stays intact: pods emit signed facts, gateways batch and anchor, and verifiers recompute evidence.
-Future channels simply plug into the pod/gateway boundary without rewriting the verifiability stack.
-
-\subsection{Architecture Decision Matrix}
-To help visualise how each major component defends different system goals, the diagram in Figure~\ref{fig:arch-matrix} arranges the five primary components (rows) against the five focal concerns (columns). Each cell concisely captures the key responsibility or behaviour relevant to that axis. This 5x5 matrix makes it easy to explain trade-offs during reviews and spec sign-off.
-
-% Proper 5x5 likelihood x impact matrix
-\begin{figure}[ht]
-  \centering
-  \begin{tikzpicture}[scale=1, every node/.style={font=\small}, inner sep=1pt]
-    % parameters (use pgfmath to avoid \def warnings)
-    \pgfmathsetmacro{\cellsize}{1.3} % cell width/height (numeric, units applied where needed)
-    \pgfmathsetmacro{\n}{5} % grid size
-    \pgfmathtruncatemacro{\NminusOne}{\n-1}
-
-    % styles
-    \tikzset{cell/.style={draw=black, minimum width=\cellsize cm, minimum height=\cellsize cm, anchor=south west}}
-    \tikzset{risk/.style={fill=red!70,text=white,rounded corners=2pt,font=\footnotesize,align=center,inner sep=2pt}}
-    \tikzset{medrisk/.style={fill=orange!60,text=black,rounded corners=2pt,font=\scriptsize,align=center,inner sep=2pt}}
-    \tikzset{opp/.style={fill=green!60,text=black,rounded corners=2pt,font=\scriptsize,align=center,inner sep=2pt}}
-    \tikzset{legend/.style={font=\footnotesize}}
-
-    % draw grid
-    \foreach \x in {0,...,\NminusOne} {
-      \foreach \y in {0,...,\NminusOne} {
-        \node[cell] (c\x\y) at ({\x*\cellsize},{\y*\cellsize}) {};
-      }
-    }
-
-    % axes labels
-    \node[font=\small, anchor=west] at ({\n*\cellsize + 0.5},{0.5*\cellsize}) {Likelihood $\rightarrow$};
-    \node[font=\small, anchor=south] at ({-0.8},{\n*\cellsize + 0.5}) {Impact $\uparrow$};
-
-    % numeric ticks
-    \foreach \i in {1,...,\n} { \node[font=\footnotesize] at ({(\i-0.5)*\cellsize}, -0.25) {\i}; }
-    \foreach \j in {1,...,\n} { \node[font=\footnotesize] at (-0.25, {(\j-0.5)*\cellsize} ) {\j}; }
-
-    % helper macro to place markers at (likelihood,impact) with label
-    \newcommand{\placeMarker}[4]{% #1=likelihood 1..5, #2=impact 1..5, #3=style, #4=label
-      \pgfmathsetmacro{\mx}{(#1-0.5)*\cellsize}
-      \pgfmathsetmacro{\my}{(#2-0.5)*\cellsize}
-      \node[#3] at ({\mx},{\my}) {#4};
-    }
-
-    % place risk/opportunity markers (likelihood, impact)
-    % CF-1: False positive verification -> likelihood 4, impact 5
-    \placeMarker{4}{5}{risk}{CF-1\\False-pos verification}
-    % CF-2: Calendar equivocation -> likelihood 3, impact 5
-    \placeMarker{3}{5}{risk}{CF-2\\Calendar equivocation}
-    % AT-5 metadata loss -> likelihood 3, impact 3 (medium risk)
-    \placeMarker{3}{3}{medrisk}{AT-5\\Meta loss}
-    % Hardware failure -> likelihood 4, impact 3
-    \placeMarker{4}{3}{medrisk}{Hardware\\failure}
-    % Stationary calendar opportunity -> likelihood 3, impact 3 (placed near AT-5 but offset)
-    \pgfmathsetmacro{\ox}{(3-0.5)*\cellsize + 0.25}
-    \pgfmathsetmacro{\oy}{(3-0.5)*\cellsize - 0.25}
-    \node[opp] at ({\ox},{\oy}) {Stationary\\calendar (CI)};
-    % Predictable audits opportunity -> likelihood 5, impact 5
-    \placeMarker{5}{5}{opp}{Predictable\\audits}
-    % Peer attestation -> likelihood 2, impact 5
-    \placeMarker{2}{5}{opp}{Peer\\attestation}
-
-    % legend box
-    \begin{scope}[shift={(0,-1.8)}]
-      \node[legend, anchor=north west] at (0,0) {\textbf{Legend}:};
-      \node[risk, anchor=north west] at ({1.2},{0}) {Critical risk};
-      \node[medrisk, anchor=north west] at ({3.0},{0}) {Medium risk};
-      \node[opp, anchor=north west] at ({4.6},{0}) {Opportunity};
-    \end{scope}
-
-    % frame
-    \draw[thick] (0,0) rectangle ({\n*\cellsize},{\n*\cellsize});
-  \end{tikzpicture}
-  \caption{5$\times$5 likelihood (x) by impact (y) risk/opportunity matrix. Cells indexed 1..5 (low..high). Markers show prioritized risks (red/orange) and opportunities (green).}
-  \label{fig:arch-matrix}
-\end{figure}
-
-\subsection{Rust workspace and pipeline boundaries}
-TrackOne is now organised as a multi-crate Rust workspace (exported to Python via maturin for Track~One deployments and compiled bare-metal for Track~Three pods):
-\begin{itemize}[nosep]
-    \item \texttt{trackone-core}: no\_std-capable core (AEAD frame builder, nonce policy, Merkle helpers). It compiles for Cortex-M0+, Cortex-M4F, and host targets (validated via \texttt{m0\_stress}, \texttt{qemu\_stress}, and \texttt{host\_stress} binaries).
-    \item \texttt{trackone-gateway}: Python-facing Rust crate (PyO3/maturin) that will replace the hottest Python paths (frame verification, Merkle batching, crypto) in Track Two without changing external CLI behaviour.
-    \item \texttt{trackone-pod-fw}: Bare-metal firmware for STM32L0/L4 and future RISC-V pods% , including the Physarum bio-impedance acquisition stack
-    ; today it proves that TrackOne frames fit in <4~kB even on Cortex-M0+.
-    \item \texttt{trackone-constants}: Workspace-wide constants (e.g., \texttt{MAX\_FACT\_LEN}) shared by gateway and pod crates so every component agrees on frame sizing and nonce layout.
-\end{itemize}
-This split lets Track One (Python gateway) ship today while providing a concretely mapped runway for Track Two (Rust gateway) and Track Three (embedded %Physarum
-pods) without rewriting verifiability logic.
-
-\subsection{Adaptive uplink cadence over LoRa}
-\label{subsec:adaptive_uplink_lora}
-
-The pod uplink path is designed around a \\emph{Class~A--style} LoRa behavior: the pod transmits at a fixed baseline interval (for example, once per day), and immediately after transmission it opens a short receive window to listen for a downlink. Downlinks are application-layer control messages, carried inside the same authenticated AEAD envelope as data frames, and are not a full LoRaWAN MAC. Each downlink contains:
-\begin{itemize}
-  \item an acknowledgement of the last accepted frame counter $(\mathit{pod\_id}, \mathit{fc})$;
-  \item an optional new uplink period (e.g., 24~h, 8~h, or an hour-scale ``storm mode'' burst window);
-  \item a monotonically increasing policy epoch $\mathit{policy\_epoch}$ to prevent rollback or replay of stale policies.
-\end{itemize}
-
-The gateway computes these cadence policies from site-level risk (for example, forecasts or observed volatility) and encodes them as small, deterministic control messages. This realizes ADR--025's decision that adaptive uplink is driven by gateway-side policy, not by opaque logic on the pod itself, and that pods remain in a simple, mostly autonomous transmit--then--listen pattern (cf.~ADR--025).
-
-\subsection{OTA firmware updates over LoRa (future work)}
-\label{subsec:ota_over_lora}
-
-Over-the-air (OTA) firmware updates over LoRa are treated as a separate, rarer maintenance channel, building on the same chain of trust as data frames and cadence control. ADR--026 specifies that OTA is orchestrated by the gateway and consists of:
-\begin{itemize}
-  \item a signed firmware manifest (version, total size, chunk size, image hash, and monotonic firmware epoch) distributed as a small control payload;
-  \item a sequence of authenticated chunks, each protected with AEAD and subject to duty-cycle limits;
-  \item a dual-slot or ``golden + candidate'' bootloader on the pod, which writes the new image to an inactive slot, verifies the hash, switches the boot target, and rolls back automatically if health checks fail.
-\end{itemize}
-
-In this report, OTA is documented as planned future work: the pod firmware baseline and the LoRa control plane have been designed so that OTA can be added later without changing the telemetry semantics or the verification pipeline (cf.~ADR--026). The core system operation and the results reported here do not depend on OTA being enabled in the field.
 
 \subsection{Interoperability via OGC SensorThings}
-Beyond the internal TrackOne facts, the gateway layer deliberately projects verified observations into a standards-compliant API. We adopt the Open Geospatial Consortium (OGC) \emph{SensorThings} data model as the public-facing abstraction for telemetry and site metadata \cite{ogc-sensorthings-part1,ogc-sensorthings-part2}.
+Beyond internal TrackOne facts, the gateway projects verified observations into a standards-compliant API.
+We adopt the OGC \emph{SensorThings} data model as the public-facing abstraction for telemetry and site metadata \cite{ogc-sensorthings-part1,ogc-sensorthings-part2}.
 
 \begin{itemize}[nosep]
-  \item Each physical pod, identified by \texttt{device\_id}, is modelled as a SensorThings \emph{Thing} with a concrete \emph{Location} anchored in the Ouarzazate GIS context.
-  \item Each measured quantity (ambient temperature, relative humidity, supply voltage, etc.) becomes a separate SensorThings \emph{Datastream} with an OGC-compatible \emph{ObservedProperty} and \emph{Sensor}, harmonized with \texttt{SampleType} and \texttt{SensorCapability} metadata.
-  \item Every TrackOne \texttt{Fact} of kind \texttt{Env} is mapped to a SensorThings \emph{Observation}: \texttt{phenomenon\_time\_start} and \texttt{phenomenon\_time\_end} define the \emph{phenomenonTime} interval, while the summarised value (mean/min/max/count) supplies the \emph{result}.
+\item Each physical pod (\texttt{pod\_id}) is modelled as a SensorThings \emph{Thing} with a \emph{Location} in the site GIS context.
+\item Each measured quantity becomes a separate \emph{Datastream}, harmonized with \texttt{SampleType} and (out-of-band) \texttt{SensorCapability} metadata.
+\item Each TrackOne \texttt{Fact} of kind \texttt{Env} maps to a SensorThings \emph{Observation}: \texttt{EnvFact.phenomenon\_time\_start/end} define \emph{phenomenonTime}, while \texttt{Fact.ingest\_time} maps to \emph{resultTime}.
 \end{itemize}
 
-Treating SensorThings as a projection keeps the TrackOne schema compact, binary, and verifiable while giving GIS tools and downstream dashboards a REST- and MQTT-friendly facade.
-The OGC MQTT Protocol Binding for SensorThings provides a natural path to publish selected Observations without changing pod firmware or the verification pipeline\cite{ogc-mqtt-binding}.
+SensorThings remains a projection: it can be rebuilt from the ledger and does not participate in Merkle commitments.
+
+\subsection{Local Kubernetes Topology (Fidelity-First)}
+\label{sec:k8s-topology}
+
+A local Kubernetes namespace is used as an \emph{executable topology sketch} for development and integration testing.
+The goal is not to prescribe a production orchestration platform, but to keep component boundaries and dependencies explicit and testable.
+
+The local overlay (\texttt{deploy/k8s/local/overlays/local}) expresses:
+\begin{itemize}[nosep]
+\item \textbf{Long-running services:} gateway, a stationary OTS calendar, and a database used for projections.
+\item \textbf{Persistent volumes:} for facts/proofs (append-only artifacts) and for database state (rebuildable view).
+\end{itemize}
+
+% ---------------------------------------------------------------------------
+% NOTE: We intentionally omit YAML listings and kubectl invocations here.
+% The architecture chapter should describe contracts and boundaries, not
+% operational steps. Those details have a home in deploy/ and docs/.
+
+\subsection{Architecture Decision Matrix}
+To help visualise how major components defend different system goals, Figure~\ref{fig:arch-matrix} provides a likelihood-by-impact matrix used during review.

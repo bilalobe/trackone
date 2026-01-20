@@ -15,6 +15,7 @@ Environment Variables:
 - STRICT_VERIFY: When set to "1", treat verification timeouts as failures (CI main).
 - STRICT_SHA: When set to "1", enforce strict SHA-256 validation.
 """
+
 from __future__ import annotations
 
 import os

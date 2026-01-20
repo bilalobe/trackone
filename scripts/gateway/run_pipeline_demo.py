@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Deterministic TrackOne pipeline runner writing artifacts to out/site_demo."""
+
 from __future__ import annotations
 
 import argparse
