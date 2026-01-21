@@ -52,6 +52,20 @@ impl From<[u8; 8]> for PodId {
 }
 
 impl From<u32> for PodId {
+    /// Constructs a `PodId` from a legacy 32-bit identifier.
+    ///
+    /// ## Wire layout (stable, forward-compatible)
+    ///
+    /// This maps the `u32` into the **last 4 bytes** (`[4..8]`) in **big-endian** order:
+    ///
+    /// - `self.0[0..4]`: reserved for a future prefix (site/fleet/issuer/batch/etc.).
+    ///   Currently all zeros for `From<u32>`.
+    /// - `self.0[4..8]`: the `u32` value encoded as `v.to_be_bytes()`.
+    ///
+    /// Rationale:
+    /// - Keeping the high 4 bytes reserved allows introducing namespacing later without
+    ///   changing the overall `PodId` width.
+    /// - Big-endian provides a canonical encoding independent of host endianness.
     fn from(v: u32) -> Self {
         let mut id = [0u8; 8];
         id[4..8].copy_from_slice(&v.to_be_bytes());
