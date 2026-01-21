@@ -41,7 +41,7 @@ dev = [
     "ruff>=0.14.13",
     "smmap==6.0.0",
     "time-machine>=3.1.0",
-    "uv==0.9.22",
+    "uv==0.9.26",
 ]
 anchoring = [
     "requests>=2.32.3",
