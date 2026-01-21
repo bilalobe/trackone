@@ -115,13 +115,14 @@ fn cbor_text(buf: &mut Vec<u8>, s: &str) {
     buf.extend_from_slice(s.as_bytes());
 }
 
-#[cfg(feature = "std")]
 fn cbor_f32(buf: &mut Vec<u8>, v: f32) {
     // Deterministic choice: encode as float32 (0xFA) always.
-    // This is stricter than RFC8949's "shortest float" recommendation, but
-    // provides stable, cross-implementation results for TrackOne.
+    // Additionally, normalize NaN to a single canonical quiet NaN bit pattern
+    // to preserve deterministic encoding across platforms and sources.
     buf.push(0xFA);
-    buf.extend_from_slice(&v.to_bits().to_be_bytes());
+
+    let bits: u32 = if v.is_nan() { 0x7FC0_0000 } else { v.to_bits() };
+    buf.extend_from_slice(&bits.to_be_bytes());
 }
 
 #[cfg(feature = "std")]
