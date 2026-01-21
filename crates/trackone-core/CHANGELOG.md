@@ -38,11 +38,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Documented the CBOR profile, schema versioning, and the “field order is part of the commitment contract” rule
 
 ### Performance
-- Added reproducible size comparisons (see `tests/serialization_benchmarks.rs`). Example results on this release:
-  - `ProvisioningRecord`: 177 B (Postcard) vs 185 B (CBOR) vs 633 B (JSON)
-  - `PolicyUpdate`: 85 B (Postcard) vs 88 B (CBOR) vs 378 B (JSON)
-  - `EnvFact` (embedded in `Fact`): 55 B (Postcard) vs 60 B (CBOR) vs 296 B (JSON)
-
+- Added reproducible size comparisons between Postcard, TrackOne CBOR, and JSON.
+  - Example results for `0.1.0-alpha.2` \(measured on Linux, Rust \`1.xx\`, \`--release\`, features: \`...\`\):
+    - `ProvisioningRecord`: 177 B \(Postcard\) vs 185 B \(CBOR\) vs 633 B \(JSON\)
+    - `PolicyUpdate`: 85 B \(Postcard\) vs 88 B \(CBOR\) vs 378 B \(JSON\)
+    - `EnvFact` \(embedded in `Fact`\): 55 B \(Postcard\) vs 60 B \(CBOR\) vs 296 B \(JSON\)
 
 ## [0.1.0-alpha.1] - 2025-01-20
 
