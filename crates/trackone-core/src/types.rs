@@ -1,13 +1,11 @@
-//! Shared core types for TrackOne frames and identifiers.
+//! TrackOne core types shared across pods, gateway, and verifiers.
 //!
-//! This module is `no_std`-friendly and avoids unbounded allocations by
-//! using fixed-size buffers via `heapless` where needed.
-//!
-//! ## Core invariants
-//! - The tuple `(pod_id, fc)` uniquely identifies a fact and enforces anti-replay.
-//! - The schema is forward-only (see ADR-006 / ADR-030).
-//! - `phenomenon_time_*` represent the measured time window (SensorThings phenomenonTime).
-//! - `ingest_time` represents gateway arrival time (SensorThings resultTime).
+//! Goals:
+//! - `no_std` friendly (bounded allocations via `heapless`)
+//! - Forward-only schema (ADR-006 / ADR-030)
+//! - Clear SensorThings alignment:
+//!   - `phenomenon_time_*` => phenomenonTime
+//!   - `ingest_time` => resultTime
 
 use core::fmt;
 
@@ -20,9 +18,32 @@ pub type FrameCounter = u64;
 
 /// Canonical device identifier.
 ///
-/// Uses 8 bytes to leave room for future schemes (site prefix, manufacturing batch, etc.).
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+/// 8 bytes keeps the door open for future strategies (site prefix, batch, etc.).
+#[derive(Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct PodId(pub [u8; 8]);
+
+impl PodId {
+    fn fmt_hex(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for b in self.0 {
+            write!(f, "{:02x}", b)?;
+        }
+        Ok(())
+    }
+}
+
+impl fmt::Display for PodId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.fmt_hex(f)
+    }
+}
+
+impl fmt::Debug for PodId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("PodId(")?;
+        self.fmt_hex(f)?;
+        f.write_str(")")
+    }
+}
 
 impl From<[u8; 8]> for PodId {
     fn from(v: [u8; 8]) -> Self {
@@ -38,12 +59,10 @@ impl From<u32> for PodId {
     }
 }
 
-/// Alias used by ADRs and gateway terminology.
+/// ADR-friendly alias for the same identifier.
 pub type DeviceId = PodId;
 
-/// Environmental sample channel/type.
-///
-/// This aligns with SensorThings ObservedProperty.
+/// Environmental sample channel/type (SensorThings ObservedProperty).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize_repr, Deserialize_repr)]
 #[repr(u8)]
 pub enum SampleType {
@@ -60,51 +79,45 @@ pub enum SampleType {
     Custom = 250,
 }
 
-/// Out-of-band sensor capability metadata.
+/// Out-of-band capability metadata (static tables in firmware/gateway).
 ///
-/// Not embedded into the wire-level Fact schema to avoid lifetime and
-/// payload bloat; instead, used as static tables in firmware/gateway.
+/// Not part of the wire-level `Fact` schema to avoid lifetime constraints and payload bloat.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SensorCapability {
     pub sample_type: SampleType,
-    /// Smallest meaningful step (engineering units).
     pub resolution: f32,
-    /// Accuracy (engineering units), e.g. ±0.2°C.
     pub accuracy: f32,
-    /// Human-facing unit symbol (e.g. "°C", "%", "V").
     pub unit_symbol: &'static str,
-    /// Human-facing label.
     pub label: &'static str,
 }
 
-/// Payload for environmental sensing.
+/// Environmental payload.
+/// Times are seconds since epoch (UTC), inclusive.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EnvFact {
     pub sample_type: SampleType,
-
-    /// Seconds since epoch (UTC). Inclusive.
     pub phenomenon_time_start: i64,
-    /// Seconds since epoch (UTC). Inclusive.
     pub phenomenon_time_end: i64,
 
-    /// Instantaneous value (if present). If this is set for a windowed summary,
-    /// it should be interpreted as the window result (e.g., mean).
+    /// Instant result; if used on a summary fact, treat as the window result (e.g., mean).
     pub value: Option<f32>,
 
     pub min: Option<f32>,
     pub max: Option<f32>,
     pub mean: Option<f32>,
+
+    /// TrackOne count semantics:
+    /// - Instant sample: `Some(1)`
+    /// - Summary: `Some(n)` where `n >= 1`
+    /// - `None`: unknown (avoid if possible)
     pub count: Option<u32>,
 
-    /// Optional quality indicator (application-specific but stable).
     pub quality: Option<f32>,
-
-    /// Optional channel index (ADC channel, bus index, etc.).
     pub sensor_channel: Option<u8>,
 }
 
 impl EnvFact {
-    /// Convenience constructor for an instantaneous sample.
+    /// Instantaneous sample at time `t` with `value`.
     pub fn instant(sample_type: SampleType, t: i64, value: f32) -> Self {
         Self {
             sample_type,
@@ -120,7 +133,7 @@ impl EnvFact {
         }
     }
 
-    /// Convenience constructor for a window summary.
+    /// Window summary over `[t0, t1]`.
     pub fn summary(
         sample_type: SampleType,
         t0: i64,
@@ -130,6 +143,9 @@ impl EnvFact {
         mean: f32,
         count: u32,
     ) -> Self {
+        assert!(t0 <= t1, "phenomenon_time_start must be <= phenomenon_time_end");
+        assert!(count >= 1, "count must be >= 1");
+
         Self {
             sample_type,
             phenomenon_time_start: t0,
@@ -154,10 +170,9 @@ pub enum FactKind {
     Custom = 250,
 }
 
-/// Payload carried by a Fact.
+/// Fact payload.
 ///
-/// `Custom` is intentionally very small; large experimental payloads should be
-/// handled as a separate design decision.
+/// `Custom` is intentionally small; big payloads should be a separate design decision.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum FactPayload {
     Env(EnvFact),
@@ -166,28 +181,20 @@ pub enum FactPayload {
 
 /// A single telemetry fact produced by a pod.
 ///
-/// Canonical wire format:
-/// 1. Serialize `Fact` with postcard.
-/// 2. Encrypt serialized bytes with AEAD into an `EncryptedFrame`.
+/// Wire format:
+/// 1) postcard serialize `Fact`
+/// 2) AEAD encrypt into `EncryptedFrame`
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Fact {
     pub pod_id: PodId,
     pub fc: FrameCounter,
-
-    /// Gateway arrival time (seconds since epoch).
     pub ingest_time: i64,
-
-    /// Optional pod-local time (seconds since epoch), if available.
     pub pod_time: Option<i64>,
-
     pub kind: FactKind,
     pub payload: FactPayload,
 }
 
-/// Encrypted frame as seen on the wire.
-///
-/// The ciphertext is stored in a bounded `heapless::Vec` to keep this
-/// usable in `no_std` environments without a heap.
+/// AEAD-wrapped fact as seen on the wire (bounded ciphertext).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EncryptedFrame<const N: usize> {
     pub pod_id: PodId,
@@ -196,18 +203,12 @@ pub struct EncryptedFrame<const N: usize> {
     pub ciphertext: Vec<u8, N>,
 }
 
-/// Core error type for trackone-core operations.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Error {
-    /// Underlying AEAD/crypto failure (seal/open).
     CryptoError,
-    /// Not enough space in internal buffers for serialization.
     SerializeBufferTooSmall,
-    /// Postcard serialization failure for `Fact`.
     SerializeError,
-    /// Postcard deserialization failure for `Fact`.
     DeserializeError,
-    /// Ciphertext does not fit into the configured `EncryptedFrame` capacity.
     CiphertextTooLarge,
 }
 
@@ -229,6 +230,16 @@ impl fmt::Display for Error {
 #[cfg(test)]
 mod tests {
     use super::*;
+    extern crate alloc;
+    use alloc::{boxed::Box, vec::Vec};
+
+    const SENSOR_CAPABILITY_EXAMPLE: SensorCapability = SensorCapability {
+        sample_type: SampleType::AmbientAirTemperature,
+        resolution: 0.1,
+        accuracy: 0.2,
+        unit_symbol: "°C",
+        label: "Ambient temperature",
+    };
 
     #[test]
     fn pod_id_from_u32_is_stable() {
@@ -253,8 +264,56 @@ mod tests {
 
         let mut buf = [0u8; 256];
         let used = postcard::to_slice(&fact, &mut buf).expect("serialize fact");
-
         let decoded: Fact = postcard::from_bytes(used).expect("deserialize fact");
         assert_eq!(fact, decoded);
+    }
+
+    #[test]
+    fn sensor_capability_roundtrip_postcard() {
+        let mut buf = [0u8; 64];
+        let used =
+            postcard::to_slice(&SENSOR_CAPABILITY_EXAMPLE, &mut buf).expect("serialize sensor");
+
+        // Ensure we can decode from a stable byte slice.
+        let static_bytes: &'static [u8] = Box::leak(Vec::from(used).into_boxed_slice());
+        let decoded: SensorCapability = postcard::from_bytes(static_bytes).expect("deserialize");
+        assert_eq!(decoded, SENSOR_CAPABILITY_EXAMPLE);
+    }
+
+    #[test]
+    fn sensor_capability_str_fields_are_static() {
+        fn assert_static(_: &'static SensorCapability) {}
+        assert_static(&SENSOR_CAPABILITY_EXAMPLE);
+
+        let _: &'static str = SENSOR_CAPABILITY_EXAMPLE.unit_symbol;
+        let _: &'static str = SENSOR_CAPABILITY_EXAMPLE.label;
+    }
+
+    #[test]
+    #[should_panic(expected = "phenomenon_time_start must be <= phenomenon_time_end")]
+    fn env_fact_summary_rejects_reversed_window() {
+        let _ = EnvFact::summary(
+            SampleType::AmbientAirTemperature,
+            2,
+            1,
+            -10.0,
+            50.0,
+            20.0,
+            10,
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "count must be >= 1")]
+    fn env_fact_summary_rejects_zero_count() {
+        let _ = EnvFact::summary(
+            SampleType::AmbientAirTemperature,
+            1,
+            1,
+            -10.0,
+            50.0,
+            20.0,
+            0,
+        );
     }
 }
