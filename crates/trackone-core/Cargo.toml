@@ -9,25 +9,32 @@ repository = "https://github.com/bilalobe/trackone"
 
 [features]
 # Default to std for host/gateway development and testing.
-# Downstream crates (e.g., pod firmware) should disable default features
-# to build in true no_std mode.
-default = ["std", "dummy-aead"]
+#
+# IMPORTANT: CI avoids `--all-features` because we keep security-gated features
+# (e.g., `dummy-aead`) from being accidentally enabled in production-style builds.
+default = ["std"]
 
 # Enable use of the Rust standard library.
-std = []
+std = ["dep:ciborium"]
 
-# Gateway-only helpers (e.g., Merkle tree) that require the Rust standard library (`std`)
-# and are not compatible with `no_std + alloc` environments. The merkle module uses `Vec::with_capacity`
-# and `to_vec()` which require full `std` support. This feature is not intended for very small MCUs
-# or embedded systems without full `std` support.
-# Currently this pulls in sha2 and requires std. We keep it as a separate feature so gateway crates
-# can opt in explicitly.
+# Gateway-only helpers (e.g., Merkle tree) that may assume std and
+# are not intended for very small MCUs.
+# Currently this only pulls in sha2, but we keep it as a separate
+# feature so gateway crates can opt in explicitly.
 gateway = ["sha2", "std"]
 
 # Enable the built-in dummy AEAD implementation used for tests and
 # examples. Downstream users targeting production firmware should
 # disable this feature.
 dummy-aead = []
+
+# Explicit safety gate: downstream crates can enable this to ensure a build
+# fails if `dummy-aead` is also present.
+deny-dummy-aead = []
+
+# Semantic marker for production builds. Downstream crates may use this
+# to enable stricter compile-time checks.
+production = []
 
 [dependencies]
 # Core data-structure support for no_std environments.
@@ -39,7 +46,14 @@ heapless = { version = "0.9", default-features = false, features = ["serde"] }
 postcard = { version = "1", default-features = false }
 
 # Serde for (de)serializing core types.
-serde = { version = "1", default-features = false, features = ["derive"] }
+# Enable `alloc` so derive-generated code for enums/containers compiles in no_std contexts.
+serde = { version = "1", default-features = false, features = ["derive", "alloc"] }
+
+# Serde representation helper for integer-backed enums (compact).
+serde_repr = "0.1"
+
+# Support for large array (de)serialization in no_std contexts.
+serde-big-array = "0.5"
 
 # Hashing for Merkle trees and other gateway-only uses.
 sha2 = { version = "0.10", default-features = false, optional = true }
@@ -50,8 +64,17 @@ zeroize = { version = "1", default-features = false, features = ["derive"] }
 # Workspace constants dependency
 trackone-constants = { path = "../trackone-constants" }
 
+# CBOR support (debug tooling / size comparisons). Canonical CBOR encoding for
+# commitments is implemented manually in `src/cbor.rs`, but we keep ciborium
+# available for non-canonical/debug CBOR when `std` is enabled.
+ciborium = { version = "0.2", optional = true }
+
 [dev-dependencies]
-# No special dev-dependencies yet; tests rely on the same core crates.
+serde_json = "1"
+# RFC 8785 JSON Canonicalization Scheme (JCS) implementation used in tests/benchmarks.
+serde_json_canonicalizer = "0.3"
+# CBOR (RFC 8949) for format comparison benchmarks
+# (pulled via the optional dependency as part of `std` feature)
 
 [lib]
 # Keep doctests disabled for now until public API and examples stabilize.
