@@ -12,7 +12,7 @@ pub type Hash = [u8; 32];
 /// Hash an encrypted frame into a Merkle leaf.
 pub fn hash_frame<const N: usize>(frame: &EncryptedFrame<N>) -> Hash {
     let mut hasher = Sha256::new();
-    hasher.update(frame.pod_id.0.to_be_bytes());
+    hasher.update(frame.pod_id.0);
     hasher.update(frame.fc.to_be_bytes());
     hasher.update(frame.nonce);
     hasher.update(frame.ciphertext.as_slice());
@@ -76,14 +76,14 @@ mod tests {
 
     #[test]
     fn hash_frame_deterministic() {
-        use crate::types::{PodId, EncryptedFrame};
+        use crate::types::PodId;
         use heapless::Vec;
 
         let mut ciphertext = Vec::<u8, 64>::new();
         ciphertext.extend_from_slice(&[1, 2, 3, 4]).unwrap();
 
         let frame = EncryptedFrame::<64> {
-            pod_id: PodId(42),
+            pod_id: PodId::from(42u32),
             fc: 100,
             nonce: [5u8; 24],
             ciphertext,
@@ -96,14 +96,14 @@ mod tests {
 
     #[test]
     fn hash_frame_different_frames_different_hashes() {
-        use crate::types::{PodId, EncryptedFrame};
+        use crate::types::PodId;
         use heapless::Vec;
 
         let mut ciphertext1 = Vec::<u8, 64>::new();
         ciphertext1.extend_from_slice(&[1, 2, 3, 4]).unwrap();
 
         let frame1 = EncryptedFrame::<64> {
-            pod_id: PodId(42),
+            pod_id: PodId::from(42u32),
             fc: 100,
             nonce: [5u8; 24],
             ciphertext: ciphertext1,
@@ -113,7 +113,7 @@ mod tests {
         ciphertext2.extend_from_slice(&[1, 2, 3, 5]).unwrap(); // Different last byte
 
         let frame2 = EncryptedFrame::<64> {
-            pod_id: PodId(42),
+            pod_id: PodId::from(42u32),
             fc: 100,
             nonce: [5u8; 24],
             ciphertext: ciphertext2,
@@ -121,6 +121,9 @@ mod tests {
 
         let hash1 = hash_frame(&frame1);
         let hash2 = hash_frame(&frame2);
-        assert_ne!(hash1, hash2, "different frames should produce different hashes");
+        assert_ne!(
+            hash1, hash2,
+            "different frames should produce different hashes"
+        );
     }
 }
