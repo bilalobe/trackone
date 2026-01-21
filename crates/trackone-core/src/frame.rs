@@ -7,7 +7,7 @@
 use heapless::Vec;
 
 use crate::crypto::{AeadDecrypt, AeadEncrypt};
-use crate::types::{CoreResult, EncryptedFrame, Error, Fact};
+use crate::types::{CoreResult, EncryptedFrame, Error, Fact, FactKind, FactPayload};
 use trackone_constants::MAX_FACT_LEN;
 
 /// Helper to construct a `Fact`.
@@ -16,9 +16,17 @@ pub fn make_fact(
     fc: crate::types::FrameCounter,
     payload: crate::types::FactPayload,
 ) -> Fact {
+    let kind = match &payload {
+        FactPayload::Env(_) => FactKind::Env,
+        FactPayload::Custom(_) => FactKind::Custom,
+    };
+
     Fact {
         pod_id,
         fc,
+        ingest_time: 0,
+        pod_time: None,
+        kind,
         payload,
     }
 }
@@ -111,7 +119,7 @@ where
 mod tests {
     use super::*;
     use crate::crypto::dummy::DummyAead;
-    use crate::types::{FactPayload, PodId};
+    use crate::types::{EnvFact, PodId, SampleType};
 
     #[test]
     fn fact_encrypt_decrypt_roundtrip() {
@@ -119,11 +127,13 @@ mod tests {
         let cipher = DummyAead::new(KEY);
 
         let fact = make_fact(
-            PodId(5),
+            PodId::from(5u32),
             1,
-            FactPayload::Temperature {
-                milli_celsius: 20_000,
-            },
+            FactPayload::Env(EnvFact::instant(
+                SampleType::AmbientAirTemperature,
+                1_700_000_000,
+                20.0,
+            )),
         );
 
         let nonce = [0u8; 24];
@@ -136,7 +146,19 @@ mod tests {
     #[test]
     fn fact_serialization_within_max_len() {
         // Build a representative fact and ensure postcard serialization fits within MAX_FACT_LEN
-        let fact = make_fact(PodId(99), 12345, FactPayload::Battery { millivolts: 3700 });
+        let fact = make_fact(
+            PodId::from(99u32),
+            12345,
+            FactPayload::Env(EnvFact::summary(
+                SampleType::AmbientRelativeHumidity,
+                1_700_000_000,
+                1_700_003_600,
+                50.0,
+                70.0,
+                60.0,
+                144,
+            )),
+        );
 
         let mut buf = [0u8; MAX_FACT_LEN];
         let used = postcard::to_slice(&fact, &mut buf).expect("serialize fact");
@@ -153,11 +175,13 @@ mod tests {
         let cipher = DummyAead::new(KEY);
 
         let fact = make_fact(
-            PodId(1),
+            PodId::from(1u32),
             1,
-            FactPayload::Temperature {
-                milli_celsius: 20_000,
-            },
+            FactPayload::Env(EnvFact::instant(
+                SampleType::AmbientAirTemperature,
+                1_700_000_000,
+                20.0,
+            )),
         );
 
         let nonce = [0u8; 24];
@@ -167,37 +191,18 @@ mod tests {
     }
 
     #[test]
-    fn encrypt_fact_ciphertext_too_large() {
-        static KEY: &[u8] = b"test-key";
-        let cipher = DummyAead::new(KEY);
-
-        let fact = make_fact(
-            PodId(1),
-            1,
-            FactPayload::Temperature {
-                milli_celsius: 20_000,
-            },
-        );
-
-        let nonce = [0u8; 24];
-        // Use a buffer size that allows encryption but can't fit in Vec
-        // This is harder to test with DummyAead, but we can at least verify the code path exists
-        let result = encrypt_fact::<10, _>(&cipher, nonce, &fact);
-        // This may or may not fail depending on serialized size, but exercises the error path
-        let _ = result;
-    }
-
-    #[test]
     fn decrypt_fact_corrupted_ciphertext() {
         static KEY: &[u8] = b"test-key";
         let cipher = DummyAead::new(KEY);
 
         let fact = make_fact(
-            PodId(5),
+            PodId::from(5u32),
             1,
-            FactPayload::Temperature {
-                milli_celsius: 20_000,
-            },
+            FactPayload::Env(EnvFact::instant(
+                SampleType::AmbientAirTemperature,
+                1_700_000_000,
+                20.0,
+            )),
         );
 
         let nonce = [0u8; 24];
@@ -210,11 +215,8 @@ mod tests {
 
         // Decryption should fail or produce invalid data that fails deserialization
         let result = decrypt_fact::<128, _>(&cipher, &enc);
-        // With DummyAead, decryption will succeed but deserialization should fail
-        // In a real AEAD, this would fail at the decrypt stage with CryptoError
-        if result.is_ok() {
-            // If it succeeds, the fact should be different due to corruption
-            assert_ne!(result.unwrap(), fact);
+        if let Ok(decoded) = result {
+            assert_ne!(decoded, fact);
         }
     }
 
@@ -234,7 +236,7 @@ mod tests {
         }
 
         let frame = EncryptedFrame::<512> {
-            pod_id: PodId(42),
+            pod_id: PodId::from(42u32),
             fc: 100,
             nonce: [0u8; 24],
             ciphertext: large_ciphertext,
