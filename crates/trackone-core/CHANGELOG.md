@@ -16,7 +16,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Integer discriminants for `FactPayload` variants
   - Deterministic float policy (always encode `f32` as CBOR float32)
 - **Environmental sensing types**: `EnvFact`, `SampleType`, `SensorCapability`, `FactKind` aligned with OGC SensorThings terms (phenomenonTime/resultTime)
-- **Serialization benchmarks**: size comparison tests for Postcard vs CBOR vs JSON (`tests/serialization_benchmarks.rs`)
 - **Production guardrail**: compile-time refusal when `production` and `dummy-aead` are enabled together
 - **Re-exports**: common core types re-exported from crate root for ergonomic use in pod-fw and gateway
 
@@ -44,7 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - `PolicyUpdate`: 85 B \(Postcard\) vs 88 B \(CBOR\) vs 378 B \(JSON\)
     - `EnvFact` \(embedded in `Fact`\): 55 B \(Postcard\) vs 60 B \(CBOR\) vs 296 B \(JSON\)
 
-## [0.1.0-alpha.1] - 2025-01-20
+## [0.1.0-alpha.1] - 2025-12-20
 
 ### Added
 - Initial alpha release
