@@ -44,26 +44,26 @@ pub mod dummy {
     //
     // The `dummy-aead` feature enables a non-secure, XOR-based AEAD implementation
     // intended ONLY for testing and development. It provides NO confidentiality and
-    // NO authentication. DO NOT USE IN PRODUCTION.
+    // NO authentication.
     //
-    // To ensure this is not accidentally used in production, we emit a compile-time
-    // error if the `dummy-aead` feature is enabled in a non-test, non-debug build.
+    // We intentionally do **not** hard-error in trackone-core by default because
+    // workspace CI and developers may use `--all-features`.
     //
-    // To disable this feature in production, ensure your Cargo.toml does NOT enable
-    // `dummy-aead`, and do not pass `--features dummy-aead` when building for release.
-    //
-    // Example (Cargo.toml):
-    // [features]
-    // default = []
-    // dummy-aead = []
-    //
-    // Example (build command):
-    // cargo build --release --no-default-features
-    //
-    // If you see a compile error below, you are attempting to build with `dummy-aead`
-    // enabled in a non-test, non-debug build. Remove the feature before proceeding.
-    #[cfg(all(feature = "dummy-aead", not(test), not(debug_assertions)))]
-    compile_error!("The `dummy-aead` feature is enabled in a non-test, non-debug build. This is UNSAFE and must not be used in production. Remove the `dummy-aead` feature.");
+    // To enforce safety in *security-sensitive builds*, downstream crates should
+    // enable either:
+    //   - `trackone-core/deny-dummy-aead` (strong guard), or
+    //   - `trackone-core/production` (semantic prod marker),
+    // which will refuse to compile if `dummy-aead` is present.
+
+    // Safety gates: if the downstream crate is building in a security-sensitive
+    // mode, it must be impossible to also enable `dummy-aead`.
+    #[cfg(all(
+        feature = "dummy-aead",
+        any(feature = "deny-dummy-aead", feature = "production")
+    ))]
+    compile_error!(
+        "`dummy-aead` is enabled in a security-sensitive build (`deny-dummy-aead` or `production`). Disable `dummy-aead`.",
+    );
 
     use super::{AeadDecrypt, AeadEncrypt};
     use crate::types::Error;
@@ -73,24 +73,8 @@ pub mod dummy {
     /// `DummyAead` is an extremely simple XOR-based AEAD implementation for testing
     /// and development only. It provides **NO confidentiality** and **NO authentication**.
     ///
-    /// # ⚠️ Never use this in production code!
-    ///
     /// To avoid accidental use, ensure the `dummy-aead` feature is **not** enabled in
-    /// production builds. For example, in your `Cargo.toml`:
-    ///
-    /// ```toml
-    /// [features]
-    /// default = []
-    /// dummy-aead = []
-    /// ```
-    ///
-    /// And build with:
-    /// ```sh
-    /// cargo build --release --no-default-features
-    /// ```
-    ///
-    /// If you see a compile error about `dummy-aead` in release builds, remove the
-    /// feature before proceeding.
+    /// production builds.
     pub struct DummyAead {
         key: &'static [u8],
     }
