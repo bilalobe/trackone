@@ -10,10 +10,16 @@
 #![cfg_attr(not(debug_assertions), deny(warnings))]
 
 /// Protocol version string
-pub const VERSION: &str = "0.1.0-alpha.1";
+pub const VERSION: &str = "0.1.0-alpha.2";
 
 /// Core shared types for frames, identifiers, and errors.
 pub mod types;
+
+/// Re-export common types for ergonomic access from other crates.
+pub use crate::types::{
+    CoreResult, DeviceId, EncryptedFrame, EnvFact, Error, Fact, FactKind, FactPayload,
+    FrameCounter, PodId, SampleType, SensorCapability,
+};
 
 /// Cryptographic abstractions and key/nonce types.
 pub mod crypto;
@@ -25,6 +31,15 @@ pub mod frame;
 #[cfg(feature = "gateway")]
 pub mod merkle;
 
+/// Provisioning records and CBOR serialization (ADR-019, ADR-034).
+pub mod provisioning;
+
+/// Canonical CBOR encoding for deterministic hashing/commitments (ADR-034).
+///
+/// Note: this is currently `std`-gated because it returns `Vec<u8>`.
+#[cfg(feature = "std")]
+pub mod cbor;
+
 pub use trackone_constants::MAX_FACT_LEN;
 
 #[cfg(test)]
@@ -33,16 +48,16 @@ mod tests {
 
     #[test]
     fn version_sanity() {
-        assert_eq!(VERSION, "0.1.0-alpha.1");
+        assert_eq!(VERSION, "0.1.0-alpha.2");
     }
 
     #[test]
     fn types_compile() {
         use crate::types::{FrameCounter, PodId};
 
-        let pod = PodId(42);
+        let pod = PodId::from(42u32);
         let fc: FrameCounter = 7;
-        assert_eq!(pod.0, 42);
+        assert_eq!(pod.0[4..8], 42u32.to_be_bytes());
         assert_eq!(fc, 7);
     }
 }
