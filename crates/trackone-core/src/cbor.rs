@@ -115,6 +115,7 @@ fn cbor_text(buf: &mut Vec<u8>, s: &str) {
     buf.extend_from_slice(s.as_bytes());
 }
 
+#[cfg(feature = "std")]
 fn cbor_f32(buf: &mut Vec<u8>, v: f32) {
     // Deterministic choice: encode as float32 (0xFA) always.
     // Additionally, normalize NaN to a single canonical quiet NaN bit pattern
