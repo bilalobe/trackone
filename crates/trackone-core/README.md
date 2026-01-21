@@ -35,7 +35,7 @@
 
 - `std` — opt-in standard library support (enables CBOR module and `ciborium` dependency)
 - `gateway` — host-specific helpers that require `std` and `sha2` (Merkle tree support)
-- `dummy-aead` — a small test-only AEAD implementation enabled by default for development convenience. **Production builds should disable this.**
+- `dummy-aead` — a small test-only AEAD implementation intended for local development and testing. **Production builds should not enable this.**
 - `production` — strict build profile that refuses to compile with `dummy-aead` enabled (compile-time safety check)
 
 ## Architecture diagram
