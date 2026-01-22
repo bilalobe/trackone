@@ -16,13 +16,17 @@ reproducible.
 1) Create a feature branch:
 
 ```bash
-git checkout -b feat/<short-topic>```
+git checkout -b feat/<short-topic>
 ```
 
 2) Set up environment:
 
 ```bash
-uv pip install -r requirements.txt || true uv pip install pytest jsonschema```
+# Recommended (lockfile-first)
+uv pip install -e ".[lint,type,security,test,anchoring]"
+
+# Or just use the Makefile shortcut
+make dev-setup
 ```
 
 3) Run tests:
