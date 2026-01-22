@@ -1,6 +1,6 @@
 # ADR-005: Migrate to PyNaCl for All Cryptographic Primitives
 
-**Status**: Accepted (Completed 2025-10-12)
+**Status**: Accepted (Completed 2025-10-12; updated 2026-01-22)
 **Date**: 2025-10-12
 **Deciders**: BILAL
 **Context**: Evaluate consolidating cryptographic dependencies from `cryptography` + `pynacl` to `pynacl` only.
@@ -42,14 +42,16 @@ All cryptographic primitives now use PyNaCl (libsodium bindings):
 
 ### Files Modified
 
-1. ✅ **crypto_utils.py** - Complete rewrite using PyNaCl APIs
-1. ✅ **frame_verifier.py** - Updated AEAD decryption to use `nacl.bindings`
-1. ✅ **pod_sim.py** - Updated AEAD encryption to use `nacl.bindings`
-1. ✅ **gen_aead_vector.py** - Regenerated deterministic test vectors with PyNaCl
-1. ✅ **test_crypto_impl.py** - Updated to use `nacl.exceptions.CryptoError` / `BadSignatureError`
-1. ✅ **test_crypto_vectors.py** - Updated AEAD verification to use PyNaCl
-1. ✅ **requirements.txt** - Removed `cryptography>=42.0.0`
-1. ✅ **ADR-001** - Updated to document PyNaCl as official implementation library
+1. **crypto_utils.py** - Complete rewrite using PyNaCl APIs
+1. **frame_verifier.py** - Updated AEAD decryption to use `nacl.bindings`
+1. **pod_sim.py** - Updated AEAD encryption to use `nacl.bindings`
+1. **gen_aead_vector.py** - Regenerated deterministic test vectors with PyNaCl
+1. **test_crypto_impl.py** - Updated to use `nacl.exceptions.CryptoError` / `BadSignatureError`
+1. **test_crypto_vectors.py** - Updated AEAD verification to use PyNaCl
+1. **pyproject.toml** - `cryptography` removed; `pynacl` is the sole crypto runtime dependency
+1. **uv.lock** – lockfile committed for deterministic dependency resolution (CI/Dependabot)
+
+> Note: Historically, this ADR referred to updating `requirements.txt`. As of 2026-01-22, TrackOne uses `pyproject.toml` + `uv.lock` as the authoritative dependency source of truth, and root `requirements*.txt` files were removed to avoid drift.
 
 ### Test Vectors
 
@@ -75,29 +77,30 @@ pytest -q
 
 Test coverage includes:
 
-- ✅ X25519 key exchange and shared secret agreement
-- ✅ HKDF deterministic derivation and domain separation
-- ✅ ChaCha20-Poly1305 (96-bit) round-trip and tamper detection
-- ✅ XChaCha20-Poly1305 (192-bit) round-trip and tamper detection
-- ✅ Ed25519 signing/verification and tamper detection
-- ✅ Deterministic AEAD vectors match exactly
-- ✅ End-to-end framed telemetry pipeline (pod_sim → frame_verifier)
+- X25519 key exchange and shared secret agreement
+- HKDF deterministic derivation and domain separation
+- ChaCha20-Poly1305 (96-bit) round-trip and tamper detection
+- XChaCha20-Poly1305 (192-bit) round-trip and tamper detection
+- Ed25519 signing/verification and tamper detection
+- Deterministic AEAD vectors match exactly
+- End-to-end framed telemetry pipeline (pod_sim → frame_verifier)
 
 ## Consequences
 
 ### Positive
 
-- ✅ **Single dependency**: `requirements.txt` reduced from 2 crypto libs to 1
-- ✅ **Better performance**: libsodium is faster than OpenSSL for these primitives
-- ✅ **Cleaner API**: Consistent patterns across all crypto operations
-- ✅ **Future-proof**: Access to modern crypto primitives ready when needed
-- ✅ **Smaller binary**: One C library (libsodium) vs OpenSSL components
-- ✅ **Better exceptions**: Specific exception types for different failure modes
+- **Single crypto dependency**: Only `pynacl` provides TrackOne cryptographic primitives
+- **Deterministic installs**: dependency versions are locked via `uv.lock` and installed through `pyproject.toml` extras in CI/tox
+- **Better performance**: libsodium is faster than OpenSSL for these primitives
+- **Cleaner API**: Consistent patterns across all crypto operations
+- **Future-proof**: Access to modern crypto primitives ready when needed
+- **Smaller binary**: One C library (libsodium) vs OpenSSL components
+- **Better exceptions**: Specific exception types for different failure modes
 
 ### Neutral
 
-- ✅ **One-time migration cost**: ~3 hours (completed)
-- ✅ **Test vectors changed**: Regenerated, documented in git history
+- **One-time migration cost**: ~3 hours (completed)
+- **Test vectors changed**: Regenerated, documented in git history
 
 ### Negative
 
@@ -126,6 +129,10 @@ PyNaCl API is more explicit and consistent, with all parameters clearly specifie
 - For ChaCha20-Poly1305 (12-byte nonce), use `nacl.bindings.crypto_aead_chacha20poly1305_ietf_*`
 - Migration preserved all existing nonce/AAD construction logic
 - No changes required to frame format or wire protocol
+- Dependency management is lockfile-first:
+  - Source of truth: `pyproject.toml` (+ committed `uv.lock`)
+  - Optional interoperability: `make export-requirements` writes pinned, lock-derived `out/requirements*.txt`
+  - This avoids maintaining handwritten requirements files that can drift from the actual package metadata.
 
 ## Status
 
