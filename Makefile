@@ -13,7 +13,7 @@ COUNT ?= 10
 OUT_DIR ?= out/site_demo
 
 # Targets
-.PHONY: help install run test test-verbose test-cov clean tag lint format lint-fix dev-setup gen-vectors sec-scan bench build-native e2e pipeline-quick sha-verify ots-verify-strict test-one
+.PHONY: help install run test test-verbose test-cov clean tag lint format lint-fix dev-setup gen-vectors sec-scan bench build-native e2e pipeline-quick sha-verify ots-verify-strict test-one export-requirements
 
 help: ## Show this help message
 	@echo "Track1 Make Targets:"
@@ -23,13 +23,12 @@ help: ## Show this help message
 
 install: ## Install production dependencies
 	@echo "[make] Installing dependencies..."
-	pip install -r requirements.txt
+	pip install -e .
 	@echo "[make] ✓ Dependencies installed"
 
 dev-setup: ## Install development dependencies (includes linting tools)
 	@echo "[make] Installing development dependencies..."
-	pip install -r requirements.txt
-	pip install -r requirements-dev.txt
+	pip install -e ".[dev,test]"
 	@echo "[make] ✓ Development environment ready"
 
 run: ## Run end-to-end pipeline (framed ingest with XChaCha20-Poly1305)
@@ -266,3 +265,13 @@ cargo-clippy: ## Run clippy on Rust workspace
 	@echo "[make] Running clippy..."
 	cargo clippy --workspace --all-targets -- -D warnings
 	@echo "[make] ✓ Clippy passed"
+
+export-requirements: ## Export pinned requirements from uv.lock (writes out/requirements*.txt)
+	@echo "[make] Exporting pinned requirements from uv.lock..."
+	@mkdir -p out
+	uv export --locked --no-emit-project --format requirements-txt --output-file out/requirements.txt
+	uv export --locked --no-emit-project --format requirements-txt --extra test --output-file out/requirements-test.txt
+	uv export --locked --no-emit-project --format requirements-txt --extra lint --output-file out/requirements-lint.txt
+	uv export --locked --no-emit-project --format requirements-txt --extra type --output-file out/requirements-type.txt
+	uv export --locked --no-emit-project --format requirements-txt --extra security --output-file out/requirements-security.txt
+	@echo "[make] ✓ Wrote out/requirements*.txt from uv.lock"
