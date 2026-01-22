@@ -49,7 +49,9 @@ import argparse
 import json
 import os
 import shutil
-import subprocess  # nosec: B404 - invoking external 'ots' tool via validated full path
+import subprocess  # nosec B404
+
+# Reason: invoking external 'ots' tool via validated full path.
 import sys
 from collections.abc import Iterable
 from hashlib import sha256
@@ -167,11 +169,12 @@ def verify_ots(
 
     try:
         # Use full path to the executable and avoid shell=True.
-        # nosec: B603 - ots_exe is validated above (absolute, file, executable); args are local paths.
-        result = subprocess.run(
+        # nosec B603
+        # Reason: ots_exe is validated above (absolute, file, executable); args are local paths.
+        p = subprocess.run(
             [str(ots_path_obj), "verify", str(ots_path)], capture_output=True, text=True
         )  # nosec
-        return result.returncode == 0
+        return p.returncode == 0
     except subprocess.CalledProcessError:
         return False
     except OSError:

@@ -31,7 +31,9 @@ import argparse
 import contextlib
 import json
 import os
-import subprocess  # nosec: B404 - invoking a vetted external tool via validated args
+import subprocess  # nosec B404
+
+# Reason: invoking a vetted external tool via validated args.
 from datetime import UTC, datetime
 from hashlib import sha256
 from pathlib import Path
@@ -50,7 +52,7 @@ def _run_ots(args: list[str]) -> subprocess.CompletedProcess[bytes]:
     calendars = env.get("OTS_CALENDARS")
     if calendars:
         env["OTS_CALENDARS"] = calendars
-    return subprocess.run(args, check=True, env=env)  # nosec
+    return subprocess.run(args, check=True, env=env)  # nosec B603
 
 
 def _find_repo_root(path: Path) -> Path:
@@ -74,7 +76,7 @@ def _ots_client_version() -> str | None:
         return None
     try:
         cmd = [ots_exe, "--version"]
-        out = subprocess.run(cmd, capture_output=True, text=True)  # nosec
+        out = subprocess.run(cmd, capture_output=True, text=True)  # nosec B603
         if out.returncode == 0:
             ver = out.stdout
             if not isinstance(ver, str):
@@ -181,7 +183,8 @@ def ots_stamp(
 
     try:
         # Attempt to invoke the OTS client. Tests expect the plain command name here.
-        # nosec: B603 - call is to a fixed executable name with local file argument; no shell.
+        # nosec B603
+        # Reason: call is to a fixed executable name with local file argument; no shell.
         _run_ots(["ots", "stamp", str(day_bin_path)])
         # OTS client typically writes <bin>.ots; ensure something exists for downstream steps.
         if not ots_path.exists():
