@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-alpha.2] - 2026-01-22
+
 ### Added
 - Dependency management tooling and workflows:
   - Added focused Python extras (`lint`, `type`, `security`, `anchoring`) and kept `dev` as a convenience union.
@@ -14,7 +16,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added `make export-requirements` to export pinned `out/requirements*.txt` from `uv.lock` for interoperability.
   - Weekly ratchet now runs a scheduled `pip-audit` over the full tooling + test install (lock-enforced).
 
+- `trackone-core` protocol hardening and schema evolution (see `crates/trackone-core/CHANGELOG.md` for full details):
+  - **BREAKING**: `PodId` expanded from `u32` to `[u8; 8]` (with `From<u32>` for backward compatibility)
+  - **BREAKING**: `FactPayload` restructured; `Fact` gained time semantics fields
+  - Added provisioning module for device identity and chain of trust
+  - Added deterministic CBOR encoding for cryptographic commitments
+  - Added environmental sensing types aligned with OGC SensorThings
+  - Added serialization benchmarks and production safety checks
+
 ### Changed
+- Bumped workspace crates to `0.1.0-alpha.2` (per ADR-035 umbrella versioning):
+  - `trackone-core` to `0.1.0-alpha.2` - **Major changes**: schema evolution, provisioning records, CBOR encoding, breaking API changes (see `crates/trackone-core/CHANGELOG.md`)
+  - `trackone-gateway` to `0.1.0-alpha.2` - Minor changes: version alignment, updated `trackone-core` dependency (still scaffolding; see `crates/trackone-gateway/CHANGELOG.md`)
+  - `trackone-pod-fw` to `0.1.0-alpha.2` - Minor changes: version alignment, updated `trackone-core` dependency (still skeleton; see `crates/trackone-pod-fw/CHANGELOG.md`)
+  - `trackone-constants` to `0.1.0-alpha.2` - Minor changes: version alignment only (see `crates/trackone-constants/CHANGELOG.md`)
+
 - CI/tox dependency resolution is now `uv.lock`-first:
   - Tox envs (lint/type/security/tests) install only via `pyproject.toml` extras and the committed `uv.lock`.
   - Removed reliance on root `requirements*.txt` and `ci-requirements.txt` (CI installs `.[ci]` instead).
@@ -25,8 +41,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Bandit suppressions updated to supported `# nosec Bxxx` form to avoid noisy "Test in comment" warnings.
 
 ### Documentation
-- Updated ADR-005 and ADR-009 to reflect lockfile-first dependency management and the new security/tooling workflow.
-- Updated README and CONTRIBUTING to recommend lockfile-first installs via focused extras (or `make dev-setup`).
+- Updated ADR-005 and ADR-009 to reflect lockfile-first dependency management and the new security/tooling workflow
+- Updated README and CONTRIBUTING to recommend lockfile-first installs via focused extras (or `make dev-setup`)
+- Added per-crate CHANGELOGs for independent consumability (ADR-035)
+- Created `justfile` with correct feature combinations for CI/development
 
 
 ## [0.1.0-alpha.1] - 2025-12-12
