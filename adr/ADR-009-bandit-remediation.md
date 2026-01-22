@@ -1,6 +1,6 @@
 # ADR 009: Bandit findings remediation and decisions
 
-Status: accepted
+Status: accepted (updated 2026-01-22)
 Date: 2025-10-22
 
 ## Context
@@ -81,21 +81,28 @@ so CI fails only on high-severity/high-confidence issues while minimizing false 
 ## Consequences and follow-ups
 
 - CI will now only fail on high/high Bandit findings. Developers should run Bandit locally with the provided config when making security-sensitive changes.
-- We added inline `# nosec` suppressions for two subprocess.run calls; these are justified and safe because of the explicit runtime validation.
-- Recommend adding Bandit to dev dependencies (`requirements-dev.txt`) with a pinned version for reproducible CI runs.
-- Consider adding an artifacts step to the CI job to upload Bandit JSON output for audit if desired.
+- We added inline `# nosec` suppressions for subprocess usage; these are justified and safe because of the explicit runtime validation.
+- Dependency management note (supersedes older requirements-file guidance):
+  - Tooling (Bandit, pip-audit, etc.) is declared in `pyproject.toml` under focused extras (e.g. `security`).
+  - CI/tox installs these via extras and uses the committed `uv.lock` for deterministic resolution.
+  - For interoperability, `make export-requirements` can generate pinned `out/requirements-security.txt` from `uv.lock`.
 
 ## How to reproduce the scan locally
 
 Install Bandit and run from the repo root:
 
 ```bash
-pip install bandit
-bandit -r scripts -c .bandit.yaml
+pip install -e ".[security]"
+bandit -r scripts -ll
+```
+
+Optionally, run pip-audit in the same minimal env:
+
+```bash
+pip-audit
 ```
 
 ## Notes for reviewers
 
-- The changes are intentionally conservative and aim to preserve behavior while addressing tool warnings in a defensible way.
+- The inline `# nosec` suppressions use Bandit’s supported `# nosec Bxxx` format; rationale lives in adjacent comments to avoid noisy “Test in comment … ignoring” output.
 - If you prefer stricter or looser Bandit behavior (e.g., medium severity allowed), update `.bandit.yaml` accordingly.
-- The inline comments on `# nosec` suppressions explain the rationale for those exceptions.
