@@ -28,7 +28,7 @@ install: ## Install production dependencies
 
 dev-setup: ## Install development dependencies (includes linting tools)
 	@echo "[make] Installing development dependencies..."
-	pip install -e ".[dev,test]"
+	pip install -e ".[lint,type,security,test,anchoring]"
 	@echo "[make] ✓ Development environment ready"
 
 run: ## Run end-to-end pipeline (framed ingest with XChaCha20-Poly1305)
