@@ -169,12 +169,11 @@ def verify_ots(
 
     try:
         # Use full path to the executable and avoid shell=True.
-        # nosec B603
         # Reason: ots_exe is validated above (absolute, file, executable); args are local paths.
-        p = subprocess.run(
+        result = subprocess.run(
             [str(ots_path_obj), "verify", str(ots_path)], capture_output=True, text=True
-        )  # nosec
-        return p.returncode == 0
+        )  # nosec B603
+        return result.returncode == 0
     except subprocess.CalledProcessError:
         return False
     except OSError:
