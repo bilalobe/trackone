@@ -68,17 +68,19 @@ jobs:
           python -m pip install --upgrade pip setuptools wheel
           python -m pip install --upgrade tox uv opentimestamps-client pip-audit
 
-      - name: Audit all Python deps (dev+test) via uv.lock
+      - name: Audit all Python deps (tooling + tests) via uv.lock
         env:
           # Ensure deterministic resolution.
           UV_LOCKED: '1'
         run: |
           set -euo pipefail
-          uv pip install -e ".[dev,test]"
+          uv venv
+          source .venv/bin/activate
+          uv pip install -e ".[lint,type,security,test,anchoring]"
           pip-audit
           {
             echo "## Dependency audit"
-            echo "- pip-audit (dev+test): ✅"
+            echo "- pip-audit (lint+type+security+test+anchoring): ✅"
             echo
           } >> "$GITHUB_STEP_SUMMARY"
 
