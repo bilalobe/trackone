@@ -24,13 +24,13 @@ jobs:
           path: |
             ~/.cache/pip
             ~/.cache/uv
-          key: ${{ runner.os }}-pipuv-${{ hashFiles('**/requirements*.txt') }}-${{ hashFiles('pyproject.toml') }}
+          key: ${{ runner.os }}-pipuv-${{ hashFiles('pyproject.toml') }}-${{ hashFiles('uv.lock') }}
 
       - name: Cache tox virtualenvs
         uses: actions/cache@v5
         with:
           path: .tox
-          key: ${{ runner.os }}-tox-${{ hashFiles('tox.ini') }}-${{ hashFiles('**/requirements*.txt') }}-${{ hashFiles('pyproject.toml') }}-${{ hashFiles('.pre-commit-config.yaml') }}
+          key: ${{ runner.os }}-tox-${{ hashFiles('tox.ini') }}-${{ hashFiles('pyproject.toml') }}-${{ hashFiles('uv.lock') }}-${{ hashFiles('.pre-commit-config.yaml') }}
 
       - name: Cache pre-commit
         uses: actions/cache@v5
@@ -38,10 +38,10 @@ jobs:
           path: ~/.cache/pre-commit
           key: ${{ runner.os }}-precommit-${{ hashFiles('.pre-commit-config.yaml') }}
 
-      - name: Ensure pip, wheel and tox
+      - name: Ensure pip, wheel and tox (+ tox-uv)
         run: |
           python -m pip install --upgrade pip setuptools wheel
-          python -m pip install --upgrade tox
+          python -m pip install -e ".[ci]"
 
       - name: Run lint/type/security tox envs
         run: |
@@ -75,18 +75,18 @@ jobs:
           path: |
             ~/.cache/pip
             ~/.cache/uv
-          key: ${{ runner.os }}-pipuv-${{ matrix.python-version }}-${{ hashFiles('**/requirements*.txt') }}-${{ hashFiles('pyproject.toml') }}
+          key: ${{ runner.os }}-pipuv-${{ matrix.python-version }}-${{ hashFiles('pyproject.toml') }}-${{ hashFiles('uv.lock') }}
 
       - name: Cache tox virtualenvs
         uses: actions/cache@v5
         with:
           path: .tox
-          key: ${{ runner.os }}-tox-${{ matrix.toxenv }}-${{ hashFiles('tox.ini') }}-${{ hashFiles('**/requirements*.txt') }}-${{ hashFiles('pyproject.toml') }}-${{ hashFiles('.pre-commit-config.yaml') }}
+          key: ${{ runner.os }}-tox-${{ matrix.toxenv }}-${{ hashFiles('tox.ini') }}-${{ hashFiles('pyproject.toml') }}-${{ hashFiles('uv.lock') }}-${{ hashFiles('.pre-commit-config.yaml') }}
 
-      - name: Ensure pip, wheel and tox
+      - name: Ensure pip, wheel and tox (+ tox-uv)
         run: |
           python -m pip install --upgrade pip setuptools wheel
-          python -m pip install --upgrade tox
+          python -m pip install -e ".[ci]"
 
       - name: Run tests via tox
         run: |
@@ -118,18 +118,18 @@ jobs:
           path: |
             ~/.cache/pip
             ~/.cache/uv
-          key: ${{ runner.os }}-pipuv-pipeline-${{ hashFiles('**/requirements*.txt') }}-${{ hashFiles('pyproject.toml') }}
+          key: ${{ runner.os }}-pipuv-pipeline-${{ hashFiles('pyproject.toml') }}-${{ hashFiles('uv.lock') }}
 
       - name: Cache tox virtualenvs
         uses: actions/cache@v5
         with:
           path: .tox
-          key: ${{ runner.os }}-tox-pipeline-${{ hashFiles('tox.ini') }}-${{ hashFiles('**/requirements*.txt') }}-${{ hashFiles('pyproject.toml') }}
+          key: ${{ runner.os }}-tox-pipeline-${{ hashFiles('tox.ini') }}-${{ hashFiles('pyproject.toml') }}-${{ hashFiles('uv.lock') }}
 
-      - name: Ensure pip, wheel and tox
+      - name: Ensure pip, wheel and tox (+ tox-uv)
         run: |
           python -m pip install --upgrade pip setuptools wheel
-          python -m pip install --upgrade tox
+          python -m pip install -e ".[ci]"
 
       - name: Run pipeline via tox
         run: tox -e pipeline -- --keep-existing
@@ -151,7 +151,7 @@ jobs:
           path: |
             ~/.cache/pip
             ~/.cache/uv
-          key: ${{ runner.os }}-pipuv-build-${{ hashFiles('**/requirements*.txt') }}-${{ hashFiles('pyproject.toml') }}
+          key: ${{ runner.os }}-pipuv-build-${{ hashFiles('pyproject.toml') }}-${{ hashFiles('uv.lock') }}
 
       - name: Install maturin
         run: |
