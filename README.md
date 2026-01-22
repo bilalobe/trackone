@@ -40,6 +40,15 @@ Prereqs:
 - A virtualenv (recommended)
 - Optional: `ots` CLI in your PATH for real OTS verification (tests fall back to placeholders)
 
+Install dependencies (recommended, lockfile-first):
+
+```bash
+make dev-setup
+```
+
+This installs the full developer toolchain via focused extras:
+`.[lint,type,security,test,anchoring]`.
+
 Run the demo pipeline via Make:
 
 ```bash
@@ -91,7 +100,8 @@ If `ots` is not installed, tests and demos can use a placeholder `.ots` proof wr
 Useful targets (run `make help` for the full list):
 
 - `make install` — install runtime dependencies
-- `make dev-setup` — install dev dependencies (lint, tests)
+- `make dev-setup` — install dev dependencies (lint, typing, tests, security)
+- `make export-requirements` — export pinned `out/requirements*.txt` from `uv.lock`
 - `make run` — run the end‑to‑end pipeline via tox
 - `make test` — run the test suite
 - `make tox-readme` — format/validate README and ADR index
@@ -278,14 +288,21 @@ MIT — see `LICENSE`.
 
 ### Python environment
 
-Replace requirements-file installs with editable install + extras (recommended):
+TrackOne uses `pyproject.toml` for dependency declarations and commits `uv.lock` for deterministic resolution.
 
-- Core deps:
-  - `pip install -e .`
-- Dev/test tooling:
-  - `pip install -e ".[dev,test]"`
+Recommended (developer toolchain):
 
-If you're using `uv`, prefer lock-based installs so dependency versions are deterministic and match CI/Dependabot:
+```bash
+make dev-setup
+# or (equivalent)
+uv pip install -e ".[lint,type,security,test,anchoring]"
+```
 
-- `uv lock` (when changing dependencies)
-- `uv pip install -e ".[dev,test]"`
+Notes:
+
+- `tox` is used to run the test matrix and checks; tox installs dependencies via focused extras.
+- When you change dependency constraints in `pyproject.toml`, regenerate the lockfile:
+
+```bash
+uv lock
+```
