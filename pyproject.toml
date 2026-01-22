@@ -39,7 +39,6 @@ dev = [
     "opentimestamps-client>=0.7.2",
     "pip-audit>=2.7.3",
     "ruff>=0.14.13",
-    "smmap==6.0.0",
     "time-machine>=3.1.0",
     "uv==0.9.26",
 ]
