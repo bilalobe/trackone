@@ -40,13 +40,6 @@ Prereqs:
 - A virtualenv (recommended)
 - Optional: `ots` CLI in your PATH for real OTS verification (tests fall back to placeholders)
 
-Install dependencies:
-
-```bash
-pip install -r requirements.txt
-pip install -r requirements-dev.txt  # for tests, lint, tox, etc.
-```
-
 Run the demo pipeline via Make:
 
 ```bash
@@ -280,3 +273,19 @@ MIT — see `LICENSE`.
 - Repository: https://github.com/bilalobe/trackone
 - ADR index: `adr/README.md`
 - Changelog: `CHANGELOG.md`
+
+## Setup
+
+### Python environment
+
+Replace requirements-file installs with editable install + extras (recommended):
+
+- Core deps:
+  - `pip install -e .`
+- Dev/test tooling:
+  - `pip install -e ".[dev,test]"`
+
+If you're using `uv`, prefer lock-based installs so dependency versions are deterministic and match CI/Dependabot:
+
+- `uv lock` (when changing dependencies)
+- `uv pip install -e ".[dev,test]"`
