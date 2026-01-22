@@ -5,6 +5,25 @@ All notable changes to Track1 (Barnacle Sentinel) will be documented in this fil
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Dependency management tooling and workflows:
+  - Added focused Python extras (`lint`, `type`, `security`, `anchoring`) and kept `dev` as a convenience union.
+  - Added `make export-requirements` to export pinned `out/requirements*.txt` from `uv.lock` for interoperability.
+  - Weekly ratchet now runs a scheduled `pip-audit` over the full `.[dev,test]` install (lock-enforced) as a broad "audit-all" sweep.
+
+### Changed
+- CI/tox dependency resolution is now `uv.lock`-first:
+  - Tox envs (lint/type/security/tests) install only via `pyproject.toml` extras and the committed `uv.lock`.
+  - Removed reliance on root `requirements.txt` / `requirements-dev.txt` (and updated Makefile targets accordingly).
+- Security scanning:
+  - Bandit suppressions updated to supported `# nosec Bxxx` form to avoid noisy "Test in comment" warnings.
+
+### Documentation
+- Updated ADR-005 and ADR-009 to reflect lockfile-first dependency management and the new security/tooling workflow.
+
+
 ## [0.1.0-alpha.1] - 2025-12-12
 
 ### Added
