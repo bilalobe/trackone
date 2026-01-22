@@ -10,18 +10,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Dependency management tooling and workflows:
   - Added focused Python extras (`lint`, `type`, `security`, `anchoring`) and kept `dev` as a convenience union.
+  - Added `ci` extra to bootstrap tox tooling in GitHub Actions.
   - Added `make export-requirements` to export pinned `out/requirements*.txt` from `uv.lock` for interoperability.
-  - Weekly ratchet now includes a new scheduled `pip-audit` security check over the full `.[dev,test]` install (lock-enforced) as a broad "audit-all" sweep.
+  - Weekly ratchet now runs a scheduled `pip-audit` over the full tooling + test install (lock-enforced).
 
 ### Changed
 - CI/tox dependency resolution is now `uv.lock`-first:
   - Tox envs (lint/type/security/tests) install only via `pyproject.toml` extras and the committed `uv.lock`.
-  - Removed reliance on root `requirements.txt` / `requirements-dev.txt` (and updated Makefile targets accordingly).
+  - Removed reliance on root `requirements*.txt` and `ci-requirements.txt` (CI installs `.[ci]` instead).
+- OTS calendar integration testing:
+  - Tightened `tox -e ots-cal` to only run `tests/integration/test_ots_integration.py`.
+  - Made `ots-cal` self-contained: it can start/stop a local `trackone_ots_calendar` container from the GHCR `ots-calendar` image (matching Weekly Ratchet).
 - Security scanning:
   - Bandit suppressions updated to supported `# nosec Bxxx` form to avoid noisy "Test in comment" warnings.
 
 ### Documentation
 - Updated ADR-005 and ADR-009 to reflect lockfile-first dependency management and the new security/tooling workflow.
+- Updated README and CONTRIBUTING to recommend lockfile-first installs via focused extras (or `make dev-setup`).
 
 
 ## [0.1.0-alpha.1] - 2025-12-12
