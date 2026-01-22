@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dependency management tooling and workflows:
   - Added focused Python extras (`lint`, `type`, `security`, `anchoring`) and kept `dev` as a convenience union.
   - Added `make export-requirements` to export pinned `out/requirements*.txt` from `uv.lock` for interoperability.
-  - Weekly ratchet now runs a scheduled `pip-audit` over the full `.[dev,test]` install (lock-enforced) as a broad "audit-all" sweep.
+  - Weekly ratchet now includes a new scheduled `pip-audit` security check over the full `.[dev,test]` install (lock-enforced) as a broad "audit-all" sweep.
 
 ### Changed
 - CI/tox dependency resolution is now `uv.lock`-first:
