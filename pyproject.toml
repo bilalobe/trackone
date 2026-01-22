@@ -61,22 +61,14 @@ anchoring = [
 
 # Full developer convenience set (union)
 # Keep this broad for local setup, but CI should prefer the focused extras above.
+# NOTE: Extras can't reference other extras in standard packaging metadata, so keep
+# this list minimal and avoid duplicating pinned tool versions from other groups.
+# Recommended for contributors instead:
+#   pip install -e ".[lint,type,security,test,anchoring]"
+# or install only what you need.
 dev = [
     "uv==0.9.26",
     "time-machine>=3.1.0",
-    "hypothesis>=6.150.0",
-    "opentimestamps-client>=0.7.2",
-    "ruff>=0.14.13",
-    "black>=26.1.0",
-    "mdformat==1.0.0",
-    "mdformat-gfm==1.0.0",
-    "mdformat-ruff==0.1.3",
-    "mypy>=1.19.1",
-    "types-jsonschema",
-    "types-requests",
-    "requests>=2.32.3",
-    "bandit>=1.9.2",
-    "pip-audit>=2.7.3",
 ]
 
 ci = [
