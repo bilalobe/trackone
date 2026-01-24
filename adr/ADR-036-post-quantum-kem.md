@@ -114,6 +114,7 @@ Provisioning transcript MUST include, for hybrid mode, at minimum:
 
 - `type = "trackone/provisioning_transcript"`
 - `schema_version`
+- `pod_id` (canonical pod identifier; `device_id` is a legacy alias)
 - `kex_suite = x25519+mlkem`
 - `ct_kem` (the ML-KEM ciphertext)
 - a string field `pq_param_id` containing the PQ parameter set identifier (e.g., `"mlkem_768"`) to prevent cross-suite confusion
