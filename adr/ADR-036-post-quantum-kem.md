@@ -7,6 +7,7 @@
   - ADR-005: PyNaCl Migration
   - ADR-006: Forward-only Schema and salt8
   - ADR-018: Cryptographic Randomness and Nonce Policy
+  - ADR-037: Signature roles and verification boundaries
 
 ## Context
 
@@ -18,7 +19,8 @@ Constraints:
 
 - Current authoritative implementation uses PyNaCl/libsodium.
 - Telemetry framing and replay semantics must not change.
-- Provisioning transcript is already signed with Ed25519 and verified by gateway.
+- Provisioning transcript is already Ed25519-signed by the pod and verified by the gateway (ADR-001; Flow A in ADR-037); this ADR extends the transcript with PQ fields and strengthens transcript binding (see ADR-037 for signature roles).
+- Pods are MCU-class and provisioning traffic is constrained; ML-KEM must remain provisioning-only and may be infeasible on the smallest targets (e.g., STM32L0). Hybrid mode is therefore optional and may be deployed only on pods/gateways that can afford the CPU/RAM cost.
 
 ## Decision
 
@@ -28,6 +30,11 @@ Introduce an optional **hybrid provisioning mode** that combines:
 - Post-quantum: ML-KEM (Kyber) shared secret `ss_kem` via encapsulation/decapsulation
 
 The hybrid mode derives the same `CK_up` and `CK_down` sizes and keeps the telemetry nonce/AAD rules unchanged. Only provisioning transcript content and key derivation inputs change.
+
+### Security note: what "hybrid" does (and does not) guarantee
+
+- `x25519+mlkem` provides post-quantum hedging only when the pod participates in ML-KEM (encapsulation/decapsulation depending on the deployment model). If a pod remains `x25519`-only, there is no post-quantum confidentiality for captured provisioning traffic (harvest-now, decrypt-later remains a classical risk).
+- Downgrade resistance is not achieved by a signature alone; it requires that the party choosing `kex_suite` is authenticated and that policy is enforced. A pod-signed transcript prevents post-hoc substitution of `kex_suite`/KEX values *after the pod has committed to them*, but does not prevent an attacker from tricking a pod into signing a weaker suite unless the pod verifies a trusted provisioning offer or enforces a local policy (ADR-037).
 
 ### Versioning / Negotiation
 
@@ -49,46 +56,48 @@ For `x25519+mlkem`:
 
 There are two deployment models for the ML-KEM keypair used during provisioning:
 
-1. **Pod long-term ML-KEM key (recommended)**  
-   - **Key ownership / storage:**  
-     - Each pod generates a long-term ML-KEM keypair `(pk_pq, sk_pq)` during manufacturing or first boot.  
-     - `pk_pq` is registered in the device registry alongside the pod's Ed25519 verification key.  
-     - `sk_pq` is stored only on the pod and never leaves the device.  
-   - **Provisioning flow:**  
-     - Gateway looks up `pk_pq` from the registry.  
-     - Gateway encapsulates to `pk_pq` producing `(ct_kem, ss_kem)`.  
-     - Pod decapsulates `ct_kem` with its `sk_pq` to derive the same `ss_kem`.  
-   - **Security properties:**  
-     - Stable post-quantum identity for the pod, analogous to the existing Ed25519 verification key.  
-     - Clear separation of roles: gateway never holds long-term PQ private keys.  
-     - Compromise of a gateway does not retroactively expose past `ss_kem` values (assuming ML-KEM KDM security and proper erasure of ephemeral state).  
-   - **Operational characteristics:**  
-     - Requires maintaining `pk_pq` in the registry (similar to Ed25519).  
-     - No additional provisioning round trips compared to current flow.  
-     - Key rotation is explicit: rotating `pk_pq` requires updating registry state and may be tied to device lifecycle events.  
-   - **When to use:**  
-     - Default for production deployments where pods can safely store long-term PQ keys.  
+1. **Pod long-term ML-KEM key (recommended when pods support PQ)**
+
+   - **Key ownership / storage:**
+     - Each pod generates a long-term ML-KEM keypair `(pk_pq, sk_pq)` during manufacturing or first boot.
+     - `pk_pq` is registered in the device registry alongside the pod's Ed25519 verification key.
+     - `sk_pq` is stored only on the pod and never leaves the device.
+   - **Provisioning flow:**
+     - Gateway looks up `pk_pq` from the registry.
+     - Gateway encapsulates to `pk_pq` producing `(ct_kem, ss_kem)`.
+     - Pod decapsulates `ct_kem` with its `sk_pq` to derive the same `ss_kem`.
+   - **Security properties:**
+     - Stable post-quantum identity for the pod, analogous to the existing Ed25519 verification key.
+     - Clear separation of roles: gateway never holds long-term PQ private keys.
+     - A later compromise of a gateway does not retroactively expose past session keys *absent stored ephemeral secrets* and assuming ML-KEM security; transcripts may be logged, but they must not contain decapsulation secrets.
+   - **Operational characteristics:**
+     - Requires maintaining `pk_pq` in the registry (similar to Ed25519).
+     - No additional provisioning round trips compared to current flow.
+     - Key rotation is explicit: rotating `pk_pq` requires updating registry state and may be tied to device lifecycle events.
+   - **When to use:**
+     - Default for production deployments where pods can afford the CPU/RAM cost and can safely store long-term PQ keys.
      - Recommended whenever registry integration is available, as it avoids ambiguity about pod identity and simplifies auditing.
 
-2. **Gateway-ephemeral ML-KEM keypair**  
-   - **Key ownership / storage:**  
-     - Gateway generates an ephemeral ML-KEM keypair `(pk_pq, sk_pq)` per provisioning session.  
-     - The pod either uses a KEM mechanism that allows encapsulation to the gateway's `pk_pq` or otherwise receives `pk_pq` as part of the provisioning transcript.  
-     - `sk_pq` is held only by the gateway for the duration of the session and then erased.  
-   - **Provisioning flow:**  
-     - Gateway generates `(pk_pq, sk_pq)` at the start of the session.  
-     - Pod encapsulates to `pk_pq`, producing `(ct_kem, ss_kem)`.  
-     - Gateway decapsulates `ct_kem` with `sk_pq` to derive the same `ss_kem`.  
-   - **Security properties:**  
-     - No long-term PQ private key on the pod; all PQ secrets on the gateway are ephemeral to the session.  
-     - Does **not** provide a stable PQ identity for the pod; identity continues to rely solely on existing Ed25519 keys.  
-     - Slightly larger attack surface on gateway infrastructure, which handles more cryptographic state, but without long-lived PQ key material.  
-   - **Operational characteristics:**  
-     - Does not require storing `pk_pq` in the device registry.  
-     - May introduce a minor amount of additional orchestration complexity (ensuring `pk_pq` is correctly communicated and bound to the session).  
-     - Simpler pod implementation if persistent PQ key storage is not yet available.  
-   - **When to use:**  
-     - Transitional environments where pods cannot yet provision or persist a long-term ML-KEM keypair.  
+1. **Gateway-ephemeral ML-KEM keypair**
+
+   - **Key ownership / storage:**
+     - Gateway generates an ephemeral ML-KEM keypair `(pk_pq, sk_pq)` per provisioning session.
+     - Gateway provides `pk_pq` (and `pq_param_id`) to the pod before the pod signs the transcript so the pod can encapsulate to `pk_pq` and bind it to the session. In Flow B (ADR-037), this SHOULD be delivered inside the gateway-signed \\emph{Provisioning Offer}. In Flow A (no gateway authentication), it may be an unsigned hello parameter, but the pod MUST still include the received `pk_pq` in its signed transcript.
+     - `sk_pq` is held only by the gateway for the duration of the session and then erased.
+   - **Provisioning flow:**
+     - Gateway generates `(pk_pq, sk_pq)` at the start of the session.
+     - Pod encapsulates to `pk_pq`, producing `(ct_kem, ss_kem)` and includes `ct_kem` in the signed transcript.
+     - Gateway decapsulates `ct_kem` with `sk_pq` to derive the same `ss_kem`.
+   - **Security properties:**
+     - No long-term PQ private key on the pod; all PQ secrets on the gateway are ephemeral to the session.
+     - Does **not** provide a stable PQ identity for the pod; identity continues to rely solely on existing Ed25519 keys.
+     - Slightly larger attack surface on gateway infrastructure, which handles more cryptographic state, but without long-lived PQ key material.
+   - **Operational characteristics:**
+     - Does not require storing `pk_pq` in the device registry.
+     - May introduce a minor amount of additional orchestration complexity (ensuring `pk_pq` is correctly communicated and bound to the session).
+     - Simpler pod implementation if persistent PQ key storage is not yet available.
+   - **When to use:**
+     - Transitional environments where pods cannot yet provision or persist a long-term ML-KEM keypair.
      - Test, lab, or constrained deployments where avoiding any new registry fields is a priority.
 
 In both models, the encapsulation/decapsulation steps are:
@@ -97,17 +106,39 @@ In both models, the encapsulation/decapsulation steps are:
 - The other side decapsulates `ct_kem` with its `sk_pq` yielding the same `ss_kem`.
 - In the preferred model (pod has long-term `pk_pq`): the gateway encapsulates to the pod's `pk_pq`, producing `(ct_kem, ss_kem)` and sending `ct_kem` in the provisioning transcript; the pod decapsulates `ct_kem` with its `sk_pq` to recover `ss_kem`.
 
-The **recommended deployment model** for production is the **pod long-term ML-KEM key** model, as it aligns with existing Ed25519 verification key handling, reduces provisioning round trips, and avoids ambiguity about post-quantum pod identity. The gateway-ephemeral model is supported but should be treated as a compatibility or migration path rather than the default.
+For pods that support ML-KEM, the recommended deployment model is the **pod long-term ML-KEM key** model, as it aligns with existing Ed25519 verification key handling, reduces provisioning round trips, and avoids ambiguity about post-quantum pod identity. For constrained pods (e.g., STM32L0-class) that remain classical, the system should continue using `kex_suite = x25519` while keeping algorithm agility hooks for future upgrades. The gateway-ephemeral model is supported but should be treated as a compatibility or migration path rather than the default.
 
 ### Transcript Additions
 
-Provisioning transcript MUST include, for hybrid mode:
+Provisioning transcript MUST include, for hybrid mode, at minimum:
 
+- `type = "trackone/provisioning_transcript"`
+- `schema_version`
 - `kex_suite = x25519+mlkem`
 - `ct_kem` (the ML-KEM ciphertext)
 - a string field `pq_param_id` containing the PQ parameter set identifier (e.g., `"mlkem_768"`) to prevent cross-suite confusion
+- `eG_pub` and `eP_pub` (the X25519 ephemeral public keys already used for `ss_ecdh`)
+- `Ng`, `Np`, `T_pod`, and `B` (existing provisioning fields used for `salt`)
+- if using the gateway-ephemeral model: `pk_pq` (gateway ephemeral ML-KEM public key)
 
-The transcript remains Ed25519-signed by the pod and verified by the gateway. Any mismatch in `ct_kem`/suite invalidates signature verification or derived keys.
+The transcript MUST be encoded in a canonical form (matching existing provisioning transcript signing) and MUST be Ed25519-signed by the pod; the gateway verifies with the registered pod verification key (ADR-001). In hybrid mode, the signature MUST cover `kex_suite` and all KEX public values (`ct_kem`, `pq_param_id`, and `pk_pq` if present) to prevent downgrade or substitution. Signature roles and optional mutual authentication flows are defined in ADR-037.
+
+### Canonical encoding
+
+`transcript_bytes` MUST be produced by a deterministic, explicitly specified encoder so that Python and Rust implementations sign the same bytes for the same logical transcript fields.
+
+- Preferred encoding: TrackOne Canonical CBOR profile (ADR-034), in an explicitly versioned provisioning transcript schema.
+- Permitted legacy/transition encoding: RFC 8785 canonical JSON, only when the schema mandates it and the encoder is deterministic.
+
+Implementations MUST NOT sign “pretty JSON” or any non-canonical map encoding, and verifiers MUST treat non-canonical encodings as invalid.
+
+### Transcript Hashing / Binding
+
+To ensure derived channel keys are *explicitly bound* to the signed transcript (and not only to the raw shared secrets), compute:
+
+- `th = SHA-256(transcript_bytes)` where `transcript_bytes` are the canonical bytes that the pod signs.
+
+Implementations MUST NOT include the Ed25519 signature bytes inside `transcript_bytes` (to avoid circularity); `th` is computed over the unsigned transcript content.
 
 ### Combiner / Key Derivation
 
@@ -116,7 +147,7 @@ Keep existing `salt = SHA-256(Ng || Np || T_pod || B)`.
 Derive PRK using HKDF-Extract with explicit domain separation:
 
 - Let `ikm = ss_ecdh || ss_kem`
-- Let `salt_h = SHA-256(salt || "barnacle:kex:x25519+mlkem")`
+- Let `salt_h = SHA-256(salt || th || "barnacle:kex:x25519+mlkem")`
 - `PRK = HKDF-Extract(salt_h, ikm)`
 
 Then derive channel keys unchanged (but fixed labels):
@@ -128,6 +159,7 @@ Rationale:
 
 - Concatenation inside HKDF-Extract is acceptable when both secrets have fixed lengths and are clearly ordered.
 - X25519 produces a 32-byte `ss_ecdh`, and ML-KEM-768 (recommended) produces a 32-byte `ss_kem`, yielding `ikm` of length 64 bytes; if a different PQ KEM or parameter set is used, implementers MUST ensure both inputs remain fixed-length and ordered before relying on this concatenation construction.
+- `salt` and `th` are both SHA-256 outputs (32 bytes each), and the suite label is a fixed ASCII string; therefore `salt || th || label` is byte-unambiguous without additional length prefixes.
 - Additional suite label mixed into `salt_h` provides robust domain separation and prevents accidental cross-mode key reuse.
 
 ### Failure Handling
@@ -135,6 +167,8 @@ Rationale:
 - If ML-KEM decapsulation detects malformed input (e.g., incorrect ciphertext length for the parameter set), provisioning MUST abort (do not fall back silently).
 - If `kex_suite` mismatches between parties, abort.
 - No "opportunistic downgrade": gateway/operator policy controls `kex_suite`; mismatches are considered errors.
+- Implementations MUST perform strict, early checks before expensive KEM operations: verify `pq_param_id` is supported; enforce exact expected lengths for `ct_kem` (and `pk_pq` when present); and rate-limit provisioning attempts to reduce DoS/battery griefing risk.
+- When chain-of-trust provisioning records are used (ADR-019), gateways MUST validate the Provisioning Record signature (per ADR-037 verification rules) before trusting `pk_pod_ed25519` to verify the transcript.
 
 ## Consequences
 
@@ -162,24 +196,37 @@ Costs:
 
 - This ADR provides "at least one holds" security assuming the HKDF combiner and domain separation are used as specified.
 - Hybrid does not help if endpoint keys are compromised (pod/gateway fully owned).
+- Hybrid does not provide post-quantum confidentiality for pods that remain `x25519`-only; PQ hedging applies only when ML-KEM participation is enabled on the pod side.
 - A downgrade attack is mitigated by:
   - including `kex_suite` in the signed transcript
-  - enforcing operator policy (reject weaker suite when hybrid is mandated)
+  - enforcing policy at the party that can be tricked (typically the pod) via local rules and/or a verifiable gateway provisioning offer (Provisioning Offer / Gateway Hello; Flow B in ADR-037)
+
+Provisioning is also exposed to DoS and battery griefing risks:
+
+- Large `ct_kem` / `pk_pq` inputs (or repeated attempts) can consume airtime and CPU if not rejected early.
+- Mitigate by strict length checks and supported-suite gating before expensive operations, plus rate limiting / lockouts on repeated failures.
+
+Gateway compromise timing matters:
+
+- If a gateway is compromised during provisioning, an attacker may tamper with negotiation, exfiltrate ephemeral secrets, or force downgrade unless mutual authentication and policy enforcement are in place.
+- If compromised after provisioning, stored transcripts may be exposed; confidentiality then depends on ML-KEM/X25519 security and the absence of stored session secrets.
 
 ### Long-term ML-KEM key management (pods)
 
 - Key storage:
   - Each pod that participates in ML-KEM-based hybrid provisioning holds a long-term ML-KEM keypair (`pk_pq`, `sk_pq`), with `pk_pq` registered in the provisioning registry.
-  - `sk_pq` MUST be stored only in device-provided or OS-provided protected storage (e.g., TPM/secure element, hardware-backed keystore, or an encrypted software keystore bound to the device) and MUST NOT be exported in plaintext off the device.
+  - `sk_pq` MUST remain on the device and MUST NOT be exported off-device in plaintext. It SHOULD be protected using the strongest available mechanism for the pod platform:
+    - **Preferred:** secure element / hardware-backed key storage.
+    - **MCU baseline:** internal flash with readout protection (e.g., STM32 RDP) and no debug access in field deployments.
   - `sk_pq` MUST NEVER be logged, included in telemetry, or transmitted over any channel.
 - Key rotation:
-  - ML-KEM long-term keys SHOULD be rotated periodically or on operator demand, reusing the key rotation mechanisms and operational procedures defined in ADR-001 for channel keys (e.g., versioned keys, rollout windows).
-  - Rotation consists of: generating a new ML-KEM keypair on the pod, registering the new `pk_pq` (with a new key identifier) in the registry, and phasing out use of the old key according to operator policy.
-  - Rotation MUST NOT require full device reprovisioning; pods MUST support updating their registered `pk_pq` while preserving their existing identity and attestations.
+  - ML-KEM long-term keys SHOULD be rotated periodically or on operator demand, using similar *operational* ideas to channel-key rotation (versioning, rollout windows), but note that PQ key rotation is a registry update, not a symmetric channel-key re-derivation.
+  - Rotation consists of: generating a new ML-KEM keypair on the pod, registering the new `pk_pq` under a new `pq_key_id` in the registry, and phasing out the old key according to operator policy (grace window, staged rollout).
+  - Rotation SHOULD preserve the pod's existing identity (Ed25519) and attestations. In highly constrained deployments, rotation may still require a maintenance provisioning session; this ADR does not mandate always-online key rollover.
 - Compromise handling:
   - If `sk_pq` is suspected or confirmed to be compromised, the corresponding `pk_pq` in the registry MUST be marked revoked/compromised, and new provisioning or channel establishment requests using that key MUST be rejected.
   - After remediation on the device, a fresh ML-KEM keypair MUST be generated and registered before the pod resumes hybrid provisioning.
-  - Compromise of `sk_pq` does not weaken past sessions that used an independent classical ECDH key under the "at least one holds" model, but future confidentiality for that pod MUST be considered lost until rotation is completed.
+  - Compromise of `sk_pq` does not weaken past sessions that used an independent classical ECDH key under the “at least one holds” model, but future confidentiality for that pod MUST be considered lost until rotation is completed.
 
 ## Acceptance Criteria
 
