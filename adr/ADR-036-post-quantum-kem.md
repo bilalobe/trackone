@@ -71,9 +71,6 @@ flowchart TD
     E --> H[Pod encapsulates to gateway pk_pq]
 ```
 
-> Implementer aid: a compact decision tree for choosing between the two models
-> lives in `src/figs/uml_pq_kex_decision_tree.puml` (rendered as `src/figs/uml_pq_kex_decision_tree.png` during report builds).
-
 1. **Pod long-term ML-KEM key (recommended when pods support PQ)**
 
    - **Key ownership / storage:**

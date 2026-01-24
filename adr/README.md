@@ -43,7 +43,7 @@ Entries list **Status** and **Summary**. Related references are grouped under **
   - **See also**: ADR-021, ADR-024, ADR-030
 
 - **ADR‑004: Framed Ingest Stub for M#1 (Plaintext CT for Pipeline Bring‑up)**
-  **Status**: Accepted (M#1)
+  **Status**: Superseded by ADR-001/002
   **Summary**: Documents the temporary plaintext-ciphertext stub used to bring up the end-to-end pipeline before real AEAD; replay window enforced; canonical facts emitted.
 
 - **ADR‑005: PyNaCl Migration**
@@ -57,7 +57,7 @@ Entries list **Status** and **Summary**. Related references are grouped under **
 
 - **ADR‑034: Serialization Boundaries - Transport vs Commitment Encodings**
   **Status**: Accepted
-  **Summary**: Separate transport encoding (Postcard) from commitment encoding (canonical CBOR/JSON) to avoid accidental mixing of wire formats and hash commitments.
+  **Summary**: Separate transport encoding (Postcard) from commitment encoding to avoid accidental mixing of wire formats and hash commitments.
 
 - **ADR‑036: Post-Quantum Hybrid Provisioning (X25519 + ML-KEM/Kyber)**
   **Status**: Proposed
@@ -129,7 +129,7 @@ Entries list **Status** and **Summary**. Related references are grouped under **
 ### Stationary Calendar & Trust Chain
 
 - **ADR‑014: Stationary OpenTimestamps Calendar for Deterministic Anchoring**
-  **Status**: Proposed (M#5)
+  **Status**: Accepted
   **Summary**: Introduce a self-hosted OTS calendar for CI/local determinism with configurable fallback to public pools; outlines deployment and verification flow.
 
   - **See also**: ADR-007, ADR-020, ADR-021, ADR-022, ADR-023
@@ -172,7 +172,7 @@ Entries list **Status** and **Summary**. Related references are grouped under **
 ### LoRa Control Plane (Adaptive & Updates)
 
 - **ADR‑025: Adaptive Uplink Cadence via Authenticated LoRa Downlink Policy**
-  **Status**: Proposed (Near-term, LoRa M#1)
+  **Status**: Proposed
   **Summary**: Gateway delivers cadence policy updates over authenticated LoRa downlink; pod applies and measures compliance; cadence changes logged as facts for auditing and anti-replay.
 
   - **See also**: ADR-001, ADR-002, ADR-018, ADR-019, ADR-024, ADR-026, ADR-030
@@ -192,7 +192,7 @@ Entries list **Status** and **Summary**. Related references are grouped under **
   - **See also**: ADR-028, ADR-029, ADR-030
 
 - **ADR‑028: Mapping TrackOne Canonical Facts to OGC SensorThings API**
-  **Status**: Proposed
+  **Status**: Accepted
   **Summary**: Projection layer translating immutable canonical facts (JSON) to OGC SensorThings Observations; maintains referential integrity and allows read-only queries without altering ledger.
 
   - **See also**: ADR-006, ADR-018, ADR-024, ADR-027, ADR-029, ADR-030
@@ -219,7 +219,7 @@ Entries list **Status** and **Summary**. Related references are grouped under **
   **Status**: Proposed
   **Summary**: Add optional Parquet exporter (columnar, partitioned by day/site) derived from canonical JSON; keeps JSON as source of truth for Merkle/OTS, improves analytical scans and storage efficiency.
 
-- **ADR‑031: SpatiaLite Adoption for Geospatial Telemetry**
+- **ADR‑031: Key Analysis of SpatiaLite for Geospatial Storage and Query**
   **Status**: Proposed
   **Summary**: Introduces SpatiaLite as the geospatial extension for SQLite to enable efficient storage, indexing, and querying of spatial telemetry data, supporting advanced geospatial analytics and interoperability with OGC standards.
 

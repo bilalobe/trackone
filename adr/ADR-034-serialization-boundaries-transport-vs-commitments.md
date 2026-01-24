@@ -1,4 +1,4 @@
-# ADR-034: Serialization Boundaries - Transport vs Commitment Encodings
+# ADR-034: Serialization Boundaries – Transport vs Commitment Encodings
 
 **Status**: Accepted
 **Date**: 2026-01-10
@@ -7,7 +7,6 @@
 
 - [ADR-032](ADR-032-informational-rfc-verifiable-telemetry-ledger.md): Verifiable telemetry ledger (interoperability and audit posture)
 - `crates/trackone-core/src/cbor.rs` (canonical CBOR commitment encoder)
-- `crates/trackone-core/tests/serialization_benchmarks.rs` (size comparisons)
 
 ## Context
 
@@ -64,7 +63,7 @@ The following MUST NOT be used to generate commitment bytes:
 ### Positive
 
 - Commitment stability becomes enforceable via API boundaries (`CanonicalCbor` trait).
-- Transport format can evolve independently from commitment artifacts.
+- Transport format can evolve independently of commitment artifacts.
 - Reduces “benchmarks as decisions” confusion: size tests inform transport choice, not commitment correctness.
 
 ### Negative / Tradeoffs

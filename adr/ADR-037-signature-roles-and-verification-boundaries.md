@@ -14,9 +14,9 @@
 
 ## Context
 
-TrackOne uses multiple cryptographic signatures across the system (pods, gateways, optional peers, and manufacturing/registry inputs). Existing ADRs describe individual parts (e.g., “pod signs provisioning transcript”, “manufacturer signs provisioning record”, “gateway signs block headers”), but the repo lacked a single, unambiguous statement of:
+TrackOne uses multiple cryptographic signatures across the system (pods, gateways, optional peers, and manufacturing/registry inputs). Existing ADRs describe individual parts (e.g., “pod signs provisioning transcript,” “manufacturer signs provisioning record,” “gateway signs block headers”), but the repo lacked a single, unambiguous statement of:
 
-- which artifact is signed by which actor,
+- which actor signs which artifact,
 - what bytes are covered by each signature (canonicalization),
 - what each verifier must validate (and in what order),
 - and what optional counter-signatures exist (mutual authentication vs. one-way).
@@ -72,11 +72,6 @@ The table below is normative for signers/verifiers. “Requirement” is express
 ## Provisioning: recommended signature flows
 
 Provisioning signatures are about *control-plane authenticity and downgrade resistance*. Telemetry keys derived from provisioning are then used for AEAD frames; frames are not signed.
-
-> Implementer aid: sequence diagrams are provided as PlantUML sources:
->
-> - `src/figs/uml_provisioning_flow_a.puml` (rendered to `src/figs/uml_provisioning_flow_a.png`)
-> - `src/figs/uml_provisioning_flow_b.puml` (rendered to `src/figs/uml_provisioning_flow_b.png`)
 
 ### Flow A (minimum): pod-signed transcript (current baseline)
 

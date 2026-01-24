@@ -10,23 +10,28 @@
 - [ADR-021](ADR-021-safety-net-ots-pipeline-verification.md): Safety-net OTS pipeline verification (trust model)
 - [ADR-024](ADR-024-anti-replay-and-ots-backed-ledger.md): Anti-replay and OTS-backed ledger (ledger semantics)
 - [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md): EnvFact schema and duty-cycled day.bin anchoring (ledger implementation)
+
+## Context
+
 - Immutable, verifiable telemetry/proof artifacts.
 - Explicit, auditable *time anchoring* for data (not just code).
 - A safety‑net model where operators can independently re‑verify that:
   - A given `*.bin` / `*.bin.ots` / `*.ots.meta.json` set corresponds to a particular Merkle root.
   - This root is anchored to a public, append‑only time source.
-- Object store of content‑addressed blobs (`sha1`/`sha256` depending on repo format).
-- Signed commits/tags (`gpgsig`, `ssh`, `sigstore` integrations).
-- Reflogs and commit dates.
-- Store day ledgers and `.ots` proofs directly as Git blobs and lean on commit history for ordering.
-- Use signed tags as the “attestation” that a given Merkle root is final.
-- Treat commit timestamps as a rough time source.
+- Git provides:
+  - Object store of content‑addressed blobs (`sha1`/`sha256` depending on repo format).
+  - Signed commits/tags (`gpgsig`, `ssh`, `sigstore` integrations).
+  - Reflogs and commit dates.
 - Git’s timestamps are not a trustable time authority.
 - Git history is *developer‑controlled*, not a neutral third‑party calendar.
 - Git signatures attest to *repository state*, not to arbitrary external evidence like OTS proofs and calendars.
+- We need:
   - Artifact immutability.
   - Time anchoring.
   - Cross‑system verification.
+
+## Decision
+
 - The canonical evidence chain for a day ledger is:
   - `*.bin` → hashed into Merkle tree → root stored and referenced;
   - `*.bin.ots` → OTS proof anchoring that root to OTS calendars;
@@ -39,35 +44,43 @@
   - Commit / tag timestamps.
   - Signed commits/tags asserting repo state.
   - Object IDs as the “primary hash” of artifacts.
-  - Git dates (`authorDate`, `committerDate`) are editable and replayable.
-  - OTS calendars and underlying Bitcoin anchors provide an external, append‑only notion of time.
-  - TrackOne’s threat model assumes a possibly compromised or misconfigured Git environment; OTS must still enable independent validation from published proofs alone.
-  - Git is excellent for *code history* and developer workflow.
-  - TrackOne’s critical artifacts are not just the code, but:
-    - Telemetry ledgers, derived Merkle roots.
-    - OTS proofs and meta.
-  - OTS is designed precisely for “prove this digest existed no later than time T”, independent of any particular VCS.
-  - We want multiple layers:
-    - Git: versioned verifier + CI config.
-    - OTS: timestamped proofs of data.
-    - (Later) Container provenance / attestations: how the verifier and calendar were built.
-  - Collapsing everything into Git would remove an independent layer and conflate “the tool we use to store code” with “the system we rely on for evidence of time”.
-  - Commands like `git hash-object`, `git update-ref`, low‑level object manipulation, and plumbing scripts can be part of dev tooling (e.g. ad‑hoc checks or debugging).
-  - They run under developer credentials, in mutable repos, and depend on local configuration.
-  - OTS proofs, once anchored, do not depend on the developer’s Git history remaining honest.
-- **Positive**
-  - Clear separation of concerns:
-    - Git = code and workflow history.
-    - OTS = artifact/proof time anchoring.
-    - (Optional) Container attestations = build provenance of tools used to verify data.
-  - Operators can validate TrackOne outputs from published ledgers and `.ots` proofs *without* trusting the TrackOne Git history.
-  - CI/ratchet design stays coherent: the stationary calendar and OTS proofs are the evidence; Git tags and logs are an index, not the root of trust.
-- **Negative / trade‑offs**
-  - We add another system (OTS calendars, proofs) that developers must understand and operate, instead of reusing Git exclusively.
-  - Some Git‑centric workflows (e.g. “just sign a tag and be done”) are intentionally left on the table in favor of explicit OTS handling.
-  - Tooling must ensure we do not accidentally treat Git metadata (timestamps, signatures) as authoritative in verification logic.
-- **Use of Git non‑porcelain as devtools**
-  - We may still:
-    - Use `git hash-object` or object inspection during development to cross‑check hashes.
-    - Script around Git plumbing for local diagnostics or developer UX.
-  - But all such uses are **non‑normative**: they must not affect the core verification semantics or replace OTS proofs in any required check.
+- OTS calendars and underlying Bitcoin anchors provide an external, append‑only notion of time.
+- TrackOne’s threat model assumes a possibly compromised or misconfigured Git environment; OTS must still enable independent validation from published proofs alone.
+- Git is excellent for *code history* and developer workflow, but TrackOne’s critical artifacts include:
+  - Telemetry ledgers and derived Merkle roots.
+  - OTS proofs and metadata.
+- We want multiple layers:
+  - Git: versioned verifier + CI config.
+  - OTS: timestamped proofs of data.
+  - (Later) Container provenance / attestations: how the verifier and calendar were built.
+- Collapsing everything into Git would remove an independent layer and conflate “the tool we use to store code” with “the system we rely on for evidence of time”.
+
+### Use of Git non‑porcelain as devtools
+
+- We may still:
+  - Use `git hash-object` or object inspection during development to cross‑check hashes.
+  - Script around Git plumbing for local diagnostics or developer UX.
+- All such uses are **non‑normative**: they must not affect the core verification semantics or replace OTS proofs in any required check.
+
+## Alternatives Considered
+
+- Store day ledgers and `.ots` proofs directly as Git blobs and lean on commit history for ordering.
+- Use signed tags as the “attestation” that a given Merkle root is final.
+- Treat commit timestamps as a rough time source.
+
+## Consequences
+
+### Positive
+
+- Clear separation of concerns:
+  - Git = code and workflow history.
+  - OTS = artifact/proof time anchoring.
+  - (Optional) Container attestations = build provenance of tools used to verify data.
+- Operators can validate TrackOne outputs from published ledgers and `.ots` proofs *without* trusting the TrackOne Git history.
+- CI/ratchet design stays coherent: the stationary calendar and OTS proofs are the evidence; Git tags and logs are an index, not the root of trust.
+
+### Negative / trade‑offs
+
+- We add another system (OTS calendars, proofs) that developers must understand and operate, instead of reusing Git exclusively.
+- Some Git‑centric workflows (e.g. “just sign a tag and be done”) are intentionally left on the table in favor of explicit OTS handling.
+- Tooling must ensure we do not accidentally treat Git metadata (timestamps, signatures) as authoritative in verification logic.
