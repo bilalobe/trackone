@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/schemas/ratchet.schema.json",
+  "title": "Weekly ratchet metadata",
+  "type": "object",
+  "description": "Metadata artifact produced by the Weekly Ratchet workflow (ADR-022).",
+  "properties": {
+    "timestamp_utc": { "type": "string", "format": "date-time" },
+    "run": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "number": { "type": "string", "minLength": 1 },
+        "attempt": { "type": "string" },
+        "event": { "type": "string", "minLength": 1 },
+        "workflow": { "type": "string", "minLength": 1 },
+        "url": { "type": "string", "minLength": 1 }
+      },
+      "required": ["id", "number", "event", "workflow", "url"],
+      "additionalProperties": true
+    },
+    "commit": {
+      "type": "object",
+      "properties": {
+        "sha": { "type": "string", "minLength": 7 },
+        "message": { "type": "string" },
+        "ref": { "type": "string" }
+      },
+      "required": ["sha"],
+      "additionalProperties": true
+    },
+    "tests": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "tox_env": { "type": "string", "minLength": 1 },
+          "outcome": { "type": "string" }
+        },
+        "required": ["tox_env"],
+        "additionalProperties": true
+      }
+    },
+    "env": {
+      "type": "object",
+      "properties": {
+        "OTS_CALENDARS": { "type": "string" },
+        "OTS_STATIONARY_STUB": { "type": "string" },
+        "RUN_REAL_OTS": { "type": "string", "enum": ["0", "1"] }
+      },
+      "required": ["RUN_REAL_OTS"],
+      "additionalProperties": true
+    }
+  },
+  "required": ["timestamp_utc", "run", "commit", "tests", "env"],
+  "additionalProperties": false
+}

@@ -259,7 +259,7 @@ Entries list **Status** and **Summary**. Related references are grouped under **
 ```markdown
 # ADR-XYZ: Title
 
-**Status**: Proposed | Accepted | Superseded
+**Status**: Proposed | Accepted | Superseded | Rejected
 **Date**: YYYY-MM-DD
 **Updated**: YYYY-MM-DD (optional)
 **Owners**: Team/Owner (optional)

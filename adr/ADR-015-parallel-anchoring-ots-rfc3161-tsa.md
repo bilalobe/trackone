@@ -5,11 +5,11 @@
 
 ## Related ADRs
 
-- ADR-003 (Canonicalization & OTS anchoring)
-- ADR-007 (OTS CI verification)
-- ADR-014 (Stationary OTS calendar)
-- ADR-008 (M#4 OTS workflow and metadata)
-- ADR-017 (Rust CLI verification — optional future verifier)
+- [ADR-003](ADR-003-merkle-canonicalization-and-ots-anchoring.md) (Canonicalization & OTS anchoring)
+- [ADR-007](ADR-007-ots-ci-verification-and-bitcoin-headers.md) (OTS CI verification)
+- [ADR-014](ADR-014-stationary-ots-calendar.md) (Stationary OTS calendar)
+- [ADR-008](ADR-008-m4-completion-ots-workflow.md) (M#4 OTS workflow and metadata)
+- [ADR-017](ADR-017-rust-core-and-pyo3-integration.md) (Rust CLI verification — optional future verifier)
 
 ## Implementation Summary
 
