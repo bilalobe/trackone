@@ -2,18 +2,19 @@
 
 **Status**: Proposed
 **Date**: 2025-11-25
-**Related ADRs**:
 
-- ADR-003: Merkle canonicalization and OTS anchoring
-- ADR-007: OTS CI verification and Bitcoin headers
-- ADR-008: M4 completion OTS workflow
-- ADR-010: Test suite refactor, structure, naming
-- ADR-014: Stationary OTS calendar
-- ADR-018: Cryptographic randomness and nonce policy
-- ADR-020: Stationary OTS calendar follow-up
-- ADR-022: First-party stationary OTS calendar service in CI
-- ADR-024: Anti-replay and OTS-backed ledger
-- ADR-030: EnvFact schema and duty-cycled day.bin anchoring
+## Related ADRs
+
+- [ADR-003](ADR-003-merkle-canonicalization-and-ots-anchoring.md): Merkle canonicalization and OTS anchoring
+- [ADR-007](ADR-007-ots-ci-verification-and-bitcoin-headers.md): OTS CI verification and Bitcoin headers
+- [ADR-008](ADR-008-m4-completion-ots-workflow.md): M4 completion OTS workflow
+- [ADR-010](ADR-010-test-suite-refactor-structure-naming.md): Test suite refactor, structure, naming
+- [ADR-014](ADR-014-stationary-ots-calendar.md): Stationary OTS calendar
+- [ADR-018](ADR-018-cryptographic-randomness-and-nonce-policy.md): Cryptographic randomness and nonce policy
+- [ADR-020](ADR-020-stationary-ots-calendar-followup.md): Stationary OTS calendar follow-up
+- [ADR-022](ADR-022-first-party-stationary-ots-calendar-service.md): First-party stationary OTS calendar service in CI
+- [ADR-024](ADR-024-anti-replay-and-ots-backed-ledger.md): Anti-replay and OTS-backed ledger
+- [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md): EnvFact schema and duty-cycled day.bin anchoring
 
 ## Context
 
@@ -100,9 +101,10 @@ Mitigations:
   - `verify_cli` and library verification functions must:
     - Recompute hashes from input data and proofs.
     - Fail closed on parse errors, missing steps, or mismatched digests.
-  - Tests:
-    - `tests/test_crypto_vectors.py` and `tests/test_edge_cases.py` cover malformed inputs and negative paths.
-    - `tests/test_gateway_pipeline.py` and `tests/test_merkle_repro.py` cover canonicalization and Merkle paths.
+  - Tests (current repo paths):
+    - `tests/integration/test_verify_cli.py` covers Merkle root recomputation and end-to-end verification glue.
+    - `tests/integration/test_ots_integration.py` covers real-OTS stamping/verification when explicitly enabled (`RUN_REAL_OTS=1`).
+    - `tests/e2e/test_pipeline_integration.py` exercises the full pipeline and verifies CLI success on produced artifacts.
 
 - **Schema and invariants:**
 
@@ -139,9 +141,10 @@ Mitigations:
   - Follow `ADR-003-merkle-canonicalization-and-ots-anchoring.md`:
     - Stable ordering of leaves.
     - Explicit salting rules, integrated with `ADR-006` for salt usage.
-  - Tests:
-    - `tests/test_merkle_repro.py` validates reproducible Merkle roots across runs.
-    - `tests/test_gateway_pipeline.py` asserts that inputs map to expected day_roots.
+  - Tests (current repo paths):
+    - `tests/integration/test_verify_cli.py::TestVerifyCli::test_merkle_root_computation_matches_batcher` validates that Merkle roots computed by `verify_cli` match those computed by `merkle_batcher`.
+    - `tests/integration/test_replay_merkle_integration.py` covers duplicate handling and deterministic batching behavior feeding `day.bin`.
+    - `tests/e2e/test_pipeline_integration.py` covers an end-to-end reproduction path from frame verification through batching.
 
 - **Anchoring and Bitcoin headers checks:**
 
@@ -224,8 +227,10 @@ Mitigations:
   - `ADR-010-test-suite-refactor-structure-naming.md`:
     - Defines consistent naming and grouping of tests.
   - Ensure:
-    - All OTS and verification-critical tests live under predictable patterns (`tests/test_ots_*.py`, `tests/test_verify_*.py`, etc.).
-    - Markers (`real_ots`, `slow`) are documented and respected.
+    - OTS and verification-critical tests live under predictable paths:
+      - `tests/integration/test_ots_integration.py`
+      - `tests/integration/test_verify_cli.py`
+      - `tests/e2e/test_pipeline_integration.py`
 
 - **CI coverage contracts:**
 
@@ -358,12 +363,10 @@ We consider this ADR “effectively implemented” when:
 - **Tests:**
 
   - All relevant test modules pass in CI, including at least:
-    - `tests/test_gateway_pipeline.py`
-    - `tests/test_merkle_repro.py`
-    - `tests/test_edge_cases.py`
-    - `tests/test_crypto_vectors.py`
-    - `tests/test_framed_ingest.py` / `tests/test_framed_security.py` (where they touch proofs).
-    - `tests/test_verify_cli.py` (or equivalent covering CLI behavior).
+    - `tests/e2e/test_pipeline_integration.py`
+    - `tests/integration/test_verify_cli.py`
+    - `tests/integration/test_replay_merkle_integration.py`
+    - `tests/integration/test_ots_integration.py` (skipped unless explicitly enabled via `RUN_REAL_OTS=1`)
   - Negative-path tests for corrupted proofs, misconfigured calendars, and malformed metadata are present and stable.
 
 - **CI jobs:**
@@ -405,13 +408,13 @@ The intent is a practical, reviewable safety net that can evolve alongside the r
 
 ## See also
 
-- [ADR-003: Merkle canonicalization and OTS anchoring](003-merkle-canonicalization-and-ots-anchoring.md)
-- [ADR-007: OTS CI verification and Bitcoin headers](007-ots-ci-verification-and-bitcoin-headers.md)
-- [ADR-008: M4 completion OTS workflow](008-m4-completion-ots-workflow.md)
-- [ADR-010: Test suite refactor, structure, naming](010-test-suite-refactor-structure-naming.md)
-- [ADR-014: Stationary OTS calendar](014-stationary-ots-calendar.md)
-- [ADR-018: Cryptographic randomness and nonce policy](018-cryptographic-randomness-and-nonce-policy.md)
-- [ADR-020: Stationary OTS calendar follow-up](020-stationary-ots-calendar-followup.md)
-- [ADR-022: First-party stationary OTS calendar service in CI](022-first-party-stationary-ots-calendar-service-in-ci.md)
-- [ADR-024: Anti-replay and OTS-backed ledger](024-anti-replay-and-ots-backed-ledger.md)
-- [ADR-030: EnvFact schema and duty-cycled day.bin anchoring](030-envfact-schema-and-duty-cycled-day.bin-anchoring.md)
+- [ADR-003: Merkle canonicalization and OTS anchoring](ADR-003-merkle-canonicalization-and-ots-anchoring.md)
+- [ADR-007: OTS CI verification and Bitcoin headers](ADR-007-ots-ci-verification-and-bitcoin-headers.md)
+- [ADR-008: M4 completion OTS workflow](ADR-008-m4-completion-ots-workflow.md)
+- [ADR-010: Test suite refactor, structure, naming](ADR-010-test-suite-refactor-structure-naming.md)
+- [ADR-014: Stationary OTS calendar](ADR-014-stationary-ots-calendar.md)
+- [ADR-018: Cryptographic randomness and nonce policy](ADR-018-cryptographic-randomness-and-nonce-policy.md)
+- [ADR-020: Stationary OTS calendar follow-up](ADR-020-stationary-ots-calendar-followup.md)
+- [ADR-022: First-party stationary OTS calendar service in CI](ADR-022-first-party-stationary-ots-calendar-service.md)
+- [ADR-024: Anti-replay and OTS-backed ledger](ADR-024-anti-replay-and-ots-backed-ledger.md)
+- [ADR-030: EnvFact schema and duty-cycled day.bin anchoring](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md)

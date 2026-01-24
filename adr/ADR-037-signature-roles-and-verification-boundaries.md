@@ -2,7 +2,15 @@
 
 **Status**: Proposed
 **Date**: 2026-01-24
-**Related**: ADR-001 (Primitives + provisioning), ADR-019 (chain of trust / provisioning records), ADR-025 (signed policy), ADR-026 (OTA firmware), ADR-034 (canonical bytes), ADR-036 (hybrid provisioning transcript binding)
+
+## Related ADRs
+
+- [ADR-001](ADR-001-primitives-x25519-hkdf-xchacha.md) (Primitives + provisioning)
+- [ADR-019](ADR-019-rust-gateway-chain-of-trust.md) (chain of trust / provisioning records)
+- [ADR-025](ADR-025-adaptive-uplink-cadence-over-lora.md) (signed policy)
+- [ADR-026](ADR-026-ota-firmware-updates-over-lora.md) (OTA firmware)
+- [ADR-034](ADR-034-serialization-boundaries-transport-vs-commitments.md) (canonical bytes)
+- [ADR-036](ADR-036-post-quantum-kem.md) (hybrid provisioning transcript binding)
 
 ## Context
 
@@ -65,7 +73,36 @@ The table below is normative for signers/verifiers. “Requirement” is express
 
 Provisioning signatures are about *control-plane authenticity and downgrade resistance*. Telemetry keys derived from provisioning are then used for AEAD frames; frames are not signed.
 
+> Implementer aid: sequence diagrams are provided as PlantUML sources:
+>
+> - `src/figs/uml_provisioning_flow_a.puml` (rendered to `src/figs/uml_provisioning_flow_a.png`)
+> - `src/figs/uml_provisioning_flow_b.puml` (rendered to `src/figs/uml_provisioning_flow_b.png`)
+
 ### Flow A (minimum): pod-signed transcript (current baseline)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant P as Pod
+    participant G as Gateway
+    participant R as Registry / Provisioning Record
+
+    Note over P,G: No gateway authentication (trusted physical process)
+
+    G->>R: Lookup pk_pod_ed25519 (or verify Provisioning Record per ADR-019)
+    R-->>G: pk_pod_ed25519
+
+    P->>G: eP_pub, Np (and optional PQ material per ADR-036)
+    G->>P: eG_pub, Ng (and optional PQ params per ADR-036)
+
+    P->>P: Build canonical transcript bytes (ADR-034)
+    P->>G: Transcript + Sig_pod_over(transcript_bytes)
+
+    G->>G: Verify Sig_pod with pk_pod_ed25519
+    G->>G: Derive CK_up and CK_down (optionally bind transcript hash th per ADR-036)
+
+    Note over P,G: Telemetry uses AEAD — no per-frame signatures.
+```
 
 1. Pod and gateway exchange KEX public values (X25519 ephemerals; optional PQ material per ADR-036).
 1. Pod constructs the **Provisioning Session Transcript** and signs it with `sk_pod_ed25519`.
@@ -75,6 +112,32 @@ Provisioning signatures are about *control-plane authenticity and downgrade resi
 This is sufficient when the pod does not authenticate a specific gateway identity (e.g., provisioning is performed in a trusted physical procedure).
 
 ### Flow B (mutual): gateway offer + pod transcript (recommended when feasible)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant P as Pod
+    participant G as Gateway
+
+    Note over P,G: Pod can authenticate gateway (pinned pk_gw_ed25519 or credential)
+
+    G->>P: Provisioning Offer + Sig_gw_over(offer_bytes)
+    Note over G: offer covers kex_suite, Ng, eG_pub, and PQ params if used
+
+    P->>P: Verify Sig_gw over canonical offer bytes
+    P->>P: Enforce local policy (reject downgraded suites)
+
+    P->>G: eP_pub, Np (and PQ values if needed)
+    P->>P: Build canonical transcript bytes (includes offer fields that must be bound)
+    P->>G: Transcript + Sig_pod_over(transcript_bytes)
+
+    G->>G: Verify Sig_pod
+    G->>G: Enforce suite policy and derive CK_up and CK_down
+
+    opt Optional non-repudiation
+        G->>P: Provisioning Ack (countersign) over transcript hash th
+    end
+```
 
 When pods can authenticate the gateway (pinned `pk_gw_ed25519` or manufacturer-issued gateway credential):
 

@@ -2,13 +2,14 @@
 
 **Status**: Proposed
 **Date**: 2026-01-04
-**Related ADRs**:
 
-- ADR-003: Canonicalization and OTS anchoring (core ledger mechanics)
-- ADR-015: Parallel anchoring with RFC 3161 (multi-trust model)
-- ADR-024: Anti-replay and ledger semantics
-- ADR-028 & ADR-030: SensorThings projections and envfact schemas
-- ADR-018: Randomness and nonce policy (crypto foundations)
+## Related ADRs
+
+- [ADR-003](ADR-003-merkle-canonicalization-and-ots-anchoring.md): Canonicalization and OTS anchoring (core ledger mechanics)
+- [ADR-015](ADR-015-parallel-anchoring-ots-rfc3161-tsa.md): Parallel anchoring with RFC 3161 (multi-trust model)
+- [ADR-024](ADR-024-anti-replay-and-ots-backed-ledger.md): Anti-replay and ledger semantics
+- [ADR-028](ADR-028-sensorthings-projection-mapping.md) & [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md): SensorThings projections and envfact schemas
+- [ADR-018](ADR-018-cryptographic-randomness-and-nonce-policy.md): Randomness and nonce policy (crypto foundations)
 
 ## Context
 

@@ -1,7 +1,13 @@
 # ADR-006: Forward-only schema policy and deprecating `salt4`
 
-Status: Accepted
-Date: 2025-10-12
+**Status**: Accepted
+**Date**: 2025-10-12
+
+## Related ADRs
+
+- [ADR-001](ADR-001-primitives-x25519-hkdf-xchacha.md): Primitives (X25519/HKDF/XChaCha20-Poly1305/Ed25519)
+- [ADR-002](ADR-002-telemetry-framing-and-replay-policy.md): Telemetry framing and replay policy
+- [ADR-005](ADR-005-pynacl-migration.md): PyNaCl migration
 
 ## Context
 
@@ -70,9 +76,3 @@ Adopt a forward-only policy for schemas and cryptographic metadata:
   1. Archive previous artifacts and ADRs as read-only references.
   1. Delete legacy references from source code and schemas.
   1. Regenerate tables/vectors for the new milestone.
-
-## References
-
-- ADR-001: Primitives (X25519/HKDF/XChaCha20-Poly1305/Ed25519)
-- ADR-002: Telemetry framing and replay policy
-- ADR-005: PyNaCl migration

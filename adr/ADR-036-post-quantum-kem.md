@@ -1,13 +1,15 @@
 # ADR-036: Post-Quantum Hybrid Provisioning (X25519 + ML-KEM/Kyber)
 
-- Status: Proposed
-- Date: 2026-01-22
-- Related:
-  - ADR-001: Cryptographic Primitives
-  - ADR-005: PyNaCl Migration
-  - ADR-006: Forward-only Schema and salt8
-  - ADR-018: Cryptographic Randomness and Nonce Policy
-  - ADR-037: Signature roles and verification boundaries
+**Status**: Proposed
+**Date**: 2026-01-22
+
+## Related ADRs
+
+- [ADR-001](ADR-001-primitives-x25519-hkdf-xchacha.md): Cryptographic Primitives
+- [ADR-005](ADR-005-pynacl-migration.md): PyNaCl Migration
+- [ADR-006](ADR-006-forward-only-schema-and-salt8.md): Forward-only Schema and salt8
+- [ADR-018](ADR-018-cryptographic-randomness-and-nonce-policy.md): Cryptographic Randomness and Nonce Policy
+- [ADR-037](ADR-037-signature-roles-and-verification-boundaries.md): Signature roles and verification boundaries
 
 ## Context
 
@@ -55,6 +57,22 @@ For `x25519+mlkem`:
 #### Deployment models for ML-KEM
 
 There are two deployment models for the ML-KEM keypair used during provisioning:
+
+```mermaid
+flowchart TD
+    A[Need PQ hedging?] -->|No| X[x25519 only]
+    A -->|Yes| B[Can pod store long-term PQ private key?]
+    B -->|Yes| C[Pod long-term ML-KEM keypair]
+    B -->|No| D[Can pod verify gateway offer and bind pk_pq safely?]
+    D -->|Yes| E[Gateway-ephemeral ML-KEM keypair]
+    D -->|No| F[x25519 only - defer PQ until mutual auth or secure procedure]
+
+    C --> G[Gateway encapsulates to pod pk_pq]
+    E --> H[Pod encapsulates to gateway pk_pq]
+```
+
+> Implementer aid: a compact decision tree for choosing between the two models
+> lives in `src/figs/uml_pq_kex_decision_tree.puml` (rendered as `src/figs/uml_pq_kex_decision_tree.png` during report builds).
 
 1. **Pod long-term ML-KEM key (recommended when pods support PQ)**
 
@@ -107,6 +125,41 @@ In both models, the encapsulation/decapsulation steps are:
 - In the preferred model (pod has long-term `pk_pq`): the gateway encapsulates to the pod's `pk_pq`, producing `(ct_kem, ss_kem)` and sending `ct_kem` in the provisioning transcript; the pod decapsulates `ct_kem` with its `sk_pq` to recover `ss_kem`.
 
 For pods that support ML-KEM, the recommended deployment model is the **pod long-term ML-KEM key** model, as it aligns with existing Ed25519 verification key handling, reduces provisioning round trips, and avoids ambiguity about post-quantum pod identity. For constrained pods (e.g., STM32L0-class) that remain classical, the system should continue using `kex_suite = x25519` while keeping algorithm agility hooks for future upgrades. The gateway-ephemeral model is supported but should be treated as a compatibility or migration path rather than the default.
+
+#### Hybrid provisioning message flow (illustrative)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant P as Pod
+    participant G as Gateway
+
+    Note over P,G: Shared: X25519 ephemerals eP_pub and eG_pub
+    Note over P,G: Shared: nonces Np and Ng
+    Note over P,G: Shared: salt inputs T_pod and B
+
+    alt Pod long-term ML-KEM key (recommended)
+        G->>P: eG_pub, Ng, pq_param_id
+        Note over G: Look up pk_pq for pod in registry
+        G->>P: ct_kem (encap to pk_pq)
+        P->>P: ss_ecdh = X25519(eP_priv, eG_pub)
+        P->>P: ss_kem = ML-KEM-Decap(sk_pq, ct_kem)
+        P->>G: Pod-signed transcript with kex_suite and KEX values
+        G->>G: Verify pod signature
+        G->>G: Derive CK_up and CK_down from ss_ecdh and ss_kem
+    else Gateway-ephemeral ML-KEM keypair
+        G->>G: Generate pk_pq and sk_pq per session
+        G->>P: Gateway Offer (optional) with kex_suite, pq_param_id, pk_pq, Ng, eG_pub
+        P->>P: Encapsulate to pk_pq -> ct_kem and ss_kem
+        P->>P: ss_ecdh = X25519(eP_priv, eG_pub)
+        P->>G: Pod-signed transcript with kex_suite and KEX values
+        G->>G: Verify pod signature
+        G->>G: ss_kem = ML-KEM-Decap(sk_pq, ct_kem)
+        G->>G: Derive CK_up and CK_down from ss_ecdh and ss_kem
+    end
+
+    Note over P,G: Telemetry framing and nonce rules unchanged (ADR-002)
+```
 
 ### Transcript Additions
 

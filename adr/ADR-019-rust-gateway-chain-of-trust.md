@@ -190,7 +190,3 @@ Negative / costs:
   - **Evidence** (facts, Merkle trees, OTS proofs),
   - **Policy** (who is allowed to provision devices, sign firmware, operate calendars).
 - Provisioning Records are signed by an offline Manufacturer Key. The Gateway possesses only the public verification key; a compromised Gateway cannot mint new valid provisioning records.
-
-### Small note on `requests` (Python dependency)
-
-- Keep `requests` confined to legacy Python tooling or migration utilities (e.g. `tools/gateway_py` dependency group). For the Rust runtime path prefer native HTTP clients / bindings; Python verification scripts may continue to use `requests` without making it a core runtime dependency for the production gateway stack.

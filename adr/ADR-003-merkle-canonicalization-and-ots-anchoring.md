@@ -1,7 +1,7 @@
 # ADR-003: Canonicalization, Merkle Policy, and Daily OpenTimestamps Anchoring
 
-**Status:** Accepted
-**Date:** 2025-10-06
+**Status**: Accepted
+**Date**: 2025-10-06
 
 ## Context
 
@@ -64,5 +64,3 @@
   - Upgrade proofs weekly via `ots upgrade` to accumulate Bitcoin confirmations.
 - **Verification:** `ots verify <day>.bin.ots` must succeed; auditors recompute `day_root` from facts and confirm
   `day.bin` consistency before verifying OTS.
-
-### 6. File layout (site_demo shown; site_id may be included in path)

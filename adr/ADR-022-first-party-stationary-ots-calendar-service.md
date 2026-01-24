@@ -2,17 +2,18 @@
 
 **Status**: Proposed
 **Date**: 2025-11-28
-**Related ADRs**:
 
-- ADR-003: Merkle canonicalization and OTS anchoring
-- ADR-007: OTS CI verification and Bitcoin headers
-- ADR-008: M4 completion OTS workflow
-- ADR-014: Stationary OTS calendar (original concept)
-- ADR-015: Parallel RFC 3161 anchoring
-- ADR-020: Stationary OTS calendar follow-up (clarification)
-- ADR-021: Safety-net OTS pipeline verification (requirements)
-- ADR-024: Anti-replay and OTS-backed ledger (operational semantics)
-- ADR-030: EnvFact schema and duty-cycled day.bin anchoring
+## Related ADRs
+
+- [ADR-003](ADR-003-merkle-canonicalization-and-ots-anchoring.md): Merkle canonicalization and OTS anchoring
+- [ADR-007](ADR-007-ots-ci-verification-and-bitcoin-headers.md): OTS CI verification and Bitcoin headers
+- [ADR-008](ADR-008-m4-completion-ots-workflow.md): M4 completion OTS workflow
+- [ADR-014](ADR-014-stationary-ots-calendar.md): Stationary OTS calendar (original concept)
+- [ADR-015](ADR-015-parallel-anchoring-ots-rfc3161-tsa.md): Parallel RFC 3161 anchoring
+- [ADR-020](ADR-020-stationary-ots-calendar-followup.md): Stationary OTS calendar follow-up (clarification)
+- [ADR-021](ADR-021-safety-net-ots-pipeline-verification.md): Safety-net OTS pipeline verification (requirements)
+- [ADR-024](ADR-024-anti-replay-and-ots-backed-ledger.md): Anti-replay and OTS-backed ledger (operational semantics)
+- [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md): EnvFact schema and duty-cycled day.bin anchoring
 
 ## Context
 
@@ -63,7 +64,7 @@ This leads to risks:
 
 - **Misinterpretation**: Stakeholders may assume "we host our own calendar" because ADR-014 mentions a stationary calendar, while ADR-020 only partially corrects this.
 - **Test coverage gaps**: We cannot run realistic end-to-end tests for:
-  - Client ↔ calendar HTTP protocol behavior.
+  - Client \<-> calendar HTTP protocol behavior.
   - Failover between a first-party calendar and public pools.
 - **Ops uncertainty**: It is unclear whether we intend to:
   - Ultimately deploy a real HTTP calendar with Bitcoin anchoring duties, or
@@ -96,7 +97,7 @@ We will:
      - A container image that runs the new HTTP calendar service by default.
      - An entrypoint compatible with `tox -e ots-cal` and CI workflows.
    - Keep `ots-cal` focused on:
-     - Exercising client ↔ calendar HTTP interactions.
+     - Exercising client \<-> calendar HTTP interactions.
      - Validating calendar selection behavior (`OTS_CALENDARS` ordering).
      - Running a targeted subset of tests that depend on a live calendar.
 
@@ -185,7 +186,7 @@ We will:
      - CI and local tests remain sensitive to:
        - Public calendar availability and latency.
        - Changes outside our control.
-     - No coverage for client ↔ calendar HTTP protocol quirks in a controlled environment.
+     - No coverage for client \<-> calendar HTTP protocol quirks in a controlled environment.
    - Rejected because:
      - We want more deterministic CI behavior and better integration coverage.
 
@@ -352,8 +353,17 @@ that runs every Monday at 03:00 UTC (and on manual dispatch). The workflow:
   setting;
 - emits a `ratchet.json` artifact describing timestamp, CI run ID, commit SHA,
   tox env outcomes, and the calendar configuration used; and
-- on successful runs against `main`, creates an annotated tag in the semantic form
-  `v0.0.1+N-m5`, where `N` increases monotonically with each ratchet.
+
+### `ratchet.json` schema (informal)
+
+To prevent drift, `ratchet.json` should conform to `toolset/unified/schemas/ratchet.schema.json`.
+
+- Required top-level fields:
+  - `timestamp_utc` (RFC 3339 date-time)
+  - `run` (object: `id`, `number`, `event`, `workflow`, `url`)
+  - `commit` (object: `sha`, optional `message`, optional `ref`)
+  - `tests` (array of `{tox_env, outcome}`)
+  - `env` (object: `RUN_REAL_OTS`, `OTS_CALENDARS`, `OTS_STATIONARY_STUB`)
 
 ### Operational guidance for long-term deployments
 

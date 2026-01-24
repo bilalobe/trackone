@@ -1,9 +1,11 @@
 # ADR-005: Migrate to PyNaCl for All Cryptographic Primitives
 
-**Status**: Accepted (Completed 2025-10-12; updated 2026-01-22)
+**Status**: Accepted (Updated)
 **Date**: 2025-10-12
-**Deciders**: BILAL
-**Context**: Evaluate consolidating cryptographic dependencies from `cryptography` + `pynacl` to `pynacl` only.
+
+## Related ADRs
+
+- [ADR-001](ADR-001-primitives-x25519-hkdf-xchacha.md): Cryptographic Primitives and Framing (updated to reflect PyNaCl)
 
 ## Context and Problem Statement
 
@@ -55,9 +57,9 @@ All cryptographic primitives now use PyNaCl (libsodium bindings):
 
 ### Test Vectors
 
-- ✅ Regenerated `toolset/unified/crypto_test_vectors.json` with PyNaCl
-- ✅ All deterministic AEAD vectors now use PyNaCl encryption
-- ✅ Backward compatibility maintained (same nonce/AAD/plaintext format)
+- Regenerated `toolset/unified/crypto_test_vectors.json` with PyNaCl
+- All deterministic AEAD vectors now use PyNaCl encryption
+- Backward compatibility maintained (same nonce/AAD/plaintext format)
 
 ### Exception Handling
 
@@ -117,11 +119,10 @@ Test coverage includes:
 
 PyNaCl API is more explicit and consistent, with all parameters clearly specified.
 
-## References
+## External References
 
 - [PyNaCl Documentation](https://pynacl.readthedocs.io/)
 - [libsodium Documentation](https://doc.libsodium.org/)
-- ADR-001: Cryptographic Primitives and Framing (updated to reflect PyNaCl)
 
 ## Notes
 

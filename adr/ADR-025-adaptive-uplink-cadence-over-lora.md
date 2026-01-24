@@ -1,16 +1,17 @@
 # ADR-025: Adaptive Uplink Cadence via Authenticated LoRa Downlink Policy
 
-**Status**: Proposed (Near-term, LoRa M#1)
+**Status**: Proposed
 **Date**: 2025-12-15
-**Related ADRs**:
 
-- ADR-001: Core cryptographic primitives (Ed25519, HKDF, XChaCha20-Poly1305)
-- ADR-002: Telemetry framing and replay policy (pod uplink model)
-- ADR-018: Cryptographic randomness and nonce policy (RNG usage)
-- ADR-019: Gateway chain of trust (authentication/verification)
-- ADR-024: Anti-replay and OTS-backed ledger (policy-change facts)
-- ADR-026: OTA firmware updates over LoRa (uses same downlink infrastructure)
-- ADR-030: EnvFact schema and duty-cycled day.bin anchoring (duty cycle interaction)
+## Related ADRs
+
+- [ADR-001](ADR-001-primitives-x25519-hkdf-xchacha.md): Core cryptographic primitives (Ed25519, HKDF, XChaCha20-Poly1305)
+- [ADR-002](ADR-002-telemetry-framing-and-replay-policy.md): Telemetry framing and replay policy (pod uplink model)
+- [ADR-018](ADR-018-cryptographic-randomness-and-nonce-policy.md): Cryptographic randomness and nonce policy (RNG usage)
+- [ADR-019](ADR-019-rust-gateway-chain-of-trust.md): Gateway chain of trust (authentication/verification)
+- [ADR-024](ADR-024-anti-replay-and-ots-backed-ledger.md): Anti-replay and OTS-backed ledger (policy-change facts)
+- [ADR-026](ADR-026-ota-firmware-updates-over-lora.md): OTA firmware updates over LoRa (uses same downlink infrastructure)
+- [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md): EnvFact schema and duty-cycled day.bin anchoring (duty cycle interaction)
 
 ## Context
 

@@ -2,7 +2,13 @@
 
 **Status**: Accepted
 **Date**: 2025-11-06
-**Milestone Target**: M#6 (post 0.1.0)
+
+## Related ADRs
+
+- [ADR-011](ADR-011-benchmarking-strategy.md): Benchmarking Strategy
+- [ADR-003](ADR-003-merkle-canonicalization-and-ots-anchoring.md): Canonicalization/Merkle Policy
+- [ADR-015](ADR-015-parallel-anchoring-ots-rfc3161-tsa.md): Parallel Anchoring with OTS/TSA (integration point for anchor verification)
+- [ADR-008](ADR-008-m4-completion-ots-workflow.md): M#4 OTS workflow and metadata (production OTS handling)
 
 ## Context
 
@@ -90,7 +96,7 @@ Python remains the orchestrator (I/O, OTS/TSA, CLI), and the Rust crates are use
 ## Testing & Verification
 
 - Must‑pass suite: existing pytest vectors (happy path + tamper + AAD + edge cases).
-- Cross‑lang KATs: generate/reference test vectors for all primitives; verify both directions (Py↔Rust).
+- Cross‑lang KATs: generate/reference test vectors for all primitives; verify both directions (Py\<->Rust).
 - Property tests: canonicalization idempotence; Merkle inclusion proof round‑trip; replay invariants unchanged.
 
 ## Operations & Migration
@@ -108,14 +114,10 @@ Python remains the orchestrator (I/O, OTS/TSA, CLI), and the Rust crates are use
 ## Acceptance Criteria
 
 - All existing tests pass with and without the extension; coverage maintained.
-- Benchmarks show ≥2× speedup for canonicalization+Merkle on gateway class hardware.
+- Benchmarks show >=2× speedup for canonicalization+Merkle on gateway class hardware.
 - Wheels produced for Linux x86_64 (manylinux, musllinux) in release CI; install tested in a clean venv.
 
-## References
+## External References
 
-- ADR‑011: Benchmarking Strategy
-- ADR‑003: Canonicalization/Merkle Policy
-- ADR‑015: Parallel Anchoring with OTS/TSA (integration point for anchor verification)
-- ADR‑008: M#4 OTS workflow and metadata (production OTS handling)
 - PyO3 (https://pyo3.rs), maturin (https://github.com/PyO3/maturin)
 - RustCrypto crates (xchacha20poly1305, ed25519-dalek, hkdf, sha2)

@@ -1,7 +1,14 @@
 # ADR-020: Follow-up on Stationary OTS Calendar (ADR-014)
 
-Status: Accepted
-Date: 2025-11-20
+**Status**: Accepted
+**Date**: 2025-11-20
+
+## Related ADRs
+
+- [ADR-014](ADR-014-stationary-ots-calendar.md): Stationary OpenTimestamps Calendar for Deterministic Anchoring
+- [ADR-007](ADR-007-ots-ci-verification-and-bitcoin-headers.md): OTS verification in CI and Bitcoin headers policy
+- [ADR-008](ADR-008-m4-completion-ots-workflow.md): Milestone M#4 completion and OTS verification workflow
+- [ADR-015](ADR-015-parallel-anchoring-ots-rfc3161-tsa.md): Parallel Anchoring with OTS and RFC 3161 TSA
 
 ## Context
 
@@ -202,11 +209,7 @@ acknowledging that the *server* side is currently stubbed.
     - Enabling `RUN_REAL_OTS=1`, and
     - Expanding the test suite under the `real_ots` marker.
 
-## References
+## External References
 
-- ADR-014: Stationary OpenTimestamps Calendar for Deterministic Anchoring
-- ADR-007: OTS verification in CI and Bitcoin headers policy
-- ADR-008: Milestone M#4 completion and OTS verification workflow
-- ADR-015: Parallel Anchoring with OTS and RFC 3161 TSA
 - OpenTimestamps project: https://opentimestamps.org/ and
   https://github.com/opentimestamps

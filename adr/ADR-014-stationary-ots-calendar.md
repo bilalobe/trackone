@@ -1,14 +1,15 @@
 # ADR-014: Stationary OpenTimestamps Calendar for Deterministic Anchoring
 
-Status: Accepted
+**Status**: Accepted
+**Date**: 2025-11-06
 
-Context
+## Context
 
 - OTS proofs acquired during CI or local runs may lack immediate BitcoinBlockHeaderAttestation; `ots upgrade` often needs time and repeated calls.
 - Public calendars are shared resources; availability and latency vary.
 - Our CI and reproducibility goals would benefit from an internal, predictable calendar endpoint to reduce external dependencies.
 
-Decision
+## Decision
 
 - Introduce a stationary (self-hosted) OpenTimestamps calendar service to improve determinism and reduce reliance on public pools.
 - Provide configuration to prefer the stationary calendar, while still allowing fallbacks to public pools.
@@ -39,7 +40,7 @@ Alternatives Considered
 - Rely purely on public calendars: simplest but less predictable.
 - Mock OTS entirely: fast, but not representative of real-world anchoring and timing.
 
-Consequences
+## Consequences
 
 - Additional maintenance overhead for hosting a service.
 - Improved determinism and reduced flaky verification due to external pool variability.

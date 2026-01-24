@@ -1,7 +1,7 @@
 # ADR-007: OTS Verification in CI and Bitcoin Headers Policy
 
-**Status:** Accepted
-**Date:** 2025-10-20
+**Status**: Accepted
+**Date**: 2025-10-20
 
 ## Context
 

@@ -2,13 +2,14 @@
 
 **Status**: Proposed
 **Date**: 2026-01-04
-**Related ADRs**:
 
-- ADR-032: Informational RFC for verifiable telemetry ledgers
-- ADR-024: Anti-replay and ledger semantics
-- ADR-018: Randomness and nonce policy
-- ADR-028 & ADR-030: SensorThings projections and envfact schemas
-- ADR-003 & ADR-015: Anchoring and timestamping strategies
+## Related ADRs
+
+- [ADR-032](ADR-032-informational-rfc-verifiable-telemetry-ledger.md): Informational RFC for verifiable telemetry ledgers
+- [ADR-024](ADR-024-anti-replay-and-ots-backed-ledger.md): Anti-replay and ledger semantics
+- [ADR-018](ADR-018-cryptographic-randomness-and-nonce-policy.md): Randomness and nonce policy
+- [ADR-028](ADR-028-sensorthings-projection-mapping.md) & [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md): SensorThings projections and envfact schemas
+- [ADR-003](ADR-003-merkle-canonicalization-and-ots-anchoring.md) & [ADR-015](ADR-015-parallel-anchoring-ots-rfc3161-tsa.md): Anchoring and timestamping strategies
 
 ## Context
 

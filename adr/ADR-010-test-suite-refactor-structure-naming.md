@@ -1,8 +1,12 @@
-# ADR 010: Test suite refactor (structure and naming)
+# ADR-010: Test suite refactor (structure and naming)
 
-- Status: Proposed
-- Date: 2025-10-28
-- Owners: QA/Platform
+**Status**: Proposed
+**Date**: 2025-10-28
+
+## Related ADRs
+
+- [ADR-011](ADR-011-benchmarking-strategy.md): Benchmarking Strategy (benchmarks rely on canonicalized, isolated test fixtures and stable module imports)
+- [ADR-016](ADR-016-changelog-policy-git-cliff.md): Changelog automation (git-cliff) — consistent commit/test discipline is recommended to produce reliable changelogs
 
 ## Context
 
@@ -32,8 +36,8 @@ Adopt a consistent structure and naming for tests and fixtures, and decompose ov
 
 - Size targets (guidelines, not hard limits)
 
-  - Unit: ≤ 150 LOC per file.
-  - Integration/E2E: ≤ 200 LOC per file.
+  - Unit: \<= 150 LOC per file.
+  - Integration/E2E: \<= 200 LOC per file.
 
 - Migration rules
 
@@ -98,9 +102,7 @@ Adopt a consistent structure and naming for tests and fixtures, and decompose ov
 - Revert the renames and splits via `git revert` of the refactor commits.
 - Restore previous `conftest.py` layout if scoped fixtures cause breakage.
 
-## References
+## External References
 
 - Current structure under `'tests/'`.
 - Prior changes removing `_boost` suffix in gateway tests.
-- ADR-011: Benchmarking Strategy (benchmarks rely on canonicalized, isolated test fixtures and stable module imports)
-- ADR-016: Changelog automation (git-cliff) — consistent commit/test discipline is recommended to produce reliable changelogs

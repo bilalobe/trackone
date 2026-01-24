@@ -1,7 +1,7 @@
 # ADR-011: Benchmarking Strategy for TrackOne
 
-Status: Accepted (updated)
-Date: 2025-11-01
+**Status**: Accepted (Updated)
+**Date**: 2025-11-01
 
 ## Context
 
@@ -118,10 +118,3 @@ Negative / Risks:
 - Developers validate locally with `--benchmark-only` and save a baseline when stable.
 - Add a Makefile target `bench` to run the suite and place results under `out/benchmarks/` (recommended next step).
 - Iterate: start with microbenchmarks for crypto primitives; expand only where there’s a clear need (e.g., regression reports or feature work).
-
-## Next actions (short-term)
-
-1. Add the initial `tests/bench/bench_crypto.py` and `tests/bench/bench_gateway.py` stubs.
-1. Add a `make bench` target and a CI job that runs benchmarks and uploads artifacts (artifact-only initially).
-1. Document benchmark ownership and a lightweight acceptance policy for regression alerts.
-1. Optionally adopt asv/pyperf later for historical tracking and deep profiling when the team needs it.

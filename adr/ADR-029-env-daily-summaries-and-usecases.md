@@ -1,13 +1,14 @@
-# ADR-029 – Environmental Sensing Use-Cases and Daily Summary Metrics
+# ADR-029: Environmental Sensing Use-Cases and Daily Summary Metrics
 
 **Status**: Proposed
 **Date**: 2025-12-15
-**Related ADRs**:
 
-- ADR-024: Anti-replay and OTS-backed ledger (ledger structure for summaries)
-- ADR-027: SHTC3-class sensors and environmental readings (sensor capabilities)
-- ADR-028: Mapping TrackOne canonical facts to OGC SensorThings API (API projection)
-- ADR-030: EnvFact schema and duty-cycled day.bin anchoring (canonical schema)
+## Related ADRs
+
+- [ADR-024](ADR-024-anti-replay-and-ots-backed-ledger.md): Anti-replay and OTS-backed ledger (ledger structure for summaries)
+- [ADR-027](ADR-027-sensorthings-shtc3-representation.md): SHTC3-class sensors and environmental readings (sensor capabilities)
+- [ADR-028](ADR-028-sensorthings-projection-mapping.md): Mapping TrackOne canonical facts to OGC SensorThings API (API projection)
+- [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md): EnvFact schema and duty-cycled day.bin anchoring (canonical schema)
 
 ## Context
 

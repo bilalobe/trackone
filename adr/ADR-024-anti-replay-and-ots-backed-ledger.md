@@ -2,15 +2,16 @@
 
 **Status**: Proposed
 **Date**: 2025-11-28
-**Related ADRs**:
 
-- ADR-002: Replay window and device table (pod-side anti-replay)
-- ADR-003: Merkle canonicalization and OTS anchoring (ledger structure)
-- ADR-006: Forward-only schema and salt8 (schema discipline)
-- ADR-019: Gateway chain of trust (operational chain)
-- ADR-021: Safety-net OTS pipeline verification (verification invariants)
-- ADR-023: Prefer OTS for integrity (trust hierarchy)
-- ADR-030: EnvFact schema and duty-cycled day.bin anchoring (schema instantiation)
+## Related ADRs
+
+- [ADR-002](ADR-002-telemetry-framing-and-replay-policy.md): Replay window and device table (pod-side anti-replay)
+- [ADR-003](ADR-003-merkle-canonicalization-and-ots-anchoring.md): Merkle canonicalization and OTS anchoring (ledger structure)
+- [ADR-006](ADR-006-forward-only-schema-and-salt8.md): Forward-only schema and salt8 (schema discipline)
+- [ADR-019](ADR-019-rust-gateway-chain-of-trust.md): Gateway chain of trust (operational chain)
+- [ADR-021](ADR-021-safety-net-ots-pipeline-verification.md): Safety-net OTS pipeline verification (verification invariants)
+- [ADR-023](ADR-023-ots-vs-git-integrity.md): Prefer OTS for integrity (trust hierarchy)
+- [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md): EnvFact schema and duty-cycled day.bin anchoring (schema instantiation)
 
 ## Context
 
@@ -49,7 +50,7 @@ We treat `(dev_id, fc)` as the minimal **unit of account** for frames in the led
 For a given calendar day `D`, the gateway constructs a canonical `day.bin` (per ADR-003) and anchors it with OTS. The anchored object logically represents:
 
 - A finite multiset of facts `F_D` derived from frames that passed gateway validation **including replay window checks**.
-- Each fact `f ∈ F_D` carries (directly or by derivation) a `(dev_id, fc)` pair.
+- Each fact `f in F_D` carries (directly or by derivation) a `(dev_id, fc)` pair.
 
 The **anchored set** is therefore:
 
@@ -92,8 +93,8 @@ Wrap-around of `fc` (e.g. 32-bit counter crossing `2^32-1 → 0`) is currently t
 
 - Practical justification: with a 32-bit counter transmitting at a plausible Barnacle cadence the expected time to wrap is astronomically large. Example calculation:
 
-  - 6 frames per hour ≈ 144 frames per day ≈ 52,560 frames per year
-  - 2^32 ≈ 4.29 × 10^9 frames → 4.29e9 / 52,560 ≈ 81,600 years to wrap
+  - 6 frames per hour ~= 144 frames per day ~= 52,560 frames per year
+  - 2^32 ~= 4.29 × 10^9 frames → 4.29e9 / 52,560 ~= 81,600 years to wrap
 
   Verdict: For Barnacle-style pods (minutes-scale frame cadence, modest lifetime), treating wrap-around as a provisioning/firmware error is acceptable and simpler than adding modulo semantics. This ADR can be revisited if deployment constraints change.
 

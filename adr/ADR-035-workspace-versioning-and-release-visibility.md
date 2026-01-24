@@ -3,6 +3,11 @@
 **Status**: Accepted
 **Date**: 2026-01-22
 
+## Related ADRs
+
+- [ADR-016](ADR-016-changelog-policy-git-cliff.md): Changelog automation proposal (Rejected)
+- [ADR-006](ADR-006-forward-only-schema-and-salt8.md): Forward-only schema policy
+
 ## Context
 
 TrackOne is a multi-crate Rust workspace (and a mixed Rust/Python repo). We are already producing multiple artifacts:
@@ -87,9 +92,7 @@ This keeps consistency (one version) while being honest about which parts are pr
 - Maintain honesty in `CHANGELOG.md` about maturity of gateway/pod layers.
 - ADR-016 records and rejects `git-cliff` automation; TrackOne stays manual for now.
 
-## References
+## External References
 
 - Keep a Changelog (https://keepachangelog.com)
 - Semantic Versioning (https://semver.org)
-- ADR-016: Changelog automation proposal (Rejected)
-- ADR-006: Forward-only schema policy

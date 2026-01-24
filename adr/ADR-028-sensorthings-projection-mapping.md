@@ -1,15 +1,16 @@
-# ADR-028 – Mapping TrackOne Canonical Facts to OGC SensorThings API
+# ADR-028: Mapping TrackOne Canonical Facts to OGC SensorThings API
 
 **Status**: Accepted
 **Date**: 2025-12-15
-**Related ADRs**:
 
-- ADR-006: Forward-only schema and salt8 (schema versioning principles)
-- ADR-018: Cryptographic randomness and nonce policy (immutability guarantees)
-- ADR-024: Anti-replay and OTS-backed ledger (canonical fact semantics)
-- ADR-027: SHTC3-class sensors and environmental readings (schema definition)
-- ADR-029: Environmental sensing use-cases and daily summary metrics (use-case requirements)
-- ADR-030: EnvFact schema and duty-cycled day.bin anchoring (fact model)
+## Related ADRs
+
+- [ADR-006](ADR-006-forward-only-schema-and-salt8.md): Forward-only schema and salt8 (schema versioning principles)
+- [ADR-018](ADR-018-cryptographic-randomness-and-nonce-policy.md): Cryptographic randomness and nonce policy (immutability guarantees)
+- [ADR-024](ADR-024-anti-replay-and-ots-backed-ledger.md): Anti-replay and OTS-backed ledger (canonical fact semantics)
+- [ADR-027](ADR-027-sensorthings-shtc3-representation.md): SHTC3-class sensors and environmental readings (schema definition)
+- [ADR-029](ADR-029-env-daily-summaries-and-usecases.md): Environmental sensing use-cases and daily summary metrics (use-case requirements)
+- [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md): EnvFact schema and duty-cycled day.bin anchoring (fact model)
 
 ## Context
 
@@ -43,30 +44,30 @@ We need a precise mapping between TrackOne’s facts and SensorThings entities.
 
 Logical mapping (names are conceptual; real schema will use existing entities where possible):
 
-- Canonical **Site / Asset / Pod / Device** fact(s) ⇒ SensorThings `Thing`:
+- Canonical **Site / Asset / Pod / Device** fact(s) -> SensorThings `Thing`:
 
   - A `Thing` corresponds to a logical physical system being monitored (e.g., a pod, station, or sensor node).
   - `Thing.properties` includes:
     - TrackOne identifiers: `trackone_thing_id`, `pod_id`, `site_id`, etc.
     - Device model, firmware version, etc. (see ADR-017, ADR-019).
 
-- Canonical **Location** facts ⇒ SensorThings `Location`:
+- Canonical **Location** facts -> SensorThings `Location`:
 
   - TrackOne location facts (geo coordinates, elevation, validity windows) are mapped to one or more `Location` resources.
-  - `Thing` ↔ `Location` relationships:
+  - `Thing` \<-> `Location` relationships:
     - `Thing` can be linked to multiple `Location`s over time:
       - Each link is defined by TrackOne location facts and validity intervals.
     - SensorThings `Location.location` uses GeoJSON (Point or other geometry).
     - Location changes are modeled by:
       - New `Location` entity or updated `Thing`–`Location` association with time intervals; the mapping must be deterministic from facts.
 
-- Canonical **Sensor deployment** facts ⇒ SensorThings `Sensor`:
+- Canonical **Sensor deployment** facts -> SensorThings `Sensor`:
 
   - Each physical sensor instance (e.g. an SHTC3 on board a pod) becomes at least one `Sensor`.
   - Sensor metadata and capabilities come from ADR-027.
   - `Sensor.metadata` contains TrackOne sensor identifiers (e.g. `trackone_sensor_id`).
 
-- Canonical **environmental observation/datapoint** facts ⇒ SensorThings `Observation`:
+- Canonical **environmental observation/datapoint** facts -> SensorThings `Observation`:
 
   - Any valid environmental reading fact (raw or summary) becomes an `Observation`.
   - `Observation.result` value(s) depend on the Datastream type:
@@ -75,13 +76,13 @@ Logical mapping (names are conceptual; real schema will use existing entities wh
   - `Observation.phenomenonTime` comes from `phenomenon_time_start` / `phenomenon_time_end`.
   - `Observation.resultTime` is typically the ingestion/anchor time, or equal to `phenomenon_time_end` if no other anchor is available.
 
-- Canonical **metric / quantity** configuration ⇒ SensorThings `ObservedProperty`:
+- Canonical **metric / quantity** configuration -> SensorThings `ObservedProperty`:
 
   - Each measurable quantity in TrackOne (e.g., temperature_air, relative_humidity, pressure, VOC, etc.) is mapped to a standardized `ObservedProperty`.
   - `ObservedProperty.definition` should reference a standard URI when available (OGC, CF, etc.).
   - `ObservedProperty.properties` includes TrackOne quantity identifiers.
 
-- Canonical **data stream configuration** ⇒ SensorThings `Datastream`:
+- Canonical **data stream configuration** -> SensorThings `Datastream`:
 
   - A `Datastream` groups Observations with the same:
     - Thing
@@ -144,4 +145,4 @@ This ensures:
     - `Thing`, `Location`, `Sensor`, `ObservedProperty`, `Datastream`, `Observation` with correct relationships.
   - Enforce read-only or write-through behavior for API mutations, with preference for read-only in the initial implementation.
 - Documentation:
-  - Document the canonical ↔ SensorThings mapping and ID scheme to support debugging and reproducibility.
+  - Document the canonical \<-> SensorThings mapping and ID scheme to support debugging and reproducibility.

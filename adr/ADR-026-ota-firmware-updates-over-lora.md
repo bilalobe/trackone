@@ -2,16 +2,17 @@
 
 **Status**: Proposed (Later milestone, LoRa M#N)
 **Date**: 2025-12-15
-**Related ADRs**:
 
-- ADR-001: Core cryptographic primitives (Ed25519 firmware signatures)
-- ADR-002: Telemetry framing and replay policy (device state model)
-- ADR-003: Merkle canonicalization and OTS anchoring (manifest canonicalization)
-- ADR-018: Cryptographic randomness and nonce policy (secure RNG for nonces)
-- ADR-019: Gateway chain of trust (firmware provenance and verification)
-- ADR-024: Anti-replay and OTS-backed ledger (OTA events as facts)
-- ADR-025: Adaptive uplink cadence (downlink infrastructure reuse)
-- ADR-030: EnvFact schema and duty-cycled day.bin anchoring (operational context)
+## Related ADRs
+
+- [ADR-001](ADR-001-primitives-x25519-hkdf-xchacha.md): Core cryptographic primitives (Ed25519 firmware signatures)
+- [ADR-002](ADR-002-telemetry-framing-and-replay-policy.md): Telemetry framing and replay policy (device state model)
+- [ADR-003](ADR-003-merkle-canonicalization-and-ots-anchoring.md): Merkle canonicalization and OTS anchoring (manifest canonicalization)
+- [ADR-018](ADR-018-cryptographic-randomness-and-nonce-policy.md): Cryptographic randomness and nonce policy (secure RNG for nonces)
+- [ADR-019](ADR-019-rust-gateway-chain-of-trust.md): Gateway chain of trust (firmware provenance and verification)
+- [ADR-024](ADR-024-anti-replay-and-ots-backed-ledger.md): Anti-replay and OTS-backed ledger (OTA events as facts)
+- [ADR-025](ADR-025-adaptive-uplink-cadence-over-lora.md): Adaptive uplink cadence (downlink infrastructure reuse)
+- [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md): EnvFact schema and duty-cycled day.bin anchoring (operational context)
 
 ## Context
 

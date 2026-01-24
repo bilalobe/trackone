@@ -1,7 +1,7 @@
 # ADR-004: Framed Ingest Stub for M#1 (Plaintext CT for Pipeline Bring‑up)
 
-Status: Accepted
-Date: 2025-10-08
+**Status**: Superseded by ADR-001/002
+**Date**: 2025-10-08
 
 ## Context
 
@@ -28,8 +28,8 @@ For M#1 only:
   ```
 
 - **Replay window (enforced):**
-  Gateway maintains `highest_fc_seen` per `dev_id` and accepts a frame iff `0 < fc - highest_fc_seen ≤ window` (default
-  64). First frame for a device is accepted if `fc ≥ 0`.
+  Gateway maintains `highest_fc_seen` per `dev_id` and accepts a frame iff `0 < fc - highest_fc_seen <= window` (default
+  64). First frame for a device is accepted if `fc >= 0`.
 
 - **Decryption (stub):**
   Gateway decodes `ct` as UTF‑8 and parses JSON into the `payload`. No cryptographic verification is performed in M#1.

@@ -1,8 +1,7 @@
-# ADR 031 – Key Analysis of SpatiaLite for Geospatial Storage and Query
+# ADR-031: Key Analysis of SpatiaLite for Geospatial Storage and Query
 
-## Status
-
-Proposed
+**Status**: Proposed
+**Date**: 2024-12-16
 
 ## Context
 
@@ -11,7 +10,7 @@ The project evolved through several problem spaces:
 - Initially framed as a cybersecurity / cryptography problem (data integrity, authenticity, provenance).
 - Then as a networking problem (distributed exchange, synchronization, timestamps).
 - Then as a systems-engineering problem (architecture, performance, deployment).
-- Finally as a spatial geometry / geodata problem (geometric operations, spatial indexing, coordinate handling).
+- Finally, as a spatial geometry / geodata problem (geometric operations, spatial indexing, coordinate handling).
 
 At this stage, we need to make an explicit architectural decision about using SpatiaLite as the primary geospatial storage and query engine for the project’s analytical workflows.
 

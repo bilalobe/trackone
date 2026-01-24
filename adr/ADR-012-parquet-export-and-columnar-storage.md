@@ -1,14 +1,13 @@
-# ADR-012: Parquet Export for Telemetry Facts (0.2.0+)
+# ADR-012: Parquet Export for Telemetry Facts and Columnar Storage
 
-Status: Proposed
-Date: 2025-11-02
-Target Release: ≥ 0.2.0
+**Status**: Proposed
+**Date**: 2025-11-02
 
 ## Context
 
 TrackOne currently emits canonical facts as JSON files and aggregates them into Merkle day records for verifiability and OTS anchoring. JSON is ideal as a canonical, human-auditable source of truth and for cryptographic determinism (ADR‑003), but it is not optimized for analytical scans at scale.
 
-Operational needs emerging for M#≥2 include:
+Operational needs emerging for M#>=2 include:
 
 - Columnar analytics over large time ranges (filter, aggregate by device/site).
 - Efficient storage for numeric metrics (temperature, humidity/bioimpedance, counters), with column pruning and compression.
@@ -31,7 +30,7 @@ Key elements:
 - Optional dependencies: PyArrow or Polars. Exporter degrades gracefully (no-op) if deps are missing, avoiding impact to existing CI/tests.
 - Zero impact to Merkle/OTS workflow: Parquet output is not hashed or anchored; day chaining semantics are unchanged.
 
-Scope and non-goals (for ≥ 0.2.0):
+Scope and non-goals (for >= 0.2.0):
 
 - Scope: batch export jobs and local analytics; basic schema evolution (additive columns).
 - Non-goals (initially): ACID table formats (Delta/Iceberg/Hudi), streaming upserts, and fast OLTP queries.
@@ -69,7 +68,7 @@ Validation strategy:
 
 Migration plan:
 
-- Phase 1 (≥ 0.2.0): Ship exporter as optional CLI; document usage. No runtime impact.
+- Phase 1 (>= 0.2.0): Ship exporter as optional CLI; document usage. No runtime impact.
 - Phase 2: Add scheduled/automated export job, partition compaction, and basic retention guidance.
 - Phase 3 (optional): Evaluate table formats (Delta/Iceberg/Hudi) if upserts/deletes or lakehouse semantics are required.
 

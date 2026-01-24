@@ -1,14 +1,14 @@
 # ADR-002: Telemetry Framing, Nonce/Replay Policy, and Device Table
 
-**Status:** Accepted (Updated for M#2)
-**Date:** 2025-10-06 (Updated: 2025-10-12)
+**Status**: Accepted (Updated)
+**Date**: 2025-10-06
 
 ## Context
 
 - ADR‑001 fixed primitives (X25519/HKDF/XChaCha20‑Poly1305/Ed25519).
 - Need a deterministic wire format for pod→gateway telemetry and a simple, verifiable replay policy for intermittent
   links.
-- Frames must be compact (≤ ~48 bytes typical), parseable on tiny MCUs, and easy to test with vectors.
+- Frames must be compact (\<= ~48 bytes typical), parseable on tiny MCUs, and easy to test with vectors.
 
 ## Decision
 
@@ -57,7 +57,7 @@ production.
 
 - Gateway maintains `device_table[dev_id]`:
   - `highest_fc_seen` (u32 for M#2, u64 for production)
-  - `fc_window` (default 64; accept if `|fc - highest_fc_seen| ≤ window_size`)
+  - `fc_window` (default 64; accept if `|fc - highest_fc_seen| <= window_size`)
   - `salt4`/`salt8` for nonce reconstruction
   - `ck_up` (32-byte AEAD key)
 - On receipt:

@@ -1,8 +1,15 @@
 # ADR-018: Cryptographic randomness and nonce policy
 
-- Status: Accepted
-- Date: 2025-11-09
-- Related: `ADR-001-primitives-x25519-hkdf-xchacha.md`, `ADR-006-forward-only-schema-and-salt8.md`, `ADR-005-pynacl-migration.md`, `ADR-011-benchmarking-strategy.md`, `ADR-017-rust-core-and-pyo3-integration.md`
+**Status**: Accepted
+**Date**: 2025-11-09
+
+## Related ADRs
+
+- `[ADR-001](ADR-001-primitives-x25519-hkdf-xchacha.md)-primitives-x25519-hkdf-xchacha.md`
+- `[ADR-006](ADR-006-forward-only-schema-and-salt8.md)-forward-only-schema-and-salt8.md`
+- `[ADR-005](ADR-005-pynacl-migration.md)-pynacl-migration.md`
+- `[ADR-011](ADR-011-benchmarking-strategy.md)-benchmarking-strategy.md`
+- `[ADR-017](ADR-017-rust-core-and-pyo3-integration.md)-rust-core-and-pyo3-integration.md`
 
 ## Context
 
@@ -73,7 +80,7 @@ Rationale: AST analysis reduces false positives vs naive regex and catches alias
 - Do not log or expose key material; salts may be stored but must not be derived from secrets.
 - Physical entropy pipelines must hash inputs and bind context metadata.
 
-## References
+## External References
 
 - NIST SP 800-90A Rev.1; RFC 5116 AEAD; libsodium `randombytes`; NaCl/`PyNaCl` docs; discussion on `.rand()` predictability.
 

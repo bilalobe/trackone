@@ -1,11 +1,13 @@
 # ADR-034: Serialization Boundaries - Transport vs Commitment Encodings
 
-- Status: Accepted
-- Date: 2026-01-10
-- Related:
-  - ADR-032: Verifiable telemetry ledger (interoperability and audit posture)
-  - `crates/trackone-core/src/cbor.rs` (canonical CBOR commitment encoder)
-  - `crates/trackone-core/tests/serialization_benchmarks.rs` (size comparisons)
+**Status**: Accepted
+**Date**: 2026-01-10
+
+## Related ADRs
+
+- [ADR-032](ADR-032-informational-rfc-verifiable-telemetry-ledger.md): Verifiable telemetry ledger (interoperability and audit posture)
+- `crates/trackone-core/src/cbor.rs` (canonical CBOR commitment encoder)
+- `crates/trackone-core/tests/serialization_benchmarks.rs` (size comparisons)
 
 ## Context
 

@@ -1,14 +1,13 @@
-# ADR-001: Cryptographic Primitives and Framing for Track 1
+# ADR-001: Cryptographic Primitives and Framing
 
-**Status:** Accepted
-**Date:** 2025-10-06
-**Updated:** 2025-10-12 (PyNaCl migration completed)
+**Status**: Accepted (Updated)
+**Date**: 2025-10-06
 
 ## Context
 
 - We need a secure, auditable telemetry pipeline between ultra–low‑power pods and a gateway with intermittent links.
 - Constraints:
-  - Tiny payloads (≤ 40–60 bytes typical)
+  - Tiny payloads (\<= 40–60 bytes typical)
   - Low compute/energy on MCU-class devices
   - Simple nonce management with replay protection
   - Deterministic verification and public timestamp anchoring (OpenTimestamps)
@@ -54,7 +53,7 @@ nonce/aad/plain/tag.
 
 - **Inputs:** Ng (gateway nonce), Np (pod nonce), RTC time Tpod (non‑secret), bio‑hash B (non‑secret salt), pod static
   key (Ed25519/X25519).
-- X25519 ephemeral ECDH (eP↔eG), optional static+ephemeral hybrid.
+- X25519 ephemeral ECDH (eP\<->eG), optional static+ephemeral hybrid.
 - `PRK = HKDF‑Extract(salt = SHA‑256(Ng||Np||Tpod||B), IKM = ECDH secret(s))`
 - `CK_up = HKDF‑Expand(PRK, "barnacle:up", 32)`
 - `CK_down = HKDF‑Expand(PRK, "barnacle:down", 32)`

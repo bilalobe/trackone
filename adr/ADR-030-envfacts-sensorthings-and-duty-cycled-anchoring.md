@@ -1,25 +1,26 @@
-# ADR-030 – EnvFact schema, SensorThings alignment, and duty-cycled day.bin anchoring
+# ADR-030: EnvFact schema, SensorThings alignment, and duty-cycled day.bin anchoring
 
 **Status**: Accepted
 **Date**: 2025-12-15
-**Related ADRs**:
 
-- ADR-001: Core cryptographic primitives (cryptographic basis)
-- ADR-003: Merkle canonicalization and OTS anchoring (ledger anchoring)
-- ADR-002: Replay window and device table (anti-replay semantics)
-- ADR-006: Forward-only schema and salt8 (schema discipline)
-- ADR-014: Stationary OTS calendar (CI infrastructure)
-- ADR-018: Cryptographic randomness and nonce policy (security baseline)
-- ADR-019: Gateway chain of trust (verification and deployment)
-- ADR-020: Stationary OTS calendar follow-up (operational context)
-- ADR-021: Safety-net OTS pipeline verification (verification assurance)
-- ADR-024: Anti-replay and OTS-backed ledger (ledger semantics)
-- ADR-025: Adaptive uplink cadence (duty cycling)
-- ADR-027: SHTC3-class sensors and environmental readings (sensor metadata)
-- ADR-028: Mapping TrackOne canonical facts to OGC SensorThings API (presentation layer)
-- ADR-029: Environmental sensing use-cases and daily summary metrics (use-case definition)
+## Related ADRs
 
-## 1. Context
+- [ADR-001](ADR-001-primitives-x25519-hkdf-xchacha.md): Core cryptographic primitives (cryptographic basis)
+- [ADR-003](ADR-003-merkle-canonicalization-and-ots-anchoring.md): Merkle canonicalization and OTS anchoring (ledger anchoring)
+- [ADR-002](ADR-002-telemetry-framing-and-replay-policy.md): Replay window and device table (anti-replay semantics)
+- [ADR-006](ADR-006-forward-only-schema-and-salt8.md): Forward-only schema and salt8 (schema discipline)
+- [ADR-014](ADR-014-stationary-ots-calendar.md): Stationary OTS calendar (CI infrastructure)
+- [ADR-018](ADR-018-cryptographic-randomness-and-nonce-policy.md): Cryptographic randomness and nonce policy (security baseline)
+- [ADR-019](ADR-019-rust-gateway-chain-of-trust.md): Gateway chain of trust (verification and deployment)
+- [ADR-020](ADR-020-stationary-ots-calendar-followup.md): Stationary OTS calendar follow-up (operational context)
+- [ADR-021](ADR-021-safety-net-ots-pipeline-verification.md): Safety-net OTS pipeline verification (verification assurance)
+- [ADR-024](ADR-024-anti-replay-and-ots-backed-ledger.md): Anti-replay and OTS-backed ledger (ledger semantics)
+- [ADR-025](ADR-025-adaptive-uplink-cadence-over-lora.md): Adaptive uplink cadence (duty cycling)
+- [ADR-027](ADR-027-sensorthings-shtc3-representation.md): SHTC3-class sensors and environmental readings (sensor metadata)
+- [ADR-028](ADR-028-sensorthings-projection-mapping.md): Mapping TrackOne canonical facts to OGC SensorThings API (presentation layer)
+- [ADR-029](ADR-029-env-daily-summaries-and-usecases.md): Environmental sensing use-cases and daily summary metrics (use-case definition)
+
+## Context
 
 Over the last iterations we:
 
@@ -34,11 +35,11 @@ Over the last iterations we:
   - connects duty cycling (uplink frequency, RX windows) with verifiability and energy goals,
   - lets the report and codebase evolve without duplicating rationale.
 
-## 2. Decision
+## Decision
 
 We adopt a unified environmental fact model and duty‑cycled anchoring strategy as follows.
 
-### 2.1. Canonical Fact / EnvFact schema (`trackone-core`)
+### Canonical Fact / EnvFact schema (`trackone-core`)
 
 The core Rust crate `trackone-core` defines the canonical schema for environmental observations on the wire.
 
@@ -111,7 +112,7 @@ Key properties:
 
 This schema is the single source of truth for pod firmware (`trackone-pod-fw`) and gateway (`trackone-gateway`). No parallel/proto or JSON‑only schemas are authoritative.
 
-### 2.2. Sensor metadata out of band
+### Sensor metadata out of band
 
 Sensor capabilities are kept out of the Fact wire schema:
 
@@ -136,7 +137,7 @@ Rationale:
 - Keeps facts small and stable; metadata is not paid per reading.
 - Matches SensorThings, where sensor/unit metadata live outside `Observation`.
 
-### 2.3. SensorThings / ArcGIS projection
+### SensorThings / ArcGIS projection
 
 The gateway maps `Fact` → SensorThings model; pods never speak SensorThings directly.
 
@@ -159,7 +160,7 @@ This projection is a view. Canonical truth remains:
 
 SensorThings/ArcGIS are presentation and integration layers, not the root of trust.
 
-### 2.4. Duty‑cycled uplink and daily `day.bin` anchoring
+### Duty‑cycled uplink and daily `day.bin` anchoring
 
 Adopt a daily anchoring cadence and duty‑cycled radio policy.
 
@@ -186,14 +187,14 @@ Duty cycling preserves verifiability because:
 - every `day.bin` is anchored (or explicitly marked pending/failed),
 - SensorThings/ArcGIS consume anchored or anchor‑pending daily summaries.
 
-## 3. Alternatives Considered
+## Alternatives Considered
 
 - Pods emitting SensorThings/JSON directly over LoRa — rejected due to payload bloat, tight coupling, and difficulty preserving the `(pod_id, fc)` anti‑replay invariant.
 - Per‑reading anchoring (OTS for every frame) — rejected because of operational load, energy/bandwidth cost, and poor value versus daily anchors.
 - Embedding full sensor metadata in every Fact — rejected due to wire bloat, lifetime/alloc constraints in `no_std`, and misalignment with SensorThings separation.
 - Gateway‑only proprietary schema (no core crate) — rejected because a shared crate (`trackone-core`) ensures consistent anti‑replay, encoding, verification, and provides testable size/behavior constraints.
 
-## 4. Consequences
+## Consequences
 
 Positive:
 
@@ -210,7 +211,7 @@ Negative / Trade‑offs:
 - Projection complexity concentrated in gateway; increases gateway responsibility.
 - Daily anchoring granularity: smallest cryptographically anchored unit is 24 hours (configurable). Shorter windows (e.g., per‑hour) are possible but out of scope.
 
-## 5. Implementation Notes and Status
+## Implementation Notes and Status
 
 - Rust types described are implemented in `crates/trackone-core/src/types.rs` and re‑exported from `trackone-core::lib`.
 - Frame encryption/decryption helpers in `crates/trackone-core/src/frame.rs` use `Fact` as the canonical payload, with `MAX_FACT_LEN` enforced via tests.

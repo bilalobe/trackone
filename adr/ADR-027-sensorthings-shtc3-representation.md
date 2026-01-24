@@ -1,14 +1,13 @@
-# ADR-027 – Representation of SHTC3-Class Sensors and Environmental Readings
+# ADR-027: Representation of SHTC3-Class Sensors and Environmental Readings
 
 **Status**: Proposed
 **Date**: 2025-12-15
-**Related ADRs**:
 
-- ADR-028: Mapping TrackOne canonical facts to OGC SensorThings API (projection)
+## Related ADRs
 
-- ADR-029: Environmental sensing use-cases and daily summary metrics (requirements)
-
-- ADR-030: EnvFact schema and duty-cycled day.bin anchoring (canonical schema)
+- [ADR-028](ADR-028-sensorthings-projection-mapping.md): Mapping TrackOne canonical facts to OGC SensorThings API (projection)
+- [ADR-029](ADR-029-env-daily-summaries-and-usecases.md): Environmental sensing use-cases and daily summary metrics (requirements)
+- [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md): EnvFact schema and duty-cycled day.bin anchoring (canonical schema)
 
 ## Context
 
@@ -80,7 +79,7 @@ For **summaries**, `*_value` should be the aggregate (e.g. mean, min, max) and `
 
 The SensorThings representation MUST follow:
 
-- SHTC3-class device ⇒ Sensor entity with:
+- SHTC3-class device -> Sensor entity with:
   - `name`: e.g. `"SHTC3 temperature and humidity sensor #123"`.
   - `description`: includes model, vendor, and free-text summary of capabilities.
   - `encodingType`: `"application/json"`.
@@ -129,6 +128,7 @@ At minimum, we need:
 - Canonical sensor metadata schema:
 
   - Add fields: `sensor_type`, `sensor_vendor`, `measurable_quantities`, and per-quantity capability objects (`unit`, `resolution`, `accuracy`, `accuracy_confidence`, `operating_range`, `calibration_date`, `calibration_notes`).
+  - JSON Schema: `toolset/unified/schemas/env_sensor_capability.schema.json` (added to prevent drift).
 
 - Environmental reading fact schema:
 

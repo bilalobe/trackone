@@ -1,8 +1,15 @@
 # ADR-015: Parallel Anchoring with OpenTimestamps and RFC 3161 TSA
 
-**Status**: Accepted (Implemented 2025-11-18)
+**Status**: Accepted (Updated)
 **Date**: 2025-11-06
-**Milestone Target**: M#5 (post 0.1.0 hardening)
+
+## Related ADRs
+
+- ADR-003 (Canonicalization & OTS anchoring)
+- ADR-007 (OTS CI verification)
+- ADR-014 (Stationary OTS calendar)
+- ADR-008 (M#4 OTS workflow and metadata)
+- ADR-017 (Rust CLI verification — optional future verifier)
 
 ## Implementation Summary
 
@@ -135,16 +142,7 @@ context = "trackone:day_root:v1"
 - Store TSA response in transparency log (e.g., append `.tsr` hash to Sigstore Rekor) for public audit.
 - Threshold signature scheme (e.g., FROST Ed25519) replacing individual peer signatures.
 
-## References
+## External References
 
-- ADR-003 (Canonicalization & OTS anchoring)
-- ADR-007 (OTS CI verification)
-- ADR-014 (Stationary OTS calendar)
-- ADR-008 (M#4 OTS workflow and metadata)
-- ADR-017 (Rust CLI verification — optional future verifier)
 - RFC 3161: Time-Stamp Protocol (TSP)
 - ETSI EN 319 421/422 (Policy & security requirements for TSPs)
-
-______________________________________________________________________
-
-This ADR formalizes multi-anchor strategy to improve resilience and audit acceptance without altering on-pod behavior or core hashing semantics.

@@ -1,8 +1,12 @@
 # ADR-008: Milestone M#4 Completion and OTS Verification Workflow
 
-**Status:** Accepted
-**Date:** 2025-10-22
-**Milestone:** M#4
+**Status**: Accepted
+**Date**: 2025-10-22
+
+## Related ADRs
+
+- ADR-003: Canonicalization, Merkle Policy, and Daily OTS Anchoring
+- ADR-007: OTS Verification in CI and Bitcoin Headers Policy
 
 ## Context
 
@@ -310,15 +314,15 @@ make coverage    # Generate HTML coverage report
 
 **Acceptance Criteria (All Met):**
 
-- ✅ Production day blob successfully anchored to Bitcoin block 919384
-- ✅ Proof metadata captured and stored
-- ✅ verify_cli.py successfully validates proof against local Bitcoin Core
-- ✅ Test suite expanded to 151 tests with 85% coverage
-- ✅ All modules have >75% coverage
-- ✅ Git LFS configured for .ots files
-- ✅ Documentation updated (README, CHANGELOG, LaTeX report)
-- ✅ Real OTS integration tests pass when enabled
-- ✅ Test suite passes with placeholder proofs (fast CI)
+- Production day blob successfully anchored to Bitcoin block 919384
+- Proof metadata captured and stored
+- verify_cli.py successfully validates proof against local Bitcoin Core
+- Test suite expanded to 151 tests with 85% coverage
+- All modules have >75% coverage
+- Git LFS configured for .ots files
+- Documentation updated (README, CHANGELOG, LaTeX report)
+- Real OTS integration tests pass when enabled
+- Test suite passes with placeholder proofs (fast CI)
 
 **Test Results:**
 
@@ -338,10 +342,8 @@ make coverage    # Generate HTML coverage report
 - OTS proof upgrade automation (weekly cron)
 - Enhanced proof metadata (git commit, build info)
 
-## References
+## External References
 
-- ADR-003: Canonicalization, Merkle Policy, and Daily OTS Anchoring
-- ADR-007: OTS Verification in CI and Bitcoin Headers Policy
 - OpenTimestamps: https://opentimestamps.org/
 - Bitcoin Block 919384: https://blockstream.info/block/00000000000000000000b36d7b88a2e781f65619746bc238d4cfde8555f13733
 - Proof Metadata: `proofs/2025-10-07.ots.meta.json`
