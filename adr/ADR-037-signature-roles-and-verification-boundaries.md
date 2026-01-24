@@ -40,9 +40,9 @@ Baseline vs. industrial distribution:
 To avoid “same fields, different bytes” failures:
 
 - All signed artifacts MUST define their signed bytes using a canonical encoding.
-- Preferred: **TrackOne Canonical CBOR** for signed bytes (ADR-034).
-- Legacy/transition: RFC 8785 canonical JSON is permitted only when explicitly called out by an artifact schema, and the verifier must enforce canonicalization before signature verification.
-- Each artifact schema MUST declare the canonicalization algorithm identifier (e.g., `trackone-canonical-cbor-v1` or `rfc8785-jcs`) so verifiers never guess.
+- Required: **TrackOne Canonical CBOR** for signed bytes (ADR-034).
+- JSON encodings are NOT permitted for signed bytes unless a future ADR explicitly updates ADR-034 and this ADR; verifiers MUST treat JSON encodings as invalid until then.
+- Each artifact schema MUST declare the canonicalization algorithm identifier (e.g., `trackone-canonical-cbor-v1`) so verifiers never guess.
 
 Each signed payload MUST include an explicit `type` (domain separation) and `schema_version` so signatures cannot be replayed across artifact kinds.
 
@@ -98,9 +98,8 @@ The pod-signed Provisioning Session Transcript MUST cover (canonical bytes):
 - Hybrid/PQ fields when `kex_suite = x25519+mlkem` (ADR-036):
   - `pq_param_id`
   - `ct_kem`
-  - `pk_pq` when using a gateway-ephemeral PQ model
-
-The transcript MUST NOT include any derived secrets (`ss_ecdh`, `ss_kem`, `CK_up`, `CK_down`) and MUST NOT include the Ed25519 signature bytes inside the signed payload (signature is stored as a separate envelope field).
+  - `pk_pq` when using a gateway-ephemeral PQ model and the gateway-signed Provisioning Offer included `pk_pq`
+    The transcript MUST NOT include any derived secrets (`ss_ecdh`, `ss_kem`, `CK_up`, `CK_down`) and MUST NOT include the Ed25519 signature bytes inside the signed payload (signature is stored as a separate envelope field).
 
 ## Verification rules (normative)
 
