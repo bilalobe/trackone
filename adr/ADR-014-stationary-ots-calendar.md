@@ -1,6 +1,6 @@
 # ADR-014: Stationary OpenTimestamps Calendar for Deterministic Anchoring
 
-Status: Proposed
+Status: Accepted
 
 Context
 

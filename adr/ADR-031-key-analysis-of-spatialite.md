@@ -1,9 +1,3 @@
-Here is a concise proposal for `ADR 031` based on your context (SpatiaLite, threat model, crypto/network/systems/geometry angle, and earlier question about "key analysis of spatialite").
-
-You can adapt wording to your repo’s ADR template.
-
-______________________________________________________________________
-
 # ADR 031 – Key Analysis of SpatiaLite for Geospatial Storage and Query
 
 ## Status

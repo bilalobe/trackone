@@ -1,6 +1,6 @@
 # ADR-028 – Mapping TrackOne Canonical Facts to OGC SensorThings API
 
-**Status**: Proposed
+**Status**: Accepted
 **Date**: 2025-12-15
 **Related ADRs**:
 

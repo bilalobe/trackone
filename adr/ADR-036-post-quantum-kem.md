@@ -128,8 +128,8 @@ The transcript MUST be encoded in a canonical form (matching existing provisioni
 
 `transcript_bytes` MUST be produced by a deterministic, explicitly specified encoder so that Python and Rust implementations sign the same bytes for the same logical transcript fields.
 
-- Preferred encoding: TrackOne Canonical CBOR profile (ADR-034), in an explicitly versioned provisioning transcript schema.
-- Permitted legacy/transition encoding: RFC 8785 canonical JSON, only when the schema mandates it and the encoder is deterministic.
+- Required encoding: TrackOne Canonical CBOR profile (ADR-034), in an explicitly versioned provisioning transcript schema.
+- JSON encodings are NOT permitted for signed transcript bytes unless a future ADR explicitly updates ADR-034 and ADR-037.
 
 Implementations MUST NOT sign “pretty JSON” or any non-canonical map encoding, and verifiers MUST treat non-canonical encodings as invalid.
 

@@ -1,6 +1,6 @@
 # ADR-034: Serialization Boundaries - Transport vs Commitment Encodings
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-01-10
 - Related:
   - ADR-032: Verifiable telemetry ledger (interoperability and audit posture)
