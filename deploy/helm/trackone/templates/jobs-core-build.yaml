@@ -1,0 +1,28 @@
+{{- if and .Values.jobs.enabled .Values.jobs.core.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: trackone-core-build
+  namespace: {{ include "trackone.namespace" . }}
+  labels:
+    app.kubernetes.io/name: trackone-core-build
+    {{- include "trackone.commonLabels" . | nindent 4 }}
+spec:
+  backoffLimit: {{ .Values.jobs.backoffLimit }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: trackone-core-build
+        {{- include "trackone.commonLabels" . | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: core-build
+          image: {{ .Values.jobs.core.image.repository }}:{{ .Values.jobs.core.image.tag }}
+          imagePullPolicy: {{ .Values.jobs.core.image.pullPolicy }}
+          env:
+            - name: TRACKONE_CORE_FEATURES
+              value: {{ .Values.jobs.core.features | quote }}
+            - name: TRACKONE_CORE_NO_DEFAULT_FEATURES
+              value: {{ .Values.jobs.core.noDefaultFeatures | quote }}
+{{- end }}

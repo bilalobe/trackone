@@ -1,0 +1,12 @@
+TrackOne Helm chart installed.
+
+Namespace:
+  {{ include "trackone.namespace" . }}
+
+Gateway endpoint:
+  Service: trackone-gateway
+  Port: {{ .Values.gateway.service.port }}
+  Type: {{ .Values.gateway.service.type }}
+{{- if and (eq .Values.gateway.service.type "NodePort") .Values.gateway.service.nodePort }}
+  NodePort: {{ .Values.gateway.service.nodePort }}
+{{- end }}

@@ -1,0 +1,42 @@
+{{- if .Values.otsCalendar.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ots-calendar
+  namespace: {{ include "trackone.namespace" . }}
+  labels:
+    app.kubernetes.io/name: ots-calendar
+    {{- include "trackone.commonLabels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ots-calendar
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ots-calendar
+        {{- include "trackone.commonLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: ots-calendar
+          image: {{ .Values.otsCalendar.image.repository }}:{{ .Values.otsCalendar.image.tag }}
+          imagePullPolicy: {{ .Values.otsCalendar.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.otsCalendar.port }}
+          env:
+            - name: OTS_LOG_LEVEL
+              value: {{ .Values.otsCalendar.logLevel | quote }}
+          volumeMounts:
+            - name: ots-calendar-data
+              mountPath: /var/lib/ots-calendar
+      volumes:
+        - name: ots-calendar-data
+          {{- if .Values.otsCalendar.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: ots-calendar-data
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+{{- end }}

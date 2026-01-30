@@ -1,0 +1,26 @@
+namespace:
+  create: true
+  name: trackone
+
+otsCalendar:
+  image:
+    repository: trackone/ots-calendar
+    tag: local
+    pullPolicy: Never
+  persistence:
+    enabled: true
+    size: 1Gi
+
+postgres:
+  persistence:
+    enabled: true
+    size: 5Gi
+
+gateway:
+  image:
+    repository: trackone/gateway
+    tag: local
+    pullPolicy: Never
+  service:
+    type: NodePort
+    nodePort: 30080

@@ -1,0 +1,23 @@
+{{- if and .Values.jobs.enabled .Values.jobs.constants.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: trackone-constants-build
+  namespace: {{ include "trackone.namespace" . }}
+  labels:
+    app.kubernetes.io/name: trackone-constants-build
+    {{- include "trackone.commonLabels" . | nindent 4 }}
+spec:
+  backoffLimit: {{ .Values.jobs.backoffLimit }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: trackone-constants-build
+        {{- include "trackone.commonLabels" . | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: constants-build
+          image: {{ .Values.jobs.constants.image.repository }}:{{ .Values.jobs.constants.image.tag }}
+          imagePullPolicy: {{ .Values.jobs.constants.image.pullPolicy }}
+{{- end }}

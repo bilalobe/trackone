@@ -1,0 +1,16 @@
+{{- if and .Values.otsCalendar.enabled .Values.otsCalendar.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ots-calendar-data
+  namespace: {{ include "trackone.namespace" . }}
+  labels:
+    app.kubernetes.io/name: ots-calendar
+    {{- include "trackone.commonLabels" . | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.otsCalendar.persistence.size }}
+{{- end }}

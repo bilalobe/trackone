@@ -1,0 +1,45 @@
+{{- if .Values.gateway.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trackone-gateway
+  namespace: {{ include "trackone.namespace" . }}
+  labels:
+    app.kubernetes.io/name: trackone-gateway
+    {{ include "trackone.commonLabels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: trackone-gateway
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: trackone-gateway
+        {{- include "trackone.commonLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: gateway
+          image: {{ .Values.gateway.image.repository }}:{{ .Values.gateway.image.tag }}
+          imagePullPolicy: {{ .Values.gateway.image.pullPolicy }}
+          env:
+            - name: OTS_CALENDARS
+              value: {{ .Values.gateway.env.otsCalendars | quote }}
+            - name: DATABASE_URL
+              value: {{ .Values.gateway.env.databaseUrl | quote }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.gateway.service.port }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.gateway.probes.readinessPath }}
+              port: http
+            initialDelaySeconds: {{ .Values.gateway.probes.readinessInitialDelay }}
+            periodSeconds: {{ .Values.gateway.probes.readinessPeriod }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.gateway.probes.livenessPath }}
+              port: http
+            initialDelaySeconds: {{ .Values.gateway.probes.livenessInitialDelay }}
+            periodSeconds: {{ .Values.gateway.probes.livenessPeriod }}
+{{- end }}
