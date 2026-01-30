@@ -6,13 +6,22 @@ otsCalendar:
   enabled: true
   image:
     repository: ots/calendar
-    tag: latest
+    tag: 0.1.0
     pullPolicy: IfNotPresent
   port: 8468
   logLevel: info
   persistence:
     enabled: false
     size: 1Gi
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+      ephemeral-storage: 256Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+      ephemeral-storage: 512Mi
 
 postgres:
   enabled: true
@@ -29,6 +38,15 @@ postgres:
   persistence:
     enabled: false
     size: 5Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+      ephemeral-storage: 512Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+      ephemeral-storage: 1Gi
 
 gateway:
   enabled: true
@@ -50,6 +68,15 @@ gateway:
     readinessPeriod: 5
     livenessInitialDelay: 10
     livenessPeriod: 10
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+      ephemeral-storage: 256Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+      ephemeral-storage: 512Mi
 
 jobs:
   enabled: true
@@ -62,15 +89,42 @@ jobs:
       pullPolicy: Never
     features: "std,gateway"
     noDefaultFeatures: "0"
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+        ephemeral-storage: 512Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+        ephemeral-storage: 1Gi
   constants:
     enabled: true
     image:
       repository: trackone/constants
       tag: local
       pullPolicy: Never
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+        ephemeral-storage: 512Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+        ephemeral-storage: 1Gi
   podFw:
     enabled: true
     image:
       repository: trackone/pod-fw
       tag: local
       pullPolicy: Never
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+        ephemeral-storage: 512Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+        ephemeral-storage: 1Gi
