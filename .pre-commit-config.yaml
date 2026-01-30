@@ -5,6 +5,9 @@ repos:
       - id: trailing-whitespace
       - id: end-of-file-fixer
       - id: check-yaml
+        # Helm templates contain Go templating directives (e.g. `{{- ... }}`) which
+        # are not valid YAML until rendered, so exclude chart template manifests.
+        exclude: ^deploy/helm/.*/templates/
       - id: check-added-large-files
 
   - repo: https://github.com/psf/black
