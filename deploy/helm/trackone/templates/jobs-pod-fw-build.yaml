@@ -6,18 +6,21 @@ metadata:
   namespace: {{ include "trackone.namespace" . }}
   labels:
     app.kubernetes.io/name: trackone-pod-fw-build
-    {{- include "trackone.commonLabels" . | nindent 4 }}
+    {{ include "trackone.commonLabels" . | nindent 4 }}
 spec:
   backoffLimit: {{ .Values.jobs.backoffLimit }}
   template:
     metadata:
       labels:
         app.kubernetes.io/name: trackone-pod-fw-build
-        {{- include "trackone.commonLabels" . | nindent 8 }}
+        {{ include "trackone.commonLabels" . | nindent 8 }}
     spec:
+      automountServiceAccountToken: false
       restartPolicy: Never
       containers:
         - name: pod-fw-build
           image: {{ .Values.jobs.podFw.image.repository }}:{{ .Values.jobs.podFw.image.tag }}
           imagePullPolicy: {{ .Values.jobs.podFw.image.pullPolicy }}
+          resources:
+            {{ toYaml .Values.jobs.podFw.resources | nindent 12 }}
 {{- end }}

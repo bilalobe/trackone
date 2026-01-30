@@ -6,7 +6,7 @@ metadata:
   namespace: {{ include "trackone.namespace" . }}
   labels:
     app.kubernetes.io/name: ots-calendar
-    {{- include "trackone.commonLabels" . | nindent 4 }}
+    {{ include "trackone.commonLabels" . | nindent 4 }}
 spec:
   replicas: 1
   selector:
@@ -16,8 +16,9 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: ots-calendar
-        {{- include "trackone.commonLabels" . | nindent 8 }}
+        {{ include "trackone.commonLabels" . | nindent 8 }}
     spec:
+      automountServiceAccountToken: false
       containers:
         - name: ots-calendar
           image: {{ .Values.otsCalendar.image.repository }}:{{ .Values.otsCalendar.image.tag }}
@@ -28,6 +29,8 @@ spec:
           env:
             - name: OTS_LOG_LEVEL
               value: {{ .Values.otsCalendar.logLevel | quote }}
+          resources:
+            {{ toYaml .Values.otsCalendar.resources | nindent 12 }}
           volumeMounts:
             - name: ots-calendar-data
               mountPath: /var/lib/ots-calendar
@@ -37,6 +40,6 @@ spec:
           persistentVolumeClaim:
             claimName: ots-calendar-data
           {{- else }}
-          emptyDir: {}
+          emptyDir: { }
           {{- end }}
 {{- end }}

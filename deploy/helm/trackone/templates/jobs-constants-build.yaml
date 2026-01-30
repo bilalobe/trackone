@@ -6,18 +6,21 @@ metadata:
   namespace: {{ include "trackone.namespace" . }}
   labels:
     app.kubernetes.io/name: trackone-constants-build
-    {{- include "trackone.commonLabels" . | nindent 4 }}
+    {{ include "trackone.commonLabels" . | nindent 4 }}
 spec:
   backoffLimit: {{ .Values.jobs.backoffLimit }}
   template:
     metadata:
       labels:
         app.kubernetes.io/name: trackone-constants-build
-        {{- include "trackone.commonLabels" . | nindent 8 }}
+        {{ include "trackone.commonLabels" . | nindent 8 }}
     spec:
+      automountServiceAccountToken: false
       restartPolicy: Never
       containers:
         - name: constants-build
           image: {{ .Values.jobs.constants.image.repository }}:{{ .Values.jobs.constants.image.tag }}
           imagePullPolicy: {{ .Values.jobs.constants.image.pullPolicy }}
+          resources:
+            {{ toYaml .Values.jobs.constants.resources | nindent 12 }}
 {{- end }}

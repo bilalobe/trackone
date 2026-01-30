@@ -6,7 +6,7 @@ metadata:
   namespace: {{ include "trackone.namespace" . }}
   labels:
     app.kubernetes.io/name: postgres
-    {{- include "trackone.commonLabels" . | nindent 4 }}
+    {{ include "trackone.commonLabels" . | nindent 4 }}
 spec:
   serviceName: postgres
   replicas: 1
@@ -17,8 +17,9 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: postgres
-        {{- include "trackone.commonLabels" . | nindent 8 }}
+        {{ include "trackone.commonLabels" . | nindent 8 }}
     spec:
+      automountServiceAccountToken: false
       containers:
         - name: postgres
           image: {{ .Values.postgres.image.repository }}:{{ .Values.postgres.image.tag }}
@@ -29,6 +30,8 @@ spec:
           envFrom:
             - secretRef:
                 name: postgres-auth
+          resources:
+            {{ toYaml .Values.postgres.resources | nindent 12 }}
           volumeMounts:
             - name: pgdata
               mountPath: /var/lib/postgresql/data
@@ -38,6 +41,6 @@ spec:
           persistentVolumeClaim:
             claimName: pgdata
           {{- else }}
-          emptyDir: {}
+          emptyDir: { }
           {{- end }}
 {{- end }}

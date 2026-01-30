@@ -6,7 +6,7 @@ metadata:
   namespace: {{ include "trackone.namespace" . }}
   labels:
     app.kubernetes.io/name: ots-calendar
-    {{- include "trackone.commonLabels" . | nindent 4 }}
+    {{ include "trackone.commonLabels" . | nindent 4 }}
 spec:
   selector:
     app.kubernetes.io/name: ots-calendar

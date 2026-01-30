@@ -1,12 +1,12 @@
 {{- define "trackone.namespace" -}}
-{{- if .Values.namespace.name -}}
+{{ if .Values.namespace.name -}}
 {{ .Values.namespace.name }}
-{{- else -}}
+{{ else -}}
 {{ .Release.Namespace }}
-{{- end -}}
-{{- end -}}
+{{ end -}}
+{{ end -}}
 
-{{- define "trackone.commonLabels" -}}
+{{ define "trackone.commonLabels" -}}
 app.kubernetes.io/instance: {{ .Release.Name }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" }}

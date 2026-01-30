@@ -6,15 +6,16 @@ metadata:
   namespace: {{ include "trackone.namespace" . }}
   labels:
     app.kubernetes.io/name: trackone-core-build
-    {{- include "trackone.commonLabels" . | nindent 4 }}
+    {{ include "trackone.commonLabels" . | nindent 4 }}
 spec:
   backoffLimit: {{ .Values.jobs.backoffLimit }}
   template:
     metadata:
       labels:
         app.kubernetes.io/name: trackone-core-build
-        {{- include "trackone.commonLabels" . | nindent 8 }}
+        {{ include "trackone.commonLabels" . | nindent 8 }}
     spec:
+      automountServiceAccountToken: false
       restartPolicy: Never
       containers:
         - name: core-build
@@ -25,4 +26,6 @@ spec:
               value: {{ .Values.jobs.core.features | quote }}
             - name: TRACKONE_CORE_NO_DEFAULT_FEATURES
               value: {{ .Values.jobs.core.noDefaultFeatures | quote }}
+          resources:
+            {{ toYaml .Values.jobs.core.resources | nindent 12 }}
 {{- end }}
