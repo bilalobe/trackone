@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/schemas/env_sensor_capability.schema.json",
+  "title": "Environmental sensor capability (SHTC3-class)",
+  "type": "object",
+  "description": "Capability metadata for SHTC3-class temperature / humidity sensors (ADR-027).",
+  "properties": {
+    "sensor_type": { "type": "string", "minLength": 1 },
+    "sensor_vendor": { "type": "string", "minLength": 1 },
+    "measurable_quantities": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["temperature_air", "relative_humidity"]
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "capabilities": {
+      "type": "object",
+      "properties": {
+        "temperature_air": { "$ref": "#/$defs/quantity_capability" },
+        "relative_humidity": { "$ref": "#/$defs/quantity_capability" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "required": ["sensor_type", "sensor_vendor", "measurable_quantities", "capabilities"],
+  "additionalProperties": false,
+  "$defs": {
+    "quantity_capability": {
+      "type": "object",
+      "properties": {
+        "unit": { "type": "string", "minLength": 1 },
+        "resolution": { "type": "number" },
+        "accuracy": { "type": "number" },
+        "accuracy_confidence": {
+          "type": "string",
+          "enum": ["typical", "max", "guaranteed", "unknown"]
+        },
+        "operating_range": {
+          "type": "object",
+          "properties": {
+            "min": { "type": "number" },
+            "max": { "type": "number" }
+          },
+          "required": ["min", "max"],
+          "additionalProperties": false
+        },
+        "calibration_date": { "type": ["string", "null"], "format": "date-time" },
+        "calibration_notes": { "type": ["string", "null"] }
+      },
+      "required": [
+        "unit",
+        "resolution",
+        "accuracy",
+        "accuracy_confidence",
+        "operating_range"
+      ],
+      "additionalProperties": false
+    }
+  }
+}
