@@ -43,3 +43,9 @@ repos:
         language: system
         files: '\.py$'
         pass_filenames: true
+      - id: scan-embedded-proofs
+        name: scan for embedded OTS proofs in JSON
+        entry: python scripts/lint/scan_embedded_proofs.py --quiet
+        language: system
+        files: '\.json$'
+        pass_filenames: true
