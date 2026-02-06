@@ -177,10 +177,11 @@ def test_min_blob_len_threshold():
     with tempfile.TemporaryDirectory() as td:
         tmp = Path(td)
         # String of length 100
+        string_val = "x" * 100
         f = _write_json(
             tmp,
             "test.json",
-            f'{{"ots_data": "{"x" * 100}"}}',
+            f'{{"ots_data": "{string_val}"}}',
         )
         # Should not trigger with min_blob_len=256
         issues = scanner.scan_file(f, min_blob_len=256, report_key_names=False)
@@ -210,7 +211,12 @@ def test_case_insensitive_key_matching():
         f = _write_json(
             tmp,
             "test.json",
-            f'{{"OTS_PROOF": "{large_val}", "Proof_Data": "{large_val}"}}',
+            """
+            {
+                "OTS_PROOF": "LARGE_VALUE_1",
+                "Proof_Data": "LARGE_VALUE_2"
+            }
+            """.replace("LARGE_VALUE_1", large_val).replace("LARGE_VALUE_2", large_val),
         )
         issues = scanner.scan_file(f, min_blob_len=256, report_key_names=False)
         assert len(issues) >= 2
@@ -263,7 +269,15 @@ def test_main_with_json_file():
     """Test that main() processes JSON files correctly"""
     with tempfile.TemporaryDirectory() as td:
         tmp = Path(td)
-        json_file = _write_json(tmp, "test.json", '{"data": "value"}')
+        json_file = _write_json(
+            tmp,
+            "test.json",
+            """
+            {
+                "data": "value"
+            }
+            """,
+        )
 
         sys.argv = ["scan_embedded_proofs.py", str(json_file)]
         result = scanner.main()
@@ -275,7 +289,15 @@ def test_main_detects_issues():
     with tempfile.TemporaryDirectory() as td:
         tmp = Path(td)
         large_val = "x" * 300
-        json_file = _write_json(tmp, "test.json", f'{{"ots_proof": "{large_val}"}}')
+        json_file = _write_json(
+            tmp,
+            "test.json",
+            """
+            {
+                "ots_proof": "LARGE_VALUE"
+            }
+            """.replace("LARGE_VALUE", large_val),
+        )
 
         sys.argv = ["scan_embedded_proofs.py", str(json_file)]
         result = scanner.main()
@@ -287,7 +309,15 @@ def test_suspicious_key_pattern_underscore():
     with tempfile.TemporaryDirectory() as td:
         tmp = Path(td)
         large_val = "x" * 300
-        f = _write_json(tmp, "test.json", f'{{"my_ots_data": "{large_val}"}}')
+        f = _write_json(
+            tmp,
+            "test.json",
+            """
+            {
+                "my_ots_data": "LARGE_VALUE"
+            }
+            """.replace("LARGE_VALUE", large_val),
+        )
         issues = scanner.scan_file(f, min_blob_len=256, report_key_names=False)
         assert len(issues) > 0
         assert any("my_ots_data" in issue for issue in issues)
