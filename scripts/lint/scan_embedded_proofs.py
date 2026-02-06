@@ -119,6 +119,10 @@ def main() -> int:
             continue
 
         if resolved.is_file():
+            # Skip non-JSON files to maintain consistency with directory scanning
+            if resolved.suffix.lower() != ".json":
+                print(f"Warning: {target} is not a JSON file, skipping.", file=sys.stderr)
+                continue
             all_issues.extend(
                 scan_file(
                     resolved,
