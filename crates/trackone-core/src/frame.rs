@@ -8,7 +8,7 @@ use heapless::Vec;
 
 use crate::crypto::{AeadDecrypt, AeadEncrypt};
 use crate::types::{CoreResult, EncryptedFrame, Error, Fact, FactKind, FactPayload};
-use trackone_constants::{AEAD_NONCE_LEN, AEAD_TAG_LEN, MAX_FACT_LEN};
+use crate::{AEAD_NONCE_LEN, AEAD_TAG_LEN, MAX_FACT_LEN};
 
 /// Helper to construct a `Fact`.
 pub fn make_fact(
@@ -135,7 +135,7 @@ mod tests {
             )),
         );
 
-        let nonce = [0u8; 24];
+        let nonce = [0u8; AEAD_NONCE_LEN];
         let enc = encrypt_fact::<128, _>(&cipher, nonce, &fact).expect("encrypt fact");
         let dec = decrypt_fact::<128, _>(&cipher, &enc).expect("decrypt fact");
 
@@ -183,7 +183,7 @@ mod tests {
             )),
         );
 
-        let nonce = [0u8; 24];
+        let nonce = [0u8; AEAD_NONCE_LEN];
         // Use a buffer size that's too small (e.g., 1 byte)
         let result = encrypt_fact::<1, _>(&cipher, nonce, &fact);
         assert!(result.is_err(), "should fail with small buffer");
@@ -204,7 +204,7 @@ mod tests {
             )),
         );
 
-        let nonce = [0u8; 24];
+        let nonce = [0u8; AEAD_NONCE_LEN];
         let mut enc = encrypt_fact::<128, _>(&cipher, nonce, &fact).expect("encrypt fact");
 
         // Corrupt the ciphertext
@@ -237,7 +237,7 @@ mod tests {
         let frame = EncryptedFrame::<512> {
             pod_id: PodId::from(42u32),
             fc: 100,
-            nonce: [0u8; 24],
+            nonce: [0u8; AEAD_NONCE_LEN],
             ciphertext: large_ciphertext,
         };
 

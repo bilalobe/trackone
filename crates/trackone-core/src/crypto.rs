@@ -128,6 +128,7 @@ pub mod dummy {
     #[cfg(test)]
     mod tests {
         use super::*;
+        use crate::AEAD_NONCE_LEN;
 
         #[test]
         fn dummy_roundtrip() {
@@ -138,12 +139,12 @@ pub mod dummy {
             let mut buf = [0u8; 16];
 
             let ct_len = aead
-                .encrypt(&[0u8; 24], &[], plaintext, &mut buf)
+                .encrypt(&[0u8; AEAD_NONCE_LEN], &[], plaintext, &mut buf)
                 .expect("encrypt");
 
             let mut out = [0u8; 16];
             let pt_len = aead
-                .decrypt(&[0u8; 24], &[], &buf[..ct_len], &mut out)
+                .decrypt(&[0u8; AEAD_NONCE_LEN], &[], &buf[..ct_len], &mut out)
                 .expect("decrypt");
 
             assert_eq!(&out[..pt_len], plaintext);

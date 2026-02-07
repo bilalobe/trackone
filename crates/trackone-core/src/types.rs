@@ -216,7 +216,7 @@ pub struct Fact {
 pub struct EncryptedFrame<const N: usize> {
     pub pod_id: PodId,
     pub fc: FrameCounter,
-    pub nonce: [u8; trackone_constants::AEAD_NONCE_LEN],
+    pub nonce: [u8; crate::AEAD_NONCE_LEN],
     pub ciphertext: Vec<u8, N>,
 }
 
