@@ -15,6 +15,11 @@ Project status: active R&D with a Python‑first reference gateway. See ADRs for
 - Verifiable daily anchoring with OTS, plus CLI to verify roots and proofs end‑to‑end.
 - Forward‑only schema/policy (ADR‑006).
 - Extensive tests, benchmarks, and ADRs documenting decisions.
+- Optional Rust gateway extension module (`trackone_core`) built from `crates/trackone-gateway` (PyO3 + maturin).
+
+## Bench topology (lab)
+
+The original bench-scale deployment topology (pod → relay → gateway → VMs) is documented in `docs/bench-network.md`.
 
 ## How it works (pipeline)
 
@@ -91,7 +96,7 @@ python scripts/gateway/verify_cli.py \
   --verify-peers --peers-strict --peers-min 2
 ```
 
-Exit codes: 0=OK, 1=missing/invalid block header, 2=Merkle mismatch, 3=missing OTS file, 4=proof failed, 5=TSA failed (strict), 6=peer failed (strict).
+Exit codes: 0=OK, 1=invalid/missing artifacts, 2=root mismatch, 3=missing required OTS proof (`--require-ots`), 4=OTS verify failed, 5=TSA failed (strict), 6=peer failed (strict), 7=OTS meta/path mismatch, 8=OTS meta invalid, 9=OTS meta artifact SHA mismatch.
 
 If `ots` is not installed, tests and demos can use a placeholder `.ots` proof written by the pipeline script; the verifier treats the string `OTS_PROOF_PLACEHOLDER` as success for local runs.
 
@@ -209,8 +214,9 @@ TrackOne now includes a Rust workspace used to host the shared core logic and a
 Python-facing gateway extension (ADR-017):
 
 - `crates/trackone-core` — platform-agnostic Rust crate for protocol and crypto
-  primitives (currently a stub, intended home for Merkle, crypto, and protocol
-  invariants).
+  primitives (protocol types, framing, crypto traits).
+- `crates/trackone-ledger` — canonical JSON + Merkle policy + day/block record helpers (ADR-003),
+  shared by batching and verification code.
 - `crates/trackone-gateway` — Rust `cdylib` crate exposed to Python via PyO3 and
   built with `maturin`. This crate will gradually wrap `trackone-core` and
   surface optimized operations to Python.
@@ -249,6 +255,8 @@ firmware/pod work.
   - `gateway/` — gateway components: `frame_verifier.py`, `merkle_batcher.py`, `ots_anchor.py`, `verify_cli.py`, `run_pipeline.sh`
 - `crates/`
   - `trackone-core/` — shared Rust core (protocol + crypto, ADR-017)
+  - `trackone-constants/` — shared sizing/policy constants for no_std + host crates
+  - `trackone-ledger/` — canonicalization + Merkle batching helpers (ADR-003)
   - `trackone-gateway/` — PyO3/maturin gateway extension crate
   - `trackone-pod-fw/` — future pod/firmware crate depending on `trackone-core`
 - `toolset/` — examples and test vectors (e.g., `toolset/unified/examples/`)
