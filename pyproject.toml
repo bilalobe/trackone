@@ -96,8 +96,6 @@ build-backend = "maturin"
 manifest-path = "crates/trackone-gateway/Cargo.toml"
 bindings = "pyo3"
 module-name = "trackone_core"
-# Python sources in scripts/ are handled separately by standard Python packaging
-python-source = "scripts"
 include = [
     "scripts/**/*.py",
     "LICENSE",
@@ -108,6 +106,7 @@ exclude = [
     "scripts/**/*.pyc",
 ]
 
+python-source = "."
 
 # Pytest configuration
 [tool.pytest.ini_options]
@@ -134,7 +133,7 @@ filterwarnings = [
     "ignore::PendingDeprecationWarning",
     "ignore::pytest.PytestUnraisableExceptionWarning",  # For async cleanup issues
     "ignore::ResourceWarning",  # File handle cleanup in tests
-    "ignore::pytest_benchmark.logger.PytestBenchmarkWarning",
+    "ignore::Warning:pytest_benchmark\\..*",
 ]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
