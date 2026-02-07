@@ -6,12 +6,7 @@ from pathlib import Path
 
 import pytest
 
-
-def _bool_env(name: str, default: bool = False) -> bool:
-    val = os.environ.get(name)
-    if val is None:
-        return default
-    return val.strip() not in {"", "0", "false", "False", "no", "NO"}
+from scripts.gateway.config import get_bool_env
 
 
 def test_day_bin_sha256_sidecar_matches_out_dir_env():
@@ -24,7 +19,7 @@ def test_day_bin_sha256_sidecar_matches_out_dir_env():
         pytest.skip("OUT_DIR not set; sha artifact verification is CI-only")
 
     day_dir = Path(out_dir)
-    strict = _bool_env("STRICT_SHA", default=False)
+    strict = get_bool_env("STRICT_SHA", default=False)
     if not day_dir.exists():
         if strict:
             pytest.fail(f"OUT_DIR does not exist: {day_dir}")
