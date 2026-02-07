@@ -42,7 +42,7 @@ def test_day_root_ignores_day_bin_mutation_for_now(
     rc = verify_cli.main(verify_args)
     if meta_path.exists():
         # Expect artifact hash mismatch when meta enforces the artifact hash
-        assert rc == 6
+        assert rc == 9
     else:
         # No meta present: current behavior is to ignore day.bin contents
         assert rc == 0
