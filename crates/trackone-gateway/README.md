@@ -10,6 +10,16 @@
 - Offer gateway-specific helpers (batching, Merkle root computation, anchoring integrations).
 - Ship a Python wheel via `maturin` for use in downstream Python tooling.
 
+## Python API
+
+The extension module is imported as `trackone_core` (see `pyproject.toml`).
+
+Currently exposed:
+
+- `Gateway` / `GatewayBatch` for simple frame batching + Merkle root computation (ADR-003 policy).
+- `trackone_core.merkle.merkle_root_bytes(...)` and `trackone_core.merkle.merkle_root_hex(...)`.
+- `PyRadio` adapter for delegating frame I/O to Python implementations (`send_frame`, optional `receive_frame`).
+
 ## Responsibilities and dependencies
 
 - Responsibilities:
