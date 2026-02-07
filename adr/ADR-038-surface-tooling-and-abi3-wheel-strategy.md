@@ -82,7 +82,7 @@ Surface tooling (Python) is authoritative for:
 - Python tooling may import it opportunistically:
   - If present: use it for canonicalization / stamping / hashing.
   - If absent: fall back to the Python reference behavior for operator convenience.
-  - Environment variable `TRACKONE_NO_EXT=1` forces the fallback path (for debugging/CI).
+  - Environment variable `TRACKONE_NO_EXT=1` is reserved as a future debug/CI switch to force the fallback path; current implementations may ignore it.
 
 This keeps Python usable without native compilation while allowing deployments to opt into the Rust-backed path.
 
@@ -106,9 +106,9 @@ Constraints:
 
 #### ABI tag evolution
 
-The CPython stable ABI tagging scheme may evolve. PEP 809 proposes a successor (`abi2026`) to the current `abi3`
-tag. TrackOne will migrate once PyO3 and maturin support the new scheme. The underlying goal is unchanged:
-**one wheel per platform, targeted at the minimum supported CPython minor**.
+The CPython stable ABI tagging scheme may evolve over time (for example, by introducing a successor to the current
+`abi3` tag). TrackOne will migrate to any such successor scheme once PyO3 and maturin support it. The underlying
+goal is unchanged: **one wheel per platform, targeted at the minimum supported CPython minor**.
 
 ### 4. Wheel testing has two modes: locked (required) + resolve (gated)
 
@@ -182,7 +182,7 @@ No migration required; this ADR formalizes existing conventions and names the ne
 Acceptance criteria for `abi3` readiness:
 
 - [ ] `abi3-py312` feature enabled in `pyo3` workspace dependency.
-- [x] A single wheel artifact installs and passes the test suite on CPython 3.12, 3.13, and 3.14.
+- [ ] A single wheel artifact installs and passes the test suite on CPython 3.12, 3.13, and 3.14.
 - [x] The locked wheel test (`test-wheel`) runs the full test suite against the installed wheel on every PR.
 - [x] The gated resolve test (`wheel-resolve`) can be triggered to check "pip reality" without requiring lock changes.
 - [ ] Wheel filename contains the expected `cp312-abi3` tag (verified in CI).
@@ -190,6 +190,5 @@ Acceptance criteria for `abi3` readiness:
 ## External References
 
 - [PEP 384 – Defining a Stable ABI](https://peps.python.org/pep-0384/)
-- [PEP 809 – Stable ABI for the Future](https://peps.python.org/pep-0809/) (proposed successor: `abi2026`)
 - [PyO3 `abi3` documentation](https://pyo3.rs/v0.28.0/building-and-distribution/multiple-python-versions)
 - [maturin documentation](https://github.com/PyO3/maturin)
