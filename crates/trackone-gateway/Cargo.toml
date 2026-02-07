@@ -8,11 +8,12 @@ authors.workspace = true
 
 [lib]
 name = "trackone"
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 doctest = false
 
 [dependencies]
 trackone-core = { path = "../trackone-core", default-features = false, features = ["gateway"] }
 pyo3.workspace = true
+sha2 = { version = "0.10", default-features = false }
 
 [dev-dependencies]
