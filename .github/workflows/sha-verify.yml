@@ -4,8 +4,6 @@ on:
   push:
     branches:
       - 'ci/sha-verify-draft'
-  pull_request:
-    types: [opened, reopened, synchronize]
   pull_request_target:
     types: [labeled]
   workflow_dispatch:
@@ -29,8 +27,12 @@ jobs:
     if: >-
       github.event_name == 'push' ||
       github.event_name == 'workflow_dispatch' ||
-      github.event_name == 'pull_request' ||
-      (github.event_name == 'pull_request_target' && github.event.action == 'labeled' && github.event.label && github.event.label.name == 'run-sha-verify')
+      (github.event_name == 'pull_request_target' &&
+        github.event.action == 'labeled' &&
+        github.event.label &&
+        github.event.label.name == 'run-sha-verify' &&
+        github.event.pull_request &&
+        github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout (normal events)
@@ -58,18 +60,18 @@ jobs:
           path: |
             ~/.cache/pip
             ~/.cache/uv
-          key: ${{ runner.os }}-pipuv-${{ hashFiles('**/requirements*.txt') }}-${{ hashFiles('pyproject.toml') }}
+          key: ${{ runner.os }}-pipuv-${{ hashFiles('pyproject.toml') }}-${{ hashFiles('uv.lock') }}
 
       - name: Cache tox virtualenvs
         uses: actions/cache@v5
         with:
           path: .tox
-          key: ${{ runner.os }}-tox-sha-${{ hashFiles('tox.ini') }}-${{ hashFiles('**/requirements*.txt') }}-${{ hashFiles('pyproject.toml') }}
+          key: ${{ runner.os }}-tox-sha-${{ hashFiles('tox.ini') }}-${{ hashFiles('pyproject.toml') }}-${{ hashFiles('uv.lock') }}
 
       - name: Install Python deps
         run: |
           python -m pip install --upgrade pip setuptools wheel
-          python -m pip install --upgrade tox
+          python -m pip install --upgrade tox tox-uv uv
 
       - name: Run pipeline via tox (generate artifacts)
         run: tox -e pipeline
@@ -88,6 +90,7 @@ jobs:
           name: day-artifacts
           path: |
             out/site_demo/day/*.bin
+            out/site_demo/day/*.sha256
             out/site_demo/day/*.json
             out/site_demo/day/*.ots*
           if-no-files-found: ignore
