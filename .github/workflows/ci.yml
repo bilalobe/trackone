@@ -63,6 +63,7 @@ jobs:
 
       - name: Cargo package (if publishable)
         run: |
+          cargo package -p trackone-constants --locked
           cargo package -p trackone-core --locked
           cargo package -p trackone-ledger --locked
           cargo package -p trackone-pod-fw --locked
