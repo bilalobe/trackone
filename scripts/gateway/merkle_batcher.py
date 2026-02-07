@@ -274,6 +274,11 @@ def main(argv: list[str] | None = None) -> int:
         }
         day_blob = canonical_json(day_record)
 
+    # Type narrowing: after the fallback block, these must be non-None
+    assert header_dict is not None
+    assert day_record is not None
+    assert day_blob is not None
+
     # Write block header
     blocks_dir = args.out / "blocks"
     blocks_dir.mkdir(parents=True, exist_ok=True)

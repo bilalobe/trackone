@@ -39,16 +39,16 @@ Currently exposed:
 ## Architecture diagram
 
 ```mermaid
-	C4Context
-	    title trackone-gateway - Context
-	    Person(p1, "Operator", "Uses Python CLI and scripts to manage gateway operations")
-	    System(system, "Python Pipeline", "Existing Python pipeline that orchestrates ingestion and verification")
-	    Container(c1, "trackone-gateway (cdylib)", "Rust CDYLIB built with maturin", "Provides PyO3 bindings and gateway operations")
-	    Container(c2, "trackone-core", "Rust crate", "Core protocol, serialization, crypto abstractions")
-	    Container(c3, "trackone-ledger", "Rust crate", "Canonical JSON + Merkle batching helpers (ADR-003)")
+C4Context
+    title trackone-gateway - Context
+    Person(p1, "Operator", "Uses Python CLI and scripts to manage gateway operations")
+    System(system, "Python Pipeline", "Existing Python pipeline that orchestrates ingestion and verification")
+    Container(c1, "trackone-gateway (cdylib)", "Rust CDYLIB built with maturin", "Provides PyO3 bindings and gateway operations")
+    Container(c2, "trackone-core", "Rust crate", "Core protocol, serialization, crypto abstractions")
+    Container(c3, "trackone-ledger", "Rust crate", "Canonical JSON + Merkle batching helpers (ADR-003)")
 
-	    Rel(p1, system, "interacts with")
-	    Rel(system, c1, "loads/uses via Python import")
-	    Rel(c1, c2, "calls into")
-	    Rel(c1, c3, "calls into")
+    Rel(p1, system, "interacts with")
+    Rel(system, c1, "loads/uses via Python import")
+    Rel(c1, c2, "calls into")
+    Rel(c1, c3, "calls into")
 ```

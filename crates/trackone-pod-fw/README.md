@@ -6,7 +6,7 @@
 
 `trackone-pod-fw` is a crate intended for pod/firmware logic. It provides the glue that collects sensor data, constructs `Fact` structures, and emits encrypted frames.
 
-Additional firmware-side notes and patterns are documented in the broader TrackOne firmware documentation.
+Additional firmware-side notes and patterns are documented in the broader [TrackOne firmware documentation](../../docs/pod-fw.md).
 
 ## Purpose
 
