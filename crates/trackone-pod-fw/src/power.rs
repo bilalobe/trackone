@@ -50,7 +50,7 @@ impl EventWaiter {
     /// pending events and reset the counter.
     #[inline]
     pub fn wait(&mut self) -> u8 {
-        if self.events_pending == 0 {
+        while self.events_pending == 0 {
             idle_wait();
         }
         let pending = self.events_pending;
