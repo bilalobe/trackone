@@ -382,14 +382,21 @@ jobs:
           import os
           import re
           import subprocess
+          import tomllib
 
-          pattern = re.compile(r'^v0\.0\.1\+(\d+)-m5$')
+          with open('Cargo.toml', 'rb') as fh:
+            cargo = tomllib.load(fh)
+          version = cargo['workspace']['package']['version']
+
+          prefix = f'v{version}+'
+          suffix = '-m5'
+          pattern = re.compile(r'^' + re.escape(prefix) + r'(\d+)' + re.escape(suffix) + r'$')
           existing = subprocess.check_output(
-              ['git', 'tag', '--list', 'v0.0.1+*-m5'], text=True
+              ['git', 'tag', '--list', f'{prefix}*{suffix}'], text=True
           ).strip().splitlines()
           numbers = [int(pattern.match(tag).group(1)) for tag in existing if pattern.match(tag)]
           next_n = (max(numbers) + 1) if numbers else 1
-          new_tag = f'v0.0.1+{next_n}-m5'
+          new_tag = f'{prefix}{next_n}{suffix}'
           with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as fh:
               fh.write(f'tag={new_tag}\n')
           print(f'Next ratchet tag: {new_tag}')
