@@ -1,0 +1,90 @@
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_call:
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  publish-crates:
+    runs-on: ubuntu-latest
+    needs: ci
+    environment: crates-io
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Python 3.14 (for pyo3 build)
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+
+      - name: Set up Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo (registry/git/target)
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Publish crates (topological order)
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          set -euo pipefail
+          crates=(
+            trackone-constants
+            trackone-core
+            trackone-ledger
+            trackone-pod-fw
+            trackone-gateway
+          )
+
+          for crate in "${crates[@]}"; do
+            echo "::group::Publishing ${crate}"
+            set +e
+            cargo publish -p "${crate}" --locked 2>&1 | tee /tmp/publish-out.txt
+            rc=${PIPESTATUS[0]}
+            set -e
+
+            if [ "$rc" -ne 0 ]; then
+              if grep -qi "already exists" /tmp/publish-out.txt; then
+                echo "Skipping ${crate}; already published."
+              else
+                echo "Failed to publish ${crate} (exit ${rc})."
+                exit "$rc"
+              fi
+            else
+              echo "Published ${crate}."
+            fi
+            echo "::endgroup::"
+          done
+
+  publish-wheel:
+    runs-on: ubuntu-latest
+    needs: [ci, publish-crates]
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - name: Download wheel artifact
+        uses: actions/download-artifact@v6
+        with:
+          name: wheel-py314
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
