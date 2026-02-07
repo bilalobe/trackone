@@ -94,8 +94,8 @@ mod tests {
         let b = b"leaf-b".to_vec();
         let c = b"leaf-c".to_vec();
 
-        let root1 = merkle_root_from_leaves(&vec![a.clone(), b.clone(), c.clone()]);
-        let root2 = merkle_root_from_leaves(&vec![c, a, b]);
+        let root1 = merkle_root_from_leaves(&[a.clone(), b.clone(), c.clone()]);
+        let root2 = merkle_root_from_leaves(&[c, a, b]);
         assert_eq!(root1.root, root2.root);
         assert_eq!(root1.leaf_hashes, root2.leaf_hashes);
     }
