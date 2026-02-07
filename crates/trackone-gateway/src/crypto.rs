@@ -2,7 +2,7 @@ use pyo3::prelude::*;
 
 #[pyfunction]
 fn version() -> &'static str {
-    "0.0.1"
+    env!("CARGO_PKG_VERSION")
 }
 
 pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
