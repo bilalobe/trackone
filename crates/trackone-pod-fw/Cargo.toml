@@ -10,10 +10,13 @@ authors.workspace = true
 trackone-core = { path = "../trackone-core", default-features = false }
 
 [dev-dependencies]
+trackone-core = { path = "../trackone-core", default-features = false, features = ["dummy-aead"] }
 
 [features]
 default = ["std"]
 std = []
+mock = []
+mock-log = ["mock", "std"]
 
 # Future: when targeting embedded platforms
 # [profile.release]
