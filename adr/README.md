@@ -70,6 +70,10 @@ Entries list **Status** and **Summary**. Related references are grouped under **
   **Summary**: Adopt a forward-only policy. Standardize on `salt8` for XChaCha (24‑byte nonce), drop `salt4` and migrations;
   the current milestone schema is the only valid runtime format. Older milestones are archived as references only.
 
+- **ADR‑038: Surface tooling boundaries and `abi3` wheel strategy**
+  **Status**: Proposed
+  **Summary**: Defines which Python components are surface tooling vs protocol-critical, keeps `trackone_core` as the stable native module name, targets `abi3` wheels to reduce the wheel matrix, and adopts two wheel test modes (locked required, pip-resolve gated).
+
 - **ADR‑010: Test suite refactor (structure and naming)**
   **Status**: Proposed (M#4→M#5)
   **Summary**: Decompose monolith tests, move fixtures closer to submodules, and adopt clearer naming (drop `_edge_cases`, `_boost`); improves focus and iteration speed.
