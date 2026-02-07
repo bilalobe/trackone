@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-alpha.3] - 2026-02-07
+
+### Added
+- High-level Python gateway API:
+  - `Gateway` and `GatewayBatch` exposed from the `trackone_core` extension module
+  - `PyRadio` adapter for Python-implemented `send_frame`/`receive_frame`
+- Merkle helpers:
+  - ADR-003 Merkle root policy (SHA-256, hash-sorted leaves)
+  - `trackone_core.merkle.merkle_root_bytes` and `trackone_core.merkle.merkle_root_hex`
+
+### Changed
+- `__version__` now reports the crate version (`CARGO_PKG_VERSION`)
+- `trackone_core.crypto.version()` now matches the crate version (was a placeholder string)
+
 ## [0.1.0-alpha.2] - 2026-01-22
 
 ### Changed
