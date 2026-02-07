@@ -14,12 +14,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `Gateway` and `GatewayBatch` exposed from the `trackone_core` extension module
   - `PyRadio` adapter for Python-implemented `send_frame`/`receive_frame`
 - Merkle helpers:
-  - ADR-003 Merkle root policy (SHA-256, hash-sorted leaves)
+  - ADR-003 Merkle root policy (SHA-256, hash-sorted leaves), implemented in `trackone-ledger`
   - `trackone_core.merkle.merkle_root_bytes` and `trackone_core.merkle.merkle_root_hex`
+  - `trackone_core.merkle.merkle_root_hex_and_leaf_hashes` (root + leaf hashes, Python pipeline parity)
+- Ledger helpers:
+  - `trackone_core.ledger.canonicalize_json_bytes` (ADR-003 canonical JSON)
+  - `trackone_core.ledger.build_day_v1_single_batch` (canonical block header + `day.bin` bytes)
 
 ### Changed
 - `__version__` now reports the crate version (`CARGO_PKG_VERSION`)
 - `trackone_core.crypto.version()` now matches the crate version (was a placeholder string)
+- Merkle policy logic moved out of `trackone-gateway` and is now single-sourced in `trackone-ledger`
+- Removed the legacy `merkle_policy` module (now provided by `trackone-ledger`)
 
 ## [0.1.0-alpha.2] - 2026-01-22
 
