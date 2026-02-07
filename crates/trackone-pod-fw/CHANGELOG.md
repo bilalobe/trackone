@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-alpha.3] - 2026-02-07
+
+### Added
+- Pod-side helpers:
+  - `Pod` helper for constructing + encrypting facts via `trackone-core::frame`
+  - `CounterNonce24` counter-based nonce generator (24-byte, XChaCha20-Poly1305)
+- Firmware utilities promoted from the legacy bench prototype:
+  - `trackone_pod_fw::hal` hardware abstraction traits, plus optional mocks (`mock`, `mock-log`)
+  - `trackone_pod_fw::power` low-power helpers (`idle_wait`, `EventWaiter`, `enter_low_power`)
+  - `trackone_pod_fw::stress` stack-guard paint/scan helpers for HWM checks
+
 ## [0.1.0-alpha.2] - 2026-01-22
 
 ### Changed
