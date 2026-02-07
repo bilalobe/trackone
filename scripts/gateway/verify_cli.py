@@ -19,6 +19,9 @@ Exit codes:
 - 4: OTS proof verification failed
 - 5: TSA verification failed (when --tsa-strict)
 - 6: Peer verification failed (when --peers-strict)
+- 7: OTS metadata/path mismatch
+- 8: OTS metadata invalid/unreadable
+- 9: OTS metadata artifact SHA mismatch
 
 This enables auditors to independently verify the gateway's claims without
 trusting the gateway operator or database.
@@ -65,11 +68,24 @@ except ImportError:  # pragma: no cover - fallback when run as a script
         verify_peer_signature,
     )
 
-# Additional exit codes for OTS metadata / artifact issues
-EXIT_META_NOT_FOUND = 5
-EXIT_ARTIFACT_HASH_MISMATCH = 6
-EXIT_ARTIFACT_PATH_MISMATCH = 7
+EXIT_OTS_NOT_FOUND = 3
 EXIT_OTS_FAILED = 4
+EXIT_TSA_FAILED = 5
+EXIT_PEERS_FAILED = 6
+EXIT_ARTIFACT_PATH_MISMATCH = 7
+EXIT_META_INVALID = 8
+EXIT_ARTIFACT_HASH_MISMATCH = 9
+
+# Optional Rust extension (`trackone_core`) for single-sourced Merkle policy (ADR-003).
+try:  # pragma: no cover - optional acceleration
+    import trackone_core  # type: ignore
+
+    _RUST_MERKLE = getattr(trackone_core, "merkle", None)
+    _RUST_LEDGER = getattr(trackone_core, "ledger", None)
+except Exception:  # pragma: no cover - extension not built/installed
+    trackone_core = None  # type: ignore[assignment]
+    _RUST_MERKLE = None
+    _RUST_LEDGER = None
 
 
 def canonical_json(obj: Any) -> bytes:
@@ -79,6 +95,15 @@ def canonical_json(obj: Any) -> bytes:
 def merkle_root(leaves: Iterable[bytes]) -> str:
     # Mirror merkle_batcher: if empty -> sha256(""); else hash leaves, sort by hex, then build tree
     leaves_list = list(leaves)
+    if _RUST_MERKLE is not None:
+        try:  # pragma: no cover - exercised when Rust extension is available
+            root_hex, _leaf_hashes = _RUST_MERKLE.merkle_root_hex_and_leaf_hashes(
+                leaves_list
+            )
+            return root_hex
+        except Exception:
+            # Fall back to the reference Python implementation.
+            pass
     if not leaves_list:
         return sha256(b"").hexdigest()
     leaf_hashes = [sha256(leaf).hexdigest() for leaf in leaves_list]
@@ -338,6 +363,10 @@ def main(argv: list[str] | None = None) -> int:
 
     day_bin_path = day_dir / f"{day}.bin"
     ots_path = day_bin_path.with_suffix(day_bin_path.suffix + ".ots")
+    recorded_root = block_header.get("merkle_root")
+    if not isinstance(recorded_root, str) or len(recorded_root) != 64:
+        print(f"ERROR: Invalid or missing 'merkle_root' in block header: {block_path}")
+        return 1
 
     # Optional: load OTS metadata sidecar if present and enforce artifact hash/path.
     # We look for proofs/<day>.ots.meta.json relative to the repository root
@@ -350,7 +379,7 @@ def main(argv: list[str] | None = None) -> int:
             meta = json.loads(meta_path.read_text(encoding="utf-8"))
         except Exception as exc:  # pragma: no cover - defensive
             print(f"ERROR: Failed to parse OTS meta file {meta_path}: {exc}")
-            return EXIT_META_NOT_FOUND
+            return EXIT_META_INVALID
 
         artifact_rel = meta.get("artifact")
         expected_sha = meta.get("artifact_sha256")
@@ -366,12 +395,11 @@ def main(argv: list[str] | None = None) -> int:
                 )
                 return EXIT_ARTIFACT_PATH_MISMATCH
 
-        # Verify SHA-256 of day.bin matches artifact_sha256 from meta
-        if (
-            isinstance(expected_sha, str)
-            and len(expected_sha) == 64
-            and day_bin_path.exists()
-        ):
+        # Verify SHA-256 of day.bin matches artifact_sha256 from meta.
+        if isinstance(expected_sha, str) and len(expected_sha) == 64:
+            if not day_bin_path.exists():
+                print(f"ERROR: OTS meta present but artifact missing: {day_bin_path}")
+                return EXIT_META_INVALID
             actual_sha = sha256(day_bin_path.read_bytes()).hexdigest()
             if actual_sha != expected_sha:
                 print(
@@ -388,6 +416,89 @@ def main(argv: list[str] | None = None) -> int:
                     f"expected {ots_path}"
                 )
                 return EXIT_ARTIFACT_PATH_MISMATCH
+            if not ots_path.exists():
+                print(f"ERROR: OTS meta present but proof missing: {ots_path}")
+                return EXIT_OTS_NOT_FOUND
+
+    # Parse + validate the anchored day blob (day.bin) if present.
+    day_record_from_bin: dict[str, Any] | None = None
+    day_bin_bytes: bytes | None = None
+    if day_bin_path.exists():
+        try:
+            day_bin_bytes = day_bin_path.read_bytes()
+            any_val = json.loads(day_bin_bytes)
+        except Exception as exc:
+            print(f"ERROR: Failed to parse day blob JSON {day_bin_path}: {exc}")
+            return 1
+        if not isinstance(any_val, dict):
+            print(f"ERROR: day blob must be a JSON object: {day_bin_path}")
+            return 1
+        day_record_from_bin = any_val
+
+        # Enforce canonical encoding (ADR-003).
+        # If the Rust extension is available, prefer its canonicalizer for single-sourcing.
+        if _RUST_LEDGER is not None:
+            try:  # pragma: no cover - exercised when Rust extension is available
+                canon = _RUST_LEDGER.canonicalize_json_bytes(day_bin_bytes)
+            except Exception:
+                canon = canonical_json(day_record_from_bin)
+        else:
+            canon = canonical_json(day_record_from_bin)
+
+        if canon != day_bin_bytes:
+            print(f"ERROR: day blob is not canonical JSON (ADR-003): {day_bin_path}")
+            return 1
+
+        # Ensure the anchored artifact commits to the same root as the block header.
+        day_root = day_record_from_bin.get("day_root")
+        if day_root != recorded_root:
+            print(
+                "ERROR: day_root mismatch between day.bin and block header. "
+                f"day.bin={day_root}, block_header={recorded_root}"
+            )
+            return 2
+
+        # Ensure the day label matches and that the embedded batch header is consistent.
+        if day_record_from_bin.get("date") != day:
+            print(
+                "ERROR: day blob date mismatch. "
+                f"day.bin.date={day_record_from_bin.get('date')}, block_header.day={day}"
+            )
+            return 1
+        if day_record_from_bin.get("site_id") != block_header.get("site_id"):
+            print(
+                "ERROR: day blob site_id mismatch. "
+                f"day.bin.site_id={day_record_from_bin.get('site_id')}, block_header.site_id={block_header.get('site_id')}"
+            )
+            return 1
+
+        batches = day_record_from_bin.get("batches")
+        if not isinstance(batches, list) or not batches:
+            print(f"ERROR: day blob must include non-empty batches: {day_bin_path}")
+            return 1
+        batch0 = batches[0]
+        if not isinstance(batch0, dict):
+            print(f"ERROR: day blob batches[0] must be an object: {day_bin_path}")
+            return 1
+        for key in [
+            "version",
+            "site_id",
+            "day",
+            "batch_id",
+            "merkle_root",
+            "count",
+            "leaf_hashes",
+        ]:
+            if batch0.get(key) != block_header.get(key):
+                print(
+                    f"ERROR: batch header mismatch for key '{key}'. "
+                    f"day.bin={batch0.get(key)}, block_header={block_header.get(key)}"
+                )
+                return 1
+    else:
+        if meta is not None:
+            print(f"ERROR: OTS meta present but day blob missing: {day_bin_path}")
+            return EXIT_META_INVALID
 
     # Read and canonicalize all facts
     fact_files = sorted(facts_dir.glob("*.json"))
@@ -400,7 +511,6 @@ def main(argv: list[str] | None = None) -> int:
 
     # Recompute Merkle root
     recomputed_root = merkle_root(leaves)
-    recorded_root = block_header.get("merkle_root")
 
     # Verify root matches
     if recomputed_root != recorded_root:
@@ -411,6 +521,10 @@ def main(argv: list[str] | None = None) -> int:
 
     # Verify OTS proof if present
     rc_ots = 0
+    if args.require_ots and not ots_path.exists():
+        print(f"ERROR: Required OTS proof missing: {ots_path}")
+        return EXIT_OTS_NOT_FOUND
+
     if ots_path is not None and ots_path.exists():
         expected_sha_from_meta: str | None = None
         if meta is not None:
@@ -425,6 +539,8 @@ def main(argv: list[str] | None = None) -> int:
         if not ok:
             print(f"ERROR: OTS proof verification failed for {ots_path}")
             rc_ots = EXIT_OTS_FAILED
+    elif not args.require_ots:
+        print(f"WARN: OTS proof not found (skipping): {ots_path}", file=sys.stderr)
 
     if rc_ots != 0:
         return rc_ots
@@ -440,13 +556,13 @@ def main(argv: list[str] | None = None) -> int:
                 msg = f"TSA verification failed: {tsr_path}"
                 if args.tsa_strict:
                     print(f"ERROR: {msg}")
-                    return 5
+                    return EXIT_TSA_FAILED
                 print(f"WARN: {msg}", file=sys.stderr)
         else:
             msg = f"TSA artifact not found: {tsr_path}"
             if args.tsa_strict:
                 print(f"ERROR: {msg}")
-                return 5
+                return EXIT_TSA_FAILED
             print(f"WARN: {msg}", file=sys.stderr)
 
     # Optional peer signature verification
@@ -463,13 +579,13 @@ def main(argv: list[str] | None = None) -> int:
                 msg = f"Peer verification failed: {sig_count} signatures, need {args.peers_min}, valid={all_valid}"
                 if args.peers_strict:
                     print(f"ERROR: {msg}")
-                    return 6
+                    return EXIT_PEERS_FAILED
                 print(f"WARN: {msg}", file=sys.stderr)
         else:
             msg = f"Peer attestation not found: {peer_attest_path}"
             if args.peers_strict:
                 print(f"ERROR: {msg}")
-                return 6
+                return EXIT_PEERS_FAILED
             print(f"WARN: {msg}", file=sys.stderr)
 
     print("OK: root matches and OTS verified")
