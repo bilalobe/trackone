@@ -1,6 +1,6 @@
 # ADR-038: Surface Tooling Boundaries and `abi3` Wheel Strategy
 
-**Status**: Proposed
+**Status**: Accepted
 **Date**: 2026-02-07
 
 ## Related ADRs
