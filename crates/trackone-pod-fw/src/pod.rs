@@ -47,14 +47,10 @@ where
     pub fn emit_payload(&mut self, payload: FactPayload) -> CoreResult<EncryptedFrame<N>> {
         let fc = self.next_fc;
         let fact = frame::make_fact(self.pod_id, fc, payload);
-        match self.emit_fact(&fact) {
-            Ok(frame) => {
-                // Only advance the frame counter after successful encryption.
-                self.next_fc = self.next_fc.wrapping_add(1);
-                Ok(frame)
-            }
-            Err(e) => Err(e),
-        }
+        let frame = self.emit_fact(&fact)?;
+        // Only advance the frame counter after successful encryption.
+        self.next_fc = self.next_fc.wrapping_add(1);
+        Ok(frame)
     }
 
     /// Encrypt an already-constructed `Fact` into an `EncryptedFrame<N>`.
