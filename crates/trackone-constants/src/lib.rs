@@ -4,3 +4,9 @@
 /// their own value; import it from `trackone_constants::MAX_FACT_LEN` (re-exported)
 /// or directly from this crate if needed.
 pub const MAX_FACT_LEN: usize = 256;
+
+/// AEAD nonce length in bytes (XChaCha20-Poly1305).
+pub const AEAD_NONCE_LEN: usize = 24;
+
+/// AEAD authentication tag length in bytes (Poly1305).
+pub const AEAD_TAG_LEN: usize = 16;
