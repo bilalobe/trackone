@@ -13,9 +13,9 @@ This script provides independent verification of the batching and anchoring proc
 
 Exit codes:
 - 0: Success (root matches and required anchors verified)
-- 1: Block header not found or invalid day field
+- 1: Block header not found, invalid day field, or artifact validation failure (invalid/missing merkle_root, non-canonical/malformed day.bin)
 - 2: Merkle root mismatch
-- 3: OTS proof file not found
+- 3: OTS proof file not found (when --require-ots or enforced by meta)
 - 4: OTS proof verification failed
 - 5: TSA verification failed (when --tsa-strict)
 - 6: Peer verification failed (when --peers-strict)
@@ -424,8 +424,6 @@ def main(argv: list[str] | None = None) -> int:
                 return EXIT_OTS_NOT_FOUND
 
     # Parse + validate the anchored day blob (day.bin) if present.
-    day_record_from_bin: dict[str, Any] | None = None
-    day_bin_bytes: bytes | None = None
     if day_bin_path.exists():
         try:
             day_bin_bytes = day_bin_path.read_bytes()
@@ -436,7 +434,7 @@ def main(argv: list[str] | None = None) -> int:
         if not isinstance(any_val, dict):
             print(f"ERROR: day blob must be a JSON object: {day_bin_path}")
             return 1
-        day_record_from_bin = any_val
+        day_record_from_bin: dict[str, Any] = any_val
 
         # Enforce canonical encoding (ADR-003).
         # If the Rust extension is available, prefer its canonicalizer for single-sourcing.
@@ -528,7 +526,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ERROR: Required OTS proof missing: {ots_path}")
         return EXIT_OTS_NOT_FOUND
 
-    if ots_path is not None and ots_path.exists():
+    if ots_path.exists():
         expected_sha_from_meta: str | None = None
         if meta is not None:
             sha_val = meta.get("artifact_sha256")

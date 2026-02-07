@@ -18,11 +18,12 @@ def test_day_root_ignores_day_bin_mutation_for_now(
     verify_cli,
     mutate_day_bin,
 ) -> None:
-    """Current verify_cli compares roots from facts; OTS meta is optional.
+    """Verify that mutating day.bin fails validation when OTS metadata is present.
 
-    If no ots_meta sidecar is present for the test day, mutating day.bin alone
-    does not affect verify_cli's Merkle comparison. Once real ots_meta for the
-    test day is wired in, this test can be tightened to expect failure.
+    The built_day_artifacts fixture always creates an OTS meta sidecar that
+    includes the artifact SHA256. After mutating day.bin, verify_cli parses
+    and validates the day.bin content, then checks the artifact hash against
+    the meta, resulting in exit code 9 (artifact hash mismatch).
     """
     day_bin = built_day_artifacts["day_bin"]
     root = built_day_artifacts["root"]
@@ -31,21 +32,13 @@ def test_day_root_ignores_day_bin_mutation_for_now(
     verify_args = ["--root", str(root), "--facts", str(facts_dir)]
     assert verify_cli.main(verify_args) == 0
 
-    # If the test workspace contains an ots_meta sidecar, verify_cli will validate
-    # the artifact SHA against the meta and should fail after mutation. Otherwise
-    # the mutation is not observed by verify_cli.
-    proofs_dir = built_day_artifacts["root"].parent / "proofs"
-    meta_path = proofs_dir / f"{built_day_artifacts['date'].name}.ots.meta.json"
-
+    # Mutate the day.bin artifact
     mutate_day_bin(day_bin)
 
+    # With OTS metadata present, verify_cli validates the artifact SHA
+    # and should fail with exit code 9 (artifact hash mismatch)
     rc = verify_cli.main(verify_args)
-    if meta_path.exists():
-        # Expect artifact hash mismatch when meta enforces the artifact hash
-        assert rc == 9
-    else:
-        # No meta present: current behavior is to ignore day.bin contents
-        assert rc == 0
+    assert rc == 9
 
 
 def test_ots_mutation_affects_only_proof_verification(

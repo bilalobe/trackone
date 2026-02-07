@@ -57,7 +57,6 @@ class TestOTSStamp:
 
         # Validate the first call was to 'ots stamp <bin>' with check=True
         first_call = mock_run.call_args_list[0]
-        from unittest.mock import call
 
         assert first_call[0] == (["ots", "stamp", str(day_bin)],)
         assert first_call[1]["check"] is True

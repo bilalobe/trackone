@@ -29,7 +29,7 @@ def clear_requests_from_sys_modules(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_require_requests_raises_when_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     import builtins
-    
+
     utils_mod = importlib.import_module("scripts.gateway.tsa_utils")
 
     # Remove requests from sys.modules to ensure clean state
