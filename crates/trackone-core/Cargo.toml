@@ -62,7 +62,9 @@ sha2 = { version = "0.10", default-features = false, optional = true }
 zeroize = { version = "1", default-features = false, features = ["derive"] }
 
 # Workspace constants dependency
-trackone-constants = { path = "../trackone-constants" }
+# When packaging, Cargo removes `path` and resolves by `version`, so we must
+# specify it to pass `cargo package` verification.
+trackone-constants = { version = "0.1.0-alpha.3", path = "../trackone-constants" }
 
 # CBOR support (debug tooling / size comparisons). Canonical CBOR encoding for
 # commitments is implemented manually in `src/cbor.rs`, but we keep ciborium
