@@ -258,5 +258,5 @@ exclude = [
 
 # Ignore missing imports for libraries without type stubs
 [[tool.mypy.overrides]]
-module = ["nacl.*"]
+module = ["nacl.*", "trackone_core"]
 ignore_missing_imports = true
