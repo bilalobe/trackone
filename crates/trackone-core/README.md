@@ -1,6 +1,6 @@
 # trackone-core
 
-[![Version](https://img.shields.io/badge/version-0.1.0--alpha.2-orange)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.1.0--alpha.3-orange)](CHANGELOG.md)
 [![Status](https://img.shields.io/badge/status-alpha-yellow)](CHANGELOG.md)
 
 # Overview
@@ -13,6 +13,7 @@
 - Define core data types (`PodId`, `FrameCounter`, `Fact`, `FactPayload`, `EncryptedFrame`, `EnvFact`)
 - Provide AEAD traits and key types for pluggable crypto implementations
 - Provide framing helpers: `make_fact`, `encrypt_fact`, and `decrypt_fact` (postcard + AEAD)
+- Re-export workspace policy constants (`MAX_FACT_LEN`, `AEAD_NONCE_LEN`, `AEAD_TAG_LEN`) from `trackone-constants`
 - Provide gateway-only Merkle helpers under an opt-in feature
 - Provide provisioning records (`ProvisioningRecord`, `PolicyUpdate`) for device identity and chain of trust
 - Provide deterministic CBOR encoding for cryptographic commitments
