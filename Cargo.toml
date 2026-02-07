@@ -5,10 +5,11 @@ members = [
     "crates/trackone-gateway",
     "crates/trackone-pod-fw",
     "crates/trackone-constants",
+    "crates/trackone-ledger",
 ]
 
 [workspace.package]
-version = "0.1.0-alpha.2"
+version = "0.1.0-alpha.3"
 edition = "2021"
 publish = false
 license = "MIT"
