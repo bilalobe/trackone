@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-alpha.3] - 2026-02-07
+
+### Added
+- Gateway Rust extension API improvements (`crates/trackone-gateway`):
+  - Exposed `Gateway`, `GatewayBatch`, and `PyRadio` in the `trackone_core` PyO3 module.
+  - Exposed `merkle_root_*` helpers implementing the ADR-003 Merkle policy (via `crates/trackone-ledger`).
+  - Exposed `trackone_core.ledger` helpers for canonical JSON and canonical `day.bin`/block-header stamping.
+- Ledger helpers (`crates/trackone-ledger`):
+  - Canonical JSON encoding and ADR-003 Merkle policy (single-sourced for batching + verification).
+  - Block header + day record helpers, including canonical `day.bin` JSON bytes.
+- Pod firmware helpers (`crates/trackone-pod-fw`):
+  - Added `Pod` helper for constructing + encrypting facts via `trackone-core::frame`.
+  - Added `CounterNonce24` counter-based nonce generator (24-byte, XChaCha20-Poly1305).
+  - Added small firmware utilities (`hal`, `power`, `stress`) promoted from the legacy bench prototype.
+- Workspace constants (`crates/trackone-constants`):
+  - Added `AEAD_NONCE_LEN` and `AEAD_TAG_LEN` for shared sizing policy.
+
+### Documentation
+- Added the bench topology document: `docs/bench-network.md`.
+- Added firmware notes and patterns: `docs/pod-fw.md`.
+
+### Changed
+- Python pipeline hardening:
+  - `merkle_batcher.py` now prefers Rust-ledger stamping when `trackone_core` is available (canonical block header + `day.bin` bytes).
+  - `verify_cli.py` now validates that `day.bin` is canonical (ADR-003) and that its embedded `day_root` matches the recorded Merkle root (gapless anchoring contract).
+- Bumped workspace crates to `0.1.0-alpha.3` (per ADR-035 umbrella versioning):
+  - `trackone-gateway` to `0.1.0-alpha.3` - Gateway API + Merkle helpers (delegating to `trackone-ledger`) (see `crates/trackone-gateway/CHANGELOG.md`)
+  - `trackone-core` to `0.1.0-alpha.3` - Version alignment + constants wiring (see `crates/trackone-core/CHANGELOG.md`)
+  - `trackone-pod-fw` to `0.1.0-alpha.3` - Pod helpers + nonce generator (see `crates/trackone-pod-fw/CHANGELOG.md`)
+  - `trackone-constants` to `0.1.0-alpha.3` - Added shared AEAD sizing constants (see `crates/trackone-constants/CHANGELOG.md`)
+  - `trackone-ledger` to `0.1.0-alpha.3` - Canonical JSON + Merkle + day/block record helpers (see `crates/trackone-ledger/CHANGELOG.md`)
+
+### Removed
+- Retired the legacy `crates/trackone-bench` prototypes after promoting the useful utilities and docs.
+
 ## [0.1.0-alpha.2] - 2026-01-22
 
 ### Added
