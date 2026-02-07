@@ -4,8 +4,6 @@ on:
   push:
     branches:
       - 'ci/ots-verify-draft'
-  pull_request:
-    types: [opened, reopened, synchronize]
   # Allow a label on a PR to explicitly request a run (no files need to change)
   pull_request_target:
     types: [labeled]
@@ -33,14 +31,17 @@ jobs:
   ots-verify:
     # Only run this job when it's one of:
     # - a push (push trigger still applies),
-    # - a pull_request (any PR) — label gating is handled below,
-    # - a pull_request_target labeled event where the label name is 'run-ots-verify',
+    # - a pull_request_target labeled event where the label name is 'run-ots-verify' (same-repo PRs only),
     # - or a manual workflow_dispatch.
     if: >-
       github.event_name == 'push' ||
       github.event_name == 'workflow_dispatch' ||
-      github.event_name == 'pull_request' ||
-      (github.event_name == 'pull_request_target' && github.event.action == 'labeled' && github.event.label && github.event.label.name == 'run-ots-verify')
+      (github.event_name == 'pull_request_target' &&
+        github.event.action == 'labeled' &&
+        github.event.label &&
+        github.event.label.name == 'run-ots-verify' &&
+        github.event.pull_request &&
+        github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     env:
       BITCOIN_CORE_VERSION: '28.1'
@@ -73,18 +74,18 @@ jobs:
           path: |
             ~/.cache/pip
             ~/.cache/uv
-          key: ${{ runner.os }}-pipuv-${{ hashFiles('**/requirements*.txt') }}-${{ hashFiles('pyproject.toml') }}
+          key: ${{ runner.os }}-pipuv-${{ hashFiles('pyproject.toml') }}-${{ hashFiles('uv.lock') }}
 
       - name: Cache tox virtualenvs
         uses: actions/cache@v5
         with:
           path: .tox
-          key: ${{ runner.os }}-tox-ots-${{ hashFiles('tox.ini') }}-${{ hashFiles('**/requirements*.txt') }}-${{ hashFiles('pyproject.toml') }}
+          key: ${{ runner.os }}-tox-ots-${{ hashFiles('tox.ini') }}-${{ hashFiles('pyproject.toml') }}-${{ hashFiles('uv.lock') }}
 
       - name: Install Python deps
         run: |
           python -m pip install --upgrade pip setuptools wheel
-          python -m pip install --upgrade tox
+          python -m pip install --upgrade tox tox-uv uv
           python -m pip install --upgrade opentimestamps-client
 
       - name: Run pipeline via tox (generate artifacts)
@@ -147,9 +148,21 @@ jobs:
       - name: Install Bitcoin Core (bitcoind)
         if: steps.check_ots.outputs.found == 'true'
         run: |
+          set -euo pipefail
           cd "$RUNNER_TEMP"
-          curl -L -o bitcoin.tar.gz https://bitcoincore.org/bin/bitcoin-core-${BITCOIN_CORE_VERSION}/bitcoin-${BITCOIN_CORE_VERSION}-x86_64-linux-gnu.tar.gz
-          tar -xzf bitcoin.tar.gz
+          BASE_URL="https://bitcoincore.org/bin/bitcoin-core-${BITCOIN_CORE_VERSION}"
+          TARBALL="bitcoin-${BITCOIN_CORE_VERSION}-x86_64-linux-gnu.tar.gz"
+
+          curl -fsSLO "${BASE_URL}/${TARBALL}"
+          curl -fsSLO "${BASE_URL}/SHA256SUMS"
+
+          # Verify the downloaded tarball against upstream SHA256SUMS.
+          # (We still rely on HTTPS transport; this is a minimum-integrity check.)
+          grep -F " ${TARBALL}" SHA256SUMS > SHA256SUMS.filtered
+          test -s SHA256SUMS.filtered
+          sha256sum -c SHA256SUMS.filtered
+
+          tar -xzf "${TARBALL}"
           echo "$RUNNER_TEMP/bitcoin-${BITCOIN_CORE_VERSION}/bin" >> "$GITHUB_PATH"
           export PATH="$RUNNER_TEMP/bitcoin-${BITCOIN_CORE_VERSION}/bin:$PATH"
           bitcoind -version
