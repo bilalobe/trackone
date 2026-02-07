@@ -1,5 +1,12 @@
 # TrackOne — Ultra‑Low‑Power, Verifiable Telemetry
 
+[![crates.io](https://img.shields.io/crates/v/trackone-core)](https://crates.io/crates/trackone-core)
+[![crates.io](https://img.shields.io/crates/v/trackone-constants)](https://crates.io/crates/trackone-constants)
+[![crates.io](https://img.shields.io/crates/v/trackone-gateway)](https://crates.io/crates/trackone-gateway)
+[![crates.io](https://img.shields.io/crates/v/trackone-pod-fw)](https://crates.io/crates/trackone-pod-fw)
+[![crates.io](https://img.shields.io/crates/v/trackone-ledger)](https://crates.io/crates/trackone-ledger)
+[![PyPI](https://img.shields.io/pypi/v/trackone)](https://pypi.org/project/trackone/)
+
 Secure ingestion, canonicalization, Merkle batching, and public anchoring of sensor telemetry. TrackOne produces an auditable, append‑only ledger of daily telemetry “facts” and anchors each day’s digest to public time via OpenTimestamps (OTS). Auditors can independently recompute Merkle roots and verify proofs without trusting the gateway operator.
 
 Project status: active R&D with a Python‑first reference gateway. See ADRs for design decisions and roadmap.
