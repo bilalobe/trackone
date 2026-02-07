@@ -37,7 +37,7 @@ import sys
 from dataclasses import asdict, dataclass
 from hashlib import sha256
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 try:
     import jsonschema
@@ -49,13 +49,15 @@ except ImportError:
 DATE_RX = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 # Optional Rust extension (`trackone_core`) for single-sourced ledger policy (ADR-003).
+_RUST_MERKLE: Any | None = None
+_RUST_LEDGER: Any | None = None
 try:  # pragma: no cover - optional acceleration
-    import trackone_core  # type: ignore
+    import trackone_core
 
     _RUST_MERKLE = getattr(trackone_core, "merkle", None)
     _RUST_LEDGER = getattr(trackone_core, "ledger", None)
 except Exception:  # pragma: no cover - extension not built/installed
-    trackone_core = None  # type: ignore[assignment]
+    trackone_core = None
     _RUST_MERKLE = None
     _RUST_LEDGER = None
 
@@ -88,7 +90,10 @@ def merkle_root_from_leaves(leaves: list[bytes]) -> tuple[str, list[str]]:
     """Return (root_hex, leaf_hexes) for canonicalized leaves."""
     if _RUST_MERKLE is not None:
         try:  # pragma: no cover - exercised when Rust extension is available
-            return _RUST_MERKLE.merkle_root_hex_and_leaf_hashes(leaves)
+            return cast(
+                tuple[str, list[str]],
+                _RUST_MERKLE.merkle_root_hex_and_leaf_hashes(leaves),
+            )
         except Exception:
             # Fall back to the reference Python implementation.
             pass

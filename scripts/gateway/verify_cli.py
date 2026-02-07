@@ -59,7 +59,7 @@ import sys
 from collections.abc import Iterable
 from hashlib import sha256
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 try:  # Support both package imports and direct script execution.
     from .peer_attestation import verify_peer_signature
@@ -77,13 +77,15 @@ EXIT_META_INVALID = 8
 EXIT_ARTIFACT_HASH_MISMATCH = 9
 
 # Optional Rust extension (`trackone_core`) for single-sourced Merkle policy (ADR-003).
+_RUST_MERKLE: Any | None = None
+_RUST_LEDGER: Any | None = None
 try:  # pragma: no cover - optional acceleration
-    import trackone_core  # type: ignore
+    import trackone_core
 
     _RUST_MERKLE = getattr(trackone_core, "merkle", None)
     _RUST_LEDGER = getattr(trackone_core, "ledger", None)
 except Exception:  # pragma: no cover - extension not built/installed
-    trackone_core = None  # type: ignore[assignment]
+    trackone_core = None
     _RUST_MERKLE = None
     _RUST_LEDGER = None
 
@@ -97,8 +99,9 @@ def merkle_root(leaves: Iterable[bytes]) -> str:
     leaves_list = list(leaves)
     if _RUST_MERKLE is not None:
         try:  # pragma: no cover - exercised when Rust extension is available
-            root_hex, _leaf_hashes = _RUST_MERKLE.merkle_root_hex_and_leaf_hashes(
-                leaves_list
+            root_hex, _leaf_hashes = cast(
+                tuple[str, list[str]],
+                _RUST_MERKLE.merkle_root_hex_and_leaf_hashes(leaves_list),
             )
             return root_hex
         except Exception:
