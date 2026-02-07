@@ -13,7 +13,7 @@ doctest = false
 
 [dependencies]
 trackone-core = { path = "../trackone-core", default-features = false, features = ["gateway"] }
+trackone-ledger = { path = "../trackone-ledger" }
 pyo3.workspace = true
-sha2 = { version = "0.10", default-features = false }
 
 [dev-dependencies]
