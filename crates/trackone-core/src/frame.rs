@@ -8,7 +8,7 @@ use heapless::Vec;
 
 use crate::crypto::{AeadDecrypt, AeadEncrypt};
 use crate::types::{CoreResult, EncryptedFrame, Error, Fact, FactKind, FactPayload};
-use trackone_constants::MAX_FACT_LEN;
+use trackone_constants::{AEAD_NONCE_LEN, AEAD_TAG_LEN, MAX_FACT_LEN};
 
 /// Helper to construct a `Fact`.
 pub fn make_fact(
@@ -52,7 +52,7 @@ pub fn make_fact(
 /// of all encrypted frames.
 pub fn encrypt_fact<const N: usize, C>(
     cipher: &C,
-    nonce: [u8; 24],
+    nonce: [u8; AEAD_NONCE_LEN],
     fact: &Fact,
 ) -> CoreResult<EncryptedFrame<N>>
 where
@@ -64,10 +64,9 @@ where
 
     let aad = &[]; // Future: include header metadata as AAD.
 
-    // AEAD ciphers add an authentication tag (typically 16 bytes for Poly1305) to the ciphertext
-    const AEAD_TAG_SIZE: usize = 16;
+    // AEAD ciphers add an authentication tag (Poly1305 = 16 bytes) to the ciphertext.
     let mut ciphertext_buf = [0u8; N];
-    if ciphertext_buf.len() < used.len() + AEAD_TAG_SIZE {
+    if ciphertext_buf.len() < used.len() + AEAD_TAG_LEN {
         // Buffer too small for ciphertext + tag
         return Err(Error::CiphertextTooLarge);
     }
