@@ -4,8 +4,8 @@ use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyBytes};
 
 mod crypto;
+mod ledger;
 mod merkle;
-pub mod merkle_policy;
 mod ots;
 mod radio;
 
@@ -79,14 +79,14 @@ impl Gateway {
         py_frames: &Bound<'py, PyAny>,
     ) -> PyResult<Bound<'py, PyBytes>> {
         let frames = extract_frames(py_frames)?;
-        let root = merkle_policy::compute_merkle_root(&frames);
+        let root = trackone_ledger::merkle::merkle_root_from_leaves(&frames).root;
         Ok(PyBytes::new(py, &root))
     }
 
     /// Create a batch from frames and attach a Merkle root.
     pub fn make_batch(&self, py_frames: &Bound<'_, PyAny>) -> PyResult<GatewayBatch> {
         let frames = extract_frames(py_frames)?;
-        let root = merkle_policy::compute_merkle_root(&frames);
+        let root = trackone_ledger::merkle::merkle_root_from_leaves(&frames).root;
         Ok(GatewayBatch {
             frames,
             merkle_root: root,
@@ -110,6 +110,7 @@ fn trackone_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // Re-export submodules into the Python extension module namespace
     crypto::register(m)?;
+    ledger::register(m)?;
     merkle::register(m)?;
     ots::register(m)?;
 
