@@ -48,6 +48,17 @@ except ImportError:
 
 DATE_RX = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
+# Optional Rust extension (`trackone_core`) for single-sourced ledger policy (ADR-003).
+try:  # pragma: no cover - optional acceleration
+    import trackone_core  # type: ignore
+
+    _RUST_MERKLE = getattr(trackone_core, "merkle", None)
+    _RUST_LEDGER = getattr(trackone_core, "ledger", None)
+except Exception:  # pragma: no cover - extension not built/installed
+    trackone_core = None  # type: ignore[assignment]
+    _RUST_MERKLE = None
+    _RUST_LEDGER = None
+
 
 def canonical_json(obj: Any) -> bytes:
     """Canonicalize JSON: sorted keys, UTF-8, no whitespace."""
@@ -75,6 +86,12 @@ def _h(x: bytes) -> bytes:
 
 def merkle_root_from_leaves(leaves: list[bytes]) -> tuple[str, list[str]]:
     """Return (root_hex, leaf_hexes) for canonicalized leaves."""
+    if _RUST_MERKLE is not None:
+        try:  # pragma: no cover - exercised when Rust extension is available
+            return _RUST_MERKLE.merkle_root_hex_and_leaf_hashes(leaves)
+        except Exception:
+            # Fall back to the reference Python implementation.
+            pass
     if not leaves:
         empty = sha256(b"").hexdigest()
         return empty, []
@@ -202,53 +219,84 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
 
-    root_hex, leaf_hashes = merkle_root_from_leaves(leaves)
     batch_id = f"{args.site}-{args.date}-00"
+    prev_root = prev_day_root_or_zero(args.out, args.site, args.date)
 
-    header = BlockHeader(
-        version=1,
-        site_id=args.site,
-        day=args.date,
-        batch_id=batch_id,
-        merkle_root=root_hex,
-        count=len(leaf_hashes),
-        leaf_hashes=leaf_hashes,
-    )
+    # Prefer single-sourced stamping via Rust ledger helpers when available.
+    header_dict: dict[str, Any] | None = None
+    header_json_bytes: bytes | None = None
+    day_record: dict[str, Any] | None = None
+    day_blob: bytes | None = None
+    root_hex: str | None = None
+    leaf_hashes: list[str] | None = None
+
+    if _RUST_LEDGER is not None:
+        try:  # pragma: no cover - exercised when Rust extension is available
+            header_json_bytes, day_blob = _RUST_LEDGER.build_day_v1_single_batch(
+                args.site, args.date, prev_root, batch_id, leaves
+            )
+            header_dict = json.loads(header_json_bytes)
+            day_record = json.loads(day_blob)
+            root_hex = header_dict.get("merkle_root")
+            leaf_hashes = header_dict.get("leaf_hashes")
+        except Exception:
+            header_dict = None
+            header_json_bytes = None
+            day_record = None
+            day_blob = None
+            root_hex = None
+            leaf_hashes = None
+
+    if header_dict is None or day_record is None or day_blob is None:
+        root_hex, leaf_hashes = merkle_root_from_leaves(leaves)
+        header = BlockHeader(
+            version=1,
+            site_id=args.site,
+            day=args.date,
+            batch_id=batch_id,
+            merkle_root=root_hex,
+            count=len(leaf_hashes),
+            leaf_hashes=leaf_hashes,
+        )
+        header_dict = header.to_dict()
+        day_record = {
+            "version": 1,
+            "site_id": args.site,
+            "date": args.date,
+            "prev_day_root": prev_root,
+            "batches": [header_dict],
+            "day_root": root_hex,
+        }
+        day_blob = canonical_json(day_record)
 
     # Write block header
     blocks_dir = args.out / "blocks"
     blocks_dir.mkdir(parents=True, exist_ok=True)
     block_path = blocks_dir / f"{args.date}-00.block.json"
-    block_path.write_text(
-        json.dumps(header.to_dict(), sort_keys=True, separators=(",", ":")) + "\n",
-        encoding="utf-8",
-    )
 
     # Day record (canonical + human-readable)
     day_dir = args.out / "day"
     day_dir.mkdir(parents=True, exist_ok=True)
-    prev_root = prev_day_root_or_zero(args.out, args.site, args.date)
-
-    day_record = {
-        "version": 1,
-        "site_id": args.site,
-        "date": args.date,
-        "prev_day_root": prev_root,
-        "batches": [header.to_dict()],
-        "day_root": root_hex,
-    }
 
     # Optional schema validation
     if args.validate_schemas:
         schemas = load_schemas()
         if "block_header" in schemas:
             validate_against_schema(
-                header.to_dict(), schemas["block_header"], "Block header"
+                header_dict, schemas["block_header"], "Block header"
             )
         if "day_record" in schemas:
             validate_against_schema(day_record, schemas["day_record"], "Day record")
 
-    day_blob = canonical_json(day_record)
+    # Persist canonical artifacts.
+    if header_json_bytes is not None:
+        block_path.write_bytes(header_json_bytes + b"\n")
+    else:
+        block_path.write_text(
+            json.dumps(header_dict, sort_keys=True, separators=(",", ":")) + "\n",
+            encoding="utf-8",
+        )
+
     day_bin_path = day_dir / f"{args.date}.bin"
     day_bin_path.write_bytes(day_blob)
 
