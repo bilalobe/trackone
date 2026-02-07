@@ -12,7 +12,7 @@
 
 TrackOne is a multi-crate Rust workspace (and a mixed Rust/Python repo). We are already producing multiple artifacts:
 
-- Rust crates (`trackone-core`, `trackone-gateway`, `trackone-pod-fw`, `trackone-constants`, `trackone-bench`).
+- Rust crates (`trackone-core`, `trackone-ledger`, `trackone-gateway`, `trackone-pod-fw`, `trackone-constants`).
 - A Python-facing artifact built via `maturin` for `trackone-gateway`.
 - A container image (`ots-calendar`) used in CI and local Kubernetes.
 
@@ -37,14 +37,14 @@ Rationale:
 - Avoids release visibility gaps where only one crate bumps but the repo has no release tag.
 - Matches TrackOne’s system-level claims: the unit we ship is the **pipeline** (pod → gateway → ledger → OTS).
 
-### 2) Keep the master changelog, and add crate-local changelogs only when a crate becomes independently consumable
+### 2) Keep the master changelog, and also maintain crate-local changelogs
 
-- `CHANGELOG.md` remains the primary release note for tags.
-- We may add `crates/<crate>/CHANGELOG.md` later **only when**:
-  - That crate is published to crates.io or becomes a stable dependency for external users.
-  - The crate’s change surface is large enough that it needs its own curated history.
+- `CHANGELOG.md` remains the primary release note for tags and GitHub Releases.
+- Crate-local changelogs (`crates/<crate>/CHANGELOG.md`) capture more detailed
+  per-crate history and are linked from the master changelog.
 
-Until then, crate highlights appear in the master changelog under a single umbrella release section.
+Crate-local changelogs do **not** imply an independent release cadence: crates
+still share the umbrella workspace version.
 
 ### 3) In the master changelog, include per-crate “highlights” without overstating maturity
 
