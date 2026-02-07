@@ -7,6 +7,8 @@
 `trackone-constants` holds workspace-wide constants that represent protocol and sizing policy decisions, such as:
 
 - `MAX_FACT_LEN` — canonical maximum serialized length (bytes) of a `Fact` when encoded with postcard.
+- `AEAD_NONCE_LEN` — canonical AEAD nonce length (bytes), currently 24 for XChaCha20-Poly1305.
+- `AEAD_TAG_LEN` — canonical AEAD tag length (bytes), 16 for Poly1305.
 
 This crate exists so multiple crates (`trackone-core`, `trackone-gateway`, firmware crates) can share the same knobs without diverging magic numbers.
 
