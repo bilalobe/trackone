@@ -157,7 +157,10 @@ impl EnvFact {
         mean: f32,
         count: u32,
     ) -> Self {
-        assert!(t0 <= t1, "phenomenon_time_start must be <= phenomenon_time_end");
+        assert!(
+            t0 <= t1,
+            "phenomenon_time_start must be <= phenomenon_time_end"
+        );
         assert!(count >= 1, "count must be >= 1");
 
         Self {
@@ -213,7 +216,7 @@ pub struct Fact {
 pub struct EncryptedFrame<const N: usize> {
     pub pod_id: PodId,
     pub fc: FrameCounter,
-    pub nonce: [u8; 24],
+    pub nonce: [u8; trackone_constants::AEAD_NONCE_LEN],
     pub ciphertext: Vec<u8, N>,
 }
 
