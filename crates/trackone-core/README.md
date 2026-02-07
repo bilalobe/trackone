@@ -14,7 +14,7 @@
 - Provide AEAD traits and key types for pluggable crypto implementations
 - Provide framing helpers: `make_fact`, `encrypt_fact`, and `decrypt_fact` (postcard + AEAD)
 - Re-export workspace policy constants (`MAX_FACT_LEN`, `AEAD_NONCE_LEN`, `AEAD_TAG_LEN`) from `trackone-constants`
-- Provide gateway-only Merkle helpers under an opt-in feature
+- Provide low-level Merkle helpers under an opt-in feature (for ADR-003 ledger policy, see `crates/trackone-ledger`)
 - Provide provisioning records (`ProvisioningRecord`, `PolicyUpdate`) for device identity and chain of trust
 - Provide deterministic CBOR encoding for cryptographic commitments
 
@@ -35,7 +35,7 @@
 ## Feature model
 
 - `std` — opt-in standard library support (enables CBOR module and `ciborium` dependency)
-- `gateway` — host-specific helpers that require `std` and `sha2` (Merkle tree support)
+- `gateway` — host-specific helpers that require `std` and `sha2` (low-level Merkle tree support)
 - `dummy-aead` — a small test-only AEAD implementation intended for local development and testing. **Production builds should not enable this.**
 - `production` — strict build profile that refuses to compile with `dummy-aead` enabled (compile-time safety check)
 
