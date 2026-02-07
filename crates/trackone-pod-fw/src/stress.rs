@@ -35,7 +35,7 @@ impl StackGuardReport {
         if total == 0 {
             return 0;
         }
-        ((self.corrupted * 100) / total).min(100) as u8
+        (self.corrupted.saturating_mul(100) / total).min(100) as u8
     }
 }
 

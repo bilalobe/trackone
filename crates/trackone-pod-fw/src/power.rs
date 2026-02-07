@@ -48,9 +48,14 @@ impl EventWaiter {
 
     /// Wait until at least one event is pending, then return the number of
     /// pending events and reset the counter.
+    ///
+    /// This method spins on `idle_wait()` until `events_pending` becomes non-zero.
+    /// The caller is expected to call `signal()` from an interrupt handler or
+    /// another execution context to set `events_pending` and wake the CPU.
     #[inline]
+    #[allow(clippy::while_immutable_condition)]
     pub fn wait(&mut self) -> u8 {
-        if self.events_pending == 0 {
+        while self.events_pending == 0 {
             idle_wait();
         }
         let pending = self.events_pending;
