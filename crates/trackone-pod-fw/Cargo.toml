@@ -3,17 +3,17 @@ name = "trackone-pod-fw"
 description = "Pod firmware-side helpers and utilities for TrackOne"
 version.workspace = true
 edition.workspace = true
-publish.workspace = true
+publish = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
 readme = "README.md"
 
 [dependencies]
-trackone-core = { path = "../trackone-core", default-features = false }
+trackone-core = { version = "0.1.0-alpha.3", path = "../trackone-core", default-features = false }
 
 [dev-dependencies]
-trackone-core = { path = "../trackone-core", default-features = false, features = ["dummy-aead"] }
+trackone-core = { version = "0.1.0-alpha.3", path = "../trackone-core", default-features = false, features = ["dummy-aead"] }
 
 [features]
 default = ["std"]

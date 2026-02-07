@@ -1,8 +1,9 @@
 [package]
 name = "trackone-core"
+description = "Core no_std-capable cryptographic and serialization primitives for TrackOne"
 version.workspace = true
 edition.workspace = true
-publish.workspace = true
+publish = true
 license.workspace = true
 authors.workspace = true
 repository = "https://github.com/bilalobe/trackone"

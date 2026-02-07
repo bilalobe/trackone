@@ -3,7 +3,7 @@ name = "trackone-gateway"
 description = "Gateway-side Rust crate exposing PyO3 bindings for Python"
 version.workspace = true
 edition.workspace = true
-publish.workspace = true
+publish = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
@@ -15,8 +15,8 @@ crate-type = ["cdylib", "rlib"]
 doctest = false
 
 [dependencies]
-trackone-core = { path = "../trackone-core", default-features = false, features = ["gateway"] }
-trackone-ledger = { path = "../trackone-ledger" }
+trackone-core = { version = "0.1.0-alpha.3", path = "../trackone-core", default-features = false, features = ["gateway"] }
+trackone-ledger = { version = "0.1.0-alpha.3", path = "../trackone-ledger" }
 pyo3.workspace = true
 
 [dev-dependencies]
