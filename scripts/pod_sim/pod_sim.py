@@ -44,6 +44,7 @@ import nacl.bindings
 # Local crypto helpers (HKDF)
 try:
     # Prefer importing from gateway utils to avoid duplication
+    import importlib
     import importlib.util
 
     GW_DIR = Path(__file__).parent.parent / "gateway"
@@ -55,9 +56,14 @@ try:
         raise ImportError("crypto_utils spec not found")
     crypto_utils = importlib.util.module_from_spec(cu_spec)
     cu_spec.loader.exec_module(crypto_utils)
-except Exception:  # Fallback minimal HKDF if import fails
+except ImportError:  # Fallback minimal HKDF if import fails
     import hashlib
     import hmac
+    import types
+
+    importlib = None  # type: ignore[assignment]
+
+    crypto_utils = types.ModuleType("crypto_utils")
 
     def hkdf_sha256(
         ikm: bytes, salt: bytes | None, info: bytes | None, length: int
@@ -155,7 +161,7 @@ def load_device_table(path: Path) -> dict[str, dict[str, Any]]:
                     out[str(k)] = v
             return out
         return {}
-    except Exception:
+    except (json.JSONDecodeError, OSError):
         return {}
 
 

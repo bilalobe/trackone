@@ -39,11 +39,13 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Any, cast
 
+jsonschema: Any | None
 try:
     import jsonschema
 
     JSONSCHEMA_AVAILABLE = True
 except ImportError:
+    jsonschema = None
     JSONSCHEMA_AVAILABLE = False
 
 DATE_RX = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -56,7 +58,7 @@ try:  # pragma: no cover - optional acceleration
 
     _RUST_MERKLE = getattr(trackone_core, "merkle", None)
     _RUST_LEDGER = getattr(trackone_core, "ledger", None)
-except Exception:  # pragma: no cover - extension not built/installed
+except ImportError:  # pragma: no cover - extension not built/installed
     trackone_core = None
     _RUST_MERKLE = None
     _RUST_LEDGER = None
@@ -94,7 +96,11 @@ def merkle_root_from_leaves(leaves: list[bytes]) -> tuple[str, list[str]]:
                 tuple[str, list[str]],
                 _RUST_MERKLE.merkle_root_hex_and_leaf_hashes(leaves),
             )
-        except Exception:
+        except (RuntimeError, TypeError, ValueError) as e:
+            print(
+                f"[WARN] Rust merkle failed, falling back to Python: {e}",
+                file=sys.stderr,
+            )
             # Fall back to the reference Python implementation.
             pass
     if not leaves:
@@ -123,7 +129,7 @@ def load_schemas() -> dict[str, Any]:
         if schema_path.exists():
             try:
                 schemas[name] = json.loads(schema_path.read_text(encoding="utf-8"))
-            except Exception as e:
+            except (json.JSONDecodeError, OSError) as e:
                 print(f"[WARN] Failed to load {name} schema: {e}", file=sys.stderr)
     return schemas
 
@@ -132,14 +138,19 @@ def validate_against_schema(
     obj: dict[str, Any], schema: dict[str, Any], label: str
 ) -> None:
     """Validate obj against schema; print warning if validation fails."""
-    if not JSONSCHEMA_AVAILABLE:
+    if not JSONSCHEMA_AVAILABLE or jsonschema is None:
         return
     try:
+        # Type narrowing: jsonschema is not None here due to the guard above
+        assert jsonschema is not None  # nosec B101 - type narrowing for mypy
         jsonschema.validate(instance=obj, schema=schema)
         print(f"[OK] {label} validated against schema.", file=sys.stderr)
-    except Exception as e:
-        # jsonschema.ValidationError and other errors are handled here
-        print(f"[WARN] {label} schema validation failed: {e}", file=sys.stderr)
+    except (jsonschema.ValidationError, jsonschema.SchemaError) as e:
+        print(f"[WARN] {label} schema validation failure: {e}", file=sys.stderr)
+    except jsonschema.RefResolutionError as e:
+        print(
+            f"[WARN] {label} schema reference resolution failure: {e}", file=sys.stderr
+        )
 
 
 def load_facts(facts_dir: Path) -> list[bytes]:
@@ -148,7 +159,7 @@ def load_facts(facts_dir: Path) -> list[bytes]:
     for fpath in fact_files:
         try:
             obj = json.loads(fpath.read_text(encoding="utf-8"))
-        except Exception as e:
+        except (json.JSONDecodeError, OSError) as e:
             print(f"[ERROR] Failed to parse JSON: {fpath}: {e}", file=sys.stderr)
             raise
         leaves.append(canonical_json(obj))
@@ -185,7 +196,7 @@ def prev_day_root_or_zero(
             if isinstance(val, str):
                 return val
         return "00" * 32
-    except Exception:
+    except (json.JSONDecodeError, OSError):
         return "00" * 32
 
 
@@ -244,7 +255,11 @@ def main(argv: list[str] | None = None) -> int:
             day_record = json.loads(day_blob)
             root_hex = header_dict.get("merkle_root")
             leaf_hashes = header_dict.get("leaf_hashes")
-        except Exception:
+        except (RuntimeError, TypeError, ValueError, json.JSONDecodeError) as e:
+            print(
+                f"[WARN] Rust ledger failed, falling back to Python: {e}",
+                file=sys.stderr,
+            )
             header_dict = None
             header_json_bytes = None
             day_record = None

@@ -83,7 +83,7 @@ def _ots_client_version() -> str | None:
                 ver = str(ver)
             ver = ver.strip()
             return ver.splitlines()[0] if ver else None
-    except Exception:
+    except (subprocess.CalledProcessError, OSError):
         pass
     return None
 
@@ -212,7 +212,7 @@ def ots_stamp(
             day_label, day_bin_path, ots_path, proofs_dir, milestone
         )
         print(f"Wrote OTS meta: {meta_path}")
-    except Exception as exc:  # pragma: no cover - defensive
+    except OSError as exc:  # pragma: no cover - defensive
         print(f"[WARN] Failed to write OTS meta sidecar: {exc}")
 
 

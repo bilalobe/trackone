@@ -76,7 +76,7 @@ EXIT_ARTIFACT_PATH_MISMATCH = 7
 EXIT_META_INVALID = 8
 EXIT_ARTIFACT_HASH_MISMATCH = 9
 
-# Optional Rust extension (`trackone_core`) for single-sourced Merkle policy (ADR-003).
+# Optional Rust extension (`trackone_core`) for single-sourced ledger policy (ADR-003).
 _RUST_MERKLE: Any | None = None
 _RUST_LEDGER: Any | None = None
 try:  # pragma: no cover - optional acceleration
@@ -84,7 +84,7 @@ try:  # pragma: no cover - optional acceleration
 
     _RUST_MERKLE = getattr(trackone_core, "merkle", None)
     _RUST_LEDGER = getattr(trackone_core, "ledger", None)
-except Exception:  # pragma: no cover - extension not built/installed
+except ImportError:  # pragma: no cover - extension not built/installed
     trackone_core = None
     _RUST_MERKLE = None
     _RUST_LEDGER = None
@@ -104,7 +104,11 @@ def merkle_root(leaves: Iterable[bytes]) -> str:
                 _RUST_MERKLE.merkle_root_hex_and_leaf_hashes(leaves_list),
             )
             return root_hex
-        except Exception:
+        except (RuntimeError, TypeError, ValueError) as e:
+            print(
+                f"[WARN] Rust merkle failed, falling back to Python: {e}",
+                file=sys.stderr,
+            )
             # Fall back to the reference Python implementation.
             pass
     if not leaves_list:
@@ -157,7 +161,7 @@ def verify_ots(
                 hexpart = parts[1].strip().splitlines()[0]
                 try:
                     stub_hex = hexpart.decode("ascii")
-                except Exception:
+                except UnicodeDecodeError:
                     return False
                 # If caller provided expected_artifact_sha (from meta), use that as the oracle.
                 if expected_artifact_sha:
@@ -173,7 +177,7 @@ def verify_ots(
                     return actual_sha == stub_hex
                 # No oracle available -> conservative reject
                 return False
-            except Exception:
+            except OSError:
                 return False
         # Legacy placeholder content produced when OTS client missing/failed.
         # Accept it as a placeholder when tests or CI allow placeholders.
@@ -380,7 +384,7 @@ def main(argv: list[str] | None = None) -> int:
     if meta_path.exists():
         try:
             meta = json.loads(meta_path.read_text(encoding="utf-8"))
-        except Exception as exc:  # pragma: no cover - defensive
+        except (json.JSONDecodeError, OSError) as exc:  # pragma: no cover - defensive
             print(f"ERROR: Failed to parse OTS meta file {meta_path}: {exc}")
             return EXIT_META_INVALID
 
@@ -428,7 +432,7 @@ def main(argv: list[str] | None = None) -> int:
         try:
             day_bin_bytes = day_bin_path.read_bytes()
             any_val = json.loads(day_bin_bytes)
-        except Exception as exc:
+        except (json.JSONDecodeError, OSError) as exc:
             print(f"ERROR: Failed to parse day blob JSON {day_bin_path}: {exc}")
             return 1
         if not isinstance(any_val, dict):
@@ -441,7 +445,11 @@ def main(argv: list[str] | None = None) -> int:
         if _RUST_LEDGER is not None:
             try:  # pragma: no cover - exercised when Rust extension is available
                 canon = _RUST_LEDGER.canonicalize_json_bytes(day_bin_bytes)
-            except Exception:
+            except (RuntimeError, TypeError, ValueError) as e:
+                print(
+                    f"[WARN] Rust ledger canonicalize failed, falling back to Python: {e}",
+                    file=sys.stderr,
+                )
                 canon = canonical_json(day_record_from_bin)
         else:
             canon = canonical_json(day_record_from_bin)

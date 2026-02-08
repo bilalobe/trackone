@@ -23,13 +23,15 @@ from __future__ import annotations
 
 import argparse
 import base64
+import binascii
 import json
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import nacl.bindings
+import nacl.exceptions
 
 # Constants for maintainability
 DEFAULT_REPLAY_WINDOW = 64
@@ -37,12 +39,17 @@ MAX_FRAME_COUNTER = 2**32 - 1
 HEADER_FIELDS = {"dev_id", "msg_type", "fc", "flags"}
 
 # Optional jsonschema: mypy will warn if stubs are missing; detect availability
+jsonschema: Any | None
 try:
     import jsonschema
 
-    JSONSCHEMA_AVAILABLE: bool = True
-except Exception:
+    JSONSCHEMA_AVAILABLE = True
+except ImportError:
+    jsonschema = None
     JSONSCHEMA_AVAILABLE = False
+
+# Cast for type narrowing
+jsonschema = cast(Any, jsonschema)
 
 
 def _load_schema(path: Path) -> dict[str, Any] | None:
@@ -52,7 +59,7 @@ def _load_schema(path: Path) -> dict[str, Any] | None:
             if isinstance(data, dict):
                 return data
             return None
-    except Exception:
+    except (json.JSONDecodeError, OSError):
         return None
     return None
 
@@ -138,19 +145,23 @@ def load_fact_schema() -> dict[str, Any] | None:
             if isinstance(data, dict):
                 return data
             return None
-        except Exception as e:
+        except (json.JSONDecodeError, OSError) as e:
             print(f"[WARN] Failed to load fact schema: {e}", file=sys.stderr)
     return None
 
 
 def validate_fact(obj: dict[str, Any], schema: dict[str, Any] | None) -> None:
     """Validate fact against schema if available."""
-    if not (schema and JSONSCHEMA_AVAILABLE):
+    if not (schema and JSONSCHEMA_AVAILABLE and jsonschema is not None):
         return
     try:
+        # Type narrowing: jsonschema is not None here due to the guard above
+        assert jsonschema is not None  # nosec B101 - type narrowing for mypy
         jsonschema.validate(instance=obj, schema=schema)
-    except Exception as e:
-        print(f"[WARN] Fact validation: {e}", file=sys.stderr)
+    except jsonschema.ValidationError as e:
+        print(f"[WARN] Fact validation failure: {e}", file=sys.stderr)
+    except jsonschema.SchemaError as e:
+        print(f"[WARN] Fact schema error: {e}", file=sys.stderr)
 
 
 # --- Device table helpers ---
@@ -162,7 +173,7 @@ def load_device_table(path: Path) -> dict[str, dict[str, Any]]:
         return {}
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
+    except (json.JSONDecodeError, OSError):
         return {}
 
     # Enforce version requirement (ADR-006)
@@ -177,7 +188,7 @@ def load_device_table(path: Path) -> dict[str, dict[str, Any]]:
         raise ValueError(f"Unsupported device table version: {version!r}")
 
     # Optional schema validation (tiny schema)
-    if JSONSCHEMA_AVAILABLE:
+    if JSONSCHEMA_AVAILABLE and jsonschema is not None:
         schema_path = (
             Path(__file__).parent.parent.parent
             / "toolset"
@@ -188,8 +199,10 @@ def load_device_table(path: Path) -> dict[str, dict[str, Any]]:
         schema = _load_schema(schema_path)
         if schema:
             try:
+                # Type narrowing: jsonschema is not None here due to the guard above
+                assert jsonschema is not None  # nosec B101 - type narrowing for mypy
                 jsonschema.validate(instance=data, schema=schema)
-            except Exception as e:
+            except (jsonschema.ValidationError, jsonschema.SchemaError) as e:
                 print(
                     f"[ERROR] Device table schema validation failed: {e}",
                     file=sys.stderr,
@@ -333,7 +346,7 @@ def aead_decrypt(
         if isinstance(payload, dict):
             return payload
         return None
-    except Exception:
+    except (ValueError, binascii.Error, TypeError, nacl.exceptions.CryptoError):
         return None
 
 
@@ -480,8 +493,8 @@ def process(argv: list[str] | None = None) -> int:
     except KeyboardInterrupt:
         print("\n[INFO] Interrupted by user", file=sys.stderr)
         return 1
-    except Exception as e:
-        print(f"[ERROR] Unexpected error: {e}", file=sys.stderr)
+    except (OSError, json.JSONDecodeError, ValueError, TypeError) as e:
+        print(f"[ERROR] processing failure: {e}", file=sys.stderr)
         return 1
     finally:
         if frames_fh is not sys.stdin:
@@ -493,7 +506,7 @@ def process(argv: list[str] | None = None) -> int:
     # Cross-check accepted count from disk to guard against counter drift
     try:
         accepted_files = len(list(args.out_facts.glob("*.json")))
-    except Exception:
+    except OSError:
         accepted_files = accepted
 
     print(

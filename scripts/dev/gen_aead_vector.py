@@ -119,7 +119,7 @@ def main() -> int:
     if OUT_PATH.exists():
         try:
             data = json.loads(OUT_PATH.read_text(encoding="utf-8"))
-        except Exception:
+        except (json.JSONDecodeError, OSError):
             data = {}
 
     data["deterministic_aead_vectors"] = [chacha_vec]
