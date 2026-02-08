@@ -34,10 +34,10 @@ repository = "https://github.com/bilalobe/trackone"
    # Dev/test helpers used by core/ledger crates
    serde_json_canonicalizer = "0.3.2"
 
-   # Internal crates (crates.io)
-   trackone-core = { version = "0.1.0-alpha.3", default-features = false }
-   trackone-ledger = { version = "0.1.0-alpha.3" }
-   trackone-constants = { version = "0.1.0-alpha.3" }
+   # Internal crates (local workspace members)
+   trackone-core = { version = "0.1.0-alpha.3", path = "crates/trackone-core", default-features = false }
+   trackone-ledger = { version = "0.1.0-alpha.3", path = "crates/trackone-ledger" }
+   trackone-constants = { version = "0.1.0-alpha.3", path = "crates/trackone-constants" }
 
 [profile.release]
 lto = true
