@@ -12,6 +12,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "block-buffer"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "96eb4cdd6cf1b31d671e9efe75c5d1ec614776856cefbe109ca373554a6d514f"
+dependencies = [
+ "hybrid-array",
+]
+
+[[package]]
 name = "byteorder"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -85,13 +94,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "crypto-common"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "211f05e03c7d03754740fd9e585de910a095d6b99f8bcfffdef8319fa02a8331"
+dependencies = [
+ "hybrid-array",
+]
+
+[[package]]
 name = "digest"
 version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9ed9a281f7bc9b7576e61468ba615a66a5c8cfdff42420a70aa82701a3b1e292"
 dependencies = [
- "block-buffer",
- "crypto-common",
+ "block-buffer 0.10.4",
+ "crypto-common 0.1.7",
+]
+
+[[package]]
+name = "digest"
+version = "0.11.0-rc.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "02b42f1d9edf5207c137646b568a0168ca0ec25b7f9eaf7f9961da51a3d91cea"
+dependencies = [
+ "block-buffer 0.11.0",
+ "crypto-common 0.2.0",
 ]
 
 [[package]]
@@ -140,6 +168,15 @@ name = "heck"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
+
+[[package]]
+name = "hybrid-array"
+version = "0.4.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e1b229d73f5803b562cc26e4da0396c8610a4ee209f4fac8fa4f8d709166dc45"
+dependencies = [
+ "typenum",
+]
 
 [[package]]
 name = "itoa"
@@ -317,9 +354,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json_canonicalizer"
-version = "0.3.1"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f777f77aeef456e47e75c2a4b16804b15395be5b344e2094a54965143ef1c31"
+checksum = "fe52319a927259afbfa5180c5157cd8167edfd3e8c254f9558c7fef44c5649f2"
 dependencies = [
  "ryu-js",
  "serde",
@@ -345,7 +382,18 @@ checksum = "a7507d819769d01a365ab707794a4084392c824f54a7a6a7862f8c3d0892b283"
 dependencies = [
  "cfg-if",
  "cpufeatures",
- "digest",
+ "digest 0.10.7",
+]
+
+[[package]]
+name = "sha2"
+version = "0.11.0-rc.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7c5f3b1e2dc8aad28310d8410bd4d7e180eca65fca176c52ab00d364475d0024"
+dependencies = [
+ "cfg-if",
+ "cpufeatures",
+ "digest 0.11.0-rc.11",
 ]
 
 [[package]]
@@ -396,6 +444,12 @@ name = "trackone-constants"
 version = "0.1.0-alpha.3"
 
 [[package]]
+name = "trackone-constants"
+version = "0.1.0-alpha.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c47b7176efbb2bd953cbaf8da087810edaf5b222fa13ba3049a1ef2a4345be9f"
+
+[[package]]
 name = "trackone-core"
 version = "0.1.0-alpha.3"
 dependencies = [
@@ -407,8 +461,23 @@ dependencies = [
  "serde_json",
  "serde_json_canonicalizer",
  "serde_repr",
- "sha2",
- "trackone-constants",
+ "sha2 0.11.0-rc.5",
+ "trackone-constants 0.1.0-alpha.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "zeroize",
+]
+
+[[package]]
+name = "trackone-core"
+version = "0.1.0-alpha.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8f28364517a1fa36bbde60fdce145576b35b53f1b99038edeb552004016714d0"
+dependencies = [
+ "heapless",
+ "postcard",
+ "serde",
+ "serde-big-array",
+ "serde_repr",
+ "trackone-constants 0.1.0-alpha.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "zeroize",
 ]
 
@@ -417,8 +486,7 @@ name = "trackone-gateway"
 version = "0.1.0-alpha.3"
 dependencies = [
  "pyo3",
- "trackone-core",
- "trackone-ledger",
+ "trackone-ledger 0.1.0-alpha.3 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -427,14 +495,25 @@ version = "0.1.0-alpha.3"
 dependencies = [
  "serde",
  "serde_json",
- "sha2",
+ "sha2 0.11.0-rc.5",
+]
+
+[[package]]
+name = "trackone-ledger"
+version = "0.1.0-alpha.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aa68f7821946feeb5d03158b324622acb87a69dfea5198ed1703530cc5114a26"
+dependencies = [
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
 ]
 
 [[package]]
 name = "trackone-pod-fw"
 version = "0.1.0-alpha.3"
 dependencies = [
- "trackone-core",
+ "trackone-core 0.1.0-alpha.3 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]

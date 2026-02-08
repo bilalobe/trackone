@@ -29,6 +29,12 @@ from typing import Any
 
 import pytest
 
+# Ensure repo root is on sys.path so `import scripts.*` works when running tests
+# directly from a checkout (pytest doesn't always add CWD under strict config).
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
 # Import common fixtures from the fixtures package so pytest registers them.
 # We prefer explicit imports and copying public symbols into this module's
 # globals() so pytest always sees the fixture callables regardless of how
