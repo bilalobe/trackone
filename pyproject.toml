@@ -125,6 +125,7 @@ markers = [
     "ots: OpenTimestamps related tests",
     "slow: slow-running tests (excluded by default)",
     "real_ots: uses real OpenTimestamps client (very slow, opt-in)",
+    "benchmark: performance benchmarks (requires pytest-benchmark)",
 ]
 # Treat warnings as errors, but allow some known safe warnings
 filterwarnings = [
