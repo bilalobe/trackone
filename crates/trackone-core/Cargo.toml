@@ -3,10 +3,11 @@ name = "trackone-core"
 description = "Core no_std-capable cryptographic and serialization primitives for TrackOne"
 version.workspace = true
 edition.workspace = true
-publish = true
+publish.workspace = true
 license.workspace = true
 authors.workspace = true
-repository = "https://github.com/bilalobe/trackone"
+repository.workspace = true
+readme = "README.md"
 
 [features]
 # Default to std for host/gateway development and testing.
@@ -39,45 +40,36 @@ production = []
 
 [dependencies]
 # Core data-structure support for no_std environments.
-heapless = { version = "0.9", default-features = false, features = ["serde"] }
+heapless.workspace = true
 
-# Serialization support; postcard itself is no_std-capable, but we
-# keep features minimal for now. We can refine features as needed
-# once concrete formats are stabilized.
-postcard = { version = "1", default-features = false }
+# Serialization support
+postcard.workspace = true
 
 # Serde for (de)serializing core types.
-# Enable `alloc` so derive-generated code for enums/containers compiles in no_std contexts.
-serde = { version = "1", default-features = false, features = ["derive", "alloc"] }
+serde = { workspace = true, default-features = false, features = ["derive", "alloc"] }
 
-# Serde representation helper for integer-backed enums (compact).
-serde_repr = "0.1"
+# Serde representation helper
+serde_repr.workspace = true
 
 # Support for large array (de)serialization in no_std contexts.
-serde-big-array = "0.5"
+serde-big-array.workspace = true
 
 # Hashing for Merkle trees and other gateway-only uses.
-sha2 = { version = "0.10", default-features = false, optional = true }
+sha2 = { workspace = true, default-features = false, optional = true }
 
 # Zeroize secret key material on drop.
-zeroize = { version = "1", default-features = false, features = ["derive"] }
+zeroize = { workspace = true, default-features = false, features = ["derive"] }
 
 # Workspace constants dependency
-# When packaging, Cargo removes `path` and resolves by `version`, so we must
-# specify it to pass `cargo package` verification.
-trackone-constants = { version = "0.1.0-alpha.3", path = "../trackone-constants" }
+trackone-constants.workspace = true
 
-# CBOR support (debug tooling / size comparisons). Canonical CBOR encoding for
-# commitments is implemented manually in `src/cbor.rs`, but we keep ciborium
-# available for non-canonical/debug CBOR when `std` is enabled.
-ciborium = { version = "0.2", optional = true }
+# CBOR support
+ciborium = { workspace = true, optional = true }
 
 [dev-dependencies]
-serde_json = "1"
+serde_json.workspace = true
 # RFC 8785 JSON Canonicalization Scheme (JCS) implementation used in tests/benchmarks.
-serde_json_canonicalizer = "0.3"
-# CBOR (RFC 8949) for format comparison benchmarks
-# (pulled via the optional dependency as part of `std` feature)
+serde_json_canonicalizer.workspace = true
 
 [lib]
 # Keep doctests disabled for now until public API and examples stabilize.

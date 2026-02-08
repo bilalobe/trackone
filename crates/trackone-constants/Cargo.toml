@@ -3,7 +3,7 @@ name = "trackone-constants"
 description = "Shared constants for TrackOne crates"
 version.workspace = true
 edition.workspace = true
-publish = true # Override workspace default (publish=false) so this crate can be packaged/published.
+publish.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
