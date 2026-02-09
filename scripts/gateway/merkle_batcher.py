@@ -255,7 +255,13 @@ def main(argv: list[str] | None = None) -> int:
             day_record = json.loads(day_blob)
             root_hex = header_dict.get("merkle_root")
             leaf_hashes = header_dict.get("leaf_hashes")
-        except (RuntimeError, TypeError, ValueError, json.JSONDecodeError, UnicodeDecodeError) as e:
+        except (
+            RuntimeError,
+            TypeError,
+            ValueError,
+            json.JSONDecodeError,
+            UnicodeDecodeError,
+        ) as e:
             print(
                 f"[WARN] Rust ledger failed, falling back to Python: {e}",
                 file=sys.stderr,
