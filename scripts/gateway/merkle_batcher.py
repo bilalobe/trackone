@@ -58,7 +58,7 @@ try:  # pragma: no cover - optional acceleration
 
     _RUST_MERKLE = getattr(trackone_core, "merkle", None)
     _RUST_LEDGER = getattr(trackone_core, "ledger", None)
-except ImportError:  # pragma: no cover - extension not built/installed
+except Exception:  # pragma: no cover - extension not built/installed or init failed
     trackone_core = None
     _RUST_MERKLE = None
     _RUST_LEDGER = None
@@ -255,7 +255,13 @@ def main(argv: list[str] | None = None) -> int:
             day_record = json.loads(day_blob)
             root_hex = header_dict.get("merkle_root")
             leaf_hashes = header_dict.get("leaf_hashes")
-        except (RuntimeError, TypeError, ValueError, json.JSONDecodeError) as e:
+        except (
+            RuntimeError,
+            TypeError,
+            ValueError,
+            json.JSONDecodeError,
+            UnicodeDecodeError,
+        ) as e:
             print(
                 f"[WARN] Rust ledger failed, falling back to Python: {e}",
                 file=sys.stderr,

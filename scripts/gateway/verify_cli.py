@@ -84,7 +84,7 @@ try:  # pragma: no cover - optional acceleration
 
     _RUST_MERKLE = getattr(trackone_core, "merkle", None)
     _RUST_LEDGER = getattr(trackone_core, "ledger", None)
-except ImportError:  # pragma: no cover - extension not built/installed
+except Exception:  # pragma: no cover - extension not built/installed or init failed
     trackone_core = None
     _RUST_MERKLE = None
     _RUST_LEDGER = None
@@ -432,7 +432,7 @@ def main(argv: list[str] | None = None) -> int:
         try:
             day_bin_bytes = day_bin_path.read_bytes()
             any_val = json.loads(day_bin_bytes)
-        except (json.JSONDecodeError, OSError) as exc:
+        except (json.JSONDecodeError, UnicodeDecodeError, OSError) as exc:
             print(f"ERROR: Failed to parse day blob JSON {day_bin_path}: {exc}")
             return 1
         if not isinstance(any_val, dict):

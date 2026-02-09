@@ -56,7 +56,7 @@ try:
         raise ImportError("crypto_utils spec not found")
     crypto_utils = importlib.util.module_from_spec(cu_spec)
     cu_spec.loader.exec_module(crypto_utils)
-except ImportError:  # Fallback minimal HKDF if import fails
+except Exception:  # Fallback minimal HKDF if import or execution fails
     import hashlib
     import hmac
     import types
@@ -161,7 +161,7 @@ def load_device_table(path: Path) -> dict[str, dict[str, Any]]:
                     out[str(k)] = v
             return out
         return {}
-    except (json.JSONDecodeError, OSError):
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
         return {}
 
 
