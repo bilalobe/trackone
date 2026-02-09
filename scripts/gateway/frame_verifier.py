@@ -48,8 +48,7 @@ except ImportError:
     jsonschema = None
     JSONSCHEMA_AVAILABLE = False
 
-# Cast for type narrowing
-jsonschema = cast(Any, jsonschema)
+# jsonschema remains Any | None for proper type checking after import guard
 
 
 def _load_schema(path: Path) -> dict[str, Any] | None:
@@ -59,7 +58,7 @@ def _load_schema(path: Path) -> dict[str, Any] | None:
             if isinstance(data, dict):
                 return data
             return None
-    except (json.JSONDecodeError, OSError):
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
         return None
     return None
 
@@ -145,7 +144,7 @@ def load_fact_schema() -> dict[str, Any] | None:
             if isinstance(data, dict):
                 return data
             return None
-        except (json.JSONDecodeError, OSError) as e:
+        except (json.JSONDecodeError, OSError, UnicodeDecodeError) as e:
             print(f"[WARN] Failed to load fact schema: {e}", file=sys.stderr)
     return None
 
@@ -173,7 +172,7 @@ def load_device_table(path: Path) -> dict[str, dict[str, Any]]:
         return {}
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
         return {}
 
     # Enforce version requirement (ADR-006)

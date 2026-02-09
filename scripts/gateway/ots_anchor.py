@@ -84,7 +84,7 @@ def _ots_client_version() -> str | None:
             ver = ver.strip()
             return ver.splitlines()[0] if ver else None
     except (subprocess.CalledProcessError, OSError):
-        pass
+        pass  # ots-cli tool not available or failed; silently skip version check
     return None
 
 

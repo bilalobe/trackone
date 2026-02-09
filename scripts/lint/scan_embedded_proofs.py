@@ -30,7 +30,7 @@ def scan_file(path: Path) -> list[str]:
     issues: list[str] = []
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError) as exc:  # pragma: no cover - defensive
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError) as exc:  # pragma: no cover - defensive
         issues.append(f"{path}: failed to parse JSON or read file: {exc}")
         return issues
 
