@@ -28,7 +28,7 @@ import json
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 import nacl.bindings
 import nacl.exceptions
