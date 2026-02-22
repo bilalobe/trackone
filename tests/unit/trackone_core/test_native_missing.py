@@ -19,7 +19,8 @@ def test_trackone_core_imports_without_native_extension(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _clear_modules("trackone_core")
-    monkeypatch.delitem(sys.modules, "trackone_core._native", raising=False)
+    # Force native import failure even if the extension is installed in the env.
+    monkeypatch.setitem(sys.modules, "trackone_core._native", None)  # type: ignore[arg-type]
 
     tc = importlib.import_module("trackone_core")
 
@@ -43,7 +44,8 @@ def test_shim_modules_raise_clear_importerror_when_native_missing(
     monkeypatch: pytest.MonkeyPatch, submod: str
 ) -> None:
     _clear_modules("trackone_core")
-    monkeypatch.delitem(sys.modules, "trackone_core._native", raising=False)
+    # Force native import failure even if the extension is installed in the env.
+    monkeypatch.setitem(sys.modules, "trackone_core._native", None)  # type: ignore[arg-type]
 
     # Importing the shim should succeed even without the native extension.
     m = importlib.import_module(f"trackone_core.{submod}")
