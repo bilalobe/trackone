@@ -95,15 +95,23 @@ build-backend = "maturin"
 # PyO3 bindings for Rust cdylib (gateway crate in workspace)
 manifest-path = "crates/trackone-gateway/Cargo.toml"
 bindings = "pyo3"
-module-name = "trackone_core"
+#
+# We ship a small Python package `trackone_core/` alongside the native extension.
+# The native module lives at `trackone_core._native` so `python-source` can be set
+# without requiring a top-level `trackone_core.py` (which would shadow the extension).
+python-source = "."
+module-name = "trackone_core._native"
 include = [
     "scripts/**/*.py",
+    "trackone_core/**/*.py",
     "LICENSE",
     "README.md",
 ]
 exclude = [
     "scripts/**/__pycache__",
     "scripts/**/*.pyc",
+    "trackone_core/**/__pycache__",
+    "trackone_core/**/*.pyc",
 ]
 
 # Pytest configuration
