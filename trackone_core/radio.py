@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ._native import radio as _radio
+from . import _native as _radio
 
 
 def __getattr__(name: str):  # noqa: ANN201

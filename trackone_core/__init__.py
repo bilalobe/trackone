@@ -18,7 +18,12 @@ from . import crypto as crypto  # noqa: F401
 from . import ledger as ledger  # noqa: F401
 from . import merkle as merkle  # noqa: F401
 from . import ots as ots  # noqa: F401
-from . import radio as radio  # noqa: F401
+try:
+    from . import radio as radio  # noqa: F401
+except Exception:
+    # The radio module is optional; failure to import it should not
+    # prevent importing the rest of trackone_core.
+    radio = None  # type: ignore[assignment]
 
 Gateway = _native.Gateway
 GatewayBatch = _native.GatewayBatch
@@ -35,5 +40,4 @@ __all__ = [
     "ledger",
     "merkle",
     "ots",
-    "radio",
 ]
