@@ -3,13 +3,13 @@
 
 from __future__ import annotations
 
-import os
-
 import pytest
+
+from scripts.gateway.config import get_bool_env
 
 
 def _require_native() -> bool:
-    return os.getenv("TRACKONE_REQUIRE_NATIVE", "0") in {"1", "true", "yes"}
+    return get_bool_env("TRACKONE_REQUIRE_NATIVE", False)
 
 
 def test_native_extension_importable() -> None:
