@@ -17,9 +17,13 @@ spec:
     spec:
       automountServiceAccountToken: false
       restartPolicy: Never
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: pod-fw-build
-          image: {{ .Values.jobs.podFw.image.repository }}:{{ .Values.jobs.podFw.image.tag }}
+          image: {{ include "trackone.image" .Values.jobs.podFw.image }}
           imagePullPolicy: {{ .Values.jobs.podFw.image.pullPolicy }}
           resources:
             {{ toYaml .Values.jobs.podFw.resources | nindent 12 }}

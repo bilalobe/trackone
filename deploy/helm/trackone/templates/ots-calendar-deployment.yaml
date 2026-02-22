@@ -19,9 +19,13 @@ spec:
         {{ include "trackone.commonLabels" . | nindent 8 }}
     spec:
       automountServiceAccountToken: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: ots-calendar
-          image: {{ .Values.otsCalendar.image.repository }}:{{ .Values.otsCalendar.image.tag }}
+          image: {{ include "trackone.image" .Values.otsCalendar.image }}
           imagePullPolicy: {{ .Values.otsCalendar.image.pullPolicy }}
           ports:
             - name: http
