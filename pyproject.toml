@@ -102,14 +102,11 @@ bindings = "pyo3"
 python-source = "."
 module-name = "trackone_core._native"
 include = [
-    "scripts/**/*.py",
     "trackone_core/**/*.py",
     "LICENSE",
     "README.md",
 ]
 exclude = [
-    "scripts/**/__pycache__",
-    "scripts/**/*.pyc",
     "trackone_core/**/__pycache__",
     "trackone_core/**/*.pyc",
 ]
