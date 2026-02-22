@@ -1,11 +1,12 @@
 import os
 
-# Import the Rust extension module built by crates/trackone-gateway.
-# The module name is `trackone_core` (see #[pymodule] fn trackone_core in Rust).
-import trackone_core  # noqa: F401
 import uvicorn
 from fastapi import FastAPI
 from fastapi.responses import PlainTextResponse
+
+# Import the Rust extension module built by crates/trackone-gateway.
+# The public import is `trackone_core` (native module lives at `trackone_core._native`).
+import trackone_core  # noqa: F401
 
 app = FastAPI()
 

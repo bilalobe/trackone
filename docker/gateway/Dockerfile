@@ -25,9 +25,12 @@ COPY crates ./crates
 # Build the extension module in release mode.
 RUN cargo build -p trackone-gateway --release
 
-# The produced artifact is a shared library. We'll copy it out with a stable name.
+# The produced artifact is a shared library. Install it under the Python package
+# layout so `import trackone_core` works (native module: trackone_core._native).
 RUN ls -la /workspace/target/release/libtrackone.so \
- && cp /workspace/target/release/libtrackone.so /workspace/trackone_core.so
+ && EXT_SUFFIX="$(python3-config --extension-suffix)" \
+ && mkdir -p /workspace/trackone_core \
+ && cp /workspace/target/release/libtrackone.so "/workspace/trackone_core/_native${EXT_SUFFIX}"
 
 FROM python:3.12-slim
 
@@ -38,7 +41,8 @@ COPY docker/gateway/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
 # Install the extension module into Python's site-packages.
-COPY --from=builder /workspace/trackone_core.so /usr/local/lib/python3.12/site-packages/trackone_core.so
+COPY trackone_core /usr/local/lib/python3.12/site-packages/trackone_core
+COPY --from=builder /workspace/trackone_core/_native*.so /usr/local/lib/python3.12/site-packages/trackone_core/
 
 COPY docker/gateway/server.py /app/server.py
 COPY docker/gateway/entrypoint.sh /app/entrypoint.sh
