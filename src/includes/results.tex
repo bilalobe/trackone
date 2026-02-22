@@ -1,226 +1,254 @@
 \section{Results}
+\label{sec:results}
 
-\subsection{Implementation Status}
-\textbf{Release date:} November 20, 2025
+This section presents the principal findings from the experiments
+described in Section~\ref{sec:experiments}, organised by the claims
+they support.
+Each subsection states the requirement under test, the
+observed outcome, and its implication for the system's readiness.
 
-\textbf{Implemented features:}
-\begin{itemize}[nosep]
-    \item Production XChaCha20-Poly1305 AEAD with PyNaCl
-    \item Device table schema v1.0 with forward-only policy
-    \item Replay window with persistent state across restarts
-    \item Deterministic Merkle batching with hash-sorted leaves
-    \item Daily OTS anchoring with verification CLI and Bitcoin attestation
-    \item Peer attestation of day roots with Ed25519 and quorum checks
-    \item Parallel RFC~3161 TSA anchoring (optional, ADR-015) with local verification when artifacts are available
-    \item End-to-end verification: Merkle recomputation, OTS/TSA proof validation, and local header verification
-    \item CI/CD: Multi-version Python testing, deterministic dependency resolution via \texttt{uv}
-\end{itemize}
+% ------------------------------------------------------------------
+\subsection{Pipeline integrity (FR-1, FR-3, FR-5, NFR-1)}
 
-\subsection{Release summary}
+The end-to-end pipeline — frame emission, \ac{AEAD} verification,
+canonical fact writing, Merkle batching, and independent
+re-verification — executes without error across all tested
+configurations.
+Table~\ref{tab:pipeline-summary} summarises the
+key invariants validated.
 
-\begin{itemize}[nosep]
-    \item Test coverage: \textbf{200+ tests}; measured coverage for gateway and pod simulation modules approximately \textbf{85\%} (target: 85\%).
-    \item Skipped/optional tests: A small number of integration tests are optional and may be skipped when external tools (OpenTimestamps client, Bitcoin headers) are unavailable; these skips are intentional and documented.
-    \item Coverage gaps: Remaining gaps are concentrated in rare branches and CLI-only error paths that require external dependencies or live networks.
-    \item Release readiness: Core verification functionality is production-ready: deterministic Merkle batching, stable AEAD primitives, replay protection, and Bitcoin-anchored OTS verification have been validated.
-\end{itemize}
+\begin{table}[H]
+    \centering
+    \caption{Pipeline integrity invariants and observed outcomes.}
+    \label{tab:pipeline-summary}
+    \small
+    \begin{tabularx}{\textwidth}{l X l}
+\toprule
+\textbf{Invariant} & \textbf{Test method} & \textbf{Result} \\
+\midrule
+Deterministic Merkle root   & Same facts (shuffled order) $\rightarrow$ identical root
+& Pass \\
+Byte-identical day blob     & Repeated batching $\rightarrow$ identical \texttt{day.bin} \ac{SHA}-256
+& Pass \\
+Tamper detection            & Single-bit mutation of \texttt{day.bin} $\rightarrow$ root mismatch
+& Pass \\
+End-to-end verification     & \texttt{verify\_cli} exit code 0 on valid artifacts
+& Pass \\
+\bottomrule
+    \end{tabularx}
+\end{table}
 
-\subsection{Coverage by module (high level)}
+These results confirm that the canonical-fact $\rightarrow$
+Merkle-root $\rightarrow$ \ac{OTS}-anchor chain is deterministic and
+tamper-evident, satisfying NFR-1 (any post-anchor modification is
+detectable).
+
+% ------------------------------------------------------------------
+\subsection{Anti-replay enforcement (FR-2, FR-11, NFR-2)}
+
+The sliding replay window (size~64) correctly enforces the
+\texttt{(dev\_id,~fc)} single-consumption invariant across all tested
+scenarios:
+
 \begin{center}
-\begin{tabular}{lrl}
-\hline
-\textbf{Module} & \textbf{Coverage} & \textbf{Notes} \\
-\hline
-\texttt{crypto\_utils.py} & 97\% & Cryptographic primitives and vectors validated \\
-\texttt{merkle\_batcher.py} & 90\% & Canonical JSON and deterministic tree construction \\
-\texttt{ots\_anchor.py} & 95\% & OTS stamping and proof handling (integration-focused) \\
-\texttt{pod\_sim.py} & 76\% & Fact generation and TLV encoding (work in progress) \\
-\texttt{frame\_verifier.py} & 82\% & AEAD decryption, replay window enforcement \\
-\texttt{verify\_cli.py} & 87\% & Verification CLI (some error paths require integration) \\
-\hline
-\textbf{Overall (measured)} & \textbf{~85\%} & \textbf{target: 85\%} \\
-\hline
-\end{tabular}
+    \small
+    \begin{tabular}{lll}
+        \toprule
+        \textbf{Scenario} & \textbf{Expected} & \textbf{Observed} \\
+        \midrule
+        Monotonic increasing \texttt{fc}           & Accept  & Accept  \\
+        Duplicate frame (same \texttt{fc})         & Reject  & Reject  \\
+        Out-of-window jump ($> 64$)                & Reject  & Reject  \\
+        Reordered frames within window             & Accept  & Accept  \\
+        Duplicate after gateway restart            & Reject  & Reject  \\
+        Boundary: highest $+$ window              & Accept  & Accept  \\
+        Boundary: highest $+$ window $+ 1$        & Reject  & Reject  \\
+        \bottomrule
+    \end{tabular}
 \end{center}
 
-\subsection{Deterministic verification and security posture}
+Rejected frames appear only in audit logs; they never enter
+\texttt{day.bin} or the Merkle set.
+This validates the ledger-vs-audit
+separation required by NFR-2.
 
-\subsection{OpenTimestamps Integration}
+% ------------------------------------------------------------------
+\subsection{Cryptographic correctness (C-2)}
 
-\textbf{Production Bitcoin anchoring validated:}
+All cryptographic primitives pass round-trip and negative tests:
+
 \begin{itemize}[nosep]
-    \item Day blobs successfully anchored to Bitcoin blocks 919384, 919388, 919418
-    \item Multiple calendar server attestations received (a.pool.opentimestamps.org, etc.)
-    \item Local verification with Bitcoin Core (headers-only mode, pruned-safe)
-    \item Merkle root recomputation matches anchored commitment (end-to-end consistency)
+  \item \textbf{AEAD:} XChaCha20-Poly1305 encrypt/decrypt matches
+  deterministic test vectors; single-bit ciphertext, tag, and
+  \ac{AAD} mutations are rejected.
+  \item \textbf{Key agreement:} X25519 shared secrets match between
+  independently generated key pairs.
+  \item \textbf{KDF:} \ac{HKDF}-\ac{SHA}256 outputs match \ac{RFC}~5869 test vectors
+  and edge cases (empty salt, zero-length info).
+  \item \textbf{Signatures:} Ed25519 sign/verify succeeds for valid
+  inputs; tampered messages and wrong keys are rejected.
 \end{itemize}
 
-\textbf{OTS workflow timing characteristics:}
+Property-based testing (Hypothesis) found no encoding failures across
+$>$10\,000 generated TLV inputs.
+
+% ------------------------------------------------------------------
+\subsection{Cross-implementation equivalence (FR-12, NFR-8)}
+
+The Rust \texttt{trackone-core} crate and the Python gateway produce
+bit-for-bit identical outputs for a shared golden corpus:
+
 \begin{itemize}[nosep]
-    \item \texttt{ots stamp}: Immediate submission ($<$5 seconds to calendar servers)
-    \item \texttt{ots upgrade}: 1--6 hours (awaiting Bitcoin block confirmation)
-    \item \texttt{ots verify}: Instant validation (if headers available locally)
-    \item Pending proofs: Cannot be verified until Bitcoin block inclusion
+  \item Canonical \ac{CBOR} commitment bytes: identical across Python and Rust.
+  \item Merkle root computation: identical for all corpus days.
+  \item \ac{AEAD} encrypt/decrypt: identical ciphertexts and tags.
 \end{itemize}
 
-\subsection{CI/CD integration strategy (ADR-007):}
-\begin{itemize}[nosep]
-    \item Headers-only Bitcoin Core: $<$1 GB storage (vs. $>$500 GB full node)
-    \item Initial header sync: \textasciitilde15 minutes (one-time cost per CI runner)
-    \item Cached headers: Subsequent verifications in seconds
-    \item Graceful fallback: Tests use placeholder proofs when OTS unavailable
-    \item Real OTS tests: Optional via \texttt{RUN\_REAL\_OTS=1} (requires \texttt{ots} binary)
-\end{itemize}
+No divergences were observed. \ac{CI} enforces this invariant: any
+cross-implementation mismatch fails the build.
 
-\subsection{Bitcoin Attestation Verification}
+% ------------------------------------------------------------------
+\subsection{Embedded viability (FR-13)}
 
-\textbf{Primary artifact:}\\
-File: \texttt{out/site\_demo/day/2025-10-07.bin}\\
-SHA256: \texttt{4778cddcf437f0b0ac8cd62fef3b89909bd6f4a8fd9590ac6e4a70e4fded5f60}\\
-OTS Proof: \texttt{out/site\_demo/day/2025-10-07.bin.ots}\\
-OTS Client: \texttt{v0.7.2}
+Firmware stress tests confirm that the frame builder fits within
+STM32L0-class resource budgets:
 
-\textbf{Bitcoin block attestation:}
-\begin{itemize}[nosep]
-    \item Height: \texttt{919,384}
-    \item Block hash: \texttt{00000000000000000000b36d7b88a2e781f65619746bc238d4cfde8555f13733}
-    \item Merkle root: \texttt{166c8fe05f6071d8a29145c4e52c039159c699f3278c45d1c3107503b59c8047}
-    \item Block time: October 16, 2025 (IST)
-\end{itemize}
+\begin{center}
+    \small
+    \begin{tabular}{llrl}
+        \toprule
+        \textbf{Target} & \textbf{Iterations} & \textbf{Max frame} & \textbf{Stack} \\
+        \midrule
+        Host (x86\_64)                & 5.6\,M/s   & 56\,B & $\sim$1\,KiB \\
+        QEMU Cortex-M4               & 1\,000      & 56\,B & guard intact \\
+        QEMU Cortex-M0+ (thumbv6m)   & 100         & 56\,B & 256\,B guard intact \\
+        \bottomrule
+    \end{tabular}
+\end{center}
 
-\textbf{Verification transcript (local Bitcoin Core node):}
-\begin{verbatim}
-# Verify OTS proof against Bitcoin blockchain
-ots verify out/site_demo/day/2025-10-07.bin.ots
-# Success! Bitcoin block 919384 attests existence as of 2025-10-16 IST
+Code size ($\sim$3.5\,KiB \texttt{.text}) and RAM usage are within
+STM32L072 budgets (128\,KiB flash, 20\,KiB RAM). Wire format is
+stable across architectures.
+Note: stress binaries use a dummy \ac{AEAD}
+to isolate framing behaviour; cryptographic throughput is not claimed.
 
-# Confirm merkle root in Bitcoin block header
-BHASH=$(bitcoin-cli getblockhash 919384)
-bitcoin-cli getblockheader $BHASH | jq -r .merkleroot
-# 166c8fe05f6071d8a29145c4e52c039159c699f3278c45d1c3107503b59c8047
+% ------------------------------------------------------------------
+\subsection{OTS anchoring and verification (FR-6, NFR-1)}
 
-# Run gateway verification CLI (Merkle + OTS)
-python scripts/gateway/verify_cli.py \
-  --root out/site_demo \
-  --facts out/site_demo/facts
-# [OK] Merkle root: 937be862ca4cca9b5ea3ce34aad4df7e234ba0624f99870a140febcdc5a8206c
-# [OK] Block header: .../blocks/2025-10-07-00.block.json
-# [OK] Day blob: .../day/2025-10-07.bin
-# [OK] SHA256(day.bin): 7627e7f8160ebeda2a386fc10204a2e589f5fa0cb80e0ee5519f74801b8e602d
-# OK: root matches and OTS verified
-\end{verbatim}
+Real Bitcoin attestations were obtained and verified locally:
 
-\textbf{Proof metadata storage:}\\
-Location: \texttt{proofs/2025-10-07.ots.meta.json}\\
-Fields: Artifact path, SHA-256, OTS client version, Bitcoin block (height/hash/merkleroot), timestamp
+\begin{center}
+    \small
+    \begin{tabular}{ll}
+        \toprule
+        \textbf{Property} & \textbf{Value} \\
+        \midrule
+        Artifact                    & \texttt{day/2025-10-07.bin} \\
+        Bitcoin blocks attesting    & 919\,384;\; 919\,388;\; 919\,418 \\
+        Calendars used              & \texttt{a.pool.opentimestamps.org} (+ others) \\
+        Verification method         & Pruned Bitcoin Core, headers-only ($<$1\,GB) \\
+        Merkle root match           & Confirmed \\
+        \bottomrule
+    \end{tabular}
+\end{center}
 
-\textbf{Git LFS configuration:}\\
-OTS proofs tracked via Git LFS to prevent repository bloat:\\
-\texttt{.gitattributes}: \texttt{*.ots filter=lfs diff=lfs merge=lfs -text}
+The day artifact's \ac{SHA}-256 digest matches the sidecar metadata; the
+\ac{OTS} proof validates against Bitcoin block headers.
+This demonstrates
+that the full anchoring lifecycle (stamp $\rightarrow$ upgrade
+$\rightarrow$ verify) is functional and that artifacts are
+independently verifiable without trusting the gateway operator.
 
-\subsection{Peer Attestation \& TSA Artifacts (M\#5)}
-\textbf{Primary artifacts:}
-\begin{itemize}[nosep]
-    \item Peer signatures: \texttt{out/site\_demo/day/2025-10-07.peers.json}
-    \item Optional TSA response: \texttt{out/site\_demo/day/2025-10-07.tsr}
-\end{itemize}
+% ------------------------------------------------------------------
+\subsection{Test coverage and CI}
 
-\textbf{Verification transcript (peer quorum):}
-\begin{verbatim}
-# Generate peer signatures (using local peer config)
-python scripts/gateway/peer_attestation.py sign \
-  --site an-001 --day 2025-10-07 \
-  --root 937be862ca4cca9b5ea3ce34aad4df7e234ba0624f99870a140febcdc5a8206c \
-  --peers toolset/demo/peers.json --out out/site_demo/day
+\begin{center}
+    \small
+    \begin{tabular}{lr}
+        \toprule
+        \textbf{Metric} & \textbf{Value} \\
+        \midrule
+        Total tests (Python)        & 200+ (181 last run; 2 skipped) \\
+        Coverage (gateway + pod)    & $\sim$85\% (target: 85\%) \\
+        Python versions tested      & 3.11, 3.12, 3.13 \\
+        Static analysis             & mypy, ruff, bandit — all clean \\
+        Full suite wall time        & $\sim$20\,s \\
+        \bottomrule
+    \end{tabular}
+\end{center}
 
-# Verify quorum (k-of-n)
-python scripts/gateway/peer_attestation.py verify \
-  --site an-001 --day 2025-10-07 \
-  --root 937be862ca4cca9b5ea3ce34aad4df7e234ba0624f99870a140febcdc5a8206c \
-  --file out/site_demo/day/2025-10-07.peers.json --min 2
-# OK: 2 of 3 signatures valid for context trackone:day-root:v1
-\end{verbatim}
+Uncovered code is concentrated in \ac{CLI} entry points and rare I/O error
+branches.
+Optional integration tests (real \ac{OTS}, \ac{TSA} verification)
+auto-skip when external tools are unavailable, avoiding false
+negatives while keeping real-world checks reproducible.
 
-\textbf{TSA note:} When \texttt{*.tsr} is present, the message imprint matches the daily Merkle root; chain verification may be skipped in offline CI and performed on auditor workstations.
+% ------------------------------------------------------------------
+\subsection{Storage and performance}
 
-\subsection{Documentation (ADRs)}
+For a representative day (10 devices, 100 frames each):
 
-\textbf{Architecture Decision Records (selected):}
-\begin{itemize}[nosep]
-    \item ADR-001: Cryptographic primitives (X25519, HKDF, XChaCha20-Poly1305, Ed25519)
-    \item ADR-002: Telemetry framing and replay policy
-    \item ADR-003: Canonicalization, Merkle policy, daily OTS anchoring
-    \item ADR-004: Framed ingest stub (transition strategy)
-    \item ADR-005: PyNaCl migration (library consolidation)
-    \item ADR-006: Forward-only device table schema (salt8 policy)
-    \item ADR-007: OTS verification in CI (headers-only Bitcoin Core)
-    \item ADR-008: Milestone M\#4 completion and workflow formalization
-    \item ADR-009: Bandit remediation (security static analysis)
-    \item ADR-010: Test suite refactor and naming conventions
-    \item ADR-011: Benchmarking strategy (metrics, harness, artifact outputs)
-    \item ADR-012: Parquet export / columnar storage (future data lake option)
-    \item ADR-013: Python version support policy (3.11--3.13 matrix)
-    \item ADR-014: Stationary OTS calendar fallback policy
-    \item ADR-015: Parallel anchoring (RFC 3161 TSA + OTS)
-    \item ADR-016: Changelog policy (git-cliff integration)
-    \item ADR-017: Rust core and PyO3 integration (latent migration plan)
-    \item ADR-018: Cryptographic randomness and nonce policy
-    \item ADR-019: Rust gateway chain of trust
-    \item ADR-020: Safety net for OTS pipeline failures
-\end{itemize}
+\begin{center}
+    \small
+    \begin{tabular}{lr}
+        \toprule
+        \textbf{Artifact class} & \textbf{Size} \\
+        \midrule
+        Frames (ND\ac{JSON})         & $\sim$200\,KB \\
+        Facts (canonical)       & $\sim$150\,KB \\
+        Block headers + day blob& $\sim$25\,KB \\
+        \ac{OTS} proof (confirmed)   & $\sim$10\,KB \\
+        \midrule
+        \textbf{Total per day}  & \textbf{$\sim$385\,KB} \\
+        \bottomrule
+    \end{tabular}
+\end{center}
 
-\textbf{External artifacts:} Deterministic crypto vectors reside at \texttt{toolset/unified/crypto\_test\_vectors.json}; absence triggers intentional skips. Real OTS proofs (e.g., \texttt{out/site\_demo/day/*.bin.ots}) enable full anchoring tests; RFC 3161 TSA responses (\texttt{*.tsr}) may be stored alongside per ADR-015.
+Storage scales linearly with device count and sampling rate.
+At
+the target duty cycle (4 uplinks/day, 10 devices), annual storage
+is under 150\,MB — well within the capacity of commodity SD cards
+or gateway flash.
 
-\subsection{Platform \& Dependencies}
+% ------------------------------------------------------------------
+\subsection{Summary of findings}
 
-\textbf{System requirements:}
-\begin{itemize}[nosep]
-    \item \textbf{OS:} Linux (openSUSE Tumbleweed, Ubuntu 24.04 tested)
-    \item \textbf{Python:} 3.11, 3.12, 3.13 (tested in CI matrix)
-    \item \textbf{Package manager:} uv (fast, deterministic dependency resolution)
-    \item \textbf{Optional:} OpenTimestamps client (\texttt{ots}), Bitcoin Core (\texttt{bitcoind})
-\end{itemize}
+Table~\ref{tab:req-verdict} maps the principal requirements to their
+experimental outcomes.
 
-\textbf{Runtime dependencies:}
-\begin{itemize}[nosep]
-    \item \texttt{pynacl}: XChaCha20-Poly1305, X25519, Ed25519, HKDF
-    \item \texttt{jsonschema}: Schema validation for blocks and day records
-    \item \texttt{pytest}: Test framework with fixtures and parametrization
-    \item \texttt{pytest-cov}: Coverage reporting and HTML output
-    \item \texttt{hypothesis}: Property-based testing for cryptographic properties
-    \item \texttt{opentimestamps-client}: Optional, for real OTS stamping/verification
-\end{itemize}
+\begin{table}[H]
+    \centering
+    \caption{Requirements traceability: key findings.}
+    \label{tab:req-verdict}
+    \small
+    \begin{tabularx}{\textwidth}{l X l}
+\toprule
+\textbf{Req.} & \textbf{Claim} & \textbf{Verdict} \\
+\midrule
+FR-2, FR-11  & Replay window rejects duplicates and stale frames
+& Satisfied \\
+FR-5, NFR-1  & Deterministic Merkle roots; tamper detected
+& Satisfied \\
+FR-6         & Daily \ac{OTS} anchor with Bitcoin attestation
+& Satisfied \\
+FR-7         & Independent verification from published artifacts
+& Satisfied \\
+FR-12, NFR-8 & Rust/Python cross-implementation equivalence
+& Satisfied \\
+FR-13        & Firmware fits Cortex-M0+ resource budget
+& Satisfied \\
+C-2          & Approved primitives; no bespoke crypto
+& Satisfied \\
+NFR-2        & Ledger/audit separation enforced
+& Satisfied \\
+\bottomrule
+    \end{tabularx}
+\end{table}
 
-\textbf{Development tools:}
-\begin{itemize}[nosep]
-    \item \texttt{mypy}: Static type checking (100\% coverage in gateway modules)
-    \item \texttt{ruff}: Fast Python linter (replaces flake8, isort, black)
-    \item \texttt{bandit}: Security static analysis (ADR-009 hardening)
-\end{itemize}
-
-We use \texttt{ruff}, \texttt{mypy}, and \texttt{bandit} for linting, type checks, and security scans respectively, and track large artifacts with Git LFS; our CI experiments use the \texttt{uv} package manager for deterministic installs~\cite{ruff,mypy,bandit,git-lfs,uv_pkg}.
-
-\textbf{CI/CD status:}
-\begin{itemize}[nosep]
-    \item All tests passing: 181 tests (181 passed, 0 failed, 2 skipped)
-    \item Python 3.12/3.13/3.14 matrix: All versions pass
-    \item Static analysis: mypy clean, ruff clean, bandit clean
-    \item Coverage threshold: 85\% (gateway + pod\_sim modules)
-    \item Build time: $<$2 minutes (with uv caching)
-\end{itemize}
-
-\subsection{Future Work (Post-M\#4)}
-
-\textbf{M\#5 Candidates:}
-\begin{itemize}[nosep]
-    \item Gateway ``Ledger'' tab: JSON output visualization for auditors
-    \item Outage logger: Connectivity monitoring and gap detection
-    \item Automated OTS workflow: Daily anchor + weekly upgrade cron jobs
-    \item Multi-day batch verification: Verify day-chain continuity (\texttt{prev\_day\_root})
-    \item Key rotation workflows: Implement ADR-001 key derivation schedules
-    \item Enhanced proof metadata: Include git commit SHA, build timestamp
-    \item Air-gapped deployment guide: Offline verification procedures
-    \item Performance benchmarking: Throughput testing for high-volume scenarios
-\end{itemize}
-
-\textbf{License:} MIT
+All Track~One requirements that are testable with the current
+(pre-deployment) system are satisfied.
+Requirements that depend on
+sustained field operation (e.g., R-1 anchoring delay under real
+connectivity, R-2 data loss bounds over months) remain to be
+validated during a pilot deployment and are identified as future
+work.

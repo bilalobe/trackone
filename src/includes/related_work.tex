@@ -1,0 +1,52 @@
+\subsection{Merkle Tree Timestamping Systems}\label{subsec:merkle-tree-timestamping-systems}
+
+\textbf{Certificate Transparency (RFC 6962, 2013):} Google's \ac{CT} system uses Merkle trees to create append-only logs of \ac{TLS} certificates with public auditability. \ac{CT} demonstrates the viability of Merkle-based timestamping at scale (billions of certificates), but targets web \ac{PKI}, not \ac{IoT} telemetry.\ \ac{CT} logs are operated by trusted third parties, whereas TrackOne uses Bitcoin blockchain for trustless verification.
+
+\textbf{Trillian (Google, 2017):} Generic Merkle tree implementation extracted from \ac{CT}.
+Provides verifiable data structures as a service but requires infrastructure deployment.\ TrackOne's daily batching is conceptually similar but optimized for \ac{LoRa} duty cycle constraints and Bitcoin anchoring costs.
+
+\textbf{Guardtime KSI (2007-present):} Commercial blockchain timestamping service used for \ac{IoT} and critical infrastructure.
+KSI uses proprietary blockchain (not Bitcoin) with Merkle aggregation.
+Requires enterprise licensing and closed-source verification.\ TrackOne provides equivalent functionality with open-source implementation and public Bitcoin verification.
+
+\subsection{Blockchain-Based IoT Systems}\label{subsec:blockchain-based-iot-systems}
+
+\textbf{Helium Network (2019-present):} Decentralized wireless network using Helium blockchain (now Solana).\ Provides proof-of-coverage and data credits for \ac{IoT} devices.\ Charges per-packet fees (\$0.00001/packet), making it unsuitable for multi-year autonomous deployments.\ TrackOne's daily \ac{OTS} anchoring provides zero marginal cost after initial stamp.
+
+\textbf{IOTA Tangle (2016-present):} Directed acyclic graph (DAG) designed for \ac{IoT} micropayments.\ Requires continuous connectivity and computational overhead for tip selection.\ TrackOne's gateway-based batching enables offline pod operation with intermittent uplinks.
+
+\textbf{Ethereum-based systems:} Various research projects use Ethereum smart contracts for \ac{IoT} data integrity.\ Gas fees (\$0.50-\$5 per transaction) make per-message timestamping prohibitively expensive.\ TrackOne's Merkle batching amortizes blockchain costs across 1000+ daily facts.
+
+\subsection{OpenTimestamps Ecosystem}\label{subsec:opentimestamps-ecosystem}
+
+\textbf{OpenTimestamps Protocol (2016):} Standard for Bitcoin blockchain timestamping.\ TrackOne builds on \ac{OTS} but adapts it for \ac{LoRa} telemetry workflows: daily batching instead of real-time stamping, gateway-based aggregation, and offline verification with pre-downloaded headers.
+
+\textbf{Existing OTS implementations:} Focus on document timestamping (PDFs, git commits).\ TrackOne extends \ac{OTS} to \ac{IoT} telemetry with Merkle aggregation, canonical \ac{CBOR} determinism, and day-chaining for temporal continuity.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.97\linewidth]{figs/trackone_data_flow}
+\caption{TrackOne data flow: local data is hashed and committed through Merkle trees to public Bitcoin via OTS, enabling independent verification without exposing raw telemetry.}
+\label{fig:globality}
+\end{figure}
+
+\subsection{Low-Power IoT Cryptography}\label{subsec:low-power-iot-cryptography}
+
+\textbf{TinyCrypt, ARM mbed TLS:} Lightweight crypto libraries for microcontrollers.
+Demonstrate feasibility of AES-GCM and ECC on constrained devices.\ TrackOne uses PyNaCl (libsodium wrapper) for gateway crypto while pods use minimal nonce construction (salt8 + counter).
+
+\textbf{LoRaWAN Security (LoRa Alliance):} Standard AES-128 encryption with session keys.\ TrackOne targets non-\ac{LoRa}WAN deployments (simple \ac{LoRa} P2P) with XChaCha20-Poly1305 for 256-bit security and larger nonce space.
+
+\subsection{TrackOne's Unique Contribution}\label{subsec:trackone's-unique-contribution}
+
+While individual components (Merkle trees, \ac{AEAD}, \ac{OTS}) are established, TrackOne's contribution is the \textbf{system-level integration} for a specific deployment scenario:
+
+\begin{itemize}[nosep]
+    \item \textbf{vs. Certificate Transparency:} Adapted for \ac{IoT} telemetry instead of \ac{TLS} certificates; Bitcoin verification instead of trusted log operators
+    \item \textbf{vs. Guardtime KSI:} Open-source implementation; public Bitcoin blockchain instead of proprietary KSI chain
+    \item \textbf{vs. Helium Network:} Zero marginal cost (daily batching) instead of per-packet fees; ultra-low power budget
+    \item \textbf{vs. Ethereum systems:} 1000× cost reduction via Merkle aggregation (\$0.001/day vs. \$1+/day)
+    \item \textbf{vs. LoRaWAN:} Stronger crypto (XChaCha20 vs.\ AES-128); public auditability; no network server dependency
+\end{itemize}
+
+TrackOne targets heritage sites requiring \textbf{multi-decade autonomy} and \textbf{vendor-independent verification}—a niche not addressed by commercial \ac{IoT} platforms or blockchain systems optimized for real-time transactions.

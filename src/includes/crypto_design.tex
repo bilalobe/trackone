@@ -1,68 +1,500 @@
-\section{Cryptographic Design (ADR-001, ADR-002, ADR-005, ADR-018)}
-% The following labels are used for cross-referencing ADRs discussed in this section.
-\label{adr:crypto-design}      % ADR-001: Cryptographic Design
-\label{adr:nonce-policy}       % ADR-002: Nonce Policy
-\label{adr:ots}                % ADR-005: One-Time Signature
-\label{adr:benchmarking}       % ADR-018: Benchmarking
-\label{adr:rust-pyo3}          % ADR: Rust/PyO3 integration
-\label{adr:qim-watermarking}   % ADR: QIM Watermarking
+% =================================figs/provisioning_ecdh_hkdf
+% SECTION: Cryptographic Design
+% Ties together ADRs on primitives, framing, and migrations.
+% Why this section: Explains security foundations without code—focus on "why" for auditability.
+\section{Cryptographic Design}
+\label{sec:crypto-design}
+
+% ADR references (see adr/ directory):
+% - ADR-001: Cryptographic Primitives (X25519, HKDF, XChaCha20-Poly1305, Ed25519)
+% - ADR-002: Telemetry Framing and Replay Policy
+% - ADR-005: PyNaCl Migration (cryptographic library consolidation)
+%            NOTE: ADR-005 is PyNaCl migration, NOT "One-Time Signature" (OTS refers to OpenTimestamps, not crypto primitive)
+% - ADR-006: Forward-only Schema and salt8 (deprecates legacy salt4/ChaCha20-Poly1305 96-bit nonce)
+% - ADR-018: Cryptographic Randomness and Nonce Policy (CSPRNG requirements, prohibits random/numpy.random)
+% - ADR-024: Anti-replay and OTS-backed Ledger Semantics (defines (dev_id, fc) uniqueness in ledger)
 
 \textbf{Implementation:} PyNaCl (libsodium) for all cryptographic operations.
 
-\textbf{Primitives:} X25519 + HKDF-SHA256 + XChaCha20-Poly1305; Ed25519; SHA-256.
+\textbf{Primitives:} X25519 + \ac{HKDF}-\ac{SHA}256 + XChaCha20-Poly1305;\\
+Ed25519; \ac{SHA}-256.
+
+\paragraph{Primitive selection rationale.}
+% this subsection answers the "why these primitives?" reviewer question without embedding code.
+XChaCha20-Poly1305 is used instead of AES-GCM because pods do not assume hardware AES acceleration, and the 192-bit nonce reduces operational nonce-management risk while retaining constant-time software implementations via libsodium.
+X25519 is preferred over \ac{NIST} P-256 for compact keys and simpler, widely audited implementations with fewer curve-specific pitfalls.
+Ed25519 is preferred over ECDSA because it is deterministic and avoids per-signature RNG failure modes (the classic ECDSA ``bad-$k$'' vulnerability).
+\ac{SHA}-256 is used over \ac{SHA}-3 primarily for ecosystem maturity and performance on constrained targets, with a conservative security margin for TrackOne’s use as a hash primitive.
+
+\textbf{I-D cross-reference:} a protocol-facing interoperability profile of the framing, replay semantics, and artifact contracts is maintained as an Internet-Draft (\texttt{draft-trackone-verifiable-telemetry-ledgers-00}); the source is tracked in-repo as \texttt{docs/draft-trackone-verifiable-telemetry-ledgers-00.xml}.
+This report provides the design rationale and implementation-aligned details used to justify that profile.
 
 % Reference for deterministic vectors location used in tests
-\textit{Deterministic crypto vectors: see} \texttt{toolset/unified/crypto\_test\_vectors.json} \textit{(mirrored by tests; ensure path available to avoid skips).}
+\textit{Deterministic crypto vectors:}\\ see \texttt{toolset/unified/crypto\_test\_vectors.json} \\ \textit{(mirrored by tests; ensure path available).}
 
-\subsection{Provisioning}
-Ephemeral ECDH using X25519; salt = $H(N_g \| N_p \| T_{pod} \| B)$.
+% state vector coverage explicitly so parity claims are auditable (not hand-wavy).
+The current corpus includes 1 deterministic \ac{AEAD} vector, 1 deterministic X\ac{AEAD} framing vector, and 3 canonical-hash vectors; it is expanded as edge cases and cross-implementation parity checks are added (\ac{ADR}-017).
 
-Derive $CK_{\uparrow}$ (uplink), $CK_{\downarrow}$ (downlink) via HKDF-SHA256 (RFC 5869).
+% ---
+% Serialization boundaries note (ADR-034)
+% - Transport (pod\leftrightarrow gateway): compact, schema-coupled encodings are acceptable.
+% - Commitment bytes (Merkle leaves / audit artifacts): must be deterministic and explicitly specified.
+\textbf{Serialization boundary:}
+TrackOne uses a compact, schema-coupled transport encoding for device frames and a separate,
+explicitly specified canonical encoding for commitment bytes.
+Transport size motivates duty-cycled \ac{LoRa}; commitment determinism motivates audit stability.
 
-Device table schema v1.0 enforces forward-only policy: requires \texttt{\_meta.version = "1.0"}, 8-byte salt (\texttt{salt8}), and 32-byte uplink key (\texttt{ck\_up}).
+% Reviewer-slim version: omit PQ risk discussion.
+\subsection{Post-Quantum risk growth under classical pods}
+\label{subsec:pq-risk-growth}
 
-\subsection{Telemetry frame}
-Header: dev\_id(u16), msg\_type(u8), fc(u32), flags(u8); AEAD payload with XChaCha20-Poly1305.
+TrackOne pods are designed for ultra-low-power operation and are expected to remain \emph{classical} for an extended
+period (e.g., STM32L0-class constraints on flash, RAM, and energy).
+In this regime, the pod--gateway provisioning
+exchange relies on a classical key establishment (X25519).
+This is sufficient for the present threat model, but it
+introduces a \textbf{risk that grows with time}:
 
-24-byte nonce construction: $\mathrm{nonce} = \mathrm{salt}_8 \| \mathrm{fc}_8 \| \mathrm{rand}_8$ \textit{(see ADR~\ref{adr:nonce-policy} for randomness and nonce policy)}
+\begin{itemize}[nosep]
+    \item \textbf{Harvest-now, decrypt-later (HNDL):} an adversary can record provisioning traffic today and attempt to
+    decrypt it years later if cryptanalytic capability changes (e.g., large-scale quantum).
+    \item \textbf{Long-lived deployments:} subterranean sensor deployments are commonly designed to remain in place for
+    years, which increases the value of stored traffic and the impact of future breaks in classical assumptions.
+    \item \textbf{Provisioning as the confidentiality bottleneck:} steady-state telemetry uses symmetric \ac{AEAD} keys derived
+    during provisioning.
+    If provisioning confidentiality is compromised retroactively, then the confidentiality of the
+    derived session keys (and thus encrypted telemetry) may also be at risk; longer deployments increase the window in
+    which stored provisioning traffic may become useful to an attacker.
+\end{itemize}
 
-AAD (additional authenticated data): $\text{dev\_id} \| \text{msg\_type}$ binds header to ciphertext.
+\textbf{Design response (hybrid-ready, telemetry unchanged):}
+the pod data plane is intentionally simple: pods construct \texttt{Fact} values from sensor inputs, encrypt them using
+an \ac{AEAD} implementation, and emit encrypted frames to the transport layer (radio).
+This steady-state telemetry framing
+does not change as part of post-quantum planning.
 
-\subsection{Replay policy}
-Gateway maintains per-device sliding window on frame counter $(fc)$.
+Post-quantum hedging is therefore treated as a \textbf{control-plane / provisioning concern}.
+The gateway side (which is
+less constrained and can be upgraded more readily) is expected to be capable of post-quantum primitives.
+TrackOne
+adopts \textbf{algorithm agility} in provisioning (e.g., a negotiated \texttt{kex\_suite}) so that a future \emph{hybrid}
+mode can be enabled without redesigning the telemetry plane (\ac{ADR}-036).
+
+In a hybrid provisioning mode, a classical secret (from X25519) is combined with a post-quantum secret from a
+\ac{NIST}-standardized KEM (e.g., \textbf{ML-KEM}, standardized by \ac{NIST}; historically referred to as ``Kyber'') through a \ac{KDF}.
+The derived symmetric keys retain the same sizes and are used by the same \ac{AEAD} framing rules.
+The purpose of a hybrid
+key establishment is \textbf{hedging}: confidentiality should hold if at least one of the constituent key exchanges
+remains secure.
+
+% \ldots existing code \ldots
+Until pods can practically participate in post-quantum operations, the system remains classical on the pod side, and
+the HNDL risk is managed primarily through operational controls (device rotation policy, provisioning frequency, and an
+explicitly stated confidentiality horizon).
+
+\paragraph{Contrast with LoRaWAN's crypto model.}
+TrackOne's crypto-agility posture is informed by the limitations of the \ac{LoRa}WAN standard.
+\ac{LoRa}WAN 1.0.x and 1.1 hardcode AES-128 for both session encryption (\ac{CT}R mode) and
+message integrity (CMAC), with no algorithm negotiation mechanism.
+The \ac{LoRa} Alliance roadmap places \emph{crypto-agility} as a Physical/Link Layer
+development item in the 2024--2027 ``Application Scalability'' phase, but as of
+early 2026 no specification has been published and no timeline has been committed
+for algorithm negotiation or hybrid key exchange at the MAC layer.
+
+This has two consequences for TrackOne's design:
+\begin{itemize}[nosep]
+        \item \textbf{AES-128 provides only 64-bit post-quantum security} (Grover's bound),
+        which is below the 128-bit target for long-lived deployments.
+        \ac{LoRa}WAN devices deployed today have no upgrade path to stronger symmetric
+        primitives without replacing the entire protocol stack.
+        \item \textbf{Key establishment is non-negotiable:}
+        \ac{LoRa}WAN Join (OTAA) derives session keys from a fixed AES-128 root key
+        (\texttt{AppKey}).
+        There is no provision for hybrid or post-quantum key exchange at the
+        Join layer, nor for per-session algorithm selection.
+\end{itemize}
+
+By operating on raw \ac{LoRa} PHY (SX1276 CSS modulation) without the \ac{LoRa}WAN MAC,
+TrackOne retains full control of the cryptographic layer:
+XChaCha20-Poly1305 with 256-bit keys (128-bit post-quantum security under Grover),
+192-bit nonces, \ac{HKDF}-\ac{SHA}256 key derivation, and a provisioning handshake that
+supports negotiated \texttt{kex\_suite} for future hybrid X25519\,+\,ML-KEM
+operation (\ac{ADR}-036).
+This ``own the crypto, rent the PHY'' approach ensures that cryptographic upgrades
+require only a firmware update and re-provisioning---not a protocol migration.
+% The LoRa Alliance may deliver crypto-agility in a future LoRaWAN revision;
+% at that point, TrackOne could adopt the LoRaWAN MAC if the algorithm menu
+% meets our requirements (see Future Work / ADR-036).
+
+\paragraph{Confidentiality horizon.}
+% make HNDL risk operational (a declared policy parameter), not just narrative.
+Each deployment MUST declare a confidentiality horizon $H$ (in years) from provisioning date that reflects the sensitivity of the telemetry content and the expected lifetime of stored provisioning traffic.
+TrackOne’s long-term claim is integrity/auditability; confidentiality is treated as bounded by $H$ under HNDL assumptions, with $H$ set per deployment and documented as an operational security parameter.
+
+\textbf{Threat boundaries and residual risks:}
+TrackOne’s primary claim in Track One is \emph{verifiable integrity} (canonical commitments $\rightarrow$ Merkle roots
+$\rightarrow$ public anchoring), not availability or physical robustness.
+The following threats are either treated as
+out-of-scope for Track One or are mitigated only operationally:
+
+\begin{itemize}[nosep]
+    \item \textbf{Denial-of-service (DoS) and battery griefing:} RF jamming, replay floods, bogus-device floods, and other
+    resource-exhaustion attacks can reduce uptime and consume duty-cycle budget.
+    These attacks are expected to be visible
+    in audit logs and metrics, but they do not invalidate the integrity of anchored artifacts.
+    \item \textbf{Key compromise and lifecycle:} if pod or gateway keys are extracted, an attacker can impersonate devices.
+    Track One assumes secrets are not leaked via logs (C-5) and relies on operator processes for rotation, revocation, and
+    quarantine; these lifecycle mechanisms are explicitly treated as operational controls in early deployments.
+    \item \textbf{Downgrade resistance (suite negotiation):}\\ any negotiated \texttt{kex\_suite} must be bound to an
+    authenticated provisioning transcript.
+    Hybrid readiness is therefore a
+    control-plane design property, not a guarantee unless policy and transcript binding enforce it (\ac{ADR}-036).
+    \item \textbf{Metadata manipulation (cleartext \texttt{fc}/\texttt{flags}):} because \texttt{fc} and \texttt{flags} are
+    transmitted in clear and are not included in \ac{AAD}, an attacker can tamper with them to trigger rejects or log noise.
+    The mitigation is that ledger admission policy and replay invariants prevent such tampering from creating valid
+    canonical facts or Merkle leaves; the residual risk is DoS amplification and operational noise.
+\end{itemize}
+
+Detailed attacker models and operational countermeasures are covered in Section~\ref{subsec:threat-model} and Section~\ref{sec:security}; the list below captures the cryptographic boundary conditions relevant to this section.
+
+\subsection{Provisioning}\label{subsec:provisioning}
+% Discussion 2026-01-16: Clarified all salt components to address "hand-wavy" criticism.
+% All inputs (Ng, Np, Tpod, B) are non-secret; salt is used as HKDF-Extract input, NOT as secret key material.
+% Security rests on ECDH secret; salt provides domain separation and reproducibility.
+Ephemeral ECDH using X25519.
+Salt derivation:\\ $\text{salt} = \text{SHA-256}(N_g \| N_p \| T_{\text{pod}} \| B)$, where:
+\begin{itemize}[nosep]
+    \item $N_g$, $N_p$: provisioning nonces (gateway, pod; random, exchanged during provisioning)
+    \item $T_{\text{pod}}$: RTC timestamp (non-secret, stable pod identifier context; provides per-device binding)
+    \item $B$: build or batch identifier (non-secret; e.g., firmware version hash)
+\end{itemize}
+
+% Why this salt: Non-secret inputs ensure reproducibility for audits; domain separation prevents cross-device key collisions (ADR-006).
+Key derivation uses \ac{HKDF}-\ac{SHA}256 (\ac{RFC} 5869):
+\begin{itemize}[nosep]
+    \item $\text{PRK} = \text{HKDF-Extract}(\text{salt}, \text{IKM} = \text{ECDH\_secret})$
+    \item $CK_{\uparrow} = \text{HKDF-Expand}(\text{PRK}, \text{"barnacle:up"}, 32)$ % info label for uplink
+    \item $CK_{\downarrow} = \text{HKDF-Expand}(\text{PRK}, \text{"barnacle:down"}, 32)$ % info label for downlink
+\end{itemize}
+% Implementation: see scripts/gateway/crypto_utils.py (hkdf_sha256) and scripts/pod_sim/pod_sim.py (line 186)
+% TODO: Explore key agility for post-quantum (e.g., Kyber hybrid in future ADR).
+
+Device table schema v1.0 (\ac{ADR}-006) enforces forward-only policy: requires \texttt{\_meta.version = "1.0,"} 8-byte salt (\texttt{salt8}), and 32-byte uplink key (\texttt{ck\_up}). Pod signs provisioning transcript with Ed25519; gateway verifies with $\text{PK}_P$ from registry.
+% Why forward-only: Prevents migration complexity; clean resets at milestones ensure audit trails start fresh (ADR-006).
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{figs/provisioning_ecdh_hkdf.pdf}
+\caption{Provisioning flow: ECDH + HKDF key derivation with Ed25519 transcript signing.}
+\label{fig:provisioning-ecdh-hkdf}
+\end{figure}
+
+\paragraph{Key lifecycle.}
+% the protocol does not enforce max key age; rotation/re-provisioning is an operational control.
+The derived uplink/downlink keys ($CK_{\uparrow}$, $CK_{\downarrow}$) are intended to persist for the deployment lifetime and are used for steady-state telemetry until an explicit re-provisioning event occurs.
+Re-provisioning performs a fresh ECDH exchange and \ac{HKDF} derivation, replaces the device table entry (including \texttt{ck\_up}/\texttt{ck\_down} and \texttt{salt8}), and resets per-device anti-replay state (e.g., \texttt{highest\_fc\_seen} and the replay window).
+The protocol does not enforce a maximum key age; rotation/revocation cadence is therefore an operational control and a residual risk, and it is also the primary knob for managing post-quantum HNDL exposure (see \S\ref{subsec:pq-risk-growth} and \ac{ADR}-036).
+
+\subsection{Telemetry frame}\label{subsec:telemetry-frame}
+% Discussion 2026-01-16: Resolved nonce/AAD mismatches between doc and implementation.
+% - Nonce: 24 bytes = salt8 || fc64 || rand8 (XChaCha20-Poly1305 requires 192-bit nonce)
+% - fc field is u32 in header but encoded as u64 in nonce (upper 32 bits zero) for future extensibility
+% - rand8 is per-frame CSPRNG (secrets.token_bytes) to prevent nonce reuse on counter reset/reboot
+% - AAD deliberately excludes fc/flags to allow cleartext replay checks; security relies on AEAD+replay-window
+Header fields: \texttt{dev\_id}(u16), \texttt{msg\_type}(u8), \texttt{fc}(u32), \texttt{flags}(u8); \ac{AEAD} payload with XChaCha20-Poly1305 (192-bit nonce).
+\textbf{I-D mapping:} see the companion Internet-Draft’s ``Frame Contract'' and ``Anti-Replay Semantics'' sections for the interoperability view of this contract (\texttt{draft-trackone-verifiable-telemetry-ledgers-00}).
+% Inline cue (I-D): docs/draft-trackone-verifiable-telemetry-ledgers-00.xml anchors: frame-contract, anti-replay.
+
+Nonce construction (24 bytes, big-endian): $\text{nonce} = \text{salt}_8 \| \text{fc}_8 \| \text{rand}_8$, where:
+\begin{itemize}[nosep]
+    \item $\text{salt}_8$: per-device 8-byte salt (provisioned, stored in device table as \texttt{salt8})
+    \item $\text{fc}_8$: 64-bit encoding of frame counter (upper 32 bits zero for u32 counters; allows future expansion to u64)
+    \item $\text{rand}_8$: 8-byte \ac{CSPRNG} output per frame (\texttt{secrets.token\_bytes(8)} per \ac{ADR}-018; prevents nonce reuse)
+\end{itemize}
+% Implementation: pod_sim.py line 196-199 (build_nonce), frame_verifier.py line 314-329 (aead_decrypt)
+% Why rand8: Guards against counter reuse on reboot/reset (ADR-018); CSPRNG ensures uniqueness even if fc wraps (though wrap is out-of-policy per ADR-024).
+
+\paragraph{Nonce uniqueness.}
+% for a fixed device key, uniqueness reduces to "fc must not repeat"; rand8 is a safety margin only for out-of-policy counter reuse/reset scenarios.
+For a fixed device key (fixed $\text{salt}_8$), nonce uniqueness is deterministic as long as the $\text{fc}_8$ value used in the nonce never repeats under that key.
+With a u32 header counter, counter-exhaustion is not a practical limit (\ac{ADR}-024 estimates $\sim$81{,}600 years to exhaust $2^{32}$ counters at 6 frames/hour).
+The per-frame random suffix $\text{rand}_8$ provides a safety margin against nonce reuse across reboots or counter resets: if an \emph{old} frame counter value is reused, nonce reuse for that counter occurs only if the new $\text{rand}_8$ repeats a previously used value.
+
+Formally, if a particular $\text{fc}_8$ value repeats $r$ times under the same key (counter reset), and $\text{rand}_8$ is sampled uniformly from $2^{64}$, the probability of any duplicate nonce for that counter is bounded by the birthday bound $p \le r(r-1)/2^{65}$.
+Reaching a meaningful collision probability would require an implausibly large number of repeats for the same counter value; under realistic reboot/reset patterns this probability remains negligible.
+
+\ac{AAD} (additional authenticated data):
+\ac{AAD} construction: $\texttt{dev\_id}$ as 2 bytes big-endian $\|$ $\texttt{msg\_type}$ as 1 byte,
+totaling 3 bytes.
+% Why exclude fc/flags from \ac{\ac{AAD}}% }: Allows pre-decrypt replay checks; bound by ledger semantics \ac{ADR}-024. Risk: Cleartext tampering possible, mitigated by replay window.
+
+Including \texttt{fc} in \ac{AAD} would require successful decryption before ordering/replay validation, which is undesirable for resource-constrained gateways that must reject replays early.
+The residual risk from cleartext \texttt{fc} tampering is bounded by the replay invariant: tampered counters are either rejected as out-of-window/duplicate before decryption, or they cause \ac{AEAD} verification failure because the nonce (and thus tag) no longer matches.
+% closes the reviewer question "why not include fc in AAD?" by stating the pre-decrypt replay check tradeoff.
+
+\textbf{Note:} Header fields \texttt{fc} and \texttt{flags} are transmitted in clear for replay-window checks but are \emph{not} included in \ac{AAD}.
+This design assumes replay policy enforcement at gateway prevents metadata tampering from affecting ledger integrity (see \ac{ADR}-024). % Design rationale: fc must be readable before AEAD decrypt to enforce replay window; flags are non-critical metadata.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\linewidth]{figs/telemetry_frame_layout.pdf}
+\caption{Telemetry frame layout: cleartext header, XChaCha20-Poly1305 AEAD payload, and cryptographic binding via AAD, nonce, and key.}
+\label{fig:telemetry-frame-layout}
+\end{figure}
+
+\subsection{Replay policy}\label{subsec:replay-policy}
+% Discussion 2026-01-16: Corrected "monotonic counter" mischaracterization to "true sliding window".
+% Original narrative claimed "0 < Δfc <= w" which rejects legitimate out-of-order (e.g., fc=99 after fc=100).
+% Actual implementation (ReplayWindow class) uses explicit ``seen'' tracking within [highest-w, highest+w], accepting
+% out-of-order frames within window. This is critical for intermittent RF links (LoRa).
+% Counter wrap-around: treated as out-of-policy (ADR-024: ~81,600 years to wrap at 6 frames/hour).
+Gateway maintains per-device state: \texttt{highest\_fc\_seen} and a set of recently seen frame counters within a sliding window.
 Default window size $w=64$.
 
-A frame is accepted if: $0 < \Delta \mathrm{fc} \le w$ relative to \texttt{highest\_fc\_seen}.
-
-Duplicate/stale frames ($\Delta \le 0$) and jumps beyond $w$ are rejected with logged warnings.
-
-\subsection{Milestone progression}
-\begin{itemize}[nosep]
-  \item \textbf{M\#0:} Merkle batching, canonicalization, OTS anchoring infrastructure
-  \item \textbf{M\#1:} Framed ingest with stub AEAD (plaintext ct, placeholder tag) to validate framing and replay
-  \item \textbf{M\#2:} Real XChaCha20-Poly1305 AEAD with test vectors and AAD enforcement
-  \item \textbf{M\#3:} PyNaCl migration, device table v1.0, comprehensive testing; CI/CD Python 3.11--3.13
-  \item \textbf{M\#4 (current):} OTS anchoring finalized; \textbf{151 tests, 85\% coverage}; expanded security and pipeline edge-case tests
-  \item \textbf{Post M\#4 (planned):} Ledger UI, outage logger, automated OTS upgrade
-\end{itemize}
-
-\subsection{Cryptographic library consolidation (ADR-005)}
-M\#3 migrated from \texttt{cryptography} + \texttt{pynacl} to PyNaCl-only:
-\begin{itemize}[nosep]
-    \item Single dependency for all primitives (X25519, HKDF, ChaCha/XChaCha, Ed25519)
-    \item Unified API with libsodium's proven implementations
-    \item Deterministic test vectors regenerated with PyNaCl bindings
-    \item Simplified maintenance and security updates
-\end{itemize}
-
-\subsection{Contrast with watermarking proposals}
-Classical watermarking (e.g., Quantization Index Modulation on analog signals) embeds auxiliary bits inside rich media streams. Track1 pods emit scalar telemetry only; there is no image pipeline and no spare energy for transform-domain embedding. Our threat model targets forged facts and replay, not exfiltration via media. Consequently, rather than hiding markers, we:\footnote{Documented in ADR~\ref{adr:nonce-policy} (nonce policy) and ADR~\ref{adr:ots} (OTS anchoring).}
+Acceptance criteria for frame with counter $\text{fc}$:
 \begin{enumerate}[nosep]
-    \item Bind each fact cryptographically (AEAD + canonical JSON + Merkle leaf)
-    \item Anchor the batch root publicly (OTS/TSA)
-    \item Provide verifiers the ability to recompute and compare roots
+    \item $\text{fc}$ not previously seen (not in replay window set)
+    \item $|\text{fc} - \text{highest\_fc\_seen}| \le w$ (within window, forward or backward)
 \end{enumerate}
-Signal-watermark concepts remain catalogued under Option~B as future research when higher-bandwidth biosignals are part of the payload.
 
-\subsection{Benchmarking and Rust roadmap}
-ADR~\ref{adr:benchmarking} (Benchmarking Strategy) defines suites to measure cryptographic throughput, Merkle construction time, and OTS latency. Those metrics will drive ADR~\ref{adr:rust-pyo3} (Rust/PyO3 integration) decisions: only when benchmarks show that Python hot paths jeopardize pod duty-cycle budgets do we port modules to Rust. Until then, PyNaCl-backed Python remains the authoritative implementation.
+Frames are rejected if:
+\begin{itemize}[nosep]
+    \item Duplicate: $\text{fc}$ already present in seen set
+    \item Out-of-window: $|\text{fc} - \text{highest\_fc\_seen}| > w$
+    \item \ac{AEAD} verification fails (bad tag, tampered ciphertext, wrong key)
+\end{itemize}
+% Implementation: frame_verifier.py lines 59-123 (ReplayWindow class); see check_and_update method
+% Why window: Allows out-of-order acceptance in window (e.g., delayed LoRa packets) while keeping per-device state bounded (ADR-024).
+
+This is a true sliding window with explicit per-device ``seen'' tracking (implementation: \texttt{ReplayWindow} class in \texttt{frame\_verifier.py}), accepting legitimate out-of-order frames within $w$.
+Per \ac{ADR}-024, only accepted frames produce canonical facts that enter the Merkle tree and \ac{OTS}-backed ledger.
+Rejected frames are logged for audit but do not affect ledger state. % ADR-024: (dev_id, fc) uniqueness invariant ensures no double-spend into Merkle tree.
+
+\paragraph{Replay window sizing.}
+% w is a policy knob; 64 is a conservative default balancing reordering tolerance vs. bounded per-device state.
+The default $w=64$ is a pragmatic tradeoff between tolerance for modest packet reordering/delay and bounded per-device state.
+At 6 frames/hour, a 64-frame window corresponds to $\sim$10.7 hours of acceptance slack, which is sufficient for bursty links without accepting arbitrarily stale traffic.
+Larger windows increase the acceptance region (and thus the number of counters that must be tracked per device), while smaller windows increase false rejects on delayed/out-of-order delivery; $w$ is therefore treated as a policy parameter with a conservative default.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\linewidth]{figs/replay_window_decision.pdf}
+\caption{Replay window decision flow: sliding window with duplicate detection and AEAD verification.}
+\label{fig:replay-window-decision}
+\end{figure}
+
+% Why milestones: Iterative security maturation; stubs de-risk integration (ADR-004).
+% Why PyNaCl: Audited C core (libsodium) with Python bindings; constant-time ops reduce side-channel risks (ADR-005).
+% TODO: Benchmark PyNaCl vs. Rust trackone-core for hot paths (ADR-011/017).
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{figs/ledger_merkle_ots_pipeline.pdf}
+\caption{Ledger pipeline: from frame ingest through Merkle batching to OTS anchoring, showing the trust boundary between transport and evidence layers.}
+\label{fig:ledger-merkle-ots-pipeline}
+\end{figure}
+
+\subsection{Commitment bytes and canonical encoding (ADR-034)}
+\label{subsec:commitment-bytes}
+
+TrackOne distinguishes between:
+\begin{itemize}[nosep]
+    \item \textbf{Transport bytes:} the payload carried over RF and internal links.
+    Transport prioritizes compactness and
+    bounded parsing under \texttt{no\_std}.
+    In the Rust workspace this is implemented using Postcard for the wire schema,
+    consistent with the fixed maximum frame size budget.
+    \item \textbf{Commitment bytes:} the deterministic bytes that are hashed into Merkle leaves and referenced by proofs.
+    These bytes must be reproducible across implementations and stable under refactors.
+\end{itemize}
+
+For commitments, TrackOne uses a \textbf{TrackOne deterministic CBOR profile} produced by a dedicated encoder
+(\texttt{crates/trackone-core/src/cbor.rs}). This profile is designed to be deterministic in the spirit of canonical \ac{CBOR}
+(\cite{rfc8949}) while also being explicit about schema versioning and float normalization.
+
+\textbf{Non-negotiable rule:} Do not use generic serde-\ac{CBOR} or \ac{JSON} serializers to produce commitment bytes.
+Commitment paths must call the canonical encoder so that Merkle leaves remain stable and auditable.
+
+For reviewers starting from the Internet-Draft profile, note that the I-D describes the artifact contracts and commitment strategy at a higher level; this subsection provides the concrete deterministic \ac{CBOR} rules needed for reproducible commitment bytes (\texttt{draft-trackone-verifiable-telemetry-ledgers-00}).
+% Inline cue (I-D): the I-D is a profile-level spec; this section pins down the byte-level determinism required for audits.
+
+Canonical \ac{CBOR} profile rules (commitment bytes):
+\begin{itemize}[nosep]
+    \item Commitment objects are encoded as arrays (positional fields), not maps.
+    \item The first array element is a schema version tag; field order is part of the commitment contract.
+    \item Integers use shortest-form encoding (\ac{RFC} 8949 \S4.2.1).
+    \item Floats are always encoded as 32-bit (\texttt{f32}) with NaN normalized to a single canonical pattern.
+    \item Optional fields are represented as \ac{CBOR} \texttt{null} when absent.
+\end{itemize}
+
+Canonical \ac{CBOR} profile rules (commitment bytes):
+\begin{itemize}[nosep]
+    \item Commitment objects are encoded as arrays (positional fields), not maps.
+    \item The first array element is a schema version tag; field order is part of the commitment contract.
+    \item Integers use shortest-form encoding (\ac{RFC} 8949 \S4.2.1).
+    \item Floats are always encoded as 32-bit (\texttt{f32}) with NaN normalized to a single canonical pattern.
+    \item Optional fields are represented as \ac{CBOR} \texttt{null} when absent.
+\end{itemize}
+
+\subsection{Golden corpus and cross-implementation parity}
+\label{subsec:golden-corpus}
+
+TrackOne maintains two independent implementations of its cryptographic and commitment pipeline:
+the \textbf{Python reference} (PyNaCl/libsodium, gateway scripts) and the \textbf{Rust workspace}
+(\texttt{trackone-core}, \texttt{trackone-ledger}, exposed to Python via PyO3 in \texttt{trackone-gateway}).
+Neither is trusted by assertion alone; parity is enforced through a shared \emph{golden corpus} and
+deterministic test vectors consumed by both stacks in \ac{CI}.
+
+\paragraph{What the golden corpus covers.}
+The corpus lives at \texttt{toolset/unified/crypto\_test\_vectors.json} and currently contains:
+\begin{itemize}[nosep]
+    \item \textbf{AEAD known-answer tests:}
+    Fixed key, nonce, \ac{AAD}, and plaintext $\rightarrow$ expected ciphertext + Poly1305 tag,
+    for both ChaCha20-Poly1305 (96-bit nonce) and XChaCha20-Poly1305 (192-bit nonce).
+    \item \textbf{Canonical-hash vectors:}
+    Fact objects with varied payload structures $\rightarrow$ expected canonical \ac{JSON} bytes
+    and (implicitly) expected \ac{SHA}-256 leaf hashes.
+    \item \textbf{Merkle root vectors} (exercised via fixture replay):
+    Batches of canonical facts $\rightarrow$ expected Merkle root (hex) and leaf hash list.
+\end{itemize}
+
+\paragraph{How parity is enforced.}
+For each vector category, both the Python test suite and the Rust \texttt{\#[test]} harness
+load the same \ac{JSON} file and assert byte-for-byte identical outputs:
+\begin{enumerate}[nosep]
+    \item \textbf{Python side:} \texttt{tests/unit/crypto/test\_crypto\_vectors.py} and
+    \texttt{tests/unit/crypto/test\_aead.py} deserialize the vectors, invoke PyNaCl bindings,
+    and compare ciphertext, tag, and canonical bytes against expected values.
+    \item \textbf{Rust side:} \texttt{trackone-core} and \texttt{trackone-ledger} tests deserialize
+    the same \ac{JSON} vectors (using \texttt{serde\_json}) and compare against expected outputs
+    using the Rust implementations of \ac{AEAD}, canonical \ac{CBOR} encoding, and Merkle tree construction.
+    \item \textbf{CI gate:} both test suites run in the same pipeline; any divergence---between
+    implementations or against the golden expected values---fails the build (FR-12, NFR-8).
+\end{enumerate}
+
+\paragraph{Payload-level equivalence.}
+Cross-implementation parity extends beyond raw cryptographic primitives to the full
+\emph{payload lifecycle}:
+\begin{itemize}[nosep]
+    \item \textbf{Transport encoding:} a frame emitted by the Python pod simulator
+    (\texttt{pod\_sim.emit\_framed}) can be decrypted and parsed by both the Python
+    gateway (\texttt{frame\_verifier.aead\_decrypt}) and the Rust gateway
+    (\texttt{trackone-core} \ac{AEAD} traits), producing identical plaintext bytes.
+    \item \textbf{Commitment encoding:} the same canonical fact, when serialized through
+    the Python \texttt{canonical\_json} path and the Rust \texttt{to\_canonical\_cbor\_vec}
+    path, produces commitment bytes that hash to the same Merkle leaf.
+    (Note: the Python pipeline currently uses canonical \ac{JSON} for Merkle leaves,
+    while the Rust pipeline uses the TrackOne \ac{CBOR} profile; equivalence is asserted
+    at the Merkle-root level via shared day-replay fixtures, and a migration to
+    \ac{CBOR}-only commitment bytes is tracked in \ac{ADR}-034.)
+    \item \textbf{Merkle root:} given the same ordered set of leaf hashes, both
+    \texttt{merkle\_batcher.merkle\_root\_from\_leaves} (Python) and
+    \texttt{trackone\_ledger::merkle::merkle\_root\_from\_leaves} (Rust, exposed via PyO3)
+    produce the same root hash.
+    This is tested directly via the \texttt{trackone\_core.merkle.merkle\_root\_hex}
+    binding in the Python integration tests.
+\end{itemize}
+
+\paragraph{Regeneration and expansion.}
+Vectors are generated by \texttt{scripts/dev/gen\_aead\_vector.py} using fixed,
+documented inputs and can be regenerated deterministically.
+Expansion of the corpus (e.g., edge-case payloads such as empty plaintext, maximum-size frames,
+or all-zero keys) is tracked as part of the \ac{ADR}-011 benchmarking and \ac{ADR}-017 Rust parity roadmaps.
+The guiding principle is that the golden corpus must grow whenever a new encoding path, payload
+variant, or cross-language boundary is introduced.
+
+\subsection{Benchmarking and Rust roadmap}\label{subsec:benchmarking-and-rust-roadmap}
+\ac{ADR}-011 (Benchmarking Strategy) defines the authoritative benchmark suite for three metric families:
+    \begin{itemize}[nosep]
+        \item \textbf{Cryptographic throughput:} XChaCha20-Poly1305 encrypt/decrypt, \ac{HKDF}-\ac{SHA}256, X25519, Ed25519.
+        \item \textbf{Merkle construction time:} \texttt{canonical\_json} and \texttt{merkle\_root\_from\_leaves} at varied batch sizes.
+        \item \textbf{OTS latency:} the \texttt{verify\_ots} path (optional in \ac{CI}; regression detection only).
+    \end{itemize}
+An end-to-end frame-processing benchmark (gateway decrypt + parse + replay admission) rounds out the suite.
+
+These metrics are the sole gating criteria for \ac{ADR}-017 (Rust/PyO3 integration):
+only when a Python hot path \emph{repeatedly} violates its duty-cycle budget on the target platform
+do we port the affected module(s) to Rust.
+Until then, the PyNaCl-backed Python implementation remains the single source of truth.
+Numeric thresholds are maintained in \ac{ADR}-011 and will be locked after the first hardware profiling round.
+    % Why phased: Benchmarks (ADR-011) ensure data-driven migration; Rust starts
+
+% Reviewer-slim version: omit transport-layer comparison.
+\subsection{Layering with transport security (e.g., WireGuard)}
+\label{subsec:layering-wireguard}
+% Discussion 2026-01-16: Clarified layer separation and qualified security claims to avoid overreach.
+% - Both use ChaCha20/Poly1305 family, but keys/nonces/counters are completely independent
+% - WireGuard = transport security (L3); TrackOne = evidence integrity (application layer)
+% - Defense-in-depth: transport compromise alone should not break evidence chain
+% - Caveat: assumes endpoint keys are not compromised (if attacker owns pod/gateway keys, game over)
+% - Replay: WireGuard anti-replay does not cover pre-tunnel attacks (RF capture, serial injection)
+% - Operational note: can borrow WireGuard's mental model (explicit peers, rotation cadence) for TrackOne provisioning
+WireGuard protects the \emph{pipes}; TrackOne protects the \emph{payloads}.
+They are intentionally independent layers of the security onion.
+While WireGuard and TrackOne both use the ChaCha20/Poly1305 family, that similarity is \emph{not} an invitation to merge crypto layers or reuse key material.
+The systems address different layers and different security objectives.
+
+\textbf{Contract (clean boundary):}
+\begin{itemize}[nosep]
+    \item \textbf{WireGuard (transport, L3):} secures connectivity between administrative domains (site\,$\leftrightarrow$\,home).
+    It improves segmentation and reduces exposure of gateway services, but it does not define evidence semantics.
+    \item \textbf{TrackOne (application + evidence):} secures telemetry \emph{as an auditable artifact}.
+    \ac{AEAD} and the ledger bind facts to \texttt{(pod\_id, frame\_counter, version, bytes)} and enable independent verification.
+\end{itemize}
+
+\begin{table}[H]
+\centering
+\caption{Security-concern handshake between WireGuard and TrackOne.}
+\label{tab:wireguard-trackone}
+\small
+\begin{tabular}{@{}lcc@{}}
+\toprule
+
+\textbf{Concern}   & \textbf{WireGuard (L3)} & \textbf{TrackOne (App / Evidence)} \\
+\midrule
+Confidentiality     & \checkmark\ in-flight           & n/a (ledger is public)             \\
+Integrity           & \checkmark\ packet checks       & \checkmark\ fact + Merkle          \\
+Anti-replay         & \checkmark\ after tunnel        & \checkmark\ before tunnel          \\
+Auditability        & $\times$\ volatile keys         & \checkmark\ permanent proofs       \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Because TrackOne's ledger can be re-verified independently of the transport,
+even a fully compromised WireGuard tunnel cannot forge or retroactively edit
+evidence.
+
+% Why this separation: Defense-in-depth; transport (WireGuard) protects against network adversaries, while application (TrackOne AEAD + ledger) protects against endpoint compromise or storage tampering (ADR-024).
+\textbf{Why this helps (defense-in-depth):}
+transport compromise \emph{alone} should not imply evidence compromise.
+TrackOne remains authoritative for ``what happened'' even if the backhaul is misconfigured, proxied, or inspected.
+\textbf{Qualification:} This separation assumes independent keys and counters.
+If endpoint compromise is total (attacker controls pod or gateway signing/encryption keys), evidence integrity is not guaranteed. % Boundary of trust: physical access to pod = compromise; focus is on network/transit/storage attacks.
+
+\textbf{Replay interaction:}
+WireGuard includes tunnel-level anti-replay, but TrackOne must still enforce replay/ordering at the ledger boundary because frames can be replayed or injected \emph{before} the tunnel (RF capture, serial injection, or re-ingest of stored artifacts).
+This motivates per-device replay windows and persistent counters (\ac{ADR}-002, \ac{ADR}-018, \ac{ADR}-024). % Threat model: attacker with RF sniffer or physical access to LoRa gateway serial port can inject frames before WireGuard tunnel.
+
+\textbf{Operational reuse (pattern level):}
+we can borrow WireGuard's operational simplicity (explicit peers/allowlists, rotation cadence, predictable mismatch behavior) as a \emph{documentation and operator mental model} for TrackOne provisioning/rotation, without coupling identities.
+
+\textbf{Non-negotiables:}
+\begin{itemize}[nosep]
+    \item Key/nonce separation: never reuse symmetric keys, nonce material, or counters across layers.
+    \item Identity separation: do not bind ledger identity to IPs or WireGuard peer IDs; treat these as observability metadata only.
+\end{itemize}
+
+    % Cross-implementation parity moved to \S\ref{subsec:golden-corpus}; keep a forward reference here.
+Cross-implementation parity between Python and Rust is enforced via a shared golden corpus
+and \ac{CI}-gated equivalence tests; see \S\ref{subsec:golden-corpus} for the full mechanism.
+
+% Discussion 2026-01-16: Added reference to Unit 42 IoT Threat Report as operational benchmark.
+% Report context: empirical analysis of 1.2M+ IoT devices showing 98% unencrypted traffic, 25% with known CVEs,
+% 400% YoY attack growth. Key recommendations: encryption, segmentation, continuous monitoring, firmware integrity.
+% TrackOne alignment: AEAD at edge (vs 98% cleartext), WireGuard segmentation (vs flat networks), OTS anchoring
+% (vs no integrity checks), OTA with signed firmware (vs unpatched vulns). This positions TrackOne as "secure-by-default"
+% outlier in IoT space, addressing multiple Unit 42 risk categories simultaneously.
+% Proactive actions: audit against report benchmarks (done), add firmware scanning (cargo-audit in CI), monitor
+% anomaly detection (gateway logs for unusual fc jumps), reference report in I-D Security Considerations.
+\paragraph{External benchmarking note.}
+Practitioner threat reports (e.g., Palo Alto Networks Unit~42 \ac{IoT} research~\cite{unit42_iot_benchmark_2024}) are useful as \emph{operational} benchmarks (segmentation, patch discipline, monitoring), but TrackOne's security claims in this document are grounded in \ac{ADR}-defined mechanisms and test-verified properties. % Unit 42 report: 98% unencrypted IoT traffic, 25% with known CVEs; TrackOne's AEAD+segmentation mitigates these risks.

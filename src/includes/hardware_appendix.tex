@@ -1,16 +1,18 @@
 % Hardware appendix for full analog details
 % NOTE: \appendix should be issued once in the main document, not inside an include file.
 
+% Reviewer-slim version: omit hardware appendix details.
 \section{Pod Hardware and Firmware}
 \label{sec:hardware_pod}
 
-This appendix documents the Barnacle Pod V0 hardware platform and the embedded firmware that implements TrackOne's digital contract. It summarizes the analog interface, stress tests, and safety considerations for the production baseline, as well as experimental lab platforms.
+This appendix documents the Barnacle Pod V0 hardware platform and the embedded firmware that implements TrackOne's digital contract.
+It summarizes the analog interface, stress tests, and safety considerations for the production baseline, as well as experimental lab platforms.
 
-\subsection{Hardware Overview}
+\subsection{Hardware Overview}\label{subsec:hardware-overview}
 High-level composition of Barnacle Pod V0:
 \begin{itemize}[nosep]
   \item \textbf{MCU:} STM32L072CBT6 (Cortex-M0+) or STM32L476 (Cortex-M4) variants; both are supported by the firmware stack.
-  \item \textbf{Radio:} SX1276-based 868\,MHz LoRa transceiver (e.g., Ra-01H/RFM95 module).
+  \item \textbf{Radio:} SX1276-based 868\,MHz \ac{LoRa} (e.g., Ra-01H/RFM95 module).
   \item \textbf{Energy harvester:} BQ25570 with PV/supercap or Li-ion storage.
   \item \textbf{Reference sensor:} SHTC3 RH/T sensor in the electronics pocket.
   %\item \textbf{Future channels:} Bio-impedance, coverage petals, and flood pins are planned but not fully populated on V0.
@@ -23,7 +25,7 @@ KiCad sources live under the project hardware path; Pod V0 is a “digital + pow
 % Callouts in caption or a separate diagram: STM32L0 MCU, BQ25570 harvester, SX1276 + matching + U.FL, SHTC3, debug headers, PV/supercap connectors.
 % Drop the image at: figs/pod_v0_pcb_3d.png (and optionally figs/pod_v0_pcb_3d_persp.png)
 % Placement: Hardware Appendix.
-\begin{figure}[h]
+\begin{figure}[H]
   \centering
   % Use extension-less filename to keep LaTeX happy across drivers.
   \includegraphics[width=0.9\textwidth]{figs/pod_v0_pcb_3d}
@@ -31,55 +33,96 @@ KiCad sources live under the project hardware path; Pod V0 is a “digital + pow
   \label{fig:pod-pcb-3d}
 \end{figure}
 
-\subsection{Reference Bill of Materials}
-Summary of the BOM for Barnacle Pod V0:
+\subsection{Reference Bill of Materials}\label{subsec:reference-bill-of-materials}
+Summary of the \ac{BOM} for Barnacle Pod V0:
 \begin{itemize}[nosep]
   \item \textbf{MCU:} STM32L072CBT6 (Cortex-M0+) or STM32L476 (Cortex-M4).
-  \item \textbf{Radio:} SX1276-based LoRa transceiver (868\,MHz).
+  \item \textbf{Radio:} SX1276-based \ac{LoRa} transceiver (868\,MHz).
   \item \textbf{Sensors:} SHTC3 (RH/T) and ADS1115 (16-bit ADC).
   \item \textbf{Analog:} INA125P instrumentation amplifier for differential signals.
   \item \textbf{Power:} BQ25570 energy harvester with PV/supercap support.
-  \item \textbf{Passives:} 0603 Yageo capacitors, W\"urth LEDs, and NRS4018T inductors.
+  \item \textbf{Passives:} 0603 Yageo capacitors, Würth LEDs, and NRS4018T inductors.
 \end{itemize}
-Manufacturer part numbers (MPNs) are populated in KiCad symbol fields for pick-ready FAB/BOM exports.
+Manufacturer part numbers (MPNs) are populated in KiCad symbol fields for pick-ready FAB/\ac{BOM} exports.
 
-\subsection{Sensor Interface and Analog Front-End}
-The Barnacle Pod V0 uses a hybrid analog/digital sensing architecture. A reference humidity and temperature sensor (SHTC3) provides environmental context over I\textsuperscript{2}C, while specialized analog stages handle low-frequency resistive or differential signals.
+\subsection{Sensor Interface and Analog Front-End}\label{subsec:sensor-interface-and-analog-front-end}
+The Barnacle Pod V0 uses a hybrid analog/digital sensing architecture.
+A reference humidity and temperature sensor (SHTC3) provides environmental context over I\textsuperscript{2}C, while specialized analog stages handle low-frequency resistive or differential signals.
 
 \paragraph{Precision ADC}
-The platform supports the ADS1115 (16-bit differential ADC, I\textsuperscript{2}C) with a programmable gain amplifier (PGA) to match various sensor output ranges. Default sampling is 80\,SPS with burst-mode operation to minimize power consumption.
+The platform supports the ADS1115 (16-bit differential ADC, I\textsuperscript{2}C) with a programmable gain amplifier (PGA) to match various sensor output ranges.
+Default sampling is 80\,SPS with burst-mode operation to minimize power consumption.
 
 \paragraph{Instrumentation Amplifier}
-For microvolt-to-millivolt level differential signals (e.g., bio-impedance or specialized soil probes), an INA125P instrumentation amplifier can be configured with gain $G \approx 100$. Input protection diodes and an anti-aliasing RC filter (cutoff $\approx 100$\,Hz) protect the ADC inputs.
+For microvolt-to-millivolt level differential signals (e.g., bio-impedance or specialized soil probes), an INA125P instrumentation amplifier can be configured with gain $G \approx 100$.
+Input protection diodes and an antialiasing RC filter (cutoff $\approx 100$\,Hz) protect the ADC inputs.
 
 \paragraph{Power Management}
-The system utilizes a BQ25570 nano-power energy harvester. It manages energy from PV cells or supercapacitors, ensuring stable operation even under low-light conditions. A small flash-backed counter prevents nonce reuse across deep-sleep cycles, maintaining cryptographic invariants (cf.~ADR-002).
+The system utilizes a BQ25570 nano-power energy harvester.
+It manages energy from PV cells or supercapacitors, ensuring stable operation even under low-light conditions.
+A small flash-backed counter prevents nonce reuse across deep-sleep cycles, maintaining cryptographic invariants (cf.~\ac{ADR}-002).
 
-\subsection{Firmware Architecture}
+\subsection{Firmware Architecture}\label{subsec:firmware-architecture}
 Firmware modules and responsibilities:
 \begin{itemize}[nosep]
-  \item \textbf{HAL:} \texttt{stm32l0xx-hal} / \texttt{stm32l4xx-hal} for MCU abstraction.
+  \item \textbf{HAL:} \texttt{stm32l0xx-hal} / \texttt{stm32l4xx-hal} for \ac{MCU} abstraction.
   \item \textbf{Sensor layer:} SHTC3 over I\textsuperscript{2}C and ADS1115 driver for analog channels.
-  \item \textbf{TrackOne layer:} Frame counters (persistent), AEAD (XChaCha20-Poly1305), \emph{FrameBuilder} logic.
-  \item \textbf{Transport:} UART logging and SX1276 LoRa radio path.
+  \item \textbf{TrackOne layer:} Frame counters (persistent), \ac{AEAD} (XChaCha20-Poly1305), \emph{FrameBuilder} logic.
+  \item \textbf{Transport:} UART logging and SX1276 \ac{LoRa} radio path.
 \end{itemize}
 
-\subsection{Stress Tests on Cortex-M0+ and M4}
-Evidence that the firmware fits MCU budgets and remains wire-compatible:
+\subsection{Stress Tests on Cortex-M0+ and M4}\label{subsec:stress-tests-on-cortex-m0+-and-m4}
+Evidence that the firmware fits \ac{MCU} budgets and remains wire-compatible:
 \begin{itemize}[nosep]
   \item Host stress: 5.6\,M frames/s on x86\_64 for max 56\,B frames; \textasciitilde1\,KiB stack usage.
   \item QEMU M4 (\emph{qemu\_stress}): 1{,}000 iterations, 56\,B frames; stack guard intact.
   \item QEMU M0+ (\emph{m0\_stress}, \texttt{thumbv6m-none-eabi}): 100 iterations, 56\,B frames; 256\,B guard untouched.
 \end{itemize}
-Implications: \textasciitilde3.5\,KiB text fits L0 flash budgets; stack headroom is safe for pod firmware; frame format stable across architectures. Embedded outputs are verified by the same gateway pipeline to ensure identical Merkle roots.
+Note: stress tests use a dummy \ac{AEAD} to isolate framing and stack behavior; cryptographic throughput is not claimed here.
+Implications: \textasciitilde3.5\,KiB text fits L0 flash budgets; stack headroom is safe for pod firmware; frame format stable across architectures.
+Embedded outputs are verified by the same gateway pipeline to ensure identical Merkle roots.
 
-\subsection{Hardware Safety and Threats}
+\subsection{Helm Chart Snapshot (Kubernetes Deployment)}\label{subsec:helm-chart-snapshot-(kubernetes-deployment)}
+This appendix captures the Helm chart structure used to deploy the local gateway stack and a rendered example manifest for documentation.
+
+\begin{figure}[H]
+  \centering
+  \begin{minipage}{0.95\linewidth}
+  \begin{verbatim}
+trackone/
+|-- templates/
+|   |-- NOTES.txt
+|   |-- _helpers.tpl
+|   |-- gateway-deployment.yaml
+|   |-- gateway-service.yaml
+|   |-- jobs-constants-build.yaml
+|   |-- jobs-core-build.yaml
+|   |-- jobs-pod-fw-build.yaml
+|   |-- namespace.yaml
+|   |-- ots-calendar-deployment.yaml
+|   |-- ots-calendar-pvc.yaml
+|   |-- ots-calendar-service.yaml
+|   |-- postgres-pvc.yaml
+|   |-- postgres-secret.yaml
+|   |-- postgres-service.yaml
+|   `-- postgres-statefulset.yaml
+|-- .helmignore
+|-- Chart.yaml
+|-- values-local.yaml
+`-- values.yaml\label{verb:verbatim}
+  \end{verbatim}
+  \end{minipage}
+  \caption{Helm chart tree for the TrackOne deployment (\texttt{deploy/helm/trackone}).}
+  \label{fig:helm-chart-tree}
+\end{figure}
+
+\subsection{Hardware Safety and Threats}\label{subsec:hardware-safety-and-threats}
 Focus on physical and environmental considerations; cryptographic and ledger safety is addressed in Section~\ref{sec:security}.
 \begin{itemize}[nosep]
   \item \textbf{Environmental risk:} Mitigation of flood risk, corrosion, PV degradation, and seasonal effects.
   \item \textbf{Power stability:} Brownout behavior is managed by the BQ25570 and supercap; non-volatile counters prevent rollback (anti-replay invariant).
   \item \textbf{Installation:} Non-invasive, removable attachments; refer to site planning (Section~\ref{sec:site_planning}).
-  \item \textbf{OTA Updates:} Supported via signed images (Ed25519) with a staged bootloader for recovery, restricted to authenticated gateways.
+  \item \textbf{\ac{OTA} Updates:} Supported via signed images (Ed25519) with a staged bootloader for recovery, restricted to authenticated gateways.
 \end{itemize}
 
 
@@ -89,9 +132,9 @@ Focus on physical and environmental considerations; cryptographic and ledger saf
 In addition to the STM32L0/L4 pod baseline, we have experimented with a RISC-V softcore running on an FPGA board (Terasic DE10-Lite) as a gateway and lab-side platform.
 Using LiteX to generate a SoC with a VexRiscv CPU, on-board SDRAM, and simple peripherals, we can:
 \begin{itemize}[nosep]
-  \item Run the Rust gateway and verification stack (cf.~ADR--019) on a soft RISC-V core or an attached single-board computer, while the FPGA handles timing-sensitive I/O or radio PHY integration.
-  \item Perform hardware-in-the-loop tests of adaptive uplink cadence policies (ADR--025) and OTA control channels (ADR--026) under controlled loss and duty-cycle constraints.
-  \item Drive real-time feeds into the SensorThings projection and daily summary pipelines (ADRs~027--029) to validate that canonical facts and projections remain consistent under stress.
+  \item Run the Rust gateway and verification stack (cf.~\ac{ADR}--019) on a soft RISC-V core or an attached single-board computer, while the FPGA handles timing-sensitive I/O or radio PHY integration.
+  \item Perform hardware-in-the-loop tests of adaptive uplink cadence policies (ADR--025) and OTA control channels (\ac{ADR}--026) under controlled loss and duty-cycle constraints.
+  \item Drive real-time feeds into the SensorThings projection and daily summary pipelines (\ac{ADR}s~027--029) to validate that canonical facts and projections remain consistent under stress.
 \end{itemize}
 
 This RISC-V/FPGA platform is explicitly scoped as \emph{experimental} and serves as a flexible laboratory environment to explore richer gateway behaviors without risking changes to production pod firmware.

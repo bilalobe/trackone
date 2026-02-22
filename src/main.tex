@@ -1,17 +1,59 @@
-\documentclass[11pt,a4paper]{article}
+\documentclass[11pt,a4paper,twoside]{article}
 
-% Basic packages
+% --- Typography & Encoding ---
 \usepackage[T1]{fontenc}
 \usepackage[utf8]{inputenc}
-\usepackage{lmodern}
-\usepackage{microtype}
-\usepackage{graphicx}
-\usepackage{hyperref}
+\usepackage{palatino}           % Print-friendly serif font
+\usepackage{microtype}          % Microtypographic refinements
+
+% --- Page Layout ---
+\usepackage[
+  a4paper,
+  top=25mm, bottom=30mm,
+  inner=30mm, outer=20mm,      % Wider inner margin for binding
+  headheight=14pt
+]{geometry}
+\usepackage{setspace}
+\onehalfspacing                 % Comfortable reading spacing
+
+% --- Headers & Footers ---
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[LE]{\small\leftmark}
+\fancyhead[RO]{\small\rightmark}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% --- Hyperlinks (print-safe: no colors, no boxes) ---
+\usepackage[
+  hidelinks,
+  pdftitle={Publicly-Verifiable Ultra-Low-Power LoRa Telemetry for Subterranean Heritage Sites},
+  pdfauthor={BILAL},
+  pdfsubject={LoRa Telemetry, Heritage Sites, Security},
+  pdfkeywords={LoRa, telemetry, cryptography, heritage, subterranean}
+]{hyperref}
+
+% --- Math & Science ---
 \usepackage{amsmath,amssymb}
+
+% --- Graphics & Figures ---
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,fit,shapes.geometric}
+
+% --- Tables ---
+\usepackage{booktabs}
+\usepackage{tabularx}
+
+% --- Lists & Text ---
 \usepackage{enumitem}
 \usepackage{textcomp}
-\usepackage{tikz}
-\usepackage{booktabs}
+\usepackage{acronym}
+
+\title{Publicly\nobreakdash-Verifiable, Ultra\nobreakdash-Low\nobreakdash-Power LoRa Telemetry\\for Subterranean Heritage Sites}
+
 \usetikzlibrary{arrows.meta,positioning,fit,shapes.geometric}
 
 \title{Publicly‑Verifiable, Ultra‑Low‑Power LoRa Telemetry for Subterranean Heritage Sites}\author{BILAL}
@@ -20,28 +62,27 @@
 \begin{document}
     \maketitle
     \tableofcontents
+    \listoffigures
+    \listoftables
 
+    \input{includes/acronyms}
     \input{includes/intro}
-    \input{includes/acknowledgments}
     \input{includes/requirements_threat}
     \input{includes/security_safety}
     \input{includes/architecture}
     \input{includes/crypto_design}
-    \input{includes/pipeline_impl}
     \input{includes/business_rules_sensorthings}
-    %\input{includes/schemas_merkle_ots}
     \input{includes/experiments}
     \input{includes/results}
     \input{includes/site_planning}
-    \input{includes/discussion_ethics}
-
-    % Hide appendices from TOC
-    \addtocontents{toc}{\protect\setcounter{tocdepth}{0}}
-    \appendix
-    \input{includes/hardware_appendix}
-    \addtocontents{toc}{\protect\setcounter{tocdepth}{2}}
+    \input{includes/limitations_and_future_work}
+    \input{includes/related_work}
 
     \input{includes/conclusion}
+    \input{includes/acknowledgments}
+
+    \appendix
+    \input{includes/hardware_appendix}
 
     \bibliographystyle{plain}
     \bibliography{main}

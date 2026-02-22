@@ -1,236 +1,139 @@
-\section{Experiments}
+\section{Experiments}\label{sec:experiments}
 
-\subsection{Determinism (M\#0--M\#5)}
-We verify deterministic Merkle root computation:
-\begin{itemize}[nosep]
-    \item Same input facts \textrightarrow{} identical \texttt{merkle\_root} (hex)
-    \item Same input facts \textrightarrow{} byte-identical \texttt{day.bin} (SHA-256)
-    \item Hash-sorted leaves ensure order independence: shuffled fact files \textrightarrow{} same root
-\end{itemize}
+% TODO [EXP-1]: Replace the coarse performance/storage figures in E6 with
+% a reproducible benchmark harness output (ADR--011), and add at least one plot
+% (pipeline stage timings; Merkle throughput vs. n).
+% TODO [EXP-2]: Add explicit links from each experiment E1--E7 to the
+% requirement IDs (FR/NFR/RR/ER) it supports, to make the evaluation traceable.
+% TODO [EXP-3]: For every release, record the exact toolchain and environment
+% used for timings (CPU model, OS, Python/Rust versions) in an appendix table.
+% TODO [EXP-4]: Add a short "negative evidence" paragraph: what was tried and
+% failed (or was deferred) so the evaluation remains honest under review.
 
-Test coverage includes: empty set, single fact, odd count, power-of-2 count, random filename ordering, Unicode edge cases.
+This chapter evaluates TrackOne as an end-to-end verifiable telemetry pipeline.
+Each experiment is described in terms of a hypothesis, method, and result.
+FPGA/RISC-V prototyping is explicitly treated as non-normative and is discussed in the hardware appendix (Section~\ref{subsec:riscv_fpga_gateway}).
 
-\subsection{Cryptographic Correctness (M\#4--M\#5)}
-\textbf{Deterministic AEAD vectors:} XChaCha20-Poly1305 test vectors in \texttt{crypto\_test\_vectors.json} verified against PyNaCl bindings.
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.97\linewidth]{figs/exp_map}
+\caption{Experiment map: each evaluation (E1--E7) targets a specific pipeline layer and trust boundary.}
+\label{fig:exp-map}
+\end{figure}
 
-\textbf{Round-trip tests:}
-\begin{itemize}[nosep]
-    \item X25519: Key generation and shared secret agreement
-    \item HKDF: Deterministic derivation per RFC 5869 and length/empty-edge cases
-    \item XChaCha20-Poly1305: Encrypt/decrypt round-trip, authentication failure detection
-    \item Ed25519: Sign/verify signatures, tamper and wrong-key rejection
-\end{itemize}
+\subsection{E1: Deterministic Merkle Commitment}\label{subsec:exp-deterministic-merkle}
+\textbf{Hypothesis:} For the same set of canonical facts, the daily commitment is deterministic: identical Merkle roots and byte-identical \texttt{day.bin} (same \ac{SHA}-256).
 
-\textbf{Property-based testing (Hypothesis):} TLV encoding robustness against truncated/malformed data; unknown tags ignored.
+\textbf{Method:} We compute Merkle roots using hash-sorted leaves (\ac{ADR}--003) over a golden corpus of facts and frames derived from \texttt{tests/fixtures/}.
+We vary input size (empty set, single fact, odd count, power-of-2 count) and randomize file ordering to test order independence.
+We repeat the computation across the Python implementation and the Rust implementation (\emph{trackone-core}), comparing results bit-for-bit under \ac{CI}.
 
-\subsection{Security Testing (M\#4--M\#5)}
-Tamper detection tests validate AEAD integrity:
-\begin{itemize}[nosep]
-    \item \textbf{Ciphertext tampering}: Single-bit flip \textrightarrow{} tag verification fails
-    \item \textbf{Tag tampering}: Modified authentication tag \textrightarrow{} rejection
-    \item \textbf{AAD tampering}: Modified header fields \textrightarrow{} tag mismatch
-    \item \textbf{Nonce validation}: Invalid nonce length (not 24 bytes) \textrightarrow{} rejected
-    \item \textbf{Unknown device}: Frame from unprovisioned device \textrightarrow{} rejected
-    \item \textbf{Frame structure}: Missing fields, malformed JSON, and empty files handled gracefully
-\end{itemize}
+\textbf{Result:} For all tested cases, Merkle roots match across implementations and across randomized file orderings.
+For identical inputs, \texttt{day.bin} is byte-identical, yielding the same \ac{SHA}-256 digest.
 
-All security tests pass with proper error messages and logging.
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.94\linewidth]{figs/exp_determinism}
+\caption{Determinism and cross-implementation parity: canonical facts deterministically yield \texttt{day.bin} and Merkle roots, and Python/Rust results are compared bit-for-bit.}
+\label{fig:exp-determinism}
+\end{figure}
 
-\subsection{Framed Ingest Robustness (M\#4)}
-Replay window enforcement with attack scenarios:
-\begin{itemize}[nosep]
-    \item \textbf{Monotonic acceptance}: Increasing \texttt{fc} within window \textrightarrow{} accepted
-    \item \textbf{Duplicate rejection}: Replay same frame \textrightarrow{} rejected with logged warning
-    \item \textbf{Out-of-window rejection}: Jumps beyond window (64) \textrightarrow{} rejected
-    \item \textbf{Reordering tolerance}: Frames within window but out of order \textrightarrow{} accepted
-    \item \textbf{Restart persistence}: Device table persisted \textrightarrow{} duplicates rejected after restart
-    \item \textbf{Boundary acceptance}: Exactly highest+window accepted; window+1 rejected
-\end{itemize}
+\subsection{E2: Cryptographic Correctness and Tamper Detection}\label{subsec:exp-crypto-correctness}
+\textbf{Hypothesis:} The gateway cryptographic pipeline is correct with respect to its known-answer vectors, and it rejects tampered frames with explicit failure modes.
 
-\subsection{End-to-End Pipeline (M\#4)}
-Complete workflow validated by \texttt{test\_end\_to\_end\_pipeline}:
+\textbf{Method:} We verify deterministic \ac{AEAD} test vectors (XChaCha20-Poly1305) and run round-trip tests for X25519, \ac{HKDF} (RFC~5869), XChaCha20-Poly1305, and Ed25519.
+We perform negative tests by mutating ciphertext, tags, \ac{AAD}, and nonces, and by presenting frames from unknown devices.
+Property-based tests stress TLV parsing against malformed and truncated inputs.
+
+\textbf{Result:} All vector and round-trip tests pass.
+All tampering scenarios are rejected (tag mismatch, nonce validation failure, unknown device), and malformed inputs fail closed with explicit errors.
+
+\subsection{E3: Replay Window Enforcement}\label{subsec:exp-replay-window}
+\textbf{Hypothesis:} The framed ingest policy enforces an anti-replay sliding window, rejecting duplicates and out-of-window frames while tolerating reordering within the window.
+
+\textbf{Method:} We execute attack scenarios against the frame counter (\texttt{fc}): monotonic acceptance, duplicate replay, out-of-window jumps, tolerated reordering, persistence across restart, and boundary conditions at the window edge.
+
+\textbf{Result:} Duplicates and out-of-window frames are rejected; frames within the window are accepted even if they arrive out-of-order.
+Persistence prevents replay after restart.
+
+\subsection{E4: End-to-End Verification and Anchoring}\label{subsec:exp-end-to-end}
+\textbf{Hypothesis:} The end-to-end pipeline produces a verifiable daily commitment that can be independently recomputed and checked, with optional external anchoring when artifacts are available.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.97\linewidth]{figs/exp_end_to_end}
+\caption{End-to-end experiment flow: from framed ingest through batching, anchoring, and independent verification.}
+\label{fig:exp-end-to-end}
+\end{figure}
+
+\textbf{Method:} We run the end-to-end test flow:
 \begin{enumerate}[nosep]
-    \item \texttt{pod\_sim --framed} generates encrypted frames
-    \item \texttt{frame\_verifier} decrypts with XChaCha20-Poly1305, validates tags
-    \item \texttt{merkle\_batcher} builds Merkle tree, validates schemas
-    \item \texttt{ots\_anchor} creates OTS proof (placeholder or real)
-    \item \texttt{verify\_cli} recomputes root, verifies match and OTS timestamp
+  \item \texttt{pod\_sim --framed} generates encrypted frames.
+  \item \texttt{frame\_verifier} decrypts and validates authenticity.
+  \item \texttt{merkle\_batcher} builds the Merkle tree over canonical commitment bytes.
+  \item \texttt{ots\_anchor} produces an \ac{OTS} proof (real or placeholder, depending on mode).
+  \item \texttt{verify\_cli} recomputes the root and verifies equality and proof structure.
 \end{enumerate}
+We additionally validate (a) peer attestation over day roots (Ed25519 signatures over a canonical message) and (b) optional \ac{RFC}~3161 \ac{TSA} responses when present.
 
-Exit code 0 confirms entire chain is cryptographically verifiable.
+\textbf{Result:} The pipeline exits successfully and the verifier recomputes the same root.
+Peer attestation verifies for the configured quorum, and invalid contexts/roots are rejected.
+When \texttt{*.tsr} artifacts are present, \ac{RFC}~3161 tokens parse and match the day root message imprint.
 
-\subsection{Peer Attestation (M\#5)}
-We validate \emph{peer attestation} of daily Merkle roots using Ed25519:
-\begin{itemize}[nosep]
-    \item Deterministic message format: \texttt{trackone:day-root:v1|<site>|<day>|<root>}
-    \item Signature generation via \texttt{scripts/gateway/peer\_attestation.py}
-    \item Quorum checks: $k$ of $n$ signatures required (configurable fixture)
-    \item Negative tests: wrong context, wrong root, unknown public key \textrightarrow{} verification fails
-\end{itemize}
+\subsection{E5: Embedded Firmware Viability}\label{subsec:exp-embedded-viability}
+\textbf{Hypothesis:} The pod frame builder is feasible for L0-class \ac{MCU}s in terms of code size and stack/RAM usage.
 
-\subsection{TSA Verification (M\#5)}
-Optional parallel RFC~3161 TSA responses (\texttt{*.tsr}) are validated when present:
-\begin{itemize}[nosep]
-    \item Timestamp token parsed; message imprint compared to daily Merkle root
-    \item Certificate chain and signing time checked (skipped when offline)
-    \item Tests are optional and auto-skip without \texttt{tsr} artifacts
-\end{itemize}
+\textbf{Method:} We run stress harnesses on host and QEMU targets (Cortex-M4 and Cortex-M0+), repeatedly building frames and checking stack guards.
 
-\subsection{Test Coverage (M\#5)}
-\textbf{200+ tests} across gateway and simulation modules (some runs may skip optional OTS/TSA tests):
-\begin{itemize}[nosep]
-    \item \texttt{test\_crypto\_impl.py}, \texttt{test\_crypto\_vectors.py}
-    \item \texttt{test\_framed\_ingest.py}, \texttt{test\_framed\_security.py}
-    \item \texttt{test\_gateway\_pipeline.py}, \texttt{test\_merkle\_repro.py}
-    \item \texttt{test\_replay\_edges.py}, \texttt{test\_tlv\_properties.py}
-    \item \texttt{test\_ots\_anchor.py}, \texttt{test\_pod\_sim.py}
-    \item \texttt{test\_edge\_cases.py}
-    \item \texttt{test\_peer\_attestation.py} (NEW)
-\end{itemize}
+\textbf{Result:} The stress harness runs complete without stack guard violations.
+Measured code size and RAM headroom remain within the STM32L0 budget envelope for framing and transport (cryptographic throughput is not claimed by the stress harness).
 
-\textbf{Coverage: ~85\%} across gateway and pod\_sim modules (measured; coverage target: 85\%). Uncovered code primarily in CLI entry points and rare error branches.
+\subsection{E6: Pipeline Performance and Storage}\label{subsec:exp-performance}
+\textbf{Hypothesis:} The pipeline completes well within interactive operator workflows for typical day sizes, and storage overhead scales linearly with measurement volume.
 
-\subsection{Performance (M\#4)}
-Wall-time measurements on Ubuntu 24.04, Python 3.13, pytest runtime:
+\textbf{Method:} We measure wall time on Ubuntu~24.04 (Python~3.13, pytest runtime) and account for the size of day artifacts for 10 devices with 100 frames each.
 
+\textbf{Result:}
+\begin{center}
 \begin{tabular}{lrr}
-    \hline
-    Operation & 10 frames & 100 frames \\
-    \hline
-    \texttt{pod\_sim --framed} & $<0.1$ s & $<0.2$ s \\
-    \texttt{frame\_verifier} (AEAD) & $<0.1$ s & $<0.5$ s \\
-    \texttt{merkle\_batcher} & $<0.1$ s & $<0.5$ s \\
-    \texttt{verify\_cli} & $<0.1$ s & $<0.5$ s \\
-    \textbf{Full test suite (200+ tests)} & \multicolumn{2}{c}{\textbf{$\sim$20 s}} \\
-    \hline
+  \hline
+  Operation & 10 frames & 100 frames \\
+  \hline
+  \texttt{pod\_sim --framed} & $<0.1$ s & $<0.2$ s \\
+  \texttt{frame\_verifier} (\ac{AEAD}) & $<0.1$ s & $<0.5$ s \\
+  \texttt{merkle\_batcher} & $<0.1$ s & $<0.5$ s \\
+  \texttt{verify\_cli} & $<0.1$ s & $<0.5$ s \\
+  \textbf{Full test suite (200+ tests)} & \multicolumn{2}{c}{\textbf{$\sim$20\,s}} \\
+  \hline
 \end{tabular}
+\end{center}
 
 Storage overhead per day (10 devices, 100 frames each):
 \begin{itemize}[nosep]
-    \item Frames (NDJSON): $\sim$200 KB
-    \item Facts (canonical): $\sim$150 KB
-    \item Block headers: $\sim$10 KB
-    \item Day blob: $\sim$15 KB
-    \item OTS proof: $\sim$5 KB (pending), $\sim$10 KB (confirmed)
+  \item Frames (ND\ac{JSON}): $\sim$200 KB
+  \item Facts (canonical): $\sim$150 KB
+  \item Block headers: $\sim$10 KB
+  \item Day blob: $\sim$15 KB
+  \item \ac{OTS} proof: $\sim$5 KB (pending), $\sim$10 KB (confirmed)
 \end{itemize}
 
-\textbf{Total daily storage: $\sim$390 KB for 1{,}000 measurements.} Scales linearly with device count and sampling rate.
+Total daily storage is approximately 390~KB per 1{,}000 measurements and scales linearly with device count and sampling rate.
 
-\subsection{CI/CD (M\#4)}
-Automated testing via GitHub Actions with \texttt{uv} package manager:
-\begin{itemize}[nosep]
-    \item \textbf{Python matrix}: 3.11, 3.12, 3.13
-    \item \textbf{Lint job}: ruff + black formatting checks
-    \item \textbf{Test job}: pytest with coverage across all Python versions
-    \item \textbf{Coverage upload}: Codecov integration (Python 3.13 only)
-\end{itemize}
+\subsection{E7: Stationary Calendar Evaluation}\label{subsec:exp-stationary-calendar}
+\textbf{Hypothesis:} A stationary calendar mode provides deterministic local proof generation under outage conditions while preserving an explicit "pending public anchor" lifecycle.
 
-All CI checks passing as of v0.0.1-m5 (November 20, 2025).
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.97\linewidth]{figs/exp_stationary_calendar}
+\caption{Stationary calendar evaluation: deterministic local proofs under outages, with an explicit upgrade path to public Bitcoin attestation.}
+\label{fig:exp-stationary-calendar}
+\end{figure}
 
-\subsection{Benchmarking plan (ADR-011)}
-We will introduce repeatable micro-benchmarks using pytest markers and a small harness:
-\begin{itemize}[nosep]
-    \item AEAD throughput (encrypt/decrypt) over payload sizes (16B\,$\ldots$\,4KB)
-    \item Merkle batching throughput vs. number of facts (n = 10\,$\ldots$\,100k)
-    \item Canonical JSON serialization cost per fact
-    \item End-to-end pipeline latency for typical day sizes (site\_demo)
-\end{itemize}
-Benchmarks will emit CSV under \texttt{out/bench/} and produce plots for the report.
+\textbf{Method:} We run \texttt{tox -e ots-cal} with a local calendar/stub deployment and execute a scheduled weekly ratchet profile that enables strict real-\ac{OTS} checks.
 
-\subsection{Skip conditions and external artifacts}
-Some tests are intentionally skipped when optional artifacts are unavailable:
-\begin{itemize}[nosep]
-    \item Deterministic crypto vectors: \texttt{toolset/unified/crypto\_test\_vectors.json} not present \textrightarrow{} vector-matching tests are skipped
-    \item Real OTS proofs: missing \texttt{ots} binary or Bitcoin headers \textrightarrow{} real integration tests are skipped
-    \item Local artifacts (e.g., \texttt{out/site\_demo/...}): present only on certain machines; tests auto-detect and enable if found
-    \item Peer attestation fixtures (e.g., \texttt{*.peers.json}): generated on-the-fly or loaded when present
-\end{itemize}
-This avoids false negatives while keeping real-world checks opt-in and reproducible.
+\textbf{Result:} Local proofs remain deterministic under \ac{CI}.
+When public anchoring is unavailable, artifacts remain verifiable with an explicit pending-anchor status rather than silent success.
 
-\subsection{Rust TrackOne-core Equivalence Experiments}
-We validate that the Rust implementation (\emph{trackone-core}) produces bit-for-bit identical results to the Python reference for a shared golden corpus:
-\begin{itemize}[nosep]
-  \item \textbf{Corpus:} facts/frames derived from \texttt{tests/fixtures/} and day replay fixtures used across CI.
-  \item \textbf{Checks:} Canonical JSON serialization (RFC~8785); Merkle root computation; AEAD encrypt/decrypt of canonical payloads.
-  \item \textbf{Method:} Python vs.
-  Rust results compared under CI; any divergence fails the pipeline (see NFR-8).
-  \item \textbf{Result:} No divergences observed across the corpus; reproducible across architectures.
-\end{itemize}
-
-\paragraph{Note on canonical encodings}
-TrackOne uses multiple encodings with different purposes:
-\begin{itemize}[nosep]
-  \item \textbf{Wire:} compact Serde/Postcard for LoRa-friendly telemetry frames.
-  \item \textbf{Canonical JSON:} RFC~8785 (JCS) for audit-friendly, cross-language deterministic JSON.
-  \item \textbf{Canonical CBOR:} RFC~8949 deterministically encoded CBOR for deterministic hashing/commitments where a compact binary form is useful (ADR--034; \cite{rfc8949}).
-\end{itemize}
-
-\subsection{Embedded Firmware Stress Experiments}
-We exercise the embedded frame builder and crypto across host and QEMU targets to establish viability for L0-class MCUs:
-\begin{itemize}[nosep]
-  \item \textbf{Host stress}: \emph{host\_stress} achieves $\sim$5.6\,M frames/s on x86\_64; max frame 56~B; $\sim$1~KiB stack usage.
-  \item \textbf{QEMU M4}: \emph{qemu\_stress} runs 1{,}000 iterations with 56~B frames; stack guard intact; no errors.
-  \item \textbf{QEMU M0+}: \emph{m0\_stress} (\texttt{thumbv6m-none-eabi}) runs 100 iterations with 56~B frames; 256~B guard remains untouched.
-  \item \textbf{Implication}: Code size (\textasciitilde{}3.5~KiB text) and RAM headroom meet STM32L0 budgets; wire-format is stable across architectures.
-\end{itemize}
-
-\subsection{Stationary Calendar Evaluation}
-We evaluate stationary calendar behaviour in CI and local runs:
-\begin{itemize}[nosep]
-  \item \textbf{Setup}: \texttt{tox -e ots-cal} with \texttt{docker-compose.ots.yml} standing up a local calendar and stationary stub.
-  \item \textbf{Metrics}: Latency and stability compared to public OTS pools; failure modes (downtime, equivocation) captured in logs.
-  \item \textbf{Weekly ratchet}: A scheduled profile exercises real OTS flows with \texttt{STRICT\_REAL\_OTS=1} so failures are not hidden.
-  \item \textbf{Outcome}: Deterministic proofs in CI; clear \emph{pending public anchor} semantics when public calendars are unavailable.
-\end{itemize}
-
-\subsection{Coverage and Pre-release Checks}
-We extend coverage accounting and pre-release checks to include:
-\begin{itemize}[nosep]
-  \item Rust tests (\texttt{cargo test -p trackone-core}) linked to Python tests via the golden corpus.
-  \item Firmware stress binaries (\emph{host\_stress}, \emph{qemu\_stress}, \emph{m0\_stress}) as part of the release checklist.
-  \item New \texttt{ots-cal} tox environment and corresponding CI job.
-\end{itemize}
-
-\subsection{Rust TrackOne-core Equivalence Experiments}
-We validate that the Rust implementation (\emph{trackone-core}) produces bit-for-bit identical results to the Python reference for a shared golden corpus:
-\begin{itemize}[nosep]
-  \item \textbf{Corpus:} facts/frames derived from \texttt{tests/fixtures/} and day replay fixtures used across CI.
-  \item \textbf{Checks:} Canonical JSON serialization (RFC~8785); Merkle root computation; AEAD encrypt/decrypt of canonical payloads.
-  \item \textbf{Method:} Python vs.
-  Rust results compared under CI; any divergence fails the pipeline (see NFR-8).
-  \item \textbf{Result:} No divergences observed across the corpus; reproducible across architectures.
-\end{itemize}
-
-\paragraph{Note on canonical encodings}
-TrackOne uses multiple encodings with different purposes:
-\begin{itemize}[nosep]
-  \item \textbf{Wire:} compact Serde/Postcard for LoRa-friendly telemetry frames.
-  \item \textbf{Canonical JSON:} RFC~8785 (JCS) for audit-friendly, cross-language deterministic JSON.
-  \item \textbf{Canonical CBOR:} RFC~8949 deterministically encoded CBOR for deterministic hashing/commitments where a compact binary form is useful (ADR--034; \cite{rfc8949}).
-\end{itemize}
-
-\subsection{Embedded Firmware Stress Experiments}
-We exercise the embedded frame builder and crypto across host and QEMU targets to establish viability for L0-class MCUs:
-\begin{itemize}[nosep]
-  \item \textbf{Host stress}: \emph{host\_stress} achieves $\sim$5.6\,M frames/s on x86\_64; max frame 56~B; $\sim$1~KiB stack usage.
-  \item \textbf{QEMU M4}: \emph{qemu\_stress} runs 1{,}000 iterations with 56~B frames; stack guard intact; no errors.
-  \item \textbf{QEMU M0+}: \emph{m0\_stress} (\texttt{thumbv6m-none-eabi}) runs 100 iterations with 56~B frames; 256~B guard remains untouched.
-  \item \textbf{Implication}: Code size (\textasciitilde{}3.5~KiB text) and RAM headroom meet STM32L0 budgets; wire-format is stable across architectures.
-\end{itemize}
-
-\subsection{Stationary Calendar Evaluation}
-We evaluate stationary calendar behaviour in CI and local runs:
-\begin{itemize}[nosep]
-  \item \textbf{Setup}: \texttt{tox -e ots-cal} with \texttt{docker-compose.ots.yml} standing up a local calendar and stationary stub.
-  \item \textbf{Metrics}: Latency and stability compared to public OTS pools; failure modes (downtime, equivocation) captured in logs.
-  \item \textbf{Weekly ratchet}: A scheduled profile exercises real OTS flows with \texttt{STRICT\_REAL\_OTS=1} so failures are not hidden.
-  \item \textbf{Outcome}: Deterministic proofs in CI; clear \emph{pending public anchor} semantics when public calendars are unavailable.
-\end{itemize}
-
-\subsection{Coverage and Pre-release Checks}
-We extend coverage accounting and pre-release checks to include:
-\begin{itemize}[nosep]
-  \item Rust tests (\texttt{cargo test -p trackone-core}) linked to Python tests via the golden corpus.
-  \item Firmware stress binaries (\emph{host\_stress}, \emph{qemu\_stress}, \emph{m0\_stress}) as part of the release checklist.
-  \item New \texttt{ots-cal} tox environment and corresponding CI job.
-\end{itemize}
+\paragraph{Experimental setup notes}
+The experiments above are exercised via an automated test suite and \ac{CI} workflows.
+Some tests (real \ac{OTS} proofs, \ac{RFC}~3161 \ac{TSA} verification) are conditional on external artifacts and are treated as opt-in checks to avoid non-deterministic failures while preserving realism.

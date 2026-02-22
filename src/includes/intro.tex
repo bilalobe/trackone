@@ -1,11 +1,34 @@
-\section{Introduction}
+\clearpage
+\thispagestyle{empty}
+\vspace*{\fill}
+\begin{center}
+  \begin{minipage}{0.8\textwidth}
+  \itshape
+  ``Certes, ce que Nous avons d'ores et déjà réalisé nous donne de l'assurance pour aborder l'avenir avec optimisme.
+  Mais les défis auxquels est confronté notre pays nous commandent de redoubler d'efforts et de vigilance, de concevoir des solutions innovantes, de subordonner les modèles de gestion aux règles de bonne gouvernance...''\\
+  \hfill Extrait du Discours de Sa Majesté le Roi Mohammed VI, que Dieu L'assiste, adressé le lundi 29 juillet 2024, à l'occasion du 25ème anniversaire de l'accession du Souverain au Trône de Ses glorieux Ancêtres.
+  \end{minipage}
+\end{center}
+\vspace*{\fill}
+\clearpage
+\section{Introduction}\label{sec:introduction}
 
 Heritage site monitoring presents unique constraints: sensors must operate for years without maintenance, avoid invasive installation, and preserve data integrity across decades without relying on commercial vendors that may discontinue services.
-While modern IoT platforms provide telemetry infrastructure, they typically require vendor lock-in (AWS IoT, Azure IoT) or incur per-message costs (blockchain-native systems like Helium Network).
+While modern \ac{IoT} platforms provide telemetry infrastructure, they typically require vendor lock-in (AWS \ac{IoT}, Azure \ac{IoT}) or incur per-message costs (blockchain-native systems like Helium Network).
 
 TrackOne addresses a specific niche: \textbf{publicly auditable telemetry for resource-constrained heritage sensors} where multi-decade autonomy is required and vendor lock-in is unacceptable.
-By formalizing the telemetry stream as a \textbf{verifiable ledger}, TrackOne ensures that sensor data remains a "source of truth" even if the original gateway operator or cloud infrastructure disappears. This is achieved by anchoring high-frequency facts into daily aggregates, which are then hardened against tampering through a combination of cryptographic Merkle trees and multi-anchor public timestamping.
-The system combines ultra-low power LoRa communication (<1kB/day traffic budget), edge AEAD encryption (gateway verifies without cloud dependency), and zero-marginal-cost public timestamping via Bitcoin blockchain through OpenTimestamps.
+By formalizing the telemetry stream as a \textbf{verifiable ledger}, TrackOne ensures that sensor data remains a ``source of truth'' even if the original gateway operator or cloud infrastructure disappears.
+This is achieved by anchoring high-frequency facts into daily aggregates, which are then hardened against tampering through a combination of cryptographic Merkle trees and multi-anchor public timestamping.
+The system combines ultra-low power \ac{LoRa} communication (<1kB/day traffic budget), edge \ac{AEAD} encryption (gateway verifies without cloud dependency), and zero-marginal-cost public timestamping via Bitcoin blockchain through OpenTimestamps.
+
+% Narrative walkthrough (snappy, end-to-end)
+\bigskip
+From a single subterranean reading to a publicly verifiable artifact: a pod wakes, captures a measurement, and encrypts it at the edge.
+A low-power \ac{LoRa} frame reaches the gateway, which rejects replays and verifies the \ac{AEAD} tag before admitting the fact into the ledger.
+The gateway writes a canonical fact, batches the day's facts into a deterministic Merkle tree, and persists a day blob that cannot be silently rewritten.
+At day's end, the day root is anchored to public time via OpenTimestamps, producing proofs that survive vendor disappearance.
+Weeks later, an auditor reruns \texttt{verify\_cli}: roots recompute, proofs validate, and any tampering is immediately exposed.
+This is the core promise: minimal energy, no cloud lock-in, and a durable, public-auditable chain of custody for heritage telemetry.
 
 % ---------------------------------------------------------------------------
 % Figure A1 – Regional context map (Ourzazate)
@@ -13,18 +36,18 @@ The system combines ultra-low power LoRa communication (<1kB/day traffic budget)
 % Drop the image at: figs/ourzazate_context_map.png
 % Suggested layers: shaded DEM base; rivers/wadis; khettara lines; main settlements; markers labelled "Pod V0 pilot area".
 % Placement: Introduction / Context.
-\begin{figure}[h]
+\begin{figure}[H]
   \centering
-  \includegraphics[width=0.9\textwidth]{figs/ourzazate_context_map.pdf}
-  \caption{Ourzazate region, highlighting legacy water infrastructure and candidate pod deployment zones.}
-  \label{fig:ourzazate-context}
+  \includegraphics[width=0.9\textwidth]{figs/workplan_no_dem.pdf}
+  \caption{Errachidia `Jorf` region, highlighting legacy water infrastructure and candidate pod deployment zones.}
+  \label{fig:errachidia-context}
 \end{figure}
 
-\subsection{Problem Statement}
+\subsection{Problem Statement}\label{subsec:problem-statement}
 
 Heritage site conservators require telemetry systems that:
 \begin{itemize}[nosep]
-    \item Operate 2+ years on coin-cell batteries (1 Wh/day budget)
+    \item Operate on limited power budgets (2+ year battery life)
     \item Provide cryptographic data integrity (confidentiality + authenticity)
     \item Enable independent verification without trusting gateway operator
     \item Survive vendor discontinuation (no proprietary cloud dependencies)
@@ -36,13 +59,13 @@ Existing solutions fail one or more requirements:
     \item \textbf{Commercial IoT platforms} (AWS IoT Core, Azure IoT Hub): Vendor lock-in, audit logs controlled by provider, pay-per-message pricing
     \item \textbf{Blockchain-native systems} (Helium Network): Per-packet fees (\$0.00001/packet = \$3.65/year for 1 msg/hour), no power constraints
     \item \textbf{Proprietary timestamping} (Guardtime KSI): Enterprise licensing, closed-source verification, not Bitcoin-anchored
-    \item \textbf{Certificate Transparency} (RFC 6962): Designed for TLS certificates, not IoT telemetry workflows
+    \item \textbf{Certificate Transparency} (RFC 6962): Designed for \ac{TLS} certificates, not \ac{IoT} telemetry workflows
 \end{itemize}
 
-\subsection{Contributions}
+\subsection{Contributions}\label{subsec:contributions}
 
 This work presents TrackOne, an \textbf{open-source implementation} combining low-power cryptography, deterministic Merkle batching, and Bitcoin timestamping for heritage site telemetry.
-While individual components are well-established (AEAD encryption, Merkle trees, OpenTimestamps), TrackOne is the \textbf{first open system} integrating them for ultra-low power LoRa deployments with public Bitcoin verification, peer attestation, and optional \textbf{parallel RFC~3161 TSA anchoring} to harden trust against a single gateway operator.
+While individual components are well-established (\ac{AEAD} encryption, Merkle trees, OpenTimestamps), TrackOne is the \textbf{first open system} integrating them for ultra-low power \ac{LoRa} deployments with public Bitcoin verification, peer attestation, and optional \textbf{parallel RFC~3161 TSA anchoring} to harden trust against a single gateway operator.
 
 \textbf{Key contributions:}
 
@@ -51,7 +74,7 @@ While individual components are well-established (AEAD encryption, Merkle trees,
     \begin{itemize}[nosep]
         \item Confidentiality + authenticity in <1kB/day traffic budget
         \item Replay protection via a sliding window (64 frames, persistent state)
-        \item Compatible with LoRaWAN duty cycle limits (1\% EU868)
+        \item Compatible with \ac{LoRa}WAN duty cycle limits (1\% EU868)
         \item Gateway-based verification (no cloud required)
     \end{itemize}
 
@@ -60,95 +83,98 @@ While individual components are well-established (AEAD encryption, Merkle trees,
         \item Amortizes blockchain costs: 1 anchor/day vs.
         1000+ individual timestamps
         \item Public verifiability without vendor lock-in (Bitcoin blockchain)
-        \item \textbf{Deterministic roots via RFC 8785:} Use of JSON Canonicalization Scheme (JCS) ensures bit-for-bit identical Merkle leaves across Python and Rust implementations, eliminating cross-platform divergence.
-        \item Independent verification CLI for third-party auditors
+        \item \textbf{Deterministic roots via TrackOne Canonical CBOR:} canonical commitment bytes ensure bit-for-bit identical Merkle leaves across Python and Rust, eliminating cross-platform divergence.
+        \item Independent verification \ac{CLI} for third-party auditors
     \end{itemize}
 
     \item \textbf{Reinforced trust via Parallel RFC 3161 TSA}
     \begin{itemize}[nosep]
-        \item Dual-anchoring strategy: Bitcoin (OTS) for decentralization + RFC 3161 for traditional legal/enterprise compliance.
-        \item Hardens the "digital contract" against single-point failure of the OTS calendar or Bitcoin P2P network.
+        \item Dual-anchoring strategy: Bitcoin (\ac{OTS}) for decentralization + \ac{RFC} 3161 for legal compliance.
+        \item Hardens the digital contract against single-point failure of the \ac{OTS} calendar or Bitcoin network.
         \item Sidecar metadata format allows auditors to choose their preferred trust anchor.
     \end{itemize}
 
     \item \textbf{Heritage deployment constraints}
     \begin{itemize}[nosep]
-        \item 2+ year battery life on CR2032 (220 mAh @ 3 V)
+        \item 2+ year battery life on a CR2032 bank (multiple cells in parallel; ~2-4 Wh total)
         \item Non-invasive installation (adhesive mount, no wiring)
         \item Open protocols (no proprietary dependencies)
         \item Zero marginal cost per telemetry record
     \end{itemize}
 
-    \item \textbf{Production-ready implementation}
+    \item \textbf{Validation-ready implementation}
     \begin{itemize}[nosep]
-        \item PyNaCl-based gateway with \~85\% test coverage (200+ tests)
-        \item Peer attestation toolchain for day roots (Ed25519 signatures, quorum policy)
-        \item Optional parallel RFC~3161 TSA anchoring (ADR-015) alongside OTS
-        \item CI-verified OTS workflow (Bitcoin Core headers-only mode)
+        \item PyNaCl-based gateway with 85\% test coverage (200+ tests)
+        \item Peer attestation toolchain (Ed25519 signatures, quorum policy)
+        \item Optional parallel \ac{RFC}~3161 \ac{TSA} anchoring (\ac{ADR}-015) alongside \ac{OTS}
+        \item \ac{CI}-verified \ac{OTS} workflow (Bitcoin Core headers-only mode)
         \item Real Bitcoin attestation: Block 919384 (October 16, 2025)
     \end{itemize}
 
     \item \textbf{Standardized projections (OGC SensorThings)}
     \begin{itemize}[nosep]
-        \item Deterministic mapping of canonical facts to OGC SensorThings API (ADR-028).
-        \item Separation of the verifiable "ledger of truth" from the "analytical projection."
-        \item Support for daily environmental summaries and stability indices (ADR-029).
+        \item Deterministic mapping of facts to \ac{OGC} SensorThings \ac{API} (\ac{ADR}-028).
+        \item Separation of "ledger of truth" from "analytical projection."
+        \item Support for daily environmental summaries and stability indices (\ac{ADR}-029).
     \end{itemize}
-\end{enumerate}
+    \end{enumerate}
 
-\subsection{Comparison with Existing Systems}
+    \subsection{Comparison with Existing Systems}\label{subsec:comparison-with-existing-systems}
 
-\begin{table}[h]
-\centering
-\caption{TrackOne vs. existing IoT and timestamping systems}
-\begin{tabular}{lcccc}
-\hline
-\textbf{System} & \textbf{Public Audit} & \textbf{Cost/Day} & \textbf{Power Budget} & \textbf{Open Source} \\
-\hline
-AWS IoT Core & Vendor logs & \$0.50 & None & No \\
-Azure IoT Hub & Vendor logs & \$0.25 & None & No \\
-Helium Network & Blockchain & \$0.09 & None & Partial \\
-Guardtime KSI & Proprietary & Enterprise & None & No \\
-Cert.\ Transparency & Public (CT logs) & N/A & N/A & Yes \\
-\textbf{TrackOne} & \textbf{Bitcoin (OTS)} & \textbf{\$0.001} & \textbf{1.4 Wh} & \textbf{Yes (MIT)} \\
-\hline
-\end{tabular}\label{tab:table}
-\end{table}
+\begin{table}[H]
+    \centering
+    \caption{TrackOne vs. existing IoT and timestamping systems}
+    \begin{tabularx}{\textwidth}{l X l l l}
+    \toprule
+    \textbf{System} & \textbf{Public Audit} & \textbf{Cost/Day} & \textbf{Energy/Day} & \textbf{Open} \\
+    \midrule
+    AWS \ac{IoT} Core & Vendor logs & \$0.50 & N/A & No \\
+    Azure \ac{IoT} Hub & Vendor logs & \$0.25 & N/A & No \\
+    Helium & Blockchain & \$0.09 & N/A & Partial \\
+    Guardtime KSI & Proprietary & Enterprise & N/A & No \\
+    Cert.\ Trans.
+    & \ac{CT} logs & N/A & N/A & Yes \\
+    \textbf{TrackOne} & \textbf{Bitcoin (OTS)} & \textbf{\$0.001} & \textbf{3-6 mWh} & \textbf{Yes} \\
+    \bottomrule
+    \end{tabularx}\label{tab:table}
+    \end{table}
 
-\textbf{Novelty claim:} While Certificate Transparency (RFC 6962) and Guardtime KSI demonstrate Merkle timestamping at scale, and blockchain systems like Helium provide decentralized IoT infrastructure, TrackOne is the \textbf{first open-source implementation} specifically scoped for \textbf{multi-decade heritage data sovereignty}. It combines:
-\begin{itemize}[nosep]
-    \item Ultra-low power radio (LoRa, <1kB/day) with edge AEAD encryption.
-    \item RFC 8785-compliant deterministic batching for cross-implementation consistency.
-    \item Dual-anchoring (Bitcoin OTS + RFC 3161 TSA) to eliminate vendor and single-protocol lock-in.
-\end{itemize}
-This targets a \textbf{specific niche}: heritage sites requiring a verifiable ledger of telemetry where data must outlive the hardware and the vendors that produced it.
+    \textbf{Novelty claim:} While Certificate Transparency and Guardtime KSI demonstrate Merkle timestamping, and systems like Helium provide decentralized \ac{IoT}, TrackOne is the \textbf{first open implementation} specifically for \textbf{multi-decade data sovereignty}.
+    It combines:
+    \begin{itemize}[nosep]
+        \item Ultra-low power radio (\ac{LoRa}, <1kB/day) with edge \ac{AEAD} encryption.
+        \item Deterministic batching via TrackOne Canonical \ac{CBOR} for consistency.
+        \item Dual-anchoring to eliminate vendor and single-protocol lock-in.
+    \end{itemize}
+    This targets a \textbf{specific niche}: heritage sites requiring a verifiable ledger where data must outlive the hardware and vendors.
 
-\subsection{Real-World Impact}
+\subsection{Real-World Impact}\label{subsec:real-world-impact}
 
 Heritage site conservators think in \textbf{decades}, not product cycles.
 TrackOne addresses long-term concerns:
 
 \begin{itemize}[nosep]
-    \item \textbf{Vendor discontinuation:} AWS can deprecate IoT services (e.g., AWS IoT 1-Click discontinued 2020).
+    \item \textbf{Vendor discontinuation:} AWS can deprecate \ac{IoT} services (e.g., AWS \ac{IoT} 1-Click discontinued 2020).
     Bitcoin blockchain persists 100+ years.
     \item \textbf{Pricing changes:} Cloud providers can increase fees.
-    OTS anchoring costs are fixed (Bitcoin transaction fees amortized across all users).
+    \ac{OTS} costs are fixed (Bitcoin fees amortized).
     \item \textbf{Data sovereignty:} Museums require independent verification.
-    TrackOne verification CLI runs offline with pre-downloaded Bitcoin headers.
+    Verification \ac{CLI} runs offline with Bitcoin headers.
     \item \textbf{Open protocols:} Complete system reproducible from source code.
     No proprietary black boxes.
+    \item \textbf{Energy reality:} A CR2032 bank at roughly 2--4~Wh total is comparable to running a 60~W bulb for about 2--4 minutes (or a 9~W LED for roughly 13--27 minutes), which is the budget TrackOne must stretch across multi-year deployments.
 \end{itemize}
 
-\subsection{Document Structure}
+\subsection{Document Structure}\label{subsec:document-structure}
 
-The report is organized as follows: Section~\ref{sec:system-requirements} covers threat model and requirements; Section~\ref{sec:security} describes security goals and safety net; Section 4 details cryptographic design and nonce construction; Section 5 presents the pipeline implementation and deterministic batching; Section 6 documents the OGC SensorThings projection and business rules; Section 7 validates the system through experiments; Section 8 presents test results and coverage metrics; Sections 9--10 discuss related work, ethics, and conclusions.
+The report is organized as follows: Section~\ref{sec:system-requirements} covers threat model; Section~\ref{sec:security} describes security; Section 4 details crypto design; Section 5 presents implementation; Section 6 documents \ac{OGC} projection; Section 7 validates the system; Section 8 presents test results; Sections 9--10 discuss ethics and conclusions.
 
 % ---------------------------------------------------------------------------
 % Figure D1 – Physarum “Steiner tree” branches on agar
 % TODO: Insert overhead photos (t0, t+12h, t+24h) showing branching/rerouting between oats; alternatively a stylized sketch over a simplified khettara layout.
 % Drop the image(s) at: figs/physarum_steiner_sequence.png (or multiple files)
 % Placement: Background / Context narrative.
-%\begin{figure}[h]
+%\begin{figure}[H]
 %  \centering
 %  \includegraphics[width=0.9\textwidth]{figs/physarum_steiner_sequence.png}
 %  \caption{Physarum polycephalum growing between nutrient points, exhibiting efficient branching reminiscent of khettara alignments.}
@@ -160,7 +186,7 @@ The report is organized as follows: Section~\ref{sec:system-requirements} covers
 % TODO: Simple diagram along a khettara: pods at varying depths, arrows for sensed quantities (moisture/impedance/RH) and uplink path (LoRa → gateway on higher ground).
 % Drop the image at: figs/pods_khettara_concept.png
 % Placement: Introduction / Context to frame hydrological/structural coverage vs RF footprint.
-%\begin{figure}[h]
+%\begin{figure}[H]
  % \centering
   %\includegraphics[width=0.9\textwidth]{figs/pods_khettara_concept.png}
  % \fbox{\parbox[c][3.0cm][c]{0.9\linewidth}{Conceptual pod placement along khettara (hydrological/structural coverage)}}
