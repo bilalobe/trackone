@@ -2,6 +2,12 @@ namespace:
   create: true
   name: trackone
 
+# Optional image pull secrets for private registries (e.g. GHCR).
+# Example:
+# imagePullSecrets:
+#   - name: ghcr-creds
+imagePullSecrets: []
+
 otsCalendar:
   enabled: true
   image:

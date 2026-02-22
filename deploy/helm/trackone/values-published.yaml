@@ -1,0 +1,35 @@
+# Published-artifact deployment profile.
+#
+# Use this when the TrackOne wheel/crates are already published and your images are built
+# from those published artifacts (no local crate builds inside Minikube).
+
+imagePullSecrets:
+  # GHCR package images are often private; create this secret in the namespace:
+  #   kubectl -n trackone create secret docker-registry ghcr-creds \
+  #     --docker-server=ghcr.io \
+  #     --docker-username=<USER> \
+  #     --docker-password=<TOKEN> \
+  #     --docker-email=<EMAIL>
+  - name: ghcr-creds
+
+jobs:
+  enabled: false
+
+gateway:
+  image:
+    # Recommended: publish/pin a gateway OCI image that `pip install`s the TrackOne wheel.
+    # Example: ghcr.io/<org>/<repo>/gateway:<version>
+    repository: ghcr.io/bilalobe/trackone/gateway
+    tag: latest
+    # For immutability, prefer a digest pin:
+    # digest: sha256:<...>
+    pullPolicy: IfNotPresent
+
+otsCalendar:
+  image:
+    # Recommended: publish/pin the calendar OCI image.
+    repository: ghcr.io/bilalobe/trackone/ots-calendar
+    tag: latest
+    # For immutability, prefer a digest pin:
+    # digest: sha256:<...>
+    pullPolicy: IfNotPresent
