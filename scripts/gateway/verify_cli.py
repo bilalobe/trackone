@@ -82,8 +82,21 @@ _RUST_LEDGER: Any | None = None
 try:  # pragma: no cover - optional acceleration
     import trackone_core
 
-    _RUST_MERKLE = getattr(trackone_core, "merkle", None)
-    _RUST_LEDGER = getattr(trackone_core, "ledger", None)
+    # Support both layouts:
+    # - legacy: a top-level extension module `trackone_core`
+    # - packaged: a Python package `trackone_core/` with native extension at
+    #   `trackone_core._native`
+    native = getattr(trackone_core, "_native", None)
+    if native is not None:
+        rust_mod = native
+    elif not hasattr(trackone_core, "__path__"):
+        rust_mod = trackone_core
+    else:
+        rust_mod = None
+
+    if rust_mod is not None:
+        _RUST_MERKLE = getattr(rust_mod, "merkle", None)
+        _RUST_LEDGER = getattr(rust_mod, "ledger", None)
 except Exception:  # pragma: no cover - extension not built/installed or init failed
     trackone_core = None  # type: ignore[assignment]
     _RUST_MERKLE = None
@@ -104,7 +117,7 @@ def merkle_root(leaves: Iterable[bytes]) -> str:
                 _RUST_MERKLE.merkle_root_hex_and_leaf_hashes(leaves_list),
             )
             return root_hex
-        except (RuntimeError, TypeError, ValueError) as e:
+        except (ImportError, RuntimeError, TypeError, ValueError) as e:
             print(
                 f"[WARN] Rust merkle failed, falling back to Python: {e}",
                 file=sys.stderr,
