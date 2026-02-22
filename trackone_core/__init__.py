@@ -21,29 +21,29 @@ from . import ots as ots  # noqa: F401
 try:
     from . import radio as radio  # noqa: F401
 except Exception:
-    # The radio module is optional; failure to import it should not
-    # prevent importing the rest of trackone_core.
+    # Radio is optional; a failure to import it must not prevent importing the
+    # rest of the package.
     radio = None  # type: ignore[assignment]
 
 try:
     from . import _native as _native  # noqa: F401
-
-    Gateway = _native.Gateway
-    GatewayBatch = _native.GatewayBatch
-    PyRadio = _native.PyRadio
-    __version__ = getattr(_native, "__version__", "0.0.0")
 except ImportError:
-    # Native extension not available; provide fallback stubs
     _native = None  # type: ignore[assignment]
-    Gateway = None  # type: ignore[assignment,misc]
-    GatewayBatch = None  # type: ignore[assignment,misc]
-    PyRadio = None  # type: ignore[assignment,misc]
-    __version__ = "0.0.0"
+
+__version__ = getattr(_native, "__version__", "0.0.0") if _native else "0.0.0"
+
+
+def __getattr__(name: str):  # noqa: ANN201
+    # Keep `import trackone_core` working without the native extension, but fail
+    # loudly if callers try to use the native surface.
+    if name in {"Gateway", "GatewayBatch", "PyRadio"}:
+        if _native is None:
+            raise ImportError("Native extension not available")
+        return getattr(_native, name)
+    raise AttributeError(name)
+
 
 __all__ = [
-    "Gateway",
-    "GatewayBatch",
-    "PyRadio",
     "__version__",
     "crypto",
     "ledger",
