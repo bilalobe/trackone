@@ -102,7 +102,7 @@ impl Gateway {
 }
 
 #[pymodule]
-fn trackone_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Register high-level classes
     m.add_class::<Gateway>()?;
     m.add_class::<GatewayBatch>()?;
