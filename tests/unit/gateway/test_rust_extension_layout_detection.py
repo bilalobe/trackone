@@ -1,0 +1,116 @@
+#!/usr/bin/env python3
+"""Tests for selecting the Rust acceleration module across layout variants.
+
+We support two layouts:
+- Packaged layout: `trackone_core` is a Python package and the native module is
+  `trackone_core._native`.
+- Legacy layout: `trackone_core` is itself the native extension module.
+
+The gateway scripts should prefer the native submodule when present, and
+otherwise use the legacy extension module.
+"""
+
+from __future__ import annotations
+
+import importlib
+import sys
+import types
+from unittest.mock import MagicMock
+
+import pytest
+
+
+def _clear_modules(prefix: str) -> None:
+    for key in list(sys.modules):
+        if key == prefix or key.startswith(prefix + "."):
+            sys.modules.pop(key, None)
+
+
+def _ensure_fake_pynacl(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ensure imports succeed on minimal environments without PyNaCl installed.
+
+    Some scripts import `nacl.*` at module import time. These tests are about
+    Rust-module selection logic, so a tiny stub is sufficient.
+    """
+    if "nacl" in sys.modules:
+        return
+
+    nacl = types.ModuleType("nacl")
+    nacl_ex = types.ModuleType("nacl.exceptions")
+    nacl_enc = types.ModuleType("nacl.encoding")
+    nacl_sign = types.ModuleType("nacl.signing")
+
+    class BadSignatureError(Exception):
+        pass
+
+    class HexEncoder:  # pragma: no cover - import-time stub
+        pass
+
+    class SigningKey:  # pragma: no cover - import-time stub
+        def __init__(self, *_args, **_kwargs) -> None:
+            raise RuntimeError("stub")
+
+    class VerifyKey:  # pragma: no cover - import-time stub
+        def __init__(self, *_args, **_kwargs) -> None:
+            raise RuntimeError("stub")
+
+    nacl_ex.BadSignatureError = BadSignatureError  # type: ignore[attr-defined]
+    nacl_enc.HexEncoder = HexEncoder  # type: ignore[attr-defined]
+    nacl_sign.SigningKey = SigningKey  # type: ignore[attr-defined]
+    nacl_sign.VerifyKey = VerifyKey  # type: ignore[attr-defined]
+
+    monkeypatch.setitem(sys.modules, "nacl", nacl)
+    monkeypatch.setitem(sys.modules, "nacl.exceptions", nacl_ex)
+    monkeypatch.setitem(sys.modules, "nacl.encoding", nacl_enc)
+    monkeypatch.setitem(sys.modules, "nacl.signing", nacl_sign)
+
+
+@pytest.mark.parametrize(
+    "script_mod",
+    ["scripts.gateway.merkle_batcher", "scripts.gateway.verify_cli"],
+)
+def test_packaged_layout_prefers_trackone_core_native_submodule(
+    monkeypatch: pytest.MonkeyPatch, script_mod: str
+) -> None:
+    _ensure_fake_pynacl(monkeypatch)
+    _clear_modules("trackone_core")
+    _clear_modules("scripts.gateway")
+
+    native = MagicMock()
+    native.merkle = MagicMock(name="merkle")
+    native.ledger = MagicMock(name="ledger")
+    monkeypatch.setitem(sys.modules, "trackone_core._native", native)
+
+    # Import the real package from the checkout; it will pick up our mocked _native.
+    tc = importlib.import_module("trackone_core")
+    assert tc._native is native
+
+    m = importlib.import_module(script_mod)
+    m = importlib.reload(m)
+
+    assert m._RUST_MERKLE is native.merkle
+    assert m._RUST_LEDGER is native.ledger
+
+
+@pytest.mark.parametrize(
+    "script_mod",
+    ["scripts.gateway.merkle_batcher", "scripts.gateway.verify_cli"],
+)
+def test_legacy_layout_uses_trackone_core_extension_module_directly(
+    monkeypatch: pytest.MonkeyPatch, script_mod: str
+) -> None:
+    _ensure_fake_pynacl(monkeypatch)
+    _clear_modules("trackone_core")
+    _clear_modules("scripts.gateway")
+
+    legacy = types.ModuleType("trackone_core")
+    legacy.merkle = object()
+    legacy.ledger = object()
+    monkeypatch.setitem(sys.modules, "trackone_core", legacy)
+    monkeypatch.delitem(sys.modules, "trackone_core._native", raising=False)
+
+    m = importlib.import_module(script_mod)
+    m = importlib.reload(m)
+
+    assert m._RUST_MERKLE is legacy.merkle
+    assert m._RUST_LEDGER is legacy.ledger
