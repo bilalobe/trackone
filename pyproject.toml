@@ -106,8 +106,6 @@ exclude = [
     "scripts/**/*.pyc",
 ]
 
-python-source = "."
-
 # Pytest configuration
 [tool.pytest.ini_options]
 testpaths = ["tests"]
