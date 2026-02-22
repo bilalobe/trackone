@@ -85,7 +85,7 @@ try:  # pragma: no cover - optional acceleration
     _RUST_MERKLE = getattr(trackone_core, "merkle", None)
     _RUST_LEDGER = getattr(trackone_core, "ledger", None)
 except Exception:  # pragma: no cover - extension not built/installed or init failed
-    trackone_core = None
+    trackone_core = None  # type: ignore[assignment]
     _RUST_MERKLE = None
     _RUST_LEDGER = None
 

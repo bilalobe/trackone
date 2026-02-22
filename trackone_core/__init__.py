@@ -11,13 +11,13 @@ a stable import surface:
 from __future__ import annotations
 
 # Importing the extension is optional for some workflows; callers that want it
-# should handle ImportError. We intentionally do not swallow ImportError here to
-# avoid masking build/ABI problems.
-from . import _native as _native  # noqa: F401
+# should handle ImportError. The native extension may not be available if the
+# package was installed without building the Rust extension.
 from . import crypto as crypto  # noqa: F401
 from . import ledger as ledger  # noqa: F401
 from . import merkle as merkle  # noqa: F401
 from . import ots as ots  # noqa: F401
+
 try:
     from . import radio as radio  # noqa: F401
 except Exception:
@@ -25,11 +25,20 @@ except Exception:
     # prevent importing the rest of trackone_core.
     radio = None  # type: ignore[assignment]
 
-Gateway = _native.Gateway
-GatewayBatch = _native.GatewayBatch
-PyRadio = _native.PyRadio
+try:
+    from . import _native as _native  # noqa: F401
 
-__version__ = getattr(_native, "__version__", "0.0.0")
+    Gateway = _native.Gateway
+    GatewayBatch = _native.GatewayBatch
+    PyRadio = _native.PyRadio
+    __version__ = getattr(_native, "__version__", "0.0.0")
+except ImportError:
+    # Native extension not available; provide fallback stubs
+    _native = None  # type: ignore[assignment]
+    Gateway = None  # type: ignore[assignment,misc]
+    GatewayBatch = None  # type: ignore[assignment,misc]
+    PyRadio = None  # type: ignore[assignment,misc]
+    __version__ = "0.0.0"
 
 __all__ = [
     "Gateway",
