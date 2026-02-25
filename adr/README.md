@@ -12,7 +12,7 @@ Entries list **Status** and **Summary**. Related references are grouped under **
 ### Core Cryptography & Framing
 
 - **ADR‑001: Cryptographic Primitives and Framing**
-  **Status**: Accepted (M#0)
+  **Status**: Accepted
   **Summary**: Establishes modern, efficient primitives for provisioning and AEAD telemetry:
 
   - X25519 + HKDF for key derivation
@@ -21,7 +21,7 @@ Entries list **Status** and **Summary**. Related references are grouped under **
   - SHA‑256 for Merkle trees and hashing
 
 - **ADR‑002: Telemetry Framing, Nonce/Replay Policy, and Device Table**
-  **Status**: Accepted (M#1 stub)
+  **Status**: Accepted
   **Summary**: Defines compact frame layout and gateway security policies:
 
   - Frame header: dev_id(u16), msg_type(u8), fc(u32), flags(u8)
@@ -32,10 +32,10 @@ Entries list **Status** and **Summary**. Related references are grouped under **
   - **See also**: ADR-024, ADR-025, ADR-026
 
 - **ADR‑003: Canonicalization, Merkle Policy, and Daily OpenTimestamps Anchoring**
-  **Status**: Accepted (M#0, M#1)
+  **Status**: Accepted
   **Summary**: Ensures deterministic, verifiable data integrity:
 
-  - Canonical JSON: sorted keys, UTF-8, no whitespace
+  - Canonical commitment discipline (historically JSON-first; commitment authority now profiled by ADR-039)
   - Hash-sorted Merkle leaves for order independence
   - Day chaining via prev_day_root (32 zero bytes for genesis)
   - Daily OTS anchoring for public timestamp verification
@@ -47,7 +47,7 @@ Entries list **Status** and **Summary**. Related references are grouped under **
   **Summary**: Documents the temporary plaintext-ciphertext stub used to bring up the end-to-end pipeline before real AEAD; replay window enforced; canonical facts emitted.
 
 - **ADR‑005: PyNaCl Migration**
-  **Status**: Accepted (M#3)
+  **Status**: Accepted
   **Summary**: Consolidate all cryptographic operations to PyNaCl (libsodium):
 
   - Removed `cryptography` dependency
@@ -59,6 +59,10 @@ Entries list **Status** and **Summary**. Related references are grouped under **
   **Status**: Accepted
   **Summary**: Separate transport encoding (Postcard) from commitment encoding to avoid accidental mixing of wire formats and hash commitments.
 
+- **ADR‑039: CBOR-first commitment profile and artifact authority**
+  **Status**: Proposed
+  **Summary**: Makes deterministic CBOR the canonical commitment path (RFC 8949 baseline + TrackOne profile constraints), defines `.cbor` artifacts as authoritative, and demotes JSON to projection-only views.
+
 - **ADR‑036: Post-Quantum Hybrid Provisioning (X25519 + ML-KEM/Kyber)**
   **Status**: Proposed
   **Summary**: Introduce optional hybrid provisioning that combines X25519 and ML-KEM shared secrets while keeping telemetry framing and nonce rules unchanged.
@@ -66,7 +70,7 @@ Entries list **Status** and **Summary**. Related references are grouped under **
 ### Policy & Process
 
 - **ADR‑006: Forward-only schema policy and deprecating `salt4`**
-  **Status**: Accepted (M#2)
+  **Status**: Accepted
   **Summary**: Adopt a forward-only policy. Standardize on `salt8` for XChaCha (24‑byte nonce), drop `salt4` and migrations;
   the current milestone schema is the only valid runtime format. Older milestones are archived as references only.
 
@@ -75,7 +79,7 @@ Entries list **Status** and **Summary**. Related references are grouped under **
   **Summary**: Defines which Python components are surface tooling vs protocol-critical, keeps `trackone_core` as the stable native module name, targets `abi3` wheels to reduce the wheel matrix, and adopts two wheel test modes (locked required, pip-resolve gated).
 
 - **ADR‑010: Test suite refactor (structure and naming)**
-  **Status**: Proposed (M#4→M#5)
+  **Status**: Proposed
   **Summary**: Decompose monolith tests, move fixtures closer to submodules, and adopt clearer naming (drop `_edge_cases`, `_boost`); improves focus and iteration speed.
 
   - **See also**: ADR-021
@@ -95,7 +99,7 @@ Entries list **Status** and **Summary**. Related references are grouped under **
 ### Verification, Integrity & OTS Pipeline
 
 - **ADR‑007: OTS verification in CI and Bitcoin headers policy**
-  **Status**: Accepted (M#4)
+  **Status**: Accepted
   **Summary**: Trustless OTS verification in CI using Bitcoin Core in headers-only/pruned mode with cached datadir; parse
   required heights from `.ots` artifacts, wait for headers to catch up, then run `ots verify`. Skip non-blocking when
   headers are unavailable within timeout.
@@ -103,13 +107,13 @@ Entries list **Status** and **Summary**. Related references are grouped under **
   - **See also**: ADR-008, ADR-021, ADR-022
 
 - **ADR‑008: Milestone M#4 Completion and OTS Verification Workflow**
-  **Status**: Accepted (M#4)
+  **Status**: Accepted
   **Summary**: Records the production OTS anchoring/verification of a day blob, CLI verification modes, and Git LFS policy for `.ots` artifacts with associated metadata.
 
   - **See also**: ADR-003, ADR-007, ADR-021
 
 - **ADR‑009: Bandit findings remediation and decisions**
-  **Status**: Accepted (M#4)
+  **Status**: Accepted
   **Summary**: Hardens subprocess usage and exception handling around `ots` calls; documents selective `# nosec` justifications and CI policy to reduce false positives while keeping security signal.
 
 - **ADR‑018: Cryptographic randomness and nonce policy**
@@ -139,7 +143,7 @@ Entries list **Status** and **Summary**. Related references are grouped under **
   - **See also**: ADR-007, ADR-020, ADR-021, ADR-022, ADR-023
 
 - **ADR‑015: Parallel Anchoring with OpenTimestamps and RFC 3161 TSA**
-  **Status**: Proposed (M#5)
+  **Status**: Proposed
   **Summary**: For each daily Merkle root, produce and store both an OTS proof and an RFC 3161 TSA response over the same digest; verify both in CI/CLI and treat dual success as strongest assurance while remaining backward-compatible with OTS-only.
 
   - **See also**: ADR-022
@@ -197,7 +201,7 @@ Entries list **Status** and **Summary**. Related references are grouped under **
 
 - **ADR‑028: Mapping TrackOne Canonical Facts to OGC SensorThings API**
   **Status**: Accepted
-  **Summary**: Projection layer translating immutable canonical facts (JSON) to OGC SensorThings Observations; maintains referential integrity and allows read-only queries without altering ledger.
+  **Summary**: Projection layer translating immutable canonical facts to OGC SensorThings Observations; maintains referential integrity and allows read-only queries without altering ledger.
 
   - **See also**: ADR-006, ADR-018, ADR-024, ADR-027, ADR-029, ADR-030
 
@@ -216,12 +220,12 @@ Entries list **Status** and **Summary**. Related references are grouped under **
 ### Data Storage & Analytics
 
 - **ADR‑011: Benchmarking Strategy for TrackOne**
-  **Status**: Accepted (M#5)
+  **Status**: Accepted
   **Summary**: Introduces pytest-benchmark based micro/mid-level benchmarks for crypto and gateway primitives, optional CI artifacts, and conventions for running and comparing baselines.
 
 - **ADR‑012: Parquet Export for Telemetry Facts (0.2.0+)**
   **Status**: Proposed
-  **Summary**: Add optional Parquet exporter (columnar, partitioned by day/site) derived from canonical JSON; keeps JSON as source of truth for Merkle/OTS, improves analytical scans and storage efficiency.
+  **Summary**: Add optional Parquet exporter (columnar, partitioned by day/site) derived from canonical facts; commitment source-of-truth follows the active commitment-profile ADRs, while Parquet remains derivative for analytics.
 
 - **ADR‑031: Key Analysis of SpatiaLite for Geospatial Storage and Query**
   **Status**: Proposed
@@ -237,18 +241,27 @@ Entries list **Status** and **Summary**. Related references are grouped under **
   **Status**: Proposed
   **Summary**: Introduce a deterministic virtual fleet and scenario runner to validate ingestion → ledger → anchoring behavior without physical hardware.
 
+- **ADR‑040: Commitment test vectors and conformance gates**
+  **Status**: Proposed
+  **Summary**: Requires machine-readable canonical commitment vectors and mandatory Rust/Python parity checks in CI for commitment bytes and roots.
+
+- **ADR‑041: Verification disclosure bundles and privacy tiers**
+  **Status**: Proposed
+  **Summary**: Defines Tier A/B/C disclosure classes, minimum verification bundle requirements, and mandatory labeling of recomputation capability vs anchor-only evidence.
+
 ### Future Roadmap
 
 - **ADR‑017: Rust Core and PyO3 Integration Strategy (Latent Goal)**
-  **Status**: Proposed (M#6)
+  **Status**: Proposed
   **Summary**: Introduce a Rust core crate with PyO3 bindings for canonicalization, hashing, Merkle, and eventually AEAD/signatures; ship wheels with `maturin`, keep Python API stable with fallbacks, and roll out in phases post‑0.1.0.
 
 ## Cross-Reference Matrix
 
-**Cryptography & Framing**: ADR-001 ← ADR-002, ADR-005, ADR-018
+**Cryptography & Framing**: ADR-001 ← ADR-002, ADR-005, ADR-018, ADR-034, ADR-039
 **OTS Pipeline**: ADR-003 ← ADR-007, ADR-008, ADR-021, ADR-023
 **Calendar & Trust**: ADR-014 ← ADR-020, ADR-022; ADR-019 ← ADR-024, ADR-025, ADR-026
-**Ledger & Anti-Replay**: ADR-024 ← ADR-002, ADR-003, ADR-006, ADR-025, ADR-026, ADR-030
+**Ledger & Anti-Replay**: ADR-024 ← ADR-002, ADR-003, ADR-006, ADR-025, ADR-026, ADR-030, ADR-041
+**Conformance & Interop**: ADR-032 ← ADR-039, ADR-040, ADR-041
 **Sensing Integration**: ADR-030 ← ADR-027, ADR-028, ADR-029
 
 ## Usage
