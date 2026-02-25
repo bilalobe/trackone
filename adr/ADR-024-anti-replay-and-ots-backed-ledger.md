@@ -2,6 +2,7 @@
 
 **Status**: Proposed
 **Date**: 2025-11-28
+**Updated**: 2026-02-23
 
 ## Related ADRs
 
@@ -12,6 +13,7 @@
 - [ADR-021](ADR-021-safety-net-ots-pipeline-verification.md): Safety-net OTS pipeline verification (verification invariants)
 - [ADR-023](ADR-023-ots-vs-git-integrity.md): Prefer OTS for integrity (trust hierarchy)
 - [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md): EnvFact schema and duty-cycled day.bin anchoring (schema instantiation)
+- [ADR-041](ADR-041-verification-disclosure-bundles-and-privacy-tiers.md): Disclosure tiers and verification-bundle semantics
 
 ## Context
 
@@ -81,7 +83,7 @@ The replay policy (see ADR-002 and `ReplayWindow` implementation) is summarized 
 For the ledger and OTS:
 
 - **Accepted frames** become facts in `facts/` and are eligible to be included in the Merkle tree and `day.bin`.
-- **Rejected frames** (duplicate or out-of-window) may be written to audit logs, metrics, or operator dashboards, but:
+- **Rejected frames** (duplicate or out-of-window) SHOULD be written to structured rejection evidence logs, metrics, or operator dashboards, and:
   - They **must not** produce canonical facts that `merkle_batcher` consumes for ledger construction.
   - They are never part of the Merkle set used for anchoring a day.
 
@@ -130,6 +132,33 @@ Once a `day.bin_D` has been anchored with a valid OTS proof and we retain that p
 
   will result in a different `SHA256(day.bin_D)` and thus require a **new** OTS anchor. This property is critical to prevent "ledger surgery" around replayed or out-of-window frames.
 
+### 6. Rejection evidence policy (audit path requirements)
+
+To avoid ambiguity in why a `(dev_id, fc)` did not appear in the anchored set,
+the gateway SHOULD emit structured rejection evidence for each rejected frame.
+
+Minimum recommended fields:
+
+- `device_id`
+- `fc`
+- `reason` (`duplicate`, `out_of_window`, `invalid_frame`, etc.)
+- `observed_at_utc`
+- optional `frame_hash` or ingress correlation ID
+
+This rejection evidence is part of the audit path (not the ledger path) and
+MUST NOT be hashed into day commitments.
+
+### 7. Omission threat model
+
+If rejection evidence is omitted, an operator can claim "frame never observed"
+for data that was actually received and rejected, weakening accountability.
+Therefore:
+
+- production deployments SHOULD retain rejection evidence for at least the same
+  retention period as day artifacts, or document a stricter operational policy;
+- verifiers and reports SHOULD distinguish "not observed" from "observed but rejected"
+  when evidence is available.
+
 ## Consequences
 
 ### Positive
@@ -142,6 +171,7 @@ Once a `day.bin_D` has been anchored with a valid OTS proof and we retain that p
 
 - **Two data paths:** We must maintain both acceptance (ledger) and audit views of traffic and document their difference.
 - **Wrap-around limitation:** Counter wrap-around is presently treated as out-of-policy unless ADR-024 is updated with explicit modulo behavior and corresponding tests.
+- **Audit storage overhead:** Structured rejection evidence increases storage and operational complexity.
 
 ## The Ledger vs. Audit separation
 
@@ -162,9 +192,13 @@ To enforce this ADR, we use a combination of unit, integration, and end-to-end t
    Integration tests under `tests/integration/test_replay_merkle_integration.py` drive `frame_verifier` and `merkle_batcher` end-to-end with streams that include duplicates, reordering, and out-of-window frames. They assert that:
 
    - The set of `(dev_id, fc)` pairs present in the facts actually consumed by `merkle_batcher` is:
+
      - Duplicate-free per `(dev_id, fc)`, and
      - Consistent with the configured sliding-window invariant (accepting valid out-of-order frames inside the window; rejecting duplicates and frames that are stale or outside the window).
+
    - On-disk artifacts in a temporary `facts/` and `out/` directory contain only the first accepted occurrence of each `(dev_id, fc)` pair. Replayed frames are visible only via audit-style output and do not result in extra JSON fact files.
+
+   - Rejected frames produce structured rejection evidence records with reason codes.
 
    One of these tests is explicitly scoped as a disk-level regression for ADR-024, e.g. `test_pipeline_rejects_duplicates_on_disk`, and is marked with `@pytest.mark.integration` (and, where relevant, `@pytest.mark.benchmark` for performance envelopes).
 
