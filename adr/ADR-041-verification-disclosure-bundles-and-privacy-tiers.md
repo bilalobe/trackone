@@ -31,12 +31,24 @@ TrackOne defines three disclosure tiers:
 
 A Tier A bundle MUST contain:
 
-- canonical fact artifacts for the day (`facts/*.cbor`);
-- day artifact (`day/YYYY-MM-DD.cbor`);
+- canonical fact artifacts for the day, as defined by the active commitment profile;
+- day artifact, as defined by the active commitment profile;
 - authoritative block/day records;
 - OTS proof and OTS metadata sidecar;
 - profile version identifier;
 - verification manifest (paths + digests).
+
+During the ADR-039 dual-artifact migration window, Tier A verification MUST
+treat the following as equivalent only when the verification manifest binds the
+selected profile and artifact digests unambiguously:
+
+- CBOR-first artifacts: `facts/*.cbor` and `day/YYYY-MM-DD.cbor`;
+- transitional artifacts: `facts/*.json` and `day/YYYY-MM-DD.bin` (canonical JSON bytes).
+
+Bundles using transitional artifacts MUST be labeled as
+"Tier A (transitional profile artifacts)" in verifier output. Once CBOR-first
+artifacts are the sole authoritative profile output, this transitional
+equivalence MUST be removed.
 
 If any required element is missing, output MUST be labeled "not independently
 recomputable".
