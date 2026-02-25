@@ -42,7 +42,7 @@ Outputs live under `out/site_demo/` by default:
 
 - `facts/` canonical JSON facts
 - `blocks/` block headers that record the authoritative daily Merkle root
-- `day/YYYY-MM-DD.bin` the day blob, with `*.ots` proof
+- `day/YYYY-MM-DD.cbor` the day blob, with `*.ots` proof
 
 ## Quick start
 
@@ -173,7 +173,7 @@ three environment variables that control how the OTS client behaves:
 
   - When set to `1`, `scripts/gateway/ots_anchor.py` does **not** call the real
     `ots` binary. Instead it writes a deterministic stub proof
-    (`STATIONARY-OTS:<sha256(day.bin)>`) and an `ots_meta` sidecar. This mode is
+    (`STATIONARY-OTS:<sha256(day.cbor)>`) and an `ots_meta` sidecar. This mode is
     used by the test suite to avoid slow or flaky network calls.
 
   - Default in tests (via `tests/conftest.py`): `OTS_STATIONARY_STUB=1`.
@@ -193,7 +193,7 @@ three environment variables that control how the OTS client behaves:
 
     ```bash
     export OTS_CALENDARS="http://127.0.0.1:8468,https://a.pool.opentimestamps.org"
-    python scripts/gateway/ots_anchor.py out/site_demo/day/2025-10-07.bin
+    python scripts/gateway/ots_anchor.py out/site_demo/day/2025-10-07.cbor
     ```
 
 - `RUN_REAL_OTS`
