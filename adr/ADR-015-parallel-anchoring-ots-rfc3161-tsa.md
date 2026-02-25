@@ -2,6 +2,7 @@
 
 **Status**: Accepted (Updated)
 **Date**: 2025-11-06
+**Updated**: 2026-02-23
 
 ## Related ADRs
 
@@ -10,6 +11,7 @@
 - [ADR-014](ADR-014-stationary-ots-calendar.md) (Stationary OTS calendar)
 - [ADR-008](ADR-008-m4-completion-ots-workflow.md) (M#4 OTS workflow and metadata)
 - [ADR-017](ADR-017-rust-core-and-pyo3-integration.md) (Rust CLI verification — optional future verifier)
+- [ADR-041](ADR-041-verification-disclosure-bundles-and-privacy-tiers.md) (Disclosure classes for verifier claims)
 
 ## Implementation Summary
 
@@ -63,6 +65,33 @@ Adopt parallel daily anchoring: for each day `D` and site `S` we produce a singl
 - CLI (`verify_cli.py`) gains flags:
   - `--verify-ots`, `--verify-tsa`, `--verify-peers`, `--require-all`.
 
+### Resilience Claims and Limits (Quantified Scope)
+
+This ADR makes bounded resilience claims, not absolute ones:
+
+- **Calendar outage resilience**: if one OTS calendar is unavailable, anchoring can
+  proceed via other configured calendars.
+- **Trust diversification**: OTS + TSA + peer signatures reduce single-anchor dependency.
+- **Latency diversification**: TSA may provide near-immediate attestations while OTS
+  may require delayed proof upgrades.
+
+Not claimed:
+
+- immunity to coordinated compromise of all selected trust roots;
+- guaranteed low latency anchoring under severe network partition;
+- semantic correctness of telemetry content (only timing/integrity attestation).
+
+### Adversary Mapping (AT-015)
+
+- **A1: Single calendar outage/misbehavior**
+  Mitigated by multi-calendar OTS submission and optional TSA/peer channels.
+- **A2: TSA outage or revocation-chain failure**
+  Mitigated by OTS path continuity and non-strict verification mode where policy permits.
+- **A3: Peer quorum unavailable**
+  Limits short-term provenance only; does not invalidate OTS/TSA evidence.
+- **A4: Multi-root coordinated compromise**
+  Not fully mitigated; requires governance controls (key management, independent operators, auditing cadence).
+
 ### Configuration
 
 - Add `anchoring.toml` (or YAML) in project root:
@@ -101,6 +130,7 @@ context = "trackone:day_root:v1"
 - Need to maintain TSA trust roots and monitor TSA certificate expiration.
 - Slight increase in daily runtime and storage (RFC 3161 artifacts are small but non-zero).
 - Peer signature workflow introduces operational coordination.
+- Parallel channels can create policy ambiguity unless strict/warn behavior is explicitly configured per environment.
 
 ### Operational Impact
 
