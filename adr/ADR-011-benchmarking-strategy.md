@@ -1,7 +1,8 @@
 # ADR-011: Benchmarking Strategy for TrackOne
 
-**Status**: Accepted (Updated)
+**Status**: Accepted
 **Date**: 2025-11-01
+**Updated**: 2026-02-25
 
 ## Context
 

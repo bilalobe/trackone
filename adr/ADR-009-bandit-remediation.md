@@ -1,7 +1,8 @@
 # ADR-009: Bandit findings remediation and decisions
 
-**Status**: Accepted (Updated)
+**Status**: Accepted
 **Date**: 2025-10-22
+**Updated**: 2026-02-25
 
 ## Context
 

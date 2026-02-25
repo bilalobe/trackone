@@ -184,7 +184,7 @@ When enabled, a gateway evidence-plane signature MUST cover canonical bytes of t
 
 - the `day_root` (or `merkle_root` for a batch header),
 - the site/day identifiers,
-- and the digest of the anchored artifact (e.g., `SHA-256(day.bin)`), either embedded directly or referenced via a signed manifest.
+- and the digest of the anchored artifact (e.g., `SHA-256(day.cbor)`), either embedded directly or referenced via a signed manifest.
 
 This prevents “under-signing” where a signature covers only a root string but not the artifact it is claimed to represent.
 

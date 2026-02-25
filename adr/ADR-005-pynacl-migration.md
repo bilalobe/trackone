@@ -1,7 +1,8 @@
 # ADR-005: Migrate to PyNaCl for All Cryptographic Primitives
 
-**Status**: Accepted (Updated)
+**Status**: Accepted
 **Date**: 2025-10-12
+**Updated**: 2026-02-25
 
 ## Related ADRs
 

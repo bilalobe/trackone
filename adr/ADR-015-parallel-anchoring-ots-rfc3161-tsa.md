@@ -1,8 +1,8 @@
 # ADR-015: Parallel Anchoring with OpenTimestamps and RFC 3161 TSA
 
-**Status**: Accepted (Updated)
+**Status**: Accepted
 **Date**: 2025-11-06
-**Updated**: 2026-02-23
+**Updated**: 2026-02-25
 
 ## Related ADRs
 

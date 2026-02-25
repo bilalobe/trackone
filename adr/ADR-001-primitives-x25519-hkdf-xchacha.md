@@ -1,7 +1,8 @@
 # ADR-001: Cryptographic Primitives and Framing
 
-**Status**: Accepted (Updated)
+**Status**: Accepted
 **Date**: 2025-10-06
+**Updated**: 2026-02-25
 
 ## Context
 
@@ -72,7 +73,7 @@ nonce/aad/plain/tag.
 - **Facts:** verified, decrypted payloads are normalized to canonical JSON/CBOR and hashed with SHA‑256 as Merkle
   leaves.
 - **Block headers:** Ed25519 signature by gateway.
-- **Day blob:** canonical JSON (site_id, date, prev_day_root, batches[], day_root); SHA‑256(day.bin) anchored via
+- **Day artifact:** canonical CBOR (site_id, date, prev_day_root, batches[], day_root); SHA‑256(day.cbor) anchored via
   OpenTimestamps.
 
 ## Consequences

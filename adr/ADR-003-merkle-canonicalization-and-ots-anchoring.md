@@ -2,6 +2,7 @@
 
 **Status**: Accepted
 **Date**: 2025-10-06
+**Updated**: 2026-02-25
 
 ## Context
 
@@ -52,15 +53,15 @@
   - For the first day at a site, `prev_day_root = "00"*32`.
   - For subsequent days, `prev_day_root = previous day’s day_root` (from `day/<YYYY‑MM‑DD>.json`).
 - **Artifacts:**
-  - Binary canonical blob: `out/<site>/day/<day>.bin` (contains canonical JSON bytes of the day record).
-  - Human‑readable: `out/<site>/day/<day>.json` (pretty JSON).
-  - Convenience hash: `out/<site>/day/<day>.bin.sha256` (hex).
+  - Canonical commitment artifact: `out/<site>/day/<day>.cbor`.
+  - Human‑readable projection: `out/<site>/day/<day>.json` (pretty JSON).
+  - Convenience hash: `out/<site>/day/<day>.cbor.sha256` (hex).
 
 ### 5. OpenTimestamps anchoring policy
 
-- We anchor `SHA‑256(day.bin)` using OpenTimestamps (OTS):
-  - Stamp on day rollover (e.g., 00:10 UTC) via `ots stamp <day.bin>`.
-  - Keep the proof next to the blob: `<day>.bin.ots`.
+- We anchor `SHA‑256(day.cbor)` using OpenTimestamps (OTS):
+  - Stamp on day rollover (e.g., 00:10 UTC) via `ots stamp <day.cbor>`.
+  - Keep the proof next to the artifact: `<day>.cbor.ots`.
   - Upgrade proofs weekly via `ots upgrade` to accumulate Bitcoin confirmations.
-- **Verification:** `ots verify <day>.bin.ots` must succeed; auditors recompute `day_root` from facts and confirm
-  `day.bin` consistency before verifying OTS.
+- **Verification:** `ots verify <day>.cbor.ots` must succeed; auditors recompute `day_root` from facts and confirm
+  `day.cbor` consistency before verifying OTS.

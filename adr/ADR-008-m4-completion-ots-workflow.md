@@ -2,6 +2,7 @@
 
 **Status**: Accepted
 **Date**: 2025-10-22
+**Updated**: 2026-02-25
 
 ## Related ADRs
 
@@ -27,9 +28,9 @@ We have successfully anchored a production day blob to the Bitcoin blockchain an
 
 **Anchored Artifact:**
 
-- File: `out/site_demo/day/2025-10-07.bin`
+- File: `out/site_demo/day/2025-10-07.cbor`
 - SHA256: `4778cddcf437f0b0ac8cd62fef3b89909bd6f4a8fd9590ac6e4a70e4fded5f60`
-- OTS Proof: `out/site_demo/day/2025-10-07.bin.ots`
+- OTS Proof: `out/site_demo/day/2025-10-07.cbor.ots`
 
 **Bitcoin Attestation:**
 
@@ -69,7 +70,7 @@ The verification CLI now handles both test and production scenarios:
 
 1. Recompute Merkle root from canonical fact files
 1. Compare against authoritative block header
-1. Verify OTS proof anchors the day.bin blob
+1. Verify OTS proof anchors the day.cbor artifact
 1. Confirm Bitcoin block header contains the attestation
 
 ### 3. Git LFS for OTS Proofs
@@ -250,7 +251,7 @@ RUN_REAL_OTS=1 make test-ots-real
 
 ```bash
 # Verify OTS proof
-ots verify out/site_demo/day/2025-10-07.bin.ots
+ots verify out/site_demo/day/2025-10-07.cbor.ots
 
 # Confirm Bitcoin block contains attestation
 bitcoin-cli getblockheader $(bitcoin-cli getblockhash 919384) | jq -r .merkleroot

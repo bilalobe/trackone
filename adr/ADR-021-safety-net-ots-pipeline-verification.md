@@ -14,7 +14,7 @@
 - [ADR-020](ADR-020-stationary-ots-calendar-followup.md): Stationary OTS calendar follow-up
 - [ADR-022](ADR-022-first-party-stationary-ots-calendar-service.md): First-party stationary OTS calendar service in CI
 - [ADR-024](ADR-024-anti-replay-and-ots-backed-ledger.md): Anti-replay and OTS-backed ledger
-- [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md): EnvFact schema and duty-cycled day.bin anchoring
+- [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md): EnvFact schema and duty-cycled day.cbor anchoring
 
 ## Context
 
@@ -143,7 +143,7 @@ Mitigations:
     - Explicit salting rules, integrated with `ADR-006` for salt usage.
   - Tests (current repo paths):
     - `tests/integration/test_verify_cli.py::TestVerifyCli::test_merkle_root_computation_matches_batcher` validates that Merkle roots computed by `verify_cli` match those computed by `merkle_batcher`.
-    - `tests/integration/test_replay_merkle_integration.py` covers duplicate handling and deterministic batching behavior feeding `day.bin`.
+    - `tests/integration/test_replay_merkle_integration.py` covers duplicate handling and deterministic batching behavior feeding `day.cbor`.
     - `tests/e2e/test_pipeline_integration.py` covers an end-to-end reproduction path from frame verification through batching.
 
 - **Anchoring and Bitcoin headers checks:**
@@ -417,4 +417,4 @@ The intent is a practical, reviewable safety net that can evolve alongside the r
 - [ADR-020: Stationary OTS calendar follow-up](ADR-020-stationary-ots-calendar-followup.md)
 - [ADR-022: First-party stationary OTS calendar service in CI](ADR-022-first-party-stationary-ots-calendar-service.md)
 - [ADR-024: Anti-replay and OTS-backed ledger](ADR-024-anti-replay-and-ots-backed-ledger.md)
-- [ADR-030: EnvFact schema and duty-cycled day.bin anchoring](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md)
+- [ADR-030: EnvFact schema and duty-cycled day.cbor anchoring](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md)

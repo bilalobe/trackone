@@ -1,7 +1,8 @@
-# ADR-030: EnvFact schema, SensorThings alignment, and duty-cycled day.bin anchoring
+# ADR-030: EnvFact schema, SensorThings alignment, and duty-cycled day.cbor anchoring
 
 **Status**: Accepted
 **Date**: 2025-12-15
+**Updated**: 2026-02-25
 
 ## Related ADRs
 
@@ -26,7 +27,7 @@ Over the last iterations we:
 
 - Introduced a Rust core crate (`trackone-core`) with a forward‑only Fact / EnvFact schema used by both pod firmware and gateway.
 - Aligned the environmental telemetry model with OGC SensorThings API concepts (`Thing`, `Datastream`, `Observation`, `phenomenonTime`, `resultTime`).
-- Tightened the anchoring pipeline to produce one canonical `day.bin` per day, verified and stamped via Merkle + OpenTimestamps, as described in ADR‑014/020/024.
+- Tightened the anchoring pipeline to produce one canonical `day.cbor` per day, verified and stamped via Merkle + OpenTimestamps, as described in ADR‑014/020/024.
 - Quantified power and airtime budgets that motivate duty‑cycled uplink (1–4 summary frames per day) instead of continuous or high‑rate streaming.
 - Validated that the TrackOne protocol and frame builder fit comfortably on Cortex‑M0+/M4 with very small flash/RAM footprints, and that gateway‑side verification remains practical.
 - Noted that schema and Merkle/OTS details were scattered across prose and test code; we need a single architectural decision that:
@@ -160,7 +161,7 @@ This projection is a view. Canonical truth remains:
 
 SensorThings/ArcGIS are presentation and integration layers, not the root of trust.
 
-### Duty‑cycled uplink and daily `day.bin` anchoring
+### Duty‑cycled uplink and daily `day.cbor` anchoring
 
 Adopt a daily anchoring cadence and duty‑cycled radio policy.
 
@@ -174,17 +175,17 @@ Pods:
 Gateway:
 
 - Validates and stores incoming `Fact`s in `facts/` (anti‑replay, schema validation, site routing).
-- Batches facts into one `day.bin` per site per day at or just after day boundary (UTC or configured site local time).
+- Batches facts into one `day.cbor` per site per day at or just after day boundary (UTC or configured site local time).
 - Computes the Merkle root over that day’s accepted facts and writes the corresponding `day.json` / block header.
 - Runs OTS anchoring:
-  - Stamp the day’s Merkle root / `day.bin` at day close.
+  - Stamp the day’s Merkle root / `day.cbor` at day close.
   - Upgrade pending proofs over hours/days until Bitcoin attestation is available (per ADR‑014/020/021).
 - Exposes verification and status via local CLI/tools (`verify_cli`), SensorThings view, and optional dashboards.
 
 Duty cycling preserves verifiability because:
 
-- every accepted fact is in exactly one `day.bin`,
-- every `day.bin` is anchored (or explicitly marked pending/failed),
+- every accepted fact is in exactly one `day.cbor`,
+- every `day.cbor` is anchored (or explicitly marked pending/failed),
 - SensorThings/ArcGIS consume anchored or anchor‑pending daily summaries.
 
 ## Alternatives Considered
@@ -202,7 +203,7 @@ Positive:
 - Schema changes centralized and checked via unit tests (roundtrips, size budgets).
 - Clean SensorThings mapping and ArcGIS integration as presentation layers.
 - Energy‑aware duty cycling: focus on 1–4 uplinks/day and short RX windows; frequency controlled by rare downlink policy messages.
-- Anchoring discipline: `day.bin` and Merkle roots remain the anchoring unit; anti‑replay aligned with ADR‑024.
+- Anchoring discipline: `day.cbor` and Merkle roots remain the anchoring unit; anti‑replay aligned with ADR‑024.
 - Testable and portable: stress tests on Cortex‑M0+/M4 and QEMU confirm framing fits constrained targets; gateway and tools share parsing/validation paths.
 
 Negative / Trade‑offs:
@@ -219,6 +220,6 @@ Negative / Trade‑offs:
 - Gateway crate (`crates/trackone-gateway`) is being aligned to:
   - accept `Fact` as its ingress type,
   - populate `facts/`,
-  - batch into `day.bin` and Merkle roots,
+  - batch into `day.cbor` and Merkle roots,
   - anchor with OTS,
   - expose SensorThings‑like views.

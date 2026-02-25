@@ -12,7 +12,7 @@
 - [ADR-019](ADR-019-rust-gateway-chain-of-trust.md): Gateway chain of trust (operational chain)
 - [ADR-021](ADR-021-safety-net-ots-pipeline-verification.md): Safety-net OTS pipeline verification (verification invariants)
 - [ADR-023](ADR-023-ots-vs-git-integrity.md): Prefer OTS for integrity (trust hierarchy)
-- [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md): EnvFact schema and duty-cycled day.bin anchoring (schema instantiation)
+- [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md): EnvFact schema and duty-cycled day.cbor anchoring (schema instantiation)
 - [ADR-041](ADR-041-verification-disclosure-bundles-and-privacy-tiers.md): Disclosure tiers and verification-bundle semantics
 
 ## Context
@@ -23,8 +23,8 @@ On the gateway side:
 
 - `frame_verifier` applies syntactic and semantic validation, including replay-window based checks.
 - Valid frames are turned into canonical facts and written into a `facts/` directory.
-- `merkle_batcher` consumes `facts/` and builds per-day Merkle trees and `day.bin` blobs, following ADR-003.
-- `ots_anchor` (and `verify_cli`) anchor and verify `day.bin` blobs using OpenTimestamps (OTS), and track proofs in sidecar metadata.
+- `merkle_batcher` consumes `facts/` and builds per-day Merkle trees and `day.cbor` artifacts, following ADR-003.
+- `ots_anchor` (and `verify_cli`) anchor and verify `day.cbor` artifacts using OpenTimestamps (OTS), and track proofs in sidecar metadata.
 
 ADR-002 specifies the replay window and device table model at the gateway. ADR-003 specifies Merkle canonicalization and OTS anchoring for day records.
 
@@ -49,7 +49,7 @@ We treat `(dev_id, fc)` as the minimal **unit of account** for frames in the led
 
 ### 2. What gets anchored
 
-For a given calendar day `D`, the gateway constructs a canonical `day.bin` (per ADR-003) and anchors it with OTS. The anchored object logically represents:
+For a given calendar day `D`, the gateway constructs a canonical `day.cbor` (per ADR-003) and anchors it with OTS. The anchored object logically represents:
 
 - A finite multiset of facts `F_D` derived from frames that passed gateway validation **including replay window checks**.
 - Each fact `f in F_D` carries (directly or by derivation) a `(dev_id, fc)` pair.
@@ -82,7 +82,7 @@ The replay policy (see ADR-002 and `ReplayWindow` implementation) is summarized 
 
 For the ledger and OTS:
 
-- **Accepted frames** become facts in `facts/` and are eligible to be included in the Merkle tree and `day.bin`.
+- **Accepted frames** become facts in `facts/` and are eligible to be included in the Merkle tree and `day.cbor`.
 - **Rejected frames** (duplicate or out-of-window) SHOULD be written to structured rejection evidence logs, metrics, or operator dashboards, and:
   - They **must not** produce canonical facts that `merkle_batcher` consumes for ledger construction.
   - They are never part of the Merkle set used for anchoring a day.
@@ -104,24 +104,24 @@ If we later introduce explicit modulo semantics for frame counters, ADR-024 must
 
 ### 4. Meaning of an OTS timestamp
 
-Given an OTS proof over the hash `H = SHA256(day.bin_D)` for day `D`, and assuming correct operation of the gateway and Merkle batcher per ADR-003 and this ADR:
+Given an OTS proof over the hash `H = SHA256(day.cbor_D)` for day `D`, and assuming correct operation of the gateway and Merkle batcher per ADR-003 and this ADR:
 
-> The OTS proof asserts that, at or before the attested time, the gateway committed to exactly the set of *accepted, non-replayed* facts F_D for day D, as serialized into day.bin_D.
+> The OTS proof asserts that, at or before the attested time, the gateway committed to exactly the set of *accepted, non-replayed* facts F_D for day D, as serialized into day.cbor_D.
 
 This means:
 
 - The OTS anchor is a statement about **accepted state** (post-replay filtering), not about all raw ingress traffic.
-- The absence of a frame `(dev_id, fc)` from `F_D` / `day.bin_D` has the following interpretations:
+- The absence of a frame `(dev_id, fc)` from `F_D` / `day.cbor_D` has the following interpretations:
   - The frame was never observed, **or**
   - The frame was observed but rejected as invalid, replay, or out-of-window, and is therefore outside the anchored ledger; it may exist only in separate audit logs.
 
-It does **not** mean that Datagram or radio delivery was perfect; only that the gateway’s replay and validation policy filtered what went into `day.bin`.
+It does **not** mean that Datagram or radio delivery was perfect; only that the gateway’s replay and validation policy filtered what went into `day.cbor`.
 
 ### 5. Anchored-set immutability
 
-Once a `day.bin_D` has been anchored with a valid OTS proof and we retain that proof:
+Once a `day.cbor_D` has been anchored with a valid OTS proof and we retain that proof:
 
-- Any mutation of `day.bin_D` (including changing, adding, or removing facts or altering their serialization) changes its SHA-256 hash.
+- Any mutation of `day.cbor_D` (including changing, adding, or removing facts or altering their serialization) changes its SHA-256 hash.
 
 - The existing OTS proof can no longer be claimed to attest to the mutated blob.
 
@@ -130,7 +130,7 @@ Once a `day.bin_D` has been anchored with a valid OTS proof and we retain that p
   - Insert previously-replayed frames, or
   - Remove legitimately accepted frames,
 
-  will result in a different `SHA256(day.bin_D)` and thus require a **new** OTS anchor. This property is critical to prevent "ledger surgery" around replayed or out-of-window frames.
+  will result in a different `SHA256(day.cbor_D)` and thus require a **new** OTS anchor. This property is critical to prevent "ledger surgery" around replayed or out-of-window frames.
 
 ### 6. Rejection evidence policy (audit path requirements)
 
@@ -177,7 +177,7 @@ Therefore:
 
 This is the most important architectural consequence.
 
-- The Ledger (`day.bin`): Is the "Clean Room." It contains only Truth — canonical, accepted facts that survived validation and replay filtering.
+- The Ledger (`day.cbor`): Is the "Clean Room." It contains only Truth — canonical, accepted facts that survived validation and replay filtering.
 
 - The Audit Log (syslog / metrics / operator dashboards): Is the "Emergency Room." It contains raw ingress noise: malformed frames, bad signatures, retransmissions, replays, and any evidence of attack or malfunction.
 
@@ -196,7 +196,7 @@ To enforce this ADR, we use a combination of unit, integration, and end-to-end t
      - Duplicate-free per `(dev_id, fc)`, and
      - Consistent with the configured sliding-window invariant (accepting valid out-of-order frames inside the window; rejecting duplicates and frames that are stale or outside the window).
 
-   - On-disk artifacts in a temporary `facts/` and `out/` directory contain only the first accepted occurrence of each `(dev_id, fc)` pair. Replayed frames are visible only via audit-style output and do not result in extra JSON fact files.
+   - On-disk artifacts in a temporary `facts/` and `out/` directory contain only the first accepted occurrence of each `(dev_id, fc)` pair. Replayed frames are visible only via audit-style output and do not result in extra fact artifacts/files (canonical CBOR artifacts with optional JSON projections, per ADR-039).
 
    - Rejected frames produce structured rejection evidence records with reason codes.
 
@@ -206,10 +206,10 @@ To enforce this ADR, we use a combination of unit, integration, and end-to-end t
 
    Where CI profiles permit real or stationary OTS interaction (see ADR-021 and calendar CI jobs), end-to-end tests:
 
-   - Build a small synthetic `day.bin` from an accepted, duplicate-free set of frames;
+   - Build a small synthetic `day.cbor` from an accepted, duplicate-free set of frames;
    - Stamp it with `ots_anchor` and record the resulting proof and meta JSON;
-   - Mutate the set with replays or out-of-window frames and rebuild `day.bin`;
-   - Demonstrate that the mutated `day.bin` has a different hash and cannot share the same OTS proof. Verification via `verify_cli` fails for the tampered artifact.
+   - Mutate the set with replays or out-of-window frames and rebuild `day.cbor`;
+   - Demonstrate that the mutated `day.cbor` has a different hash and cannot share the same OTS proof. Verification via `verify_cli` fails for the tampered artifact.
 
    These tests are marked with `@pytest.mark.integration` and additional markers such as `real_ots`, `slow`, or `requires_calendar` so that tox environments and CI workflows can select appropriate subsets (e.g. `tox -e ots-cal`, weekly ratchet jobs).
 

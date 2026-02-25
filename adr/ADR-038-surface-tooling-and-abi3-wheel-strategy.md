@@ -2,6 +2,7 @@
 
 **Status**: Accepted
 **Date**: 2026-02-07
+**Updated**: 2026-02-25
 
 ## Related ADRs
 
@@ -60,15 +61,15 @@ Rules:
 The following operations are authoritative in Rust. Python implementations of the same operations exist as
 fallbacks for environments without the native extension, but the Rust output is canonical when present.
 
-| Operation                                   | Authoritative crate                | Governing ADR    |
-| ------------------------------------------- | ---------------------------------- | ---------------- |
-| Canonical JSON encoding for commitments     | `trackone-ledger`                  | ADR-003          |
-| Merkle leaf hashing and root computation    | `trackone-ledger`, `trackone-core` | ADR-003          |
-| Canonical `day.bin` / block-header stamping | `trackone-ledger`                  | ADR-003          |
-| Canonical CBOR commitment encoding          | `trackone-core` (`cbor.rs`)        | ADR-034          |
-| AEAD encrypt/decrypt (XChaCha20-Poly1305)   | `trackone-core`                    | ADR-001          |
-| Ed25519 sign/verify                         | `trackone-core`                    | ADR-001, ADR-037 |
-| X25519 + HKDF key derivation                | `trackone-core`                    | ADR-001          |
+| Operation                                    | Authoritative crate                | Governing ADR    |
+| -------------------------------------------- | ---------------------------------- | ---------------- |
+| Canonical JSON encoding for commitments      | `trackone-ledger`                  | ADR-003          |
+| Merkle leaf hashing and root computation     | `trackone-ledger`, `trackone-core` | ADR-003          |
+| Canonical `day.cbor` / block-header stamping | `trackone-ledger`                  | ADR-003          |
+| Canonical CBOR commitment encoding           | `trackone-core` (`cbor.rs`)        | ADR-034          |
+| AEAD encrypt/decrypt (XChaCha20-Poly1305)    | `trackone-core`                    | ADR-001          |
+| Ed25519 sign/verify                          | `trackone-core`                    | ADR-001, ADR-037 |
+| X25519 + HKDF key derivation                 | `trackone-core`                    | ADR-001          |
 
 Surface tooling (Python) is authoritative for:
 

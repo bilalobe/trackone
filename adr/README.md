@@ -108,7 +108,7 @@ Entries list **Status** and **Summary**. Related references are grouped under **
 
 - **ADR‑008: Milestone M#4 Completion and OTS Verification Workflow**
   **Status**: Accepted
-  **Summary**: Records the production OTS anchoring/verification of a day blob, CLI verification modes, and Git LFS policy for `.ots` artifacts with associated metadata.
+  **Summary**: Records the production OTS anchoring/verification of a day artifact, CLI verification modes, and Git LFS policy for `.ots` artifacts with associated metadata.
 
   - **See also**: ADR-003, ADR-007, ADR-021
 
@@ -211,9 +211,9 @@ Entries list **Status** and **Summary**. Related references are grouped under **
 
   - **See also**: ADR-027, ADR-028, ADR-030
 
-- **ADR‑030: EnvFact schema, SensorThings alignment, and duty-cycled day.bin anchoring**
+- **ADR‑030: EnvFact schema, SensorThings alignment, and duty-cycled day.cbor anchoring**
   **Status**: Accepted
-  **Summary**: Integrates SHTC3 EnvFact canonical schema, duty-cycled anchoring (day.bin batches), and SensorThings API projection; harmonizes all sensing and ledger concerns.
+  **Summary**: Integrates SHTC3 EnvFact canonical schema, duty-cycled anchoring (day.cbor batches), and SensorThings API projection; harmonizes all sensing and ledger concerns.
 
   - **See also**: ADR-001, ADR-003, ADR-002, ADR-006, ADR-014, ADR-018, ADR-019, ADR-020, ADR-021, ADR-024, ADR-025, ADR-027, ADR-028, ADR-029, All ADRs above (integration point)
 

@@ -2,6 +2,7 @@
 
 **Status**: Accepted
 **Date**: 2025-11-28
+**Updated**: 2026-02-25
 
 ## Related ADRs
 
@@ -9,14 +10,14 @@
 - [ADR-020](ADR-020-stationary-ots-calendar-followup.md): Stationary OTS calendar follow-up (operations context)
 - [ADR-021](ADR-021-safety-net-ots-pipeline-verification.md): Safety-net OTS pipeline verification (trust model)
 - [ADR-024](ADR-024-anti-replay-and-ots-backed-ledger.md): Anti-replay and OTS-backed ledger (ledger semantics)
-- [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md): EnvFact schema and duty-cycled day.bin anchoring (ledger implementation)
+- [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md): EnvFact schema and duty-cycled day.cbor anchoring (ledger implementation)
 
 ## Context
 
 - Immutable, verifiable telemetry/proof artifacts.
 - Explicit, auditable *time anchoring* for data (not just code).
 - A safety‑net model where operators can independently re‑verify that:
-  - A given `*.bin` / `*.bin.ots` / `*.ots.meta.json` set corresponds to a particular Merkle root.
+  - A given `*.cbor` / `*.cbor.ots` / `*.ots.meta.json` set corresponds to a particular Merkle root.
   - This root is anchored to a public, append‑only time source.
 - Git provides:
   - Object store of content‑addressed blobs (`sha1`/`sha256` depending on repo format).
@@ -33,8 +34,8 @@
 ## Decision
 
 - The canonical evidence chain for a day ledger is:
-  - `*.bin` → hashed into Merkle tree → root stored and referenced;
-  - `*.bin.ots` → OTS proof anchoring that root to OTS calendars;
+  - `*.cbor` → hashed into Merkle tree → root stored and referenced;
+  - `*.cbor.ots` → OTS proof anchoring that root to OTS calendars;
   - `*.ots.meta.json` → metadata binding proof, artifact SHA‑256, and calendar URLs.
 - Git’s role is limited to:
   - Source code versioning for the verifier, stationary calendar, and CI workflows.

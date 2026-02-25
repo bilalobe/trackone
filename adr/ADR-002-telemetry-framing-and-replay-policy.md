@@ -1,7 +1,8 @@
 # ADR-002: Telemetry Framing, Nonce/Replay Policy, and Device Table
 
-**Status**: Accepted (Updated)
+**Status**: Accepted
 **Date**: 2025-10-06
+**Updated**: 2026-02-25
 
 ## Context
 
