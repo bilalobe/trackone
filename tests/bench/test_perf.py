@@ -16,8 +16,8 @@ FILE_CANDIDATES = []
 if ENV_OTS_FILE:
     FILE_CANDIDATES.append(pathlib.Path(ENV_OTS_FILE))
 FILE_CANDIDATES += [
-    PROJECT_ROOT / "out/site_demo/day/2025-10-07.bin.ots",
-    PROJECT_ROOT / "out/site_demo/day/2025-10-07.bin",
+    PROJECT_ROOT / "out/site_demo/day/2025-10-07.cbor.ots",
+    PROJECT_ROOT / "out/site_demo/day/2025-10-07.cbor",
 ]
 
 
@@ -26,7 +26,7 @@ def ots_file():
     for p in FILE_CANDIDATES:
         if p.exists() and p.is_file():
             return p
-    pytest.skip("No real OTS .bin file found in expected locations")
+    pytest.skip("No real OTS .cbor file found in expected locations")
     return None
 
 
