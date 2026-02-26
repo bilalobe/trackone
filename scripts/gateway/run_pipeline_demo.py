@@ -12,25 +12,29 @@ import subprocess
 import sys
 from collections.abc import Iterable
 from pathlib import Path
+from typing import Any
 
 try:  # Support both package imports and direct script execution.
-    from .tsa_stamp import DEFAULT_TSA_TIMEOUT, TsaStampError, tsa_stamp_day_blob
+    from .anchoring_config import (
+        STRICT,
+        AnchoringConfig,
+        compute_overall_status,
+        load_anchoring_config,
+    )
+except ImportError:  # pragma: no cover - fallback when run as a script
+    from anchoring_config import (  # type: ignore
+        STRICT,
+        AnchoringConfig,
+        compute_overall_status,
+        load_anchoring_config,
+    )
+
+try:  # Support both package imports and direct script execution.
+    from .tsa_stamp import TsaStampError, tsa_stamp_day_blob
 except ImportError:  # pragma: no cover - fallback when run as a script
     from tsa_stamp import (  # type: ignore
-        DEFAULT_TSA_TIMEOUT,
         TsaStampError,
         tsa_stamp_day_blob,
-    )
-
-try:  # Support both package imports and direct script execution.
-    from .peer_attestation import (
-        PeerAttestationError,
-        write_peer_attestations,
-    )
-except ImportError:  # pragma: no cover - fallback when run as a script
-    from peer_attestation import (  # type: ignore
-        PeerAttestationError,
-        write_peer_attestations,
     )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -41,21 +45,11 @@ DEFAULT_SITE = "an-001"
 DEFAULT_FRAME_COUNT = 7
 DEFAULT_FRAME_WINDOW = 64
 
-
-def _maybe_requests_exception() -> type[BaseException] | None:
-    try:
-        import requests
-
-        return requests.RequestException  # type: ignore[return-value,unused-ignore]
-    except ModuleNotFoundError:
-        return None
-
-
-def env_flag(name: str, default: bool = False) -> bool:
-    value = os.environ.get(name)
-    if value is None:
-        return default
-    return value.lower() in {"1", "true", "yes", "on"}
+STATUS_VERIFIED = "verified"
+STATUS_FAILED = "failed"
+STATUS_MISSING = "missing"
+STATUS_PENDING = "pending"
+STATUS_SKIPPED = "skipped"
 
 
 def resolve_repo_path(path: Path | None) -> Path | None:
@@ -75,7 +69,7 @@ def rel(path: Path) -> str:
 
 def run_cmd(label: str, cmd: Iterable[str], *, cwd: Path) -> None:
     printable = " ".join(shlex.quote(str(part)) for part in cmd)
-    print(f"[pipeline] {label}\n[pipeline] → {printable}")
+    print(f"[pipeline] {label}\n[pipeline] -> {printable}")
     subprocess.run(list(cmd), check=True, cwd=cwd)
 
 
@@ -83,10 +77,7 @@ def clean_outputs(out_dir: Path, frames_file: Path, *, keep_existing: bool) -> N
     out_dir.mkdir(parents=True, exist_ok=True)
     if keep_existing:
         return
-    for path in (
-        frames_file,
-        out_dir / "frames.ndjson",
-    ):
+    for path in (frames_file, out_dir / "frames.ndjson"):
         if Path(path).is_file():
             Path(path).unlink()
     for subdir in ("facts", "blocks", "day"):
@@ -100,6 +91,10 @@ def ensure_dirs(*paths: Path) -> None:
         path.mkdir(parents=True, exist_ok=True)
 
 
+def _channel(enabled: bool, status: str, reason: str = "") -> dict[str, Any]:
+    return {"enabled": enabled, "status": status, "reason": reason}
+
+
 def artifact_manifest(
     date: str,
     site: str,
@@ -107,17 +102,19 @@ def artifact_manifest(
     frame_count: int,
     frames_file: Path,
     facts_dir: Path,
-    day_bin: Path,
+    day_artifact: Path,
     out_dir: Path,
     *,
+    anchoring: dict[str, Any],
     tsa_artifacts: dict[str, Path] | None = None,
     peer_attest: Path | None = None,
+    verifier_summary: dict[str, Any] | None = None,
 ) -> Path:
     artifacts = {
-        "day_bin": rel(day_bin),
-        "day_json": rel(day_bin.with_suffix(".json")),
-        "day_sha256": rel(day_bin.with_suffix(".bin.sha256")),
-        "day_ots": rel(Path(f"{day_bin}.ots")),
+        "day_cbor": rel(day_artifact),
+        "day_json": rel(day_artifact.with_suffix(".json")),
+        "day_sha256": rel(day_artifact.with_suffix(".cbor.sha256")),
+        "day_ots": rel(Path(f"{day_artifact}.ots")),
         "block": rel(out_dir / "blocks" / f"{date}-00.block.json"),
     }
     if tsa_artifacts:
@@ -133,8 +130,12 @@ def artifact_manifest(
         "frames_file": rel(frames_file),
         "facts_dir": rel(facts_dir),
         "artifacts": artifacts,
+        "anchoring": anchoring,
     }
-    manifest_path = day_bin.parent / f"{date}.pipeline-manifest.json"
+    if verifier_summary is not None:
+        manifest["verifier"] = verifier_summary
+
+    manifest_path = day_artifact.parent / f"{date}.pipeline-manifest.json"
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     return manifest_path
 
@@ -162,6 +163,18 @@ def parse_args() -> argparse.Namespace:
         default=int(os.environ.get("PIPELINE_FRAME_WINDOW", DEFAULT_FRAME_WINDOW)),
     )
     parser.add_argument(
+        "--config",
+        type=Path,
+        default=None,
+        help="Anchoring config path (default: ./anchoring.toml)",
+    )
+    parser.add_argument(
+        "--policy-mode",
+        choices=["warn", "strict"],
+        default=None,
+        help="Override anchoring policy mode",
+    )
+    parser.add_argument(
         "--keep-existing",
         action="store_true",
         help="Retain existing artifacts instead of cleaning the out directory.",
@@ -182,9 +195,14 @@ def parse_args() -> argparse.Namespace:
         help="Treat verify_cli failures as fatal (default: warn only).",
     )
     parser.add_argument(
+        "--skip-ots",
+        action="store_true",
+        help="Skip OTS anchoring regardless of configuration",
+    )
+    parser.add_argument(
         "--tsa-url",
-        default=os.environ.get("PIPELINE_TSA_URL"),
-        help="RFC 3161 TSA endpoint (default: PIPELINE_TSA_URL env)",
+        default=None,
+        help="RFC 3161 TSA endpoint override",
     )
     parser.add_argument(
         "--tsa-out",
@@ -206,13 +224,13 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--tsa-policy-oid",
-        default=os.environ.get("PIPELINE_TSA_POLICY_OID"),
+        default=None,
         help="Policy OID to include in TSA request",
     )
     parser.add_argument(
         "--tsa-timeout",
         type=float,
-        default=float(os.environ.get("PIPELINE_TSA_TIMEOUT", DEFAULT_TSA_TIMEOUT)),
+        default=None,
         help="HTTP timeout in seconds for TSA requests",
     )
     parser.add_argument(
@@ -223,7 +241,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--tsa-strict",
         action="store_true",
-        help="Treat TSA failures as fatal (default: warn and continue)",
+        help="Treat TSA failures as fatal (override policy)",
     )
     parser.add_argument(
         "--tsa-verify",
@@ -245,12 +263,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--peer-min",
         type=int,
-        default=int(os.environ.get("PIPELINE_PEER_MIN", "1")),
+        default=None,
         help="Minimum peer signatures required",
     )
     parser.add_argument(
         "--peer-context",
-        default=os.environ.get("PIPELINE_PEER_CONTEXT", "trackone:day-root:v1"),
+        default=None,
         help="Context string embedded in peer signatures",
     )
     parser.add_argument(
@@ -261,13 +279,120 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--peers-strict",
         action="store_true",
-        help="Treat peer attestation failures as fatal",
+        help="Treat peer attestation failures as fatal (override policy)",
     )
     return parser.parse_args()
 
 
+def _load_config(args: argparse.Namespace) -> AnchoringConfig:
+    cli_overrides: dict[str, Any] = {
+        "policy_mode": args.policy_mode,
+        "tsa_enabled": True if args.tsa_url else None,
+        "tsa_url": args.tsa_url,
+        "tsa_ca_bundle": str(args.tsa_ca) if args.tsa_ca else None,
+        "tsa_chain_bundle": str(args.tsa_chain) if args.tsa_chain else None,
+        "tsa_policy_oid": args.tsa_policy_oid,
+        "tsa_timeout_s": args.tsa_timeout,
+        "tsa_verify": args.tsa_verify if args.tsa_verify else None,
+        "peers_enabled": True if args.peer_config else None,
+        "peers_config_path": str(args.peer_config) if args.peer_config else None,
+        "peers_min_signatures": args.peer_min,
+        "peers_context": args.peer_context,
+    }
+    cfg_path = resolve_repo_path(args.config)
+    return load_anchoring_config(config_path=cfg_path, cli_overrides=cli_overrides)
+
+
+def _set_ots_calendars(cfg: AnchoringConfig) -> None:
+    if not cfg.ots.calendar_urls:
+        os.environ.pop("OTS_CALENDARS", None)
+        return
+    os.environ["OTS_CALENDARS"] = ",".join(cfg.ots.calendar_urls)
+
+
+def _load_peer_attestation() -> Any | None:
+    """Resolve peer attestation helpers without hard dependency at import time."""
+    write_peer_attestations: Any | None = None
+    try:
+        from .peer_attestation import (
+            write_peer_attestations as write_peer_attestations_primary,
+        )
+
+        write_peer_attestations = write_peer_attestations_primary
+    except ImportError:
+        try:
+            from peer_attestation import (  # type: ignore[import-not-found]
+                write_peer_attestations as write_peer_attestations_fallback,
+            )
+
+            write_peer_attestations = write_peer_attestations_fallback
+        except ImportError:
+            pass
+    return write_peer_attestations
+
+
+def _run_verify_cli(
+    *,
+    gateway_dir: Path,
+    root: Path,
+    facts_dir: Path,
+    cfg: AnchoringConfig,
+    skip_ots: bool,
+    skip_tsa: bool,
+    skip_peers: bool,
+) -> tuple[int, dict[str, Any] | None]:
+    verify_cmd = [
+        sys.executable,
+        str(gateway_dir / "verify_cli.py"),
+        "--root",
+        str(root),
+        "--facts",
+        str(facts_dir),
+        "--json",
+        "--policy-mode",
+        cfg.policy.mode,
+    ]
+    if cfg.path.exists():
+        verify_cmd.extend(["--config", str(cfg.path)])
+
+    verify_env = os.environ.copy()
+    if skip_ots:
+        verify_env["ANCHOR_OTS_ENABLED"] = "0"
+    if skip_tsa:
+        verify_env["ANCHOR_TSA_ENABLED"] = "0"
+    if skip_peers:
+        verify_env["ANCHOR_PEERS_ENABLED"] = "0"
+
+    proc = subprocess.run(
+        verify_cmd,
+        check=False,
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        env=verify_env,
+    )
+    if proc.stdout:
+        print(proc.stdout.strip())
+    if proc.stderr:
+        print(proc.stderr.strip(), file=sys.stderr)
+
+    summary: dict[str, Any] | None = None
+    if proc.stdout.strip():
+        try:
+            summary_val = json.loads(proc.stdout)
+            if isinstance(summary_val, dict):
+                summary = summary_val
+        except json.JSONDecodeError:
+            summary = None
+
+    return proc.returncode, summary
+
+
 def main() -> None:
     args = parse_args()
+    cfg = _load_config(args)
+    strict_mode = cfg.policy.mode == STRICT
+
     out_dir = Path(args.out_dir)
     if not out_dir.is_absolute():
         out_dir = (REPO_ROOT / out_dir).resolve()
@@ -276,7 +401,7 @@ def main() -> None:
     facts_dir = out_dir / "facts"
     device_table = out_dir / "device_table.json"
     day_dir = out_dir / "day"
-    day_bin = day_dir / f"{args.date}.bin"
+    day_cbor = day_dir / f"{args.date}.cbor"
     tsa_out_dir = resolve_repo_path(args.tsa_out) or day_dir
     peer_dir = resolve_repo_path(args.peer_dir) or (day_dir / "peers")
     tsa_artifacts: dict[str, Path] | None = None
@@ -287,6 +412,20 @@ def main() -> None:
 
     scripts_dir = REPO_ROOT / "scripts"
     gateway_dir = scripts_dir / "gateway"
+
+    _set_ots_calendars(cfg)
+
+    channels: dict[str, dict[str, Any]] = {
+        "ots": _channel(
+            cfg.ots.enabled and not args.skip_ots, STATUS_SKIPPED, "disabled"
+        ),
+        "tsa": _channel(
+            cfg.tsa.enabled and not args.skip_tsa, STATUS_SKIPPED, "disabled"
+        ),
+        "peers": _channel(
+            cfg.peers.enabled and not args.skip_peers, STATUS_SKIPPED, "disabled"
+        ),
+    }
 
     run_cmd(
         "Generating framed telemetry",
@@ -337,117 +476,180 @@ def main() -> None:
     ]
     if not args.skip_validate:
         merkle_cmd.append("--validate-schemas")
-
     run_cmd("Batching facts", merkle_cmd, cwd=REPO_ROOT)
 
-    run_cmd(
-        "Anchoring day blob",
-        [
-            sys.executable,
-            str(gateway_dir / "ots_anchor.py"),
-            str(day_bin),
-        ],
-        cwd=REPO_ROOT,
-    )
-
-    tsa_url = args.tsa_url or os.environ.get("PIPELINE_TSA_URL")
-    if tsa_url and not args.skip_tsa:
-        tsa_ca = resolve_repo_path(args.tsa_ca)
-        tsa_chain = resolve_repo_path(args.tsa_chain)
-        try:
-            print("[pipeline] Anchoring day blob with RFC 3161 TSA")
-            tsa_result = tsa_stamp_day_blob(
-                day_blob=day_bin,
-                tsa_url=tsa_url,
-                out_dir=tsa_out_dir,
-                tsa_ca_pem=tsa_ca,
-                tsa_chain_pem=tsa_chain,
-                policy_oid=args.tsa_policy_oid,
-                timeout_s=args.tsa_timeout,
-                verify_response=args.tsa_verify or bool(tsa_ca or tsa_chain),
-            )
-            print(
-                f"[pipeline] TSA response stored: {rel(tsa_result.tsr)} (verified={tsa_result.verified})"
-            )
-            tsa_artifacts = {
-                "tsa_tsq": tsa_result.tsq,
-                "tsa_tsr": tsa_result.tsr,
-                "tsa_meta": tsa_result.tsr_json,
-            }
-        except (
-            TsaStampError,
-            subprocess.CalledProcessError,
-        ) as exc:
-            message = f"[pipeline] WARN: TSA stamping failed ({exc})"
-            if args.tsa_strict:
-                raise RuntimeError(message) from exc
-            print(message, file=sys.stderr)
-    elif not tsa_url:
-        print("[pipeline] INFO: TSA URL not configured; skipping RFC 3161 step")
-
-    peer_config = resolve_repo_path(args.peer_config)
-    if peer_config and not args.skip_peers:
-        try:
-            peer_dir.mkdir(parents=True, exist_ok=True)
-            result = write_peer_attestations(
-                site_id=args.site,
-                day=args.date,
-                day_root_hex=json.loads(
-                    day_bin.with_suffix(".json").read_text(encoding="utf-8")
-                )["day_root"],
-                peer_config=peer_config,
-                out_dir=peer_dir,
-                min_signatures=args.peer_min,
-                context=args.peer_context.encode(),
-            )
-            print(
-                f"[pipeline] Peer signatures stored: {rel(result.path)} ({len(result.signatures)} signatures)"
-            )
-            peer_attest_path = result.path
-        except (PeerAttestationError, FileNotFoundError, json.JSONDecodeError) as exc:
-            message = f"[pipeline] WARN: peer attestation failed ({exc})"
-            if args.peers_strict:
-                raise RuntimeError(message) from exc
-            print(message, file=sys.stderr)
-    elif not peer_config:
-        print("[pipeline] INFO: peer config not provided; skipping co-signing")
-
-    if not args.skip_verify_cli:
+    if channels["ots"]["enabled"]:
         try:
             run_cmd(
-                "Verifying pipeline outputs",
-                [
-                    sys.executable,
-                    str(gateway_dir / "verify_cli.py"),
-                    "--root",
-                    str(out_dir),
-                    "--facts",
-                    str(facts_dir),
-                ],
+                "Anchoring day artifact",
+                [sys.executable, str(gateway_dir / "ots_anchor.py"), str(day_cbor)],
                 cwd=REPO_ROOT,
             )
+            channels["ots"] = _channel(True, STATUS_PENDING, "proof-created")
         except subprocess.CalledProcessError as exc:
-            if args.fail_on_verify:
-                raise
-            print(
-                "[pipeline] WARN: verify_cli failed but continuing (set --fail-on-verify to enforce).",
-                file=sys.stderr,
+            channels["ots"] = _channel(
+                True, STATUS_FAILED, f"ots-stamp-error:{exc.returncode}"
             )
+            if strict_mode:
+                raise RuntimeError("OTS anchoring failed under strict policy") from exc
+
+    tsa_enabled = channels["tsa"]["enabled"]
+    if tsa_enabled:
+        tsa_url = cfg.tsa.url
+        tsa_ca = (
+            resolve_repo_path(Path(cfg.tsa.ca_bundle)) if cfg.tsa.ca_bundle else None
+        )
+        tsa_chain = (
+            resolve_repo_path(Path(cfg.tsa.chain_bundle))
+            if cfg.tsa.chain_bundle
+            else None
+        )
+        tsa_strict = args.tsa_strict or strict_mode
+        if not tsa_url:
+            channels["tsa"] = _channel(True, STATUS_MISSING, "tsa-url-not-configured")
+            if tsa_strict:
+                raise RuntimeError("TSA enabled under strict policy but URL is missing")
+        else:
+            try:
+                print("[pipeline] Anchoring day artifact with RFC 3161 TSA")
+                tsa_result = tsa_stamp_day_blob(
+                    day_blob=day_cbor,
+                    tsa_url=tsa_url,
+                    out_dir=tsa_out_dir,
+                    tsa_ca_pem=tsa_ca,
+                    tsa_chain_pem=tsa_chain,
+                    policy_oid=cfg.tsa.policy_oid or None,
+                    timeout_s=cfg.tsa.timeout_s,
+                    verify_response=cfg.tsa.verify or bool(tsa_ca or tsa_chain),
+                )
+                tsa_artifacts = {
+                    "tsa_tsq": tsa_result.tsq,
+                    "tsa_tsr": tsa_result.tsr,
+                    "tsa_meta": tsa_result.tsr_json,
+                }
+                status = STATUS_VERIFIED if tsa_result.verified else STATUS_PENDING
+                channels["tsa"] = _channel(True, status, "tsa-stamp-ok")
+                print(
+                    f"[pipeline] TSA response stored: {rel(tsa_result.tsr)} (verified={tsa_result.verified})"
+                )
+            except (
+                TsaStampError,
+                subprocess.CalledProcessError,
+            ) as exc:
+                channels["tsa"] = _channel(True, STATUS_FAILED, f"tsa-error:{exc}")
+                if tsa_strict:
+                    raise RuntimeError(
+                        "TSA anchoring failed under strict policy"
+                    ) from exc
+                print(f"[pipeline] WARN: TSA stamping failed ({exc})", file=sys.stderr)
+
+    peers_enabled = channels["peers"]["enabled"]
+    if peers_enabled:
+        peer_config_path = (
+            resolve_repo_path(Path(cfg.peers.config_path))
+            if cfg.peers.config_path
+            else None
+        )
+        peers_strict = args.peers_strict or strict_mode
+        if peer_config_path is None or not peer_config_path.exists():
+            channels["peers"] = _channel(True, STATUS_MISSING, "peer-config-not-found")
+            if peers_strict:
+                raise RuntimeError(
+                    "Peers enabled under strict policy but peer config is missing"
+                )
+        else:
+            try:
+                peer_mod = _load_peer_attestation()
+                if peer_mod is None:
+                    raise RuntimeError("peer-attestation-module-unavailable")
+                write_peer_attestations = peer_mod
+
+                peer_dir.mkdir(parents=True, exist_ok=True)
+                day_root_hex = json.loads(
+                    day_cbor.with_suffix(".json").read_text(encoding="utf-8")
+                )["day_root"]
+                result = write_peer_attestations(
+                    site_id=args.site,
+                    day=args.date,
+                    day_root_hex=day_root_hex,
+                    peer_config=peer_config_path,
+                    out_dir=peer_dir,
+                    min_signatures=cfg.peers.min_signatures,
+                    context=cfg.peers.context.encode(),
+                )
+                peer_attest_path = result.path
+                channels["peers"] = _channel(
+                    True, STATUS_VERIFIED, "peer-signatures-collected"
+                )
+                print(
+                    f"[pipeline] Peer signatures stored: {rel(result.path)} ({len(result.signatures)} signatures)"
+                )
+            except (
+                FileNotFoundError,
+                json.JSONDecodeError,
+                RuntimeError,
+                ValueError,
+            ) as exc:
+                channels["peers"] = _channel(True, STATUS_FAILED, f"peer-error:{exc}")
+                if peers_strict:
+                    raise RuntimeError(
+                        "Peer attestation failed under strict policy"
+                    ) from exc
+                print(
+                    f"[pipeline] WARN: peer attestation failed ({exc})", file=sys.stderr
+                )
+
+    verifier_summary: dict[str, Any] | None = None
+    verify_rc = 0
+    if not args.skip_verify_cli:
+        verify_rc, verifier_summary = _run_verify_cli(
+            gateway_dir=gateway_dir,
+            root=out_dir,
+            facts_dir=facts_dir,
+            cfg=cfg,
+            skip_ots=args.skip_ots,
+            skip_tsa=args.skip_tsa,
+            skip_peers=args.skip_peers,
+        )
+        if verify_rc != 0:
+            if args.fail_on_verify:
+                raise RuntimeError(f"verify_cli failed with exit code {verify_rc}")
             print(
-                f"[pipeline] WARN: verify_cli exited with code {exc.returncode}",
+                f"[pipeline] WARN: verify_cli exited with code {verify_rc}",
                 file=sys.stderr,
             )
 
+        if verifier_summary is not None:
+            channels_val = verifier_summary.get("channels")
+            if isinstance(channels_val, dict):
+                for name in ("ots", "tsa", "peers"):
+                    item = channels_val.get(name)
+                    if isinstance(item, dict):
+                        channels[name] = dict(item)
+
     expected_artifacts = [
-        day_bin,
-        day_bin.with_suffix(".json"),
-        day_bin.with_suffix(".bin.sha256"),
-        Path(f"{day_bin}.ots"),
+        day_cbor,
+        day_cbor.with_suffix(".json"),
+        day_cbor.with_suffix(".cbor.sha256"),
     ]
+    if channels["ots"]["status"] in {STATUS_VERIFIED, STATUS_PENDING}:
+        expected_artifacts.append(Path(f"{day_cbor}.ots"))
+    if tsa_artifacts:
+        expected_artifacts.extend(tsa_artifacts.values())
+    if peer_attest_path:
+        expected_artifacts.append(peer_attest_path)
+
     missing = [p for p in expected_artifacts if not p.exists()]
     if missing:
         missing_str = ", ".join(rel(p) for p in missing)
         raise RuntimeError(f"Missing expected artifacts: {missing_str}")
+
+    overall = compute_overall_status(policy_mode=cfg.policy.mode, channels=channels)
+    anchoring_summary = {
+        "policy": {"mode": cfg.policy.mode},
+        "channels": channels,
+        "overall": overall,
+    }
 
     manifest_path = artifact_manifest(
         args.date,
@@ -456,28 +658,13 @@ def main() -> None:
         args.frame_count,
         frames_file,
         facts_dir,
-        day_bin,
+        day_cbor,
         out_dir,
+        anchoring=anchoring_summary,
         tsa_artifacts=tsa_artifacts,
         peer_attest=peer_attest_path,
+        verifier_summary=verifier_summary,
     )
-
-    if tsa_url and not args.skip_tsa:
-        expected_artifacts.extend(
-            [
-                tsa_out_dir / f"{args.date}.tsq",
-                tsa_out_dir / f"{args.date}.tsr",
-                tsa_out_dir / f"{args.date}.tsr.json",
-            ]
-        )
-
-    if peer_config and not args.skip_peers:
-        expected_artifacts.append(peer_dir / f"{args.date}.peers.json")
-
-    missing = [p for p in expected_artifacts if not p.exists()]
-    if missing:
-        missing_str = ", ".join(rel(p) for p in missing)
-        raise RuntimeError(f"Missing expected artifacts: {missing_str}")
 
     print("[pipeline] ✓ Pipeline completed successfully")
     for path in expected_artifacts + [manifest_path]:
