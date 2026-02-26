@@ -11,6 +11,8 @@ Environment Variables:
 - OTS_STATIONARY_STUB: When set to "1", use deterministic local OTS stubs instead
                        of calling the real `ots` binary. Default in tests.
 - OTS_CALENDARS: Comma-separated list of OTS calendar URLs (forwarded to ots client).
+- ANCHOR_POLICY_MODE: Anchoring policy mode (`warn` or `strict`).
+- PIPELINE_POLICY_MODE: Backward-compatible alias for policy mode.
 - RUN_REAL_OTS: When set to "1", enables real OTS integration tests (slow).
 - STRICT_VERIFY: When set to "1", treat verification timeouts as failures (CI main).
 - STRICT_SHA: When set to "1", enforce strict SHA-256 validation.
@@ -52,6 +54,11 @@ OTS_STATIONARY_STUB: bool = get_bool_env("OTS_STATIONARY_STUB", default=False)
 
 OTS_CALENDARS: str = get_str_env("OTS_CALENDARS", default="")
 """Comma-separated list of OTS calendar URLs."""
+
+ANCHOR_POLICY_MODE: str = get_str_env(
+    "ANCHOR_POLICY_MODE", default=get_str_env("PIPELINE_POLICY_MODE", "warn")
+).lower()
+"""Anchoring policy mode (`warn` or `strict`)."""
 
 RUN_REAL_OTS: bool = get_bool_env("RUN_REAL_OTS", default=False)
 """Enable real OTS integration tests (slow, requires ots binary)."""
