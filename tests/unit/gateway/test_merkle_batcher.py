@@ -8,6 +8,8 @@ import json
 
 import pytest
 
+from scripts.gateway.canonical_cbor import canonicalize_obj_to_cbor
+
 
 @pytest.fixture(scope="module", autouse=True)
 def _load_modules(gateway_modules):
@@ -46,18 +48,16 @@ class TestMerkleBatcherEdgeCases:
         out_dir = tmp_path / "out"
         out_dir.mkdir()
 
-        # Create a fact file
-        fact_file = facts_dir / "fact.json"
-        fact_file.write_text(
-            json.dumps(
-                {
-                    "device_id": "test",
-                    "timestamp": "2025-10-07T10:00:00Z",
-                    "nonce": "abc123",
-                    "payload": {},
-                }
-            )
-        )
+        # Create a fact file (authoritative CBOR + JSON projection)
+        fact_obj = {
+            "device_id": "test",
+            "timestamp": "2025-10-07T10:00:00Z",
+            "nonce": "abc123",
+            "payload": {},
+        }
+        fact_stem = facts_dir / "fact"
+        fact_stem.with_suffix(".cbor").write_bytes(canonicalize_obj_to_cbor(fact_obj))
+        fact_stem.with_suffix(".json").write_text(json.dumps(fact_obj))
 
         args = [
             "--facts",
@@ -109,17 +109,15 @@ class TestMerkleBatcherEdgeCases:
         out_dir = tmp_path / "out"
         out_dir.mkdir()
 
-        fact_file = facts_dir / "fact.json"
-        fact_file.write_text(
-            json.dumps(
-                {
-                    "device_id": "test",
-                    "timestamp": "2025-10-07T10:00:00Z",
-                    "nonce": "abc123",
-                    "payload": {},
-                }
-            )
-        )
+        fact_obj = {
+            "device_id": "test",
+            "timestamp": "2025-10-07T10:00:00Z",
+            "nonce": "abc123",
+            "payload": {},
+        }
+        fact_stem = facts_dir / "fact"
+        fact_stem.with_suffix(".cbor").write_bytes(canonicalize_obj_to_cbor(fact_obj))
+        fact_stem.with_suffix(".json").write_text(json.dumps(fact_obj))
 
         args = [
             "--facts",

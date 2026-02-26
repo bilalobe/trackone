@@ -49,8 +49,8 @@ class TestVerifyCliEdgeCases:
 
         day_dir.mkdir(parents=True)
 
-        # Create day.bin but no .ots file
-        day_bin = day_dir / "2025-10-07.bin"
+        # Create day.cbor but no .ots file
+        day_bin = day_dir / "2025-10-07.cbor"
         day_bin.write_bytes(b"test data")
 
         args = [
