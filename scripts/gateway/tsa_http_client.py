@@ -98,7 +98,7 @@ def parse_args() -> argparse.Namespace:
         description="Submit a TSQ to an RFC 3161 TSA via HTTP"
     )
     parser.add_argument(
-        "input", type=Path, help="Blob to hash (e.g. day/YYYY-MM-DD.bin)"
+        "input", type=Path, help="Blob to hash (e.g. day/YYYY-MM-DD.cbor)"
     )
     parser.add_argument("tsa_url", help="RFC 3161 TSA endpoint URL")
     parser.add_argument(

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""RFC 3161 timestamp helper for TrackOne day blobs."""
+"""RFC 3161 timestamp helper for TrackOne day artifacts."""
 
 from __future__ import annotations
 
@@ -176,8 +176,14 @@ def tsa_stamp_day_blob(
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Submit a day blob to an RFC 3161 TSA")
-    parser.add_argument("day_blob", type=Path, help="Path to day/YYYY-MM-DD.bin")
+    parser = argparse.ArgumentParser(
+        description="Submit a day artifact to an RFC 3161 TSA"
+    )
+    parser.add_argument(
+        "day_blob",
+        type=Path,
+        help="Path to day/YYYY-MM-DD.cbor artifact (or legacy day blob)",
+    )
     parser.add_argument("tsa_url", help="RFC 3161 TSA URL")
     parser.add_argument("out_dir", type=Path, help="Output directory for tsq/tsr files")
     parser.add_argument(

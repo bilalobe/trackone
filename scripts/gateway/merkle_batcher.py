@@ -6,15 +6,15 @@ Batch device facts into a Merkle tree and emit deterministic artifacts.
 
 This script implements the core batching logic for Track1 telemetry, producing:
 - blocks/<day>-00.block.json — signed-ready block header with merkle_root
-- day/<day>.bin — canonical day blob (for OpenTimestamps anchoring)
+- day/<day>.cbor — canonical day artifact (for OpenTimestamps anchoring)
 - day/<day>.json — human-readable day record
-- day/<day>.bin.sha256 — SHA-256 hash (for convenience)
+- day/<day>.cbor.sha256 — SHA-256 hash (for convenience)
 
 Determinism guarantees (ADR-003):
-1. Canonical JSON: sorted keys, UTF-8, no whitespace via json.dumps(sort_keys=True)
+1. Deterministic CBOR commitment bytes for fact/day artifacts
 2. Hash-sorted Merkle leaves: sorts leaf hashes before building tree (order-independent)
 3. Day chaining: includes prev_day_root (32 zero bytes for genesis day)
-4. Reproducible across runs: same facts/ → identical merkle_root and day.bin SHA-256
+4. Reproducible across runs: same facts/ → identical merkle_root and day.cbor SHA-256
 
 References:
 - ADR-003: Canonicalization, Merkle Policy, Daily OTS Anchoring
@@ -38,6 +38,11 @@ from dataclasses import asdict, dataclass
 from hashlib import sha256
 from pathlib import Path
 from typing import Any, cast
+
+try:  # Support both package imports and direct script execution.
+    from .canonical_cbor import canonicalize_obj_to_cbor
+except ImportError:  # pragma: no cover - fallback when run as a script
+    from canonical_cbor import canonicalize_obj_to_cbor  # type: ignore
 
 jsonschema: Any | None
 try:
@@ -167,15 +172,20 @@ def validate_against_schema(
 
 
 def load_facts(facts_dir: Path) -> list[bytes]:
-    fact_files = sorted(facts_dir.glob("*.json"))
+    fact_files = sorted(facts_dir.glob("*.cbor"))
+    if not fact_files:
+        json_candidates = sorted(facts_dir.glob("*.json"))
+        if json_candidates:
+            raise ValueError(
+                "JSON facts found but CBOR facts are required for commitments (ADR-039)"
+            )
     leaves: list[bytes] = []
     for fpath in fact_files:
         try:
-            obj = json.loads(fpath.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError) as e:
-            print(f"[ERROR] Failed to parse JSON: {fpath}: {e}", file=sys.stderr)
+            leaves.append(fpath.read_bytes())
+        except OSError as e:
+            print(f"[ERROR] Failed to read CBOR fact: {fpath}: {e}", file=sys.stderr)
             raise
-        leaves.append(canonical_json(obj))
     return leaves
 
 
@@ -215,10 +225,10 @@ def prev_day_root_or_zero(
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
-        description="Batch facts into Merkle root; emit block header and canonical day blob."
+        description="Batch facts into Merkle root; emit block header and canonical day artifact."
     )
     ap.add_argument(
-        "--facts", type=Path, required=True, help="Directory containing fact JSON files"
+        "--facts", type=Path, required=True, help="Directory containing fact CBOR files"
     )
     ap.add_argument(
         "--out", type=Path, required=True, help="Output directory (e.g. out/site_demo)"
@@ -261,11 +271,26 @@ def main(argv: list[str] | None = None) -> int:
 
     if _RUST_LEDGER is not None:
         try:  # pragma: no cover - exercised when Rust extension is available
-            header_json_bytes, day_blob = _RUST_LEDGER.build_day_v1_single_batch(
-                args.site, args.date, prev_root, batch_id, leaves
-            )
-            header_dict = json.loads(header_json_bytes)
-            day_record = json.loads(day_blob)
+            if hasattr(_RUST_LEDGER, "build_day_v1_single_batch_cbor"):
+                (
+                    header_json_bytes,
+                    day_blob,
+                    day_json_bytes,
+                ) = _RUST_LEDGER.build_day_v1_single_batch_cbor(
+                    args.site, args.date, prev_root, batch_id, leaves
+                )
+                header_dict = json.loads(header_json_bytes)
+                day_record = json.loads(day_json_bytes)
+            else:
+                (
+                    header_json_bytes,
+                    day_json_bytes,
+                ) = _RUST_LEDGER.build_day_v1_single_batch(
+                    args.site, args.date, prev_root, batch_id, leaves
+                )
+                header_dict = json.loads(header_json_bytes)
+                day_record = json.loads(day_json_bytes)
+                day_blob = canonicalize_obj_to_cbor(day_record)
             root_hex = header_dict.get("merkle_root")
             leaf_hashes = header_dict.get("leaf_hashes")
         except (
@@ -306,7 +331,7 @@ def main(argv: list[str] | None = None) -> int:
             "batches": [header_dict],
             "day_root": root_hex,
         }
-        day_blob = canonical_json(day_record)
+        day_blob = canonicalize_obj_to_cbor(day_record)
 
     # Type narrowing: after the fallback block, these must be non-None
     assert header_dict is not None
@@ -341,11 +366,11 @@ def main(argv: list[str] | None = None) -> int:
             encoding="utf-8",
         )
 
-    day_bin_path = day_dir / f"{args.date}.bin"
-    day_bin_path.write_bytes(day_blob)
+    day_cbor_path = day_dir / f"{args.date}.cbor"
+    day_cbor_path.write_bytes(day_blob)
 
     # Convenience sha256 file
-    sha_path = day_dir / f"{args.date}.bin.sha256"
+    sha_path = day_dir / f"{args.date}.cbor.sha256"
     sha_path.write_text(sha256(day_blob).hexdigest() + "\n", encoding="utf-8")
 
     # Human-readable
@@ -354,9 +379,9 @@ def main(argv: list[str] | None = None) -> int:
 
     print(f"[OK] Merkle root: {root_hex}")
     print(f"[OK] Block header: {block_path}")
-    print(f"[OK] Day blob: {day_bin_path}")
+    print(f"[OK] Day artifact: {day_cbor_path}")
     print(f"[OK] Day record: {day_json_path}")
-    print(f"[OK] SHA256(day.bin): {sha_path.read_text().strip()}")
+    print(f"[OK] SHA256(day.cbor): {sha_path.read_text().strip()}")
     return 0
 
 

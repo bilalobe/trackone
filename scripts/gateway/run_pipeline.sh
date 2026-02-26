@@ -20,7 +20,7 @@ NUM_FRAMES=10
 FRAMES_FILE="${OUT_DIR}/frames.ndjson"
 FACTS_DIR="${OUT_DIR}/facts"
 DEVICE_TABLE="${OUT_DIR}/device_table.json"
-DAY_BIN="${OUT_DIR}/day/${DATE}.bin"
+DAY_ARTIFACT="${OUT_DIR}/day/${DATE}.cbor"
 
 echo "[pipeline] Starting Track1 pipeline (v1.0)"
 echo "[pipeline] Site: ${SITE}, Date: ${DATE}, Device: ${DEVICE_ID}"
@@ -31,7 +31,7 @@ mkdir -p "${OUT_DIR}"
 mkdir -p "${FACTS_DIR}"
 
 # Ensure fresh state for facts (avoid counting stale files)
-rm -f "${FACTS_DIR}"/*.json 2>/dev/null || true
+rm -f "${FACTS_DIR}"/*.json "${FACTS_DIR}"/*.cbor 2>/dev/null || true
 
 # Step 1: Generate framed telemetry (sim persists device_table with per-device salts/keys)
 echo "[pipeline] Step 1: Generating framed telemetry (${NUM_FRAMES} frames)..."
@@ -63,10 +63,10 @@ python scripts/gateway/merkle_batcher.py \
   --date "${DATE}" \
   --validate-schemas
 
-# Step 4: Anchor day blob with OTS
+# Step 4: Anchor day artifact with OTS
 echo ""
-echo "[pipeline] Step 4: Anchoring day blob with OpenTimestamps..."
-python scripts/gateway/ots_anchor.py "${DAY_BIN}"
+echo "[pipeline] Step 4: Anchoring day artifact with OpenTimestamps..."
+python scripts/gateway/ots_anchor.py "${DAY_ARTIFACT}"
 
 # Step 5: Verify Merkle root and OTS proof
 echo ""
@@ -82,4 +82,4 @@ echo "[pipeline]   - Frames: ${FRAMES_FILE}"
 echo "[pipeline]   - Facts: ${FACTS_DIR}/"
 echo "[pipeline]   - Blocks: ${OUT_DIR}/blocks/"
 echo "[pipeline]   - Day: ${OUT_DIR}/day/"
-echo "[pipeline]   - OTS proof: ${DAY_BIN}.ots"
+echo "[pipeline]   - OTS proof: ${DAY_ARTIFACT}.ots"

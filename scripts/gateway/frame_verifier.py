@@ -33,6 +33,11 @@ from typing import Any
 import nacl.bindings
 import nacl.exceptions
 
+try:  # Support both package imports and direct script execution.
+    from .canonical_cbor import canonicalize_obj_to_cbor
+except ImportError:  # pragma: no cover - fallback when run as a script
+    from canonical_cbor import canonicalize_obj_to_cbor  # type: ignore
+
 # Constants for maintainability
 DEFAULT_REPLAY_WINDOW = 64
 MAX_FRAME_COUNTER = 2**32 - 1
@@ -473,9 +478,12 @@ def process(argv: list[str] | None = None) -> int:
             # Validate against schema
             validate_fact(fact, fact_schema)
 
-            # Write fact file
-            fact_file = args.out_facts / f"{dev_id_str}-{fc:08d}.json"
-            with fact_file.open("w", encoding="utf-8") as out_fh:
+            # Write authoritative CBOR fact + JSON projection.
+            fact_file_stem = args.out_facts / f"{dev_id_str}-{fc:08d}"
+            fact_file_cbor = fact_file_stem.with_suffix(".cbor")
+            fact_file_json = fact_file_stem.with_suffix(".json")
+            fact_file_cbor.write_bytes(canonicalize_obj_to_cbor(fact))
+            with fact_file_json.open("w", encoding="utf-8") as out_fh:
                 json.dump(fact, out_fh, indent=2, sort_keys=True)
 
             # Update device table for persistence (non-secret runtime state)
@@ -504,7 +512,7 @@ def process(argv: list[str] | None = None) -> int:
 
     # Cross-check accepted count from disk to guard against counter drift
     try:
-        accepted_files = len(list(args.out_facts.glob("*.json")))
+        accepted_files = len(list(args.out_facts.glob("*.cbor")))
     except OSError:
         accepted_files = accepted
 

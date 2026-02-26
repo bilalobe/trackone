@@ -2,23 +2,23 @@
 """
 ots_anchor.py
 
-Anchor a day blob using OpenTimestamps (OTS) for public verifiability.
+Anchor a day artifact using OpenTimestamps (OTS) for public verifiability.
 
-This script creates a cryptographic timestamp proof by submitting the day.bin
+This script creates a cryptographic timestamp proof by submitting the day artifact
 SHA-256 hash to OpenTimestamps attestation servers. It now also emits a
 sidecar metadata file describing the artifact and the proof. The sidecar is
 intended to be the authoritative link between an artifact and its proof and
 should be considered immutable once created.
 
 Files produced:
-- <day>.bin.ots        (binary or placeholder proof)
+- <day>.cbor.ots        (binary or placeholder proof)
 - proofs/<day>.ots.meta.json  (metadata sidecar with artifact path and SHA-256)
 
 The metadata format is defined by toolset/unified/schemas/ots_meta.schema.json
 and includes `artifact`, `artifact_sha256`, and `ots_proof` entries.
 
 Usage:
-    ots_anchor.ots_stamp(day_bin_path, ots_path, proofs_dir=None)
+    ots_anchor.ots_stamp(day_artifact_path, ots_path, proofs_dir=None)
 
 When called from a pipeline, pass `proofs_dir` pointing to the repository's
 `proofs/` directory (e.g., out_root.parent / 'proofs') so the sidecar is colocated
@@ -150,10 +150,10 @@ def ots_stamp(
     proofs_dir: Path | None = None,
     milestone: str = "m4",
 ) -> None:
-    """Stamp the day blob using OpenTimestamps CLI, or write a placeholder if not available.
+    """Stamp the day artifact using OpenTimestamps CLI, or write a placeholder if not available.
 
     Contract:
-    - Input: day_bin_path (Path to .bin), ots_path (.bin.ots target path)
+    - Input: day_bin_path (Path to day artifact), ots_path (<artifact>.ots target path)
     - Behavior: attempt `ots stamp <bin>`; on any failure, write placeholder proof.
     - Additionally: write a metadata sidecar to `proofs_dir` (if provided) or to the
       repository's `proofs/` directory discovered from the day blob path.
@@ -218,9 +218,13 @@ def ots_stamp(
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(
-        description="Anchor a day blob using OpenTimestamps (OTS)"
+        description="Anchor a day artifact using OpenTimestamps (OTS)"
     )
-    p.add_argument("day_bin", type=Path, help="Path to day/YYYY-MM-DD.bin blob")
+    p.add_argument(
+        "day_bin",
+        type=Path,
+        help="Path to day/YYYY-MM-DD.cbor artifact (or legacy day blob)",
+    )
     p.add_argument(
         "--proofs",
         type=Path,
