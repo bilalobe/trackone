@@ -74,7 +74,7 @@ def write_ots_placeholder(ots_anchor):
     """Write an OTS placeholder/stub and metadata sidecar.
 
     Returns a callable that takes (out_dir, day) and creates:
-    - day/<day>.bin.ots (stationary stub or placeholder)
+    - day/<day>.cbor.ots (stationary stub or placeholder)
     - proofs/<day>.ots.meta.json (metadata sidecar)
 
     Returns (ots_path, meta_path) tuple.
@@ -82,20 +82,20 @@ def write_ots_placeholder(ots_anchor):
 
     def _write(out_dir: Path, day: str) -> tuple[Path, Path]:
         out_dir = Path(out_dir)
-        day_bin = out_dir / "day" / f"{day}.bin"
-        day_bin.parent.mkdir(parents=True, exist_ok=True)
+        day_cbor = out_dir / "day" / f"{day}.cbor"
+        day_cbor.parent.mkdir(parents=True, exist_ok=True)
 
-        # Ensure day_bin exists (merkle_batcher should have written it in tests)
-        if not day_bin.exists():
-            day_bin.write_bytes(b"test day blob")
+        # Ensure day artifact exists (merkle_batcher should have written it in tests)
+        if not day_cbor.exists():
+            day_cbor.write_bytes(b"test day artifact")
 
-        ots_path = day_bin.with_suffix(day_bin.suffix + ".ots")
+        ots_path = day_cbor.with_suffix(day_cbor.suffix + ".ots")
         proofs_dir = out_dir.parent / "proofs"
 
         # In tests we want deterministic, offline behavior.
         # Always route through ots_anchor.ots_stamp, which already honors
         # OTS_STATIONARY_STUB and writes the meta sidecar.
-        ots_anchor.ots_stamp(day_bin, ots_path, proofs_dir=proofs_dir)
+        ots_anchor.ots_stamp(day_cbor, ots_path, proofs_dir=proofs_dir)
 
         meta_path = proofs_dir / f"{day}.ots.meta.json"
         return ots_path, meta_path
@@ -160,8 +160,8 @@ def run_pipeline(
     Returns a callable that executes:
     1. Pod simulator (write frames)
     2. Frame verifier (verify frames -> facts)
-    3. Merkle batcher (batch facts -> day.bin)
-    4. OTS anchor (stamp day.bin)
+    3. Merkle batcher (batch facts -> day.cbor)
+    4. OTS anchor (stamp day.cbor)
     5. Verify CLI (verify everything)
 
     Returns a dict with exit codes and paths.

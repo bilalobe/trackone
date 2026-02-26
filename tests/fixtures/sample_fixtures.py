@@ -82,13 +82,13 @@ def built_day_artifacts(
     sample_facts,
     write_ots_placeholder,
 ) -> dict[str, Path]:
-    """Build a minimal day.bin + .ots setup under a fresh temporary directory.
+    """Build a minimal day.cbor + .ots setup under a fresh temporary directory.
 
     Returns a mapping with:
     - root: output root directory
-    - facts_dir: directory with JSON fact files
-    - day_bin: path to day/YYYY-MM-DD.bin
-    - ots_path: path to day/YYYY-MM-DD.bin.ots
+    - facts_dir: directory with authoritative CBOR fact files (+ JSON projections)
+    - day_bin: path to day/YYYY-MM-DD.cbor (legacy key name)
+    - ots_path: path to day/YYYY-MM-DD.cbor.ots
     - date: the date string used ("2025-10-07")
     """
     facts_dir = tmp_path / "facts"
@@ -110,7 +110,7 @@ def built_day_artifacts(
     ]
     assert merkle_batcher.main(args) == 0
 
-    day_bin = out_dir / "day" / f"{date}.bin"
+    day_bin = out_dir / "day" / f"{date}.cbor"
     assert day_bin.exists()
 
     ots_path, meta_path = write_ots_placeholder(out_dir, date)
@@ -128,7 +128,7 @@ def built_day_artifacts(
 
 @pytest.fixture
 def mutate_day_bin() -> Callable[[Path], None]:
-    """Return a function that corrupts a day.bin file in a minimal, detectable way."""
+    """Return a function that corrupts a day artifact in a minimal, detectable way."""
 
     def _mutate(path: Path) -> None:
         with path.open("ab") as f:
