@@ -2,7 +2,7 @@
 
 These tests exercise the ReplayWindow + frame_verifier + merkle_batcher
 integration and assert that only the correct (dev_id, fc) pairs are admitted
-into the Merkle set that feeds day.bin.
+into the Merkle set that feeds day.cbor.
 
 We deliberately use small synthetic facts rather than running the full pod_sim
 pipeline, to keep the tests fast and deterministic while still covering the
@@ -14,6 +14,8 @@ import json
 from pathlib import Path
 
 import pytest
+
+from scripts.gateway.canonical_cbor import canonicalize_obj_to_cbor
 
 
 @pytest.fixture
@@ -42,7 +44,9 @@ def synthetic_facts(tmp_path: Path) -> Path:
     ]
 
     for idx, obj in enumerate(samples):
-        (facts_dir / f"fact-{idx:02d}.json").write_text(
+        fact_stem = facts_dir / f"fact-{idx:02d}"
+        fact_stem.with_suffix(".cbor").write_bytes(canonicalize_obj_to_cbor(obj))
+        fact_stem.with_suffix(".json").write_text(
             json.dumps(obj, sort_keys=True) + "\n", encoding="utf-8"
         )
 
@@ -239,7 +243,7 @@ def test_pipeline_rejects_duplicates_on_disk(
     assert rc == 0
 
     # Facts on disk should reflect only unique fc values: 10, 11, 12.
-    fact_files = sorted(facts_dir.glob("*.json"))
+    fact_files = sorted(facts_dir.glob("*.cbor"))
 
     # If AEAD setup prevents any facts from being written, we skip the test
     # since the duplicate-rejection path was not exercised. This ensures the

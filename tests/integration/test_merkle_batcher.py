@@ -29,7 +29,7 @@ class TestMerkleBatcher:
 
         # Check outputs exist
         block_path = temp_workspace["out_dir"] / "blocks" / "2025-10-07-00.block.json"
-        day_bin_path = temp_workspace["out_dir"] / "day" / "2025-10-07.bin"
+        day_bin_path = temp_workspace["out_dir"] / "day" / "2025-10-07.cbor"
         day_json_path = temp_workspace["out_dir"] / "day" / "2025-10-07.json"
 
         assert block_path.exists()

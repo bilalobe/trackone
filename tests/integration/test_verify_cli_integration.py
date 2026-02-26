@@ -29,7 +29,7 @@ def test_verify_ots_missing_binary_returns_false(
     tmp_path: Path, verify_cli, monkeypatch
 ):
     """verify_ots should return False when 'ots' binary is not available."""
-    ots_path = tmp_path / "2025-10-07.bin.ots"
+    ots_path = tmp_path / "2025-10-07.cbor.ots"
     ots_path.write_text("REAL_PROOF_BYTES\n", encoding="utf-8")
 
     monkeypatch.setattr(shutil, "which", lambda _: None)
@@ -39,7 +39,7 @@ def test_verify_ots_missing_binary_returns_false(
 @patch("verify_cli.subprocess.run")
 def test_verify_ots_external_success(mock_run, tmp_path: Path, verify_cli, monkeypatch):
     """verify_ots should invoke external 'ots verify' and return True on success."""
-    ots_path = tmp_path / "2025-10-07.bin.ots"
+    ots_path = tmp_path / "2025-10-07.cbor.ots"
     ots_path.write_text("REAL_PROOF_BYTES\n", encoding="utf-8")
 
     # Create a fake 'ots' executable file
@@ -89,8 +89,8 @@ class TestVerifyCliMainPlaceholder:
         ]
         assert merkle_batcher.main(args) == 0
 
-        # Verify day.bin exists
-        day_bin = out_dir / "day" / "2025-10-07.bin"
+        # Verify day.cbor exists
+        day_bin = out_dir / "day" / "2025-10-07.cbor"
         assert day_bin.exists()
 
         # Create placeholder OTS proof and meta sidecar
@@ -173,7 +173,7 @@ def test_require_ots_accepts_real_ots(
     assert merkle_batcher.main(args) == 0
 
     # Create a realistic .ots file and a fake 'ots' binary that returns success
-    day_bin = out_dir / "day" / "2025-10-07.bin"
+    day_bin = out_dir / "day" / "2025-10-07.cbor"
     ots_path = day_bin.with_suffix(day_bin.suffix + ".ots")
     ots_path.write_text("REAL_PROOF_BYTES\n", encoding="utf-8")
 
@@ -193,6 +193,49 @@ def test_require_ots_accepts_real_ots(
 
     rc = verify_cli.main(verify_args)
     assert rc == 0
+
+
+def test_require_ots_overrides_disabled_ots_config(
+    tmp_path: Path,
+    merkle_batcher,
+    verify_cli,
+    write_sample_facts_fixture,
+    sample_facts,
+):
+    """--require-ots must enforce OTS even when config has ots.enabled=false."""
+    facts_dir = tmp_path / "facts"
+    out_dir = tmp_path / "out"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    write_sample_facts_fixture(facts_dir, sample_facts)
+
+    args = [
+        "--facts",
+        str(facts_dir),
+        "--out",
+        str(out_dir),
+        "--site",
+        "test-site",
+        "--date",
+        "2025-10-07",
+    ]
+    assert merkle_batcher.main(args) == 0
+
+    cfg_path = tmp_path / "anchoring.toml"
+    cfg_path.write_text("[ots]\nenabled = false\n", encoding="utf-8")
+
+    rc = verify_cli.main(
+        [
+            "--root",
+            str(out_dir),
+            "--facts",
+            str(facts_dir),
+            "--config",
+            str(cfg_path),
+            "--require-ots",
+        ]
+    )
+    assert rc == 3
 
 
 class TestVerifyCliTsaPeerIntegration:
