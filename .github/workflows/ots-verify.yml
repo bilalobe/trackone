@@ -85,13 +85,13 @@ jobs:
       - name: Install Python deps
         run: |
           python -m pip install --upgrade pip setuptools wheel
-          python -m pip install --upgrade tox tox-uv uv
-          python -m pip install --upgrade opentimestamps-client
+          python -m pip install -e ".[ci,test]"
 
       - name: Run pipeline via tox (generate artifacts)
         run: tox -e pipeline -- --keep-existing
         env:
           TOX_PYTHON: python
+          PIPELINE_POLICY_MODE: ${{ github.ref_name == 'main' && 'strict' || 'warn' }}
 
       - name: Check for OTS files
         id: check_ots
@@ -186,6 +186,16 @@ jobs:
         run: |
           ./scripts/ci/ots_verify.sh out/site_demo/day
 
+      - name: Run verifier policy summary
+        if: steps.check_ots.outputs.found == 'true'
+        env:
+          ANCHOR_POLICY_MODE: ${{ github.ref_name == 'main' && 'strict' || 'warn' }}
+        run: |
+          python scripts/gateway/verify_cli.py \
+            --root out/site_demo \
+            --facts out/site_demo/facts \
+            --json > out/site_demo/day/verify_summary.json
+
       - name: Upload OTS proof bundle
         if: steps.check_ots.outputs.found == 'true'
         uses: actions/upload-artifact@v6
@@ -193,11 +203,12 @@ jobs:
           name: ots-proof-bundle
           path: |
             out/site_demo/day/*.ots
-            out/site_demo/day/*.bin
+            out/site_demo/day/*.cbor
             out/site_demo/day/*.json
             out/site_demo/day/*.sha256
             out/site_demo/day/ots_verify_summary.txt
             out/site_demo/day/ots_verify_summary.json
+            out/site_demo/day/verify_summary.json
           if-no-files-found: warn
           retention-days: 7
 

@@ -71,10 +71,12 @@ jobs:
       - name: Install Python deps
         run: |
           python -m pip install --upgrade pip setuptools wheel
-          python -m pip install --upgrade tox tox-uv uv
+          python -m pip install -e ".[ci]"
 
       - name: Run pipeline via tox (generate artifacts)
         run: tox -e pipeline
+        env:
+          PIPELINE_POLICY_MODE: ${{ github.ref_name == 'main' && 'strict' || 'warn' }}
 
       - name: Run SHA verification via tox
         env:
@@ -89,7 +91,7 @@ jobs:
         with:
           name: day-artifacts
           path: |
-            out/site_demo/day/*.bin
+            out/site_demo/day/*.cbor
             out/site_demo/day/*.sha256
             out/site_demo/day/*.json
             out/site_demo/day/*.ots*
