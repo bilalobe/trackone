@@ -1,10 +1,10 @@
 #![cfg_attr(not(debug_assertions), deny(warnings))]
 
 // Keep externally-stable module names while using shorter filenames.
-#[path = "c_json.rs"]
-pub mod canonical_json;
 #[path = "c_cbor.rs"]
 pub mod canonical_cbor;
+#[path = "c_json.rs"]
+pub mod canonical_json;
 pub mod merkle;
 pub mod types;
 
