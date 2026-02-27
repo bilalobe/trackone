@@ -666,7 +666,16 @@ def main() -> None:
         verifier_summary=verifier_summary,
     )
 
-    print("[pipeline] ✓ Pipeline completed successfully")
+    if overall == "success":
+        print("[pipeline] ✓ Pipeline completed successfully")
+    else:
+        print(
+            f"[pipeline] WARN: pipeline completed with overall anchoring status "
+            f"{overall!r} (policy mode={cfg.policy.mode})",
+            file=sys.stderr,
+        )
+        if cfg.policy.mode == STRICT:
+            raise SystemExit(1)
     for path in expected_artifacts + [manifest_path]:
         print(f"[pipeline]   - {rel(path)}")
 
