@@ -5,16 +5,13 @@ All notable changes to `trackone-gateway` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.1.0-alpha.4] - 2026-02-26
 
 ### Added
-- Ledger CBOR helpers exposed through PyO3:
-  - `trackone_core.ledger.canonicalize_json_to_cbor_bytes`
-  - `trackone_core.ledger.build_day_v1_single_batch_cbor` returning
-    `(block_header_json_bytes, day_cbor_bytes, day_json_projection_bytes)`.
+- `ledger` submodule exposes `canonicalize_json_bytes`, `canonicalize_json_to_cbor_bytes`, `build_day_v1_single_batch`, and `build_day_v1_single_batch_cbor`, giving Python callers deterministic JSON and CBOR helpers backed by the workspace `trackone-ledger` helpers.
 
 ### Changed
-- Ledger bindings now rely on local workspace `trackone-ledger` APIs for CBOR commitment generation during alpha.4 development.
+- Ledger helpers now delegate to the workspace `trackone-ledger` canonicalization modules when producing deterministic CBOR commitments for the Python gateway surface.
 
 ## [0.1.0-alpha.3] - 2026-02-07
 
