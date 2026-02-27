@@ -69,7 +69,11 @@ fn build_day_v1_single_batch_cbor<'py>(
     prev_day_root: String,
     batch_id: String,
     canonical_leaves: &Bound<'py, PyAny>,
-) -> PyResult<(Bound<'py, PyBytes>, Bound<'py, PyBytes>, Bound<'py, PyBytes>)> {
+) -> PyResult<(
+    Bound<'py, PyBytes>,
+    Bound<'py, PyBytes>,
+    Bound<'py, PyBytes>,
+)> {
     let leaves = crate::extract_frames(canonical_leaves)?;
 
     let header = trackone_ledger::types::block_header_v1_from_canonical_leaves(
