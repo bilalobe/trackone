@@ -61,15 +61,16 @@ Rules:
 The following operations are authoritative in Rust. Python implementations of the same operations exist as
 fallbacks for environments without the native extension, but the Rust output is canonical when present.
 
-| Operation                                    | Authoritative crate                | Governing ADR    |
-| -------------------------------------------- | ---------------------------------- | ---------------- |
-| Canonical JSON encoding for commitments      | `trackone-ledger`                  | ADR-003          |
-| Merkle leaf hashing and root computation     | `trackone-ledger`, `trackone-core` | ADR-003          |
-| Canonical `day.cbor` / block-header stamping | `trackone-ledger`                  | ADR-003          |
-| Canonical CBOR commitment encoding           | `trackone-core` (`cbor.rs`)        | ADR-034          |
-| AEAD encrypt/decrypt (XChaCha20-Poly1305)    | `trackone-core`                    | ADR-001          |
-| Ed25519 sign/verify                          | `trackone-core`                    | ADR-001, ADR-037 |
-| X25519 + HKDF key derivation                 | `trackone-core`                    | ADR-001          |
+| Operation                                     | Authoritative crate                      | Governing ADR    |
+| --------------------------------------------- | ---------------------------------------- | ---------------- |
+| Canonical JSON encoding for commitments       | `trackone-ledger`                        | ADR-003          |
+| Merkle leaf hashing and root computation      | `trackone-ledger`, `trackone-core`       | ADR-003          |
+| Canonical `day.cbor` / block-header stamping  | `trackone-ledger`                        | ADR-003          |
+| OTS boundary checks (proof + sidecar binding) | `trackone-gateway` (`trackone_core.ots`) | ADR-003, ADR-007 |
+| Canonical CBOR commitment encoding            | `trackone-core` (`cbor.rs`)              | ADR-034          |
+| AEAD encrypt/decrypt (XChaCha20-Poly1305)     | `trackone-core`                          | ADR-001          |
+| Ed25519 sign/verify                           | `trackone-core`                          | ADR-001, ADR-037 |
+| X25519 + HKDF key derivation                  | `trackone-core`                          | ADR-001          |
 
 Surface tooling (Python) is authoritative for:
 
@@ -182,11 +183,11 @@ No migration required; this ADR formalizes existing conventions and names the ne
 
 Acceptance criteria for `abi3` readiness:
 
-- [ ] `abi3-py312` feature enabled in `pyo3` workspace dependency.
-- [ ] A single wheel artifact installs and passes the test suite on CPython 3.12, 3.13, and 3.14.
+- [x] `abi3-py312` feature enabled in `pyo3` workspace dependency.
+- [x] A single wheel artifact installs and passes the test suite on CPython 3.12, 3.13, and 3.14.
 - [x] The locked wheel test (`test-wheel`) runs the full test suite against the installed wheel on every PR.
 - [x] The gated resolve test (`wheel-resolve`) can be triggered to check "pip reality" without requiring lock changes.
-- [ ] Wheel filename contains the expected `cp312-abi3` tag (verified in CI).
+- [x] Wheel filename contains the expected `cp312-abi3` tag (verified in CI).
 
 ## External References
 
