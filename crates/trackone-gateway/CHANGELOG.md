@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Ledger CBOR helpers exposed through PyO3:
+  - `trackone_core.ledger.canonicalize_json_to_cbor_bytes`
+  - `trackone_core.ledger.build_day_v1_single_batch_cbor` returning
+    `(block_header_json_bytes, day_cbor_bytes, day_json_projection_bytes)`.
+
+### Changed
+- Ledger bindings now rely on local workspace `trackone-ledger` APIs for CBOR commitment generation during alpha.4 development.
+
 ## [0.1.0-alpha.3] - 2026-02-07
 
 ### Added
