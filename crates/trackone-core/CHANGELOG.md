@@ -5,10 +5,14 @@ All notable changes to `trackone-core` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.1.0-alpha.4] - 2026-02-26
 
 ### Notes
 - No crate-local API changes in this cycle; current alpha.4 work is concentrated in `trackone-ledger` and `trackone-gateway`.
+
+### Changed
+- PyO3 packaging now emits the native extension as `trackone_core._native` while the crate root provides a shim that catches missing `_native` imports and keeps `Gateway`, `GatewayBatch`, `PyRadio`, and `__version__` callable from Python.
+- Added tests that force `_native` import failure so the crate remains usable in environments where the compiled extension is unavailable.
 
 ## [0.1.0-alpha.3] - 2026-02-07
 
