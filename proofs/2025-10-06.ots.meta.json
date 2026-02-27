@@ -1,0 +1,14 @@
+{
+  "artifact": "/tmp/pytest-of-runner/pytest-1/test_multiple_days_stamping0/2025-10-06.bin",
+  "artifact_sha256": "167d24215b9b1341a0b4ecb019b16f20680ea8d6dd6f5aa14a958d10caa2dc28",
+  "bitcoin": {
+    "blockhash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "height": 0,
+    "merkleroot": "167d24215b9b1341a0b4ecb019b16f20680ea8d6dd6f5aa14a958d10caa2dc28"
+  },
+  "day": "2025-10-06",
+  "milestone": "m5",
+  "ots_client_version": "unknown",
+  "ots_proof": "/tmp/pytest-of-runner/pytest-1/test_multiple_days_stamping0/2025-10-06.bin.ots",
+  "verified_at_utc": "2026-02-27T23:20:11.771920+00:00"
+}
