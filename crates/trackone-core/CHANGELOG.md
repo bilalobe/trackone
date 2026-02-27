@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Notes
+- No crate-local API changes in this cycle; current alpha.4 work is concentrated in `trackone-ledger` and `trackone-gateway`.
+
 ## [0.1.0-alpha.3] - 2026-02-07
 
 ### Changed
