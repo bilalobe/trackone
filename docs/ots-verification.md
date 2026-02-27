@@ -24,7 +24,7 @@ bitcoind -daemon \
   -maxconnections=8
 
 # Verify a proof (once headers have reached required heights)
-ots verify out/site_demo/day/2025-10-07.bin.ots
+ots verify out/site_demo/day/2025-10-07.cbor.ots
 ```
 
 Alternatively, use the helper target (wraps our CI script):
@@ -145,7 +145,7 @@ export OTS_STATIONARY_STUB=0
 export OTS_CALENDARS="http://127.0.0.1:8468"
 
 # Anchor a day blob against the local calendar
-python scripts/gateway/ots_anchor.py out/site_demo/day/2025-10-07.bin
+python scripts/gateway/ots_anchor.py out/site_demo/day/2025-10-07.cbor
 
 # Run the real-OTS integration tests
 RUN_REAL_OTS=1 pytest -m real_ots tests/integration/test_ots_integration.py
@@ -223,7 +223,7 @@ We use three main CI profiles around OTS:
   - Runs `tox -e ots-cal` with `OTS_CALENDARS` pointing at the local calendar
     (plus public pools as a secondary).
 - `ots-verify` (see `.github/workflows/ots-verify.yml`):
-  - Generates real OTS proofs for `out/site_demo/day/*.bin` and verifies them
+  - Generates real OTS proofs for `out/site_demo/day/*.cbor` and verifies them
     against Bitcoin headers using `bitcoind` / `bitcoin-cli`.
   - Uses `scripts/ci/ots_verify.sh` as the orchestrator.
 - Weekly ratchet (`weekly-ratchet.yml`):
@@ -246,21 +246,21 @@ anchor** used to:
 
 `verify_cli` now treats OTS proofs as immutable sidecars:
 
-- The day record (`*.json`) and day blob (`*.bin`) are hashed into a Merkle
+- The day record (`*.json`) and day blob (`*.cbor`) are hashed into a Merkle
   tree; only the blob affects the `day_root`.
-- OTS proofs live in separate `*.bin.ots` files, with metadata in
+- OTS proofs live in separate `*.cbor.ots` files, with metadata in
   `proofs/<day>.ots.meta.json` describing:
   - the artifact path (`artifact`),
   - its SHA-256 (`artifact_sha256`),
   - and the proof path (`ots_proof`).
 - During verification, `verify_cli`:
-  - recomputes `sha256(day.bin)` and compares it to `artifact_sha256`;
+  - recomputes `sha256(day.cbor)` and compares it to `artifact_sha256`;
   - ensures `artifact` and `ots_proof` paths point at the expected files;
   - passes `artifact_sha256` into `verify_ots` so that even stationary stubs
     must match the recorded artifact hash.
 
 This guarantees that mutating `.ots` files alone does not change `day_root`,
-while mutating `*.bin` will break verification — exactly the "Mutable Proof
+while mutating `*.cbor` will break verification — exactly the "Mutable Proof
 Trap" we wanted to avoid.
 
 ## Troubleshooting
@@ -283,7 +283,7 @@ For manual experiments with an RFC 3161 TSA endpoint ("bring your own TSA"), Tra
 
 ### What it does
 
-Given a blob (typically a day record such as `out/site_demo/day/YYYY-MM-DD.bin`) and a TSA URL, the helper will:
+Given a blob (typically a day record such as `out/site_demo/day/YYYY-MM-DD.cbor`) and a TSA URL, the helper will:
 
 1. Compute a hash of the blob (default: SHA-256).
 1. Ask `openssl ts -query` to build a TSQ with that digest via the `-digest` option
@@ -313,7 +313,7 @@ Then, with `TRACKONE_TSA_URL` pointing to a TSA endpoint you are entitled to use
 export TRACKONE_TSA_URL="https://your-tsa.example.com/tsa"
 
 python scripts/gateway/tsa_http_client.py \
-  out/site_demo/day/2025-10-07.bin \
+  out/site_demo/day/2025-10-07.cbor \
   "$TRACKONE_TSA_URL" \
   --out-dir out/site_demo/day
 ```
