@@ -19,6 +19,10 @@ impl BlockHeaderV1 {
     pub fn canonical_json_bytes(&self) -> Result<Vec<u8>> {
         canonical_json::canonicalize_serialize(self)
     }
+
+    pub fn canonical_cbor_bytes(&self) -> Result<Vec<u8>> {
+        crate::canonical_cbor::canonicalize_serialize_to_cbor(self)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -34,6 +38,10 @@ pub struct DayRecordV1 {
 impl DayRecordV1 {
     pub fn canonical_json_bytes(&self) -> Result<Vec<u8>> {
         canonical_json::canonicalize_serialize(self)
+    }
+
+    pub fn canonical_cbor_bytes(&self) -> Result<Vec<u8>> {
+        crate::canonical_cbor::canonicalize_serialize_to_cbor(self)
     }
 }
 
