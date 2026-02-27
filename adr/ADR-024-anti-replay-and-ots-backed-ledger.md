@@ -1,8 +1,7 @@
 # ADR-024: Anti-replay and OTS-backed ledger semantics
 
-**Status**: Proposed
-**Date**: 2025-11-28
-**Updated**: 2026-02-23
+**Status**: Accepted
+**Date**: 2026-02-23
 
 ## Related ADRs
 
@@ -87,6 +86,12 @@ For the ledger and OTS:
   - They **must not** produce canonical facts that `merkle_batcher` consumes for ledger construction.
   - They are never part of the Merkle set used for anchoring a day.
 
+Current reference implementation:
+
+- `scripts/gateway/frame_verifier.py` writes structured rejection evidence to
+  `audit/rejections-<day>.ndjson` beside the `facts/` directory.
+- These records are append-only per day and remain outside the Merkle/OTS path.
+
 Wrap-around of `fc` (e.g. 32-bit counter crossing `2^32-1 → 0`) is currently treated as an **out-of-policy event** unless and until an explicit wrap-around policy is implemented:
 
 - If a device wraps its frame counter, existing `ReplayWindow` behavior will typically classify the wrapped value as too far behind or otherwise out-of-window.
@@ -148,6 +153,17 @@ Minimum recommended fields:
 This rejection evidence is part of the audit path (not the ledger path) and
 MUST NOT be hashed into day commitments.
 
+Current implementation shape:
+
+- `frame_verifier` emits one NDJSON object per rejected frame with:
+  - `device_id`
+  - `fc`
+  - `reason`
+  - `observed_at_utc`
+  - `frame_sha256`
+  - `source` (`parse`, `replay`, `decrypt`)
+- The default audit directory is a sibling `audit/` directory next to `facts/`.
+
 ### 7. Omission threat model
 
 If rejection evidence is omitted, an operator can claim "frame never observed"
@@ -158,6 +174,10 @@ Therefore:
   retention period as day artifacts, or document a stricter operational policy;
 - verifiers and reports SHOULD distinguish "not observed" from "observed but rejected"
   when evidence is available.
+
+For deployed TrackOne gateways, the `audit/rejections-<day>.ndjson` retention
+policy SHOULD be at least as long as the retention policy for `day.cbor`,
+associated OTS proofs, and OTS sidecar metadata.
 
 ## Consequences
 
@@ -196,7 +216,7 @@ To enforce this ADR, we use a combination of unit, integration, and end-to-end t
      - Duplicate-free per `(dev_id, fc)`, and
      - Consistent with the configured sliding-window invariant (accepting valid out-of-order frames inside the window; rejecting duplicates and frames that are stale or outside the window).
 
-   - On-disk artifacts in a temporary `facts/` and `out/` directory contain only the first accepted occurrence of each `(dev_id, fc)` pair. Replayed frames are visible only via audit-style output and do not result in extra fact artifacts/files (canonical CBOR artifacts with optional JSON projections, per ADR-039).
+   - On-disk artifacts in a temporary `facts/` and `out/` directory contain only the first accepted occurrence of each `(dev_id, fc)` pair. Replayed frames are visible only via structured audit evidence in `audit/rejections-<day>.ndjson` and do not result in extra fact artifacts/files (canonical CBOR artifacts with optional JSON projections, per ADR-039).
 
    - Rejected frames produce structured rejection evidence records with reason codes.
 
