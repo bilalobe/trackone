@@ -18,6 +18,8 @@ def test_replay_rejection_writes_structured_record(
 ) -> None:
     temp_dirs["root"].mkdir(parents=True, exist_ok=True)
     write_frames("pod-021", 1, temp_dirs["frames"], temp_dirs["device_table"])
+    line = temp_dirs["frames"].read_text(encoding="utf-8").strip()
+    temp_dirs["frames"].write_text(f"{line}\n{line}\n", encoding="utf-8")
 
     args = [
         "--in",
@@ -28,7 +30,6 @@ def test_replay_rejection_writes_structured_record(
         str(temp_dirs["device_table"]),
     ]
 
-    assert frame_verifier.process(args) == 0
     assert frame_verifier.process(args) == 0
 
     records = _read_rejections(temp_dirs["root"] / "audit")
