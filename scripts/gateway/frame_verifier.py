@@ -2,7 +2,8 @@
 """
 frame_verifier.py
 
-Parse framed telemetry (NDJSON), enforce replay window, AEAD-decrypt, and emit canonical facts.
+Parse framed telemetry (NDJSON), enforce replay window, AEAD-decrypt, emit canonical
+facts, and retain structured rejection audit evidence.
 
 For M#2 (production), implements XChaCha20-Poly1305 AEAD (192-bit nonce, 24 bytes).
 
@@ -26,9 +27,11 @@ import base64
 import binascii
 import json
 import sys
+from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
+from hashlib import sha256
 from pathlib import Path
-from typing import Any
+from typing import Any, TextIO
 
 import nacl.bindings
 import nacl.exceptions
@@ -54,6 +57,31 @@ except ImportError:
     JSONSCHEMA_AVAILABLE = False
 
 # jsonschema remains Any | None for proper type checking after import guard
+
+
+@dataclass(slots=True, frozen=True)
+class RejectionRecord:
+    device_id: str
+    fc: int | None
+    reason: str
+    observed_at_utc: str
+    frame_sha256: str
+    source: str
+
+
+def _hash_rejected_line(raw_line: str) -> str:
+    """Hash a rejected raw frame line, ignoring only trailing newline bytes."""
+    return sha256(raw_line.rstrip("\r\n").encode("utf-8")).hexdigest()
+
+
+def _audit_day_label(now: datetime | None = None) -> str:
+    current = now if now is not None else datetime.now(UTC)
+    return current.date().isoformat()
+
+
+def _emit_rejection(out_fh: TextIO, record: RejectionRecord) -> None:
+    out_fh.write(json.dumps(asdict(record), sort_keys=True) + "\n")
+    out_fh.flush()
 
 
 def _load_schema(path: Path) -> dict[str, Any] | None:
@@ -376,8 +404,9 @@ def process(argv: list[str] | None = None) -> int:
     """
     Main processing function.
 
-    Reads frames from --in, enforces replay window, AEAD-decrypts,
-    and writes canonical facts to --out-facts directory.
+    Reads frames from --in, enforces replay window, AEAD-decrypts, writes
+    canonical facts to --out-facts, and appends structured rejection evidence
+    to --out-audit (or a sibling audit/ directory by default).
 
     Returns:
         0 on success, 1 on error
@@ -411,6 +440,13 @@ def process(argv: list[str] | None = None) -> int:
         default=DEFAULT_REPLAY_WINDOW,
         help=f"Replay window size (default: {DEFAULT_REPLAY_WINDOW})",
     )
+    p.add_argument(
+        "--out-audit",
+        dest="out_audit",
+        type=Path,
+        default=None,
+        help="Output directory for structured rejection audit logs",
+    )
 
     args = p.parse_args(argv)
 
@@ -422,22 +458,40 @@ def process(argv: list[str] | None = None) -> int:
     # Create output directory
     args.out_facts.mkdir(parents=True, exist_ok=True)
 
-    # Load device table and schema
-    device_table = load_device_table(args.device_table)
-    fact_schema = load_fact_schema()
-
-    # Initialize replay window from persisted state
-    replay = ReplayWindow(window_size=args.window)
-    replay.initialize_from_device_table(device_table)
-
-    # Process frames
-    total = 0
-    accepted = 0
-    rejected = 0
+    audit_dir = (
+        args.out_audit
+        if args.out_audit is not None
+        else args.out_facts.parent / "audit"
+    )
+    audit_path = audit_dir / f"rejections-{_audit_day_label()}.ndjson"
+    audit_fh: TextIO | None = None
+    try:
+        audit_dir.mkdir(parents=True, exist_ok=True)
+        audit_fh = audit_path.open("a", encoding="utf-8")
+    except OSError as e:
+        if frames_fh is not sys.stdin:
+            frames_fh.close()
+        print(f"[ERROR] processing failure: {e}", file=sys.stderr)
+        return 1
 
     try:
-        for _line_num, line in enumerate(frames_fh, start=1):
-            line = line.strip()
+        assert audit_fh is not None
+
+        # Load device table and schema
+        device_table = load_device_table(args.device_table)
+        fact_schema = load_fact_schema()
+
+        # Initialize replay window from persisted state
+        replay = ReplayWindow(window_size=args.window)
+        replay.initialize_from_device_table(device_table)
+
+        # Process frames
+        total = 0
+        accepted = 0
+        rejected = 0
+
+        for _line_num, raw_line in enumerate(frames_fh, start=1):
+            line = raw_line.strip()
             if not line:
                 continue
 
@@ -448,6 +502,17 @@ def process(argv: list[str] | None = None) -> int:
             if frame is None:
                 rejected += 1
                 print(f"[WARN] {err}", file=sys.stderr)
+                _emit_rejection(
+                    audit_fh,
+                    RejectionRecord(
+                        device_id="",
+                        fc=None,
+                        reason=err,
+                        observed_at_utc=datetime.now(UTC).isoformat(),
+                        frame_sha256=_hash_rejected_line(raw_line),
+                        source="parse",
+                    ),
+                )
                 continue
 
             hdr = frame["hdr"]
@@ -461,6 +526,17 @@ def process(argv: list[str] | None = None) -> int:
                 print(
                     f"[WARN] Rejected {dev_id_str} fc={fc}: {reason}", file=sys.stderr
                 )
+                _emit_rejection(
+                    audit_fh,
+                    RejectionRecord(
+                        device_id=dev_id_str,
+                        fc=fc,
+                        reason=reason,
+                        observed_at_utc=datetime.now(UTC).isoformat(),
+                        frame_sha256=_hash_rejected_line(raw_line),
+                        source="replay",
+                    ),
+                )
                 continue
 
             # AEAD decrypt
@@ -469,6 +545,17 @@ def process(argv: list[str] | None = None) -> int:
                 rejected += 1
                 print(
                     f"[WARN] Decrypt failed for {dev_id_str} fc={fc}", file=sys.stderr
+                )
+                _emit_rejection(
+                    audit_fh,
+                    RejectionRecord(
+                        device_id=dev_id_str,
+                        fc=fc,
+                        reason="decrypt_failed",
+                        observed_at_utc=datetime.now(UTC).isoformat(),
+                        frame_sha256=_hash_rejected_line(raw_line),
+                        source="decrypt",
+                    ),
                 )
                 continue
 
@@ -497,6 +584,20 @@ def process(argv: list[str] | None = None) -> int:
 
             accepted += 1
 
+        # Save device table
+        save_device_table(args.device_table, device_table)
+
+        # Cross-check accepted count from disk to guard against counter drift
+        try:
+            accepted_files = len(list(args.out_facts.glob("*.cbor")))
+        except OSError:
+            accepted_files = accepted
+
+        print(
+            f"[frame_verifier] total={total} accepted={accepted_files} rejected={rejected} window={args.window}"
+        )
+        return 0
+
     except KeyboardInterrupt:
         print("\n[INFO] Interrupted by user", file=sys.stderr)
         return 1
@@ -506,20 +607,8 @@ def process(argv: list[str] | None = None) -> int:
     finally:
         if frames_fh is not sys.stdin:
             frames_fh.close()
-
-    # Save device table
-    save_device_table(args.device_table, device_table)
-
-    # Cross-check accepted count from disk to guard against counter drift
-    try:
-        accepted_files = len(list(args.out_facts.glob("*.cbor")))
-    except OSError:
-        accepted_files = accepted
-
-    print(
-        f"[frame_verifier] total={total} accepted={accepted_files} rejected={rejected} window={args.window}"
-    )
-    return 0
+        if audit_fh is not None:
+            audit_fh.close()
 
 
 def main(argv: list[str] | None = None) -> int:
