@@ -454,6 +454,7 @@ def process(argv: list[str] | None = None) -> int:
     frames_fh = (
         args.input_file.open("r", encoding="utf-8") if args.input_file else sys.stdin
     )
+    device_table_existed = args.device_table.exists()
 
     # Create output directory
     args.out_facts.mkdir(parents=True, exist_ok=True)
@@ -584,8 +585,9 @@ def process(argv: list[str] | None = None) -> int:
 
             accepted += 1
 
-        # Save device table
-        save_device_table(args.device_table, device_table)
+        # Avoid creating a brand-new empty device table when nothing was accepted.
+        if device_table or device_table_existed:
+            save_device_table(args.device_table, device_table)
 
         # Cross-check accepted count from disk to guard against counter drift
         try:
