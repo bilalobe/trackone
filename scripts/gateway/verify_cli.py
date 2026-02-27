@@ -307,7 +307,7 @@ def _validate_meta_sidecar_python(
 ) -> _PythonOtsVerifyResult:
     try:
         meta = json.loads(meta_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
+    except (UnicodeDecodeError, json.JSONDecodeError):
         return _PythonOtsVerifyResult(
             ok=False,
             status_name=STATUS_FAILED,
@@ -730,7 +730,7 @@ def main(argv: list[str] | None = None) -> int:
 
         try:
             loaded_meta = json.loads(meta_path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
+        except (json.JSONDecodeError, UnicodeDecodeError, OSError):
             print(f"ERROR: Failed to parse OTS meta file {meta_path}")
             summary["checks"]["meta_valid"] = False
             _emit(summary, args.json)

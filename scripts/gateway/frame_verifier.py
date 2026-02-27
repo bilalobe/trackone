@@ -475,9 +475,12 @@ def process(argv: list[str] | None = None) -> int:
         print(f"[ERROR] processing failure: {e}", file=sys.stderr)
         return 1
 
-    try:
-        assert audit_fh is not None
+    if audit_fh is None:
+        raise RuntimeError(
+            "audit_fh is unexpectedly None after attempting to open audit file"
+        )
 
+    try:
         # Load device table and schema
         device_table = load_device_table(args.device_table)
         fact_schema = load_fact_schema()
