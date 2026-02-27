@@ -8,8 +8,10 @@ except ImportError:
     _ots = None  # type: ignore[assignment]
 
 if _ots is not None:
-    OtsStatus = _ots.OtsStatus
-    OtsVerifyResult = _ots.OtsVerifyResult
+    if hasattr(_ots, "OtsStatus"):
+        OtsStatus = _ots.OtsStatus
+    if hasattr(_ots, "OtsVerifyResult"):
+        OtsVerifyResult = _ots.OtsVerifyResult
 
 
 def __getattr__(name: str):  # noqa: ANN201
