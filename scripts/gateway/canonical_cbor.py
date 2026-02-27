@@ -48,6 +48,39 @@ def _encode_int(buf: bytearray, n: int) -> None:
         _major_u64(buf, 1, -1 - n)
 
 
+def _same_float_value(a: float, b: float) -> bool:
+    if a != b:
+        return False
+    if a == 0.0:
+        return math.copysign(1.0, a) == math.copysign(1.0, b)
+    return True
+
+
+def _encode_float_preferred(buf: bytearray, value: float) -> None:
+    if not math.isfinite(value):
+        raise ValueError("non-finite float not allowed")
+
+    # RFC 8949 deterministic encoding: use the shortest float width
+    # that exactly preserves the numeric value.
+    try:
+        f16 = struct.pack(">e", value)
+        if _same_float_value(struct.unpack(">e", f16)[0], value):
+            buf.append(0xF9)  # float16
+            buf.extend(f16)
+            return
+    except OverflowError:
+        pass
+
+    f32 = struct.pack(">f", value)
+    if _same_float_value(struct.unpack(">f", f32)[0], value):
+        buf.append(0xFA)  # float32
+        buf.extend(f32)
+        return
+
+    buf.append(0xFB)  # float64
+    buf.extend(struct.pack(">d", value))
+
+
 def _encode_obj(buf: bytearray, obj: Any) -> None:
     if obj is None:
         buf.append(0xF6)
@@ -62,10 +95,7 @@ def _encode_obj(buf: bytearray, obj: Any) -> None:
         _encode_int(buf, obj)
         return
     if isinstance(obj, float):
-        if not math.isfinite(obj):
-            raise ValueError("non-finite float not allowed")
-        buf.append(0xFB)  # float64
-        buf.extend(struct.pack(">d", obj))
+        _encode_float_preferred(buf, obj)
         return
     if isinstance(obj, str):
         raw = obj.encode("utf-8")
