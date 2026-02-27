@@ -1,6 +1,10 @@
 #![cfg_attr(not(debug_assertions), deny(warnings))]
 
+// Keep externally-stable module names while using shorter filenames.
+#[path = "c_json.rs"]
 pub mod canonical_json;
+#[path = "c_cbor.rs"]
+pub mod canonical_cbor;
 pub mod merkle;
 pub mod types;
 
@@ -8,12 +12,16 @@ pub mod types;
 #[derive(Debug)]
 pub enum Error {
     Json(serde_json::Error),
+    NonFiniteFloat,
+    UnsupportedNumber,
 }
 
 impl core::fmt::Display for Error {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Error::Json(e) => write!(f, "json error: {e}"),
+            Error::NonFiniteFloat => write!(f, "non-finite float not allowed"),
+            Error::UnsupportedNumber => write!(f, "unsupported JSON number representation"),
         }
     }
 }
