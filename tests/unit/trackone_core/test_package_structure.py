@@ -11,6 +11,7 @@ These tests verify that:
 from __future__ import annotations
 
 import sys
+from types import ModuleType
 from unittest.mock import MagicMock
 
 import pytest
@@ -116,10 +117,26 @@ class TestPackageImport:
 class TestShimSubmodules:
     """Verify that the four shim modules can be imported and forward correctly."""
 
-    @pytest.mark.parametrize("submod", ["crypto", "ledger", "merkle", "ots"])
-    def test_submodule_accessible(
-        self, mock_native: MagicMock, submod: str
+    def test_ots_shim_tolerates_legacy_native_surface(
+        self, mock_native: MagicMock
     ) -> None:
+        """Import should succeed when _native.ots lacks the new class exports."""
+        import importlib
+
+        legacy_ots = ModuleType("ots")
+        legacy_ots.verify_ots_proof = MagicMock(name="verify_ots_proof")
+        legacy_ots.validate_meta_sidecar = MagicMock(name="validate_meta_sidecar")
+        mock_native.ots = legacy_ots
+
+        tc = importlib.import_module("trackone_core")
+        ots = importlib.import_module("trackone_core.ots")
+
+        assert tc is not None
+        assert ots.verify_ots_proof is legacy_ots.verify_ots_proof
+        assert not hasattr(ots, "OtsStatus")
+
+    @pytest.mark.parametrize("submod", ["crypto", "ledger", "merkle", "ots"])
+    def test_submodule_accessible(self, mock_native: MagicMock, submod: str) -> None:
         """Each shim submodule should be importable via trackone_core.<submod>."""
         import importlib
 
