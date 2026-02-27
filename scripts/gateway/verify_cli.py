@@ -265,7 +265,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         "--facts",
         type=Path,
-        default=Path("toolset/unified/examples"),
+        required=True,
         help="Directory with fact CBOR files to recompute the Merkle root",
     )
     p.add_argument(
@@ -355,13 +355,19 @@ def main(argv: list[str] | None = None) -> int:
 
     day_cbor_path = day_dir / f"{day}.cbor"
     day_bin_legacy = day_dir / f"{day}.bin"
-    if not day_cbor_path.exists() and day_bin_legacy.exists():
+    using_legacy_day_bin = False
+    if day_cbor_path.exists():
+        day_artifact = day_cbor_path
+    elif day_bin_legacy.exists():
+        using_legacy_day_bin = True
+        day_artifact = day_bin_legacy
         print(
-            f"ERROR: Legacy artifact found ({day_bin_legacy}). "
-            "Migrate day artifacts to .cbor before verification."
+            f"[WARN] Using legacy day artifact ({day_bin_legacy}). "
+            "Please migrate to .cbor commitments.",
+            file=sys.stderr,
         )
-        return 1
-    day_artifact = day_cbor_path
+    else:
+        day_artifact = day_cbor_path
     ots_path = day_artifact.with_suffix(day_artifact.suffix + ".ots")
     recorded_root = block_header.get("merkle_root")
     if not isinstance(recorded_root, str) or len(recorded_root) != 64:
@@ -477,28 +483,39 @@ def main(argv: list[str] | None = None) -> int:
         try:
             day_json_bytes = day_json_path.read_bytes()
             canon: bytes | None = None
-            if _RUST_LEDGER is not None and hasattr(
-                _RUST_LEDGER, "canonicalize_json_to_cbor_bytes"
-            ):
-                try:  # pragma: no cover - exercised when Rust extension is available
-                    canon = bytes(
-                        _RUST_LEDGER.canonicalize_json_to_cbor_bytes(day_json_bytes)
-                    )
-                except (RuntimeError, TypeError, ValueError):
-                    canon = None
-            if canon is None:
-                canon = canonicalize_obj_to_cbor(day_record)
+            if using_legacy_day_bin:
+                canon = json.dumps(
+                    day_record, sort_keys=True, separators=(",", ":")
+                ).encode("utf-8")
+            else:
+                if _RUST_LEDGER is not None and hasattr(
+                    _RUST_LEDGER, "canonicalize_json_to_cbor_bytes"
+                ):
+                    try:  # pragma: no cover - exercised when Rust extension is available
+                        canon = bytes(
+                            _RUST_LEDGER.canonicalize_json_to_cbor_bytes(day_json_bytes)
+                        )
+                    except (RuntimeError, TypeError, ValueError):
+                        canon = None
+                if canon is None:
+                    canon = canonicalize_obj_to_cbor(day_record)
         except (OSError, TypeError, ValueError) as exc:
             print(
-                f"ERROR: Failed to canonicalize day projection {day_json_path} into CBOR: {exc}"
+                f"ERROR: Failed to canonicalize day projection {day_json_path} into "
+                f"{'JSON' if using_legacy_day_bin else 'CBOR'} commitment bytes: {exc}"
             )
             _emit(summary, args.json)
             return 1
 
         if canon != day_bytes:
-            print(
-                f"ERROR: day artifact is not canonical commitment bytes: {day_artifact}"
-            )
+            if using_legacy_day_bin:
+                print(
+                    f"ERROR: legacy day artifact is not canonical JSON commitment bytes: {day_artifact}"
+                )
+            else:
+                print(
+                    f"ERROR: day artifact is not canonical commitment bytes: {day_artifact}"
+                )
             _emit(summary, args.json)
             return 1
 
@@ -575,7 +592,9 @@ def main(argv: list[str] | None = None) -> int:
         else:
             expected_sha_from_meta: str | None = None
             if meta is not None and isinstance(meta.get("artifact_sha256"), str):
-                expected_sha_from_meta = cast(str, meta["artifact_sha256"])
+                expected_sha_from_meta = cast(
+                    str, cast(object, meta["artifact_sha256"])
+                )
             ok = verify_ots(
                 ots_path,
                 allow_placeholder=allow_placeholder,
