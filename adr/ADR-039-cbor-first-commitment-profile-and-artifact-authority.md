@@ -1,6 +1,6 @@
 # ADR-039: CBOR-First Commitment Profile and Artifact Authority
 
-**Status**: Proposed
+**Status**: Accepted
 **Date**: 2026-02-23
 
 ## Related ADRs

@@ -60,7 +60,7 @@ Entries list **Status** and **Summary**. Related references are grouped under **
   **Summary**: Separate transport encoding (Postcard) from commitment encoding to avoid accidental mixing of wire formats and hash commitments.
 
 - **ADR‑039: CBOR-first commitment profile and artifact authority**
-  **Status**: Proposed
+  **Status**: Accepted
   **Summary**: Makes deterministic CBOR the canonical commitment path (RFC 8949 baseline + TrackOne profile constraints), defines `.cbor` artifacts as authoritative, and demotes JSON to projection-only views.
 
 - **ADR‑036: Post-Quantum Hybrid Provisioning (X25519 + ML-KEM/Kyber)**
