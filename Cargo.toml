@@ -9,7 +9,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.0-alpha.3"
+version = "0.1.0-alpha.4"
 edition = "2021"
 publish = true
 license = "MIT"
@@ -34,10 +34,10 @@ repository = "https://github.com/bilalobe/trackone"
    # Dev/test helpers used by core/ledger crates
    serde_json_canonicalizer = "0.3.2"
 
-   # Internal crates (crates.io)
-   trackone-core = { version = "0.1.0-alpha.3", default-features = false }
-   trackone-ledger = { version = "0.1.0-alpha.3" }
-   trackone-constants = { version = "0.1.0-alpha.3" }
+   # Internal crates (workspace path + pinned version for publish compatibility)
+   trackone-core = { path = "crates/trackone-core", version = "0.1.0-alpha.4", default-features = false }
+   trackone-ledger = { path = "crates/trackone-ledger", version = "0.1.0-alpha.4" }
+   trackone-constants = { path = "crates/trackone-constants", version = "0.1.0-alpha.4" }
 
 [profile.release]
 lto = true
