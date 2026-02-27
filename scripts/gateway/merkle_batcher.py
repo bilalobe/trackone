@@ -10,6 +10,9 @@ This script implements the core batching logic for Track1 telemetry, producing:
 - day/<day>.json — human-readable day record
 - day/<day>.cbor.sha256 — SHA-256 hash (for convenience)
 
+Audit artifacts (for example `audit/rejections-<day>.ndjson`) are not part of the
+ledger input and are never consumed when building Merkle commitments.
+
 Determinism guarantees (ADR-003):
 1. Deterministic CBOR commitment bytes for fact/day artifacts
 2. Hash-sorted Merkle leaves: sorts leaf hashes before building tree (order-independent)
@@ -172,6 +175,11 @@ def validate_against_schema(
 
 
 def load_facts(facts_dir: Path) -> list[bytes]:
+    """Load only canonical fact commitments from `facts_dir`.
+
+    Sibling audit evidence directories are intentionally ignored and must not
+    influence Merkle roots.
+    """
     fact_files = sorted(facts_dir.glob("*.cbor"))
     if not fact_files:
         json_candidates = sorted(facts_dir.glob("*.json"))
