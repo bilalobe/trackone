@@ -4,6 +4,7 @@ Error-path tests for verify_cli (moved from test_unit_coverage_boost.py)
 """
 from __future__ import annotations
 
+import subprocess
 from unittest.mock import patch
 
 from scripts.gateway import verify_cli
@@ -63,4 +64,26 @@ class TestVerifyCliErrorPaths:
         with patch("shutil.which", return_value=str(fake_ots_dir)):
             result = verify_cli.verify_ots(ots_file)
             # Should return False because path is not a file
+            assert result is False
+
+    def test_verify_ots_subprocess_timeout(self, tmp_path):
+        """Test verify_ots when subprocess.run times out."""
+        ots_file = tmp_path / "test.ots"
+        ots_file.write_text("some ots data", encoding="utf-8")
+
+        fake_ots = tmp_path / "fake_ots"
+        fake_ots.write_text("#!/bin/sh\necho test", encoding="utf-8")
+        fake_ots.chmod(0o755)
+
+        with (
+            patch("shutil.which", return_value=str(fake_ots)),
+            patch(
+                "subprocess.run",
+                side_effect=subprocess.TimeoutExpired(
+                    cmd=["ots", "verify", str(ots_file)],
+                    timeout=verify_cli.OTS_VERIFY_TIMEOUT_SECS,
+                ),
+            ),
+        ):
+            result = verify_cli.verify_ots(ots_file)
             assert result is False
