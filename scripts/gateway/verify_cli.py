@@ -10,6 +10,7 @@ import shutil
 import subprocess  # nosec B404
 import sys
 from collections.abc import Iterable
+from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
 from typing import Any, cast
@@ -44,10 +45,12 @@ STATUS_FAILED = "failed"
 STATUS_MISSING = "missing"
 STATUS_PENDING = "pending"
 STATUS_SKIPPED = "skipped"
+OTS_VERIFY_TIMEOUT_SECS = 30.0
 
 # Optional Rust extension (`trackone_core`) for single-sourced ledger policy.
 _RUST_MERKLE: Any | None = None
 _RUST_LEDGER: Any | None = None
+_RUST_OTS: Any | None = None
 try:  # pragma: no cover - optional acceleration
     import trackone_core
 
@@ -62,10 +65,12 @@ try:  # pragma: no cover - optional acceleration
     if rust_mod is not None:
         _RUST_MERKLE = getattr(rust_mod, "merkle", None)
         _RUST_LEDGER = getattr(rust_mod, "ledger", None)
+        _RUST_OTS = getattr(rust_mod, "ots", None)
 except Exception:  # pragma: no cover - extension not built/installed or init failed
     trackone_core = None  # type: ignore[assignment]
     _RUST_MERKLE = None
     _RUST_LEDGER = None
+    _RUST_OTS = None
 
 
 def merkle_root(leaves: Iterable[bytes]) -> str:
@@ -97,49 +102,359 @@ def merkle_root(leaves: Iterable[bytes]) -> str:
     return layer[0].hex()
 
 
+@dataclass(slots=True, frozen=True)
+class _PythonOtsVerifyResult:
+    ok: bool
+    status_name: str
+    reason: str
+
+
+def _coerce_ots_status_name(result: Any) -> str:
+    status_name = getattr(result, "status_name", None)
+    if isinstance(status_name, str):
+        return status_name
+
+    status = getattr(result, "status", None)
+    if isinstance(status, str):
+        return status
+
+    value = getattr(status, "value", None)
+    if isinstance(value, str):
+        return value
+
+    text = str(status).strip().lower()
+    if text.startswith("otsstatus."):
+        return text.split(".", 1)[1]
+    return text or STATUS_FAILED
+
+
+def _verify_ots_python(
+    ots_path: Path,
+    allow_placeholder: bool = True,
+    expected_artifact_sha: str | None = None,
+) -> _PythonOtsVerifyResult:
+    try:
+        raw = ots_path.read_bytes()
+        if raw.startswith(b"STATIONARY-OTS:"):
+            if not allow_placeholder:
+                return _PythonOtsVerifyResult(
+                    ok=False,
+                    status_name=STATUS_FAILED,
+                    reason="placeholder-not-allowed",
+                )
+            try:
+                parts = raw.split(b":", 1)
+                if len(parts) != 2:
+                    return _PythonOtsVerifyResult(
+                        ok=False,
+                        status_name=STATUS_FAILED,
+                        reason="stationary-stub-invalid",
+                    )
+                stub_hex = parts[1].strip().splitlines()[0].decode("ascii").lower()
+                if expected_artifact_sha:
+                    if stub_hex == expected_artifact_sha.strip().lower():
+                        return _PythonOtsVerifyResult(
+                            ok=True,
+                            status_name=STATUS_VERIFIED,
+                            reason="stationary-stub-verified",
+                        )
+                    return _PythonOtsVerifyResult(
+                        ok=False,
+                        status_name=STATUS_FAILED,
+                        reason="stationary-stub-hash-mismatch",
+                    )
+                artifact_candidate = ots_path.with_suffix("")
+                if artifact_candidate.exists():
+                    actual_sha = sha256(artifact_candidate.read_bytes()).hexdigest()
+                    if actual_sha == stub_hex:
+                        return _PythonOtsVerifyResult(
+                            ok=True,
+                            status_name=STATUS_VERIFIED,
+                            reason="stationary-stub-verified",
+                        )
+                    return _PythonOtsVerifyResult(
+                        ok=False,
+                        status_name=STATUS_FAILED,
+                        reason="stationary-stub-hash-mismatch",
+                    )
+                return _PythonOtsVerifyResult(
+                    ok=False,
+                    status_name=STATUS_FAILED,
+                    reason="stationary-stub-artifact-missing",
+                )
+            except (OSError, UnicodeDecodeError):
+                return _PythonOtsVerifyResult(
+                    ok=False,
+                    status_name=STATUS_FAILED,
+                    reason="stationary-stub-invalid",
+                )
+        if raw.strip() == b"OTS_PROOF_PLACEHOLDER":
+            if allow_placeholder:
+                return _PythonOtsVerifyResult(
+                    ok=True,
+                    status_name=STATUS_PENDING,
+                    reason="placeholder-accepted",
+                )
+            return _PythonOtsVerifyResult(
+                ok=False,
+                status_name=STATUS_FAILED,
+                reason="placeholder-not-allowed",
+            )
+    except OSError:
+        if not ots_path.exists():
+            return _PythonOtsVerifyResult(
+                ok=False,
+                status_name=STATUS_MISSING,
+                reason="ots-proof-not-found",
+            )
+        return _PythonOtsVerifyResult(
+            ok=False,
+            status_name=STATUS_FAILED,
+            reason="ots-proof-read-failed",
+        )
+
+    ots_exe = shutil.which("ots")
+    if not ots_exe:
+        return _PythonOtsVerifyResult(
+            ok=False,
+            status_name=STATUS_FAILED,
+            reason="ots-binary-not-found",
+        )
+    ots_path_obj = Path(ots_exe).resolve()
+    if not ots_path_obj.is_file() or not os.access(str(ots_path_obj), os.X_OK):
+        return _PythonOtsVerifyResult(
+            ok=False,
+            status_name=STATUS_FAILED,
+            reason="ots-binary-not-executable",
+        )
+    try:
+        result = subprocess.run(
+            [str(ots_path_obj), "verify", str(ots_path)],
+            capture_output=True,
+            text=True,
+            timeout=OTS_VERIFY_TIMEOUT_SECS,
+        )  # nosec B603
+        if result.returncode == 0:
+            return _PythonOtsVerifyResult(
+                ok=True,
+                status_name=STATUS_VERIFIED,
+                reason="ots-verified",
+            )
+        return _PythonOtsVerifyResult(
+            ok=False,
+            status_name=STATUS_FAILED,
+            reason="ots-verification-failed",
+        )
+    except subprocess.TimeoutExpired:
+        return _PythonOtsVerifyResult(
+            ok=False,
+            status_name=STATUS_FAILED,
+            reason="ots-timeout",
+        )
+    except (subprocess.CalledProcessError, OSError):
+        return _PythonOtsVerifyResult(
+            ok=False,
+            status_name=STATUS_FAILED,
+            reason="ots-exec-failed",
+        )
+
+
+def verify_ots_proof(
+    ots_path: Path,
+    allow_placeholder: bool = True,
+    expected_artifact_sha: str | None = None,
+) -> Any:
+    """Verify an OTS proof using the native boundary when available."""
+    if _RUST_OTS is not None and hasattr(_RUST_OTS, "verify_ots_proof"):
+        try:  # pragma: no cover - exercised when Rust extension is available
+            return _RUST_OTS.verify_ots_proof(
+                str(ots_path),
+                allow_placeholder=allow_placeholder,
+                expected_artifact_sha=expected_artifact_sha,
+                ots_binary=shutil.which("ots"),
+                timeout_secs=OTS_VERIFY_TIMEOUT_SECS,
+            )
+        except (ImportError, RuntimeError, TypeError, ValueError) as e:
+            print(
+                f"[WARN] Rust ots verify failed, falling back to Python: {e}",
+                file=sys.stderr,
+            )
+    return _verify_ots_python(
+        ots_path,
+        allow_placeholder=allow_placeholder,
+        expected_artifact_sha=expected_artifact_sha,
+    )
+
+
 def verify_ots(
     ots_path: Path,
     allow_placeholder: bool = True,
     expected_artifact_sha: str | None = None,
 ) -> bool:
-    """Verify an OTS proof file."""
-    try:
-        raw = ots_path.read_bytes()
-        if raw.startswith(b"STATIONARY-OTS:"):
-            if not allow_placeholder:
-                return False
-            try:
-                parts = raw.split(b":", 1)
-                if len(parts) != 2:
-                    return False
-                stub_hex = parts[1].strip().splitlines()[0].decode("ascii")
-                if expected_artifact_sha:
-                    return stub_hex == expected_artifact_sha
-                artifact_candidate = ots_path.with_suffix("")
-                if artifact_candidate.exists():
-                    actual_sha = sha256(artifact_candidate.read_bytes()).hexdigest()
-                    return actual_sha == stub_hex
-                return False
-            except (OSError, UnicodeDecodeError):
-                return False
-        if raw.strip() == b"OTS_PROOF_PLACEHOLDER" and allow_placeholder:
-            return True
-    except (OSError, UnicodeDecodeError):
-        pass
+    """Verify an OTS proof file via the Python fallback path."""
+    return _verify_ots_python(
+        ots_path,
+        allow_placeholder=allow_placeholder,
+        expected_artifact_sha=expected_artifact_sha,
+    ).ok
 
-    ots_exe = shutil.which("ots")
-    if not ots_exe:
-        return False
-    ots_path_obj = Path(ots_exe).resolve()
-    if not ots_path_obj.is_file() or not os.access(str(ots_path_obj), os.X_OK):
-        return False
+
+def _validate_meta_sidecar_python(
+    meta_path: Path,
+    repo_root: Path,
+    day_artifact: Path,
+    ots_path: Path,
+) -> _PythonOtsVerifyResult:
     try:
-        result = subprocess.run(
-            [str(ots_path_obj), "verify", str(ots_path)], capture_output=True, text=True
-        )  # nosec B603
-        return result.returncode == 0
-    except (subprocess.CalledProcessError, OSError):
-        return False
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return _PythonOtsVerifyResult(
+            ok=False,
+            status_name=STATUS_FAILED,
+            reason="meta-parse-failed",
+        )
+    except OSError:
+        if not meta_path.exists():
+            return _PythonOtsVerifyResult(
+                ok=False,
+                status_name=STATUS_MISSING,
+                reason="meta-not-found",
+            )
+        return _PythonOtsVerifyResult(
+            ok=False,
+            status_name=STATUS_FAILED,
+            reason="meta-read-failed",
+        )
+
+    if not isinstance(meta, dict):
+        return _PythonOtsVerifyResult(
+            ok=False,
+            status_name=STATUS_FAILED,
+            reason="meta-missing-fields",
+        )
+
+    artifact_rel = meta.get("artifact")
+    meta_day = meta.get("day")
+    expected_sha = meta.get("artifact_sha256")
+    meta_ots_rel = meta.get("ots_proof")
+    if (
+        not isinstance(artifact_rel, str)
+        or not isinstance(meta_day, str)
+        or not meta_day
+        or not isinstance(expected_sha, str)
+        or len(expected_sha) != 64
+        or not isinstance(meta_ots_rel, str)
+    ):
+        return _PythonOtsVerifyResult(
+            ok=False,
+            status_name=STATUS_FAILED,
+            reason="meta-missing-fields",
+        )
+
+    resolved_artifact = (repo_root / artifact_rel).resolve()
+    if resolved_artifact != day_artifact.resolve():
+        return _PythonOtsVerifyResult(
+            ok=False,
+            status_name=STATUS_FAILED,
+            reason="meta-artifact-path-mismatch",
+        )
+
+    if meta_day != day_artifact.stem:
+        return _PythonOtsVerifyResult(
+            ok=False,
+            status_name=STATUS_FAILED,
+            reason="meta-day-mismatch",
+        )
+
+    if not day_artifact.exists():
+        return _PythonOtsVerifyResult(
+            ok=False,
+            status_name=STATUS_MISSING,
+            reason="meta-artifact-missing",
+        )
+
+    actual_sha = sha256(day_artifact.read_bytes()).hexdigest()
+    if actual_sha != expected_sha.lower():
+        return _PythonOtsVerifyResult(
+            ok=False,
+            status_name=STATUS_FAILED,
+            reason="meta-artifact-hash-mismatch",
+        )
+
+    resolved_meta_ots = (repo_root / meta_ots_rel).resolve()
+    if resolved_meta_ots != ots_path.resolve():
+        return _PythonOtsVerifyResult(
+            ok=False,
+            status_name=STATUS_FAILED,
+            reason="meta-ots-path-mismatch",
+        )
+
+    if not ots_path.exists():
+        return _PythonOtsVerifyResult(
+            ok=False,
+            status_name=STATUS_MISSING,
+            reason="ots-proof-not-found",
+        )
+
+    return _PythonOtsVerifyResult(
+        ok=True,
+        status_name=STATUS_VERIFIED,
+        reason="meta-valid",
+    )
+
+
+def validate_meta_sidecar(
+    meta_path: Path,
+    repo_root: Path,
+    day_artifact: Path,
+    ots_path: Path,
+) -> Any:
+    """Validate the OTS sidecar binding, preferring the native boundary."""
+    if _RUST_OTS is not None and hasattr(_RUST_OTS, "validate_meta_sidecar"):
+        try:  # pragma: no cover - exercised when Rust extension is available
+            return _RUST_OTS.validate_meta_sidecar(
+                str(meta_path.resolve()),
+                str(repo_root.resolve()),
+                str(day_artifact.resolve()),
+                str(ots_path.resolve()),
+            )
+        except (ImportError, RuntimeError, TypeError, ValueError) as e:
+            print(
+                f"[WARN] Rust ots meta validation failed, falling back to Python: {e}",
+                file=sys.stderr,
+            )
+    return _validate_meta_sidecar_python(meta_path, repo_root, day_artifact, ots_path)
+
+
+def _meta_failure_exit(reason: str) -> int:
+    if reason in {"meta-artifact-path-mismatch", "meta-ots-path-mismatch"}:
+        return EXIT_ARTIFACT_PATH_MISMATCH
+    if reason == "meta-artifact-hash-mismatch":
+        return EXIT_ARTIFACT_HASH_MISMATCH
+    if reason == "ots-proof-not-found":
+        return EXIT_OTS_NOT_FOUND
+    return EXIT_META_INVALID
+
+
+def _meta_failure_message(
+    reason: str, meta_path: Path, day_artifact: Path, ots_path: Path
+) -> str:
+    messages = {
+        "meta-read-failed": f"ERROR: Failed to read OTS meta file {meta_path}",
+        "meta-parse-failed": f"ERROR: Failed to parse OTS meta file {meta_path}",
+        "meta-missing-fields": f"ERROR: OTS meta file missing required fields: {meta_path}",
+        "meta-artifact-path-mismatch": (
+            f"ERROR: OTS meta artifact path mismatch for {day_artifact}"
+        ),
+        "meta-day-mismatch": f"ERROR: OTS meta day mismatch for {day_artifact}",
+        "meta-artifact-missing": f"ERROR: OTS meta present but artifact missing: {day_artifact}",
+        "meta-artifact-hash-mismatch": (
+            f"ERROR: OTS meta artifact_sha256 mismatch for {day_artifact}"
+        ),
+        "meta-ots-path-mismatch": f"ERROR: OTS meta ots_proof path mismatch for {ots_path}",
+        "ots-proof-not-found": f"ERROR: OTS meta present but proof missing: {ots_path}",
+    }
+    return messages.get(reason, f"ERROR: OTS metadata validation failed: {meta_path}")
 
 
 def verify_tsa(tsr_path: Path, day_artifact: Path) -> bool:
@@ -405,59 +720,28 @@ def main(argv: list[str] | None = None) -> int:
     meta_path = repo_root / "proofs" / f"{day}.ots.meta.json"
     meta: dict[str, Any] | None = None
     if meta_path.exists():
+        meta_check = validate_meta_sidecar(meta_path, repo_root, day_artifact, ots_path)
+        if not bool(getattr(meta_check, "ok", False)):
+            reason = str(getattr(meta_check, "reason", "meta-invalid"))
+            print(_meta_failure_message(reason, meta_path, day_artifact, ots_path))
+            summary["checks"]["meta_valid"] = False
+            _emit(summary, args.json)
+            return _meta_failure_exit(reason)
+
         try:
-            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+            loaded_meta = json.loads(meta_path.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
             print(f"ERROR: Failed to parse OTS meta file {meta_path}")
             summary["checks"]["meta_valid"] = False
             _emit(summary, args.json)
             return EXIT_META_INVALID
-
-        artifact_rel = meta.get("artifact")
-        expected_sha = meta.get("artifact_sha256")
-        meta_ots_rel = meta.get("ots_proof")
-
-        if isinstance(artifact_rel, str):
-            resolved_artifact = (repo_root / artifact_rel).resolve()
-            if resolved_artifact != day_artifact.resolve():
-                print(
-                    f"ERROR: OTS meta artifact path mismatch. Meta artifact={resolved_artifact}, "
-                    f"expected {day_artifact}"
-                )
-                summary["checks"]["meta_valid"] = False
-                _emit(summary, args.json)
-                return EXIT_ARTIFACT_PATH_MISMATCH
-
-        if isinstance(expected_sha, str) and len(expected_sha) == 64:
-            if not day_artifact.exists():
-                print(f"ERROR: OTS meta present but artifact missing: {day_artifact}")
-                summary["checks"]["meta_valid"] = False
-                _emit(summary, args.json)
-                return EXIT_META_INVALID
-            actual_sha = sha256(day_artifact.read_bytes()).hexdigest()
-            if actual_sha != expected_sha:
-                print(
-                    f"ERROR: OTS meta artifact_sha256 mismatch. Expected={expected_sha}, Actual={actual_sha}"
-                )
-                summary["checks"]["meta_valid"] = False
-                _emit(summary, args.json)
-                return EXIT_ARTIFACT_HASH_MISMATCH
-
-        if isinstance(meta_ots_rel, str):
-            resolved_meta_ots = (repo_root / meta_ots_rel).resolve()
-            if resolved_meta_ots != ots_path.resolve():
-                print(
-                    f"ERROR: OTS meta ots_proof path mismatch. Meta ots={resolved_meta_ots}, "
-                    f"expected {ots_path}"
-                )
-                summary["checks"]["meta_valid"] = False
-                _emit(summary, args.json)
-                return EXIT_ARTIFACT_PATH_MISMATCH
-            if not ots_path.exists():
-                print(f"ERROR: OTS meta present but proof missing: {ots_path}")
-                summary["checks"]["meta_valid"] = False
-                _emit(summary, args.json)
-                return EXIT_OTS_NOT_FOUND
+        if isinstance(loaded_meta, dict):
+            meta = loaded_meta
+        else:
+            print(f"ERROR: OTS meta file missing required fields: {meta_path}")
+            summary["checks"]["meta_valid"] = False
+            _emit(summary, args.json)
+            return EXIT_META_INVALID
 
     # Parse and validate day artifact
     if day_artifact.exists():
@@ -595,21 +879,26 @@ def main(argv: list[str] | None = None) -> int:
                 expected_sha_from_meta = cast(
                     str, cast(object, meta["artifact_sha256"])
                 )
-            ok = verify_ots(
+            ots_result = verify_ots_proof(
                 ots_path,
                 allow_placeholder=allow_placeholder,
                 expected_artifact_sha=expected_sha_from_meta,
             )
-            if ok:
-                summary["channels"]["ots"] = _channel(
-                    True, STATUS_VERIFIED, "ots-verified"
-                )
+            ots_ok = bool(getattr(ots_result, "ok", False))
+            ots_reason = str(getattr(ots_result, "reason", "ots-verification-failed"))
+            ots_status = _coerce_ots_status_name(ots_result)
+            if ots_ok:
+                if ots_status not in {STATUS_VERIFIED, STATUS_PENDING}:
+                    ots_status = STATUS_VERIFIED
+                summary["channels"]["ots"] = _channel(True, ots_status, ots_reason)
             else:
-                summary["channels"]["ots"] = _channel(
-                    True, STATUS_FAILED, "ots-verification-failed"
-                )
+                if ots_status not in {STATUS_FAILED, STATUS_MISSING}:
+                    ots_status = STATUS_FAILED
+                summary["channels"]["ots"] = _channel(True, ots_status, ots_reason)
                 summary["overall"] = "failed"
                 _emit(summary, args.json)
+                if ots_reason == "ots-proof-not-found":
+                    return EXIT_OTS_NOT_FOUND
                 return EXIT_OTS_FAILED
     else:
         summary["channels"]["ots"] = _channel(False, STATUS_SKIPPED, "disabled")
