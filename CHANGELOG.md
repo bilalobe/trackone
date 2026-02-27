@@ -5,7 +5,65 @@ All notable changes to Track1 (Barnacle Sentinel) will be documented in this fil
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.1.0-alpha.4] - 2026-02-26
+
+### Added
+- Pre-commit hook: `scan-embedded-proofs` to detect suspicious embedded OTS proof blobs in staged JSON files.
+- Tests: added coverage for the `trackone_core` packaged/native layouts and for behavior when the native extension is missing.
+- Anchoring policy/config surface for ADR-015:
+  - Added root `anchoring.toml` with `[ots]`, `[tsa]`, `[peers]`, `[policy]`.
+  - Added `scripts/gateway/anchoring_config.py` with deterministic precedence (`defaults < file < env < CLI`) and `warn|strict` overall status reduction.
+  - Added `tests/unit/gateway/test_anchoring_config.py` for precedence and policy behavior.
+- Verifier/pipeline structured status outputs:
+  - `verify_cli.py` now supports `--json`, `--config`, and `--policy-mode`.
+  - `run_pipeline_demo.py` now records per-channel status (`ots`, `tsa`, `peers`) and policy outcome in the pipeline manifest.
+  - CI now publishes verifier summary output (`out/site_demo/day/verify_summary.json`) in OTS verification workflow artifacts.
+
+### Changed
+- Packaging (maturin/PyO3): the native extension module is now built as `trackone_core._native` with a small Python wrapper package at `trackone_core/`. This allows setting `python-source` without breaking `maturin pep517 write-dist-info` in CI while keeping `import trackone_core` stable.
+- Python wheel contents: ship `trackone_core` bindings only (no `scripts/` tooling package included in the wheel).
+- Tox/uv orchestration hardening:
+  - Default tox envs now run via `uv-venv-lock-runner` with `uv_sync_locked=true` to keep installs aligned to the committed `uv.lock`.
+  - Shared tox `setenv` now carries `UV_CACHE_DIR={toxworkdir}/.uv-cache` so wheel and test envs use a writable, deterministic cache path.
+  - `test-wheel` and `wheel-resolve` now declare `depends = maturin-build` so wheel tests can be run directly without manual pre-steps.
+  - Tool-only envs (`lint`, `format`, `type`, `security`) now use `package = skip` to avoid unnecessary package build/install during checks.
+- CI dependency bootstrap is again extras-driven (`pip install -e ".[ci]"`, with `.[ci,test]` / `.[ci,test,security]` where needed), keeping Dependabot-managed constraints in `pyproject.toml` authoritative.
+- Day commitment artifact naming migrated from legacy `day/YYYY-MM-DD.bin` to `day/YYYY-MM-DD.cbor`:
+  - `merkle_batcher.py` now writes `*.cbor`, `*.json`, and `*.cbor.sha256`.
+  - `verify_cli.py`, `run_pipeline_demo.py`, `run_pipeline.sh`, and workflows now consume/upload `.cbor` artifacts.
+  - Documentation and fixtures updated to reflect `.cbor`/`.cbor.ots`.
+- ADR-039 commitment authority migration is now active:
+  - Added deterministic CBOR canonicalization in `crates/trackone-ledger/src/c_cbor.rs` and Python helper `scripts/gateway/canonical_cbor.py`.
+  - `frame_verifier.py` now emits authoritative `facts/*.cbor` with JSON projections.
+  - `merkle_batcher.py` and `verify_cli.py` now recompute commitments from `facts/*.cbor` and reject JSON-only fact directories.
+  - `verify_cli.py` now validates `day/<day>.cbor` by recanonicalizing `day/<day>.json` into deterministic CBOR and byte-comparing.
+  - Deterministic map-key ordering tightened to RFC 8949 Section 4.2.1 for text keys (UTF-8 length, then lexicographic bytes), with Rust/Python parity tests.
+- Cargo workspace internal dependencies now resolve to local path crates (`trackone-core`, `trackone-ledger`, `trackone-constants`) to keep alpha.4 implementation coherent across crates.
+- Policy behavior tightened:
+  - `verify_cli --require-ots` now enforces OTS validation even when config disables OTS.
+  - `run_pipeline_demo --skip-ots/--skip-tsa/--skip-peers` now propagates to `verify_cli` execution, preventing policy/config mismatch during post-run verification.
+
+### Fixed
+- Python package imports: `trackone_core` now gracefully handles missing native extension (`_native` module) by wrapping imports in try/except blocks and providing fallback stubs when the Rust extension is not built or installed.
+  - `trackone_core/__init__.py` wraps `_native` import and provides `None` fallback for `Gateway`, `GatewayBatch`, `PyRadio`, and `__version__`.
+  - `trackone_core/crypto.py`, `ledger.py`, `merkle.py`, `ots.py` now catch `ImportError` when importing from `_native` and raise a clear `ImportError` on attribute access time (via `__getattr__`).
+  - `scripts/gateway/verify_cli.py` and `merkle_batcher.py` suppress mypy type errors for `trackone_core = None` assignments with `# type: ignore[assignment]`.
+- Tests: `tests/unit/trackone_core/test_native_missing.py` now forces `_native` import failure via negative `sys.modules` caching so it remains valid even in environments where the native extension is installed.
+- Avoided hard import failure in `verify_cli.py` when `pynacl` is unavailable by lazy-loading peer verification helpers.
+- Wheel tox env reliability: fixed `No module named pip` failures by bootstrapping pip with `python -m ensurepip --upgrade` before `python -m pip ...` commands in `test-wheel` and `wheel-resolve`.
+
+### Integration Notes
+- `tox -e pipeline` was executed successfully on 2026-02-23 and completed artifact generation.
+- Observed gap: freshly stamped OTS proofs can still be incomplete at immediate verification time (`verify_cli` exit code `4`, `ots-verification-failed`) because calendar attestations are pending Bitcoin confirmation.
+- Current behavior remains non-fatal in `warn` mode (pipeline prints warning and exits success). Use strict policy and/or delayed upgrade/verification if hard-pass OTS verification is required in the same run.
+- ADR-039 is now accepted for the `0.1.0-alpha.4` track. Implementation start state:
+  - Canonical CBOR profile is implemented in `crates/trackone-ledger/src/c_cbor.rs` and surfaced through `trackone-gateway` PyO3 bindings.
+  - Pipeline/verifier commitment authority now uses deterministic CBOR bytes (`facts/*.cbor`, `day/*.cbor`) with JSON projections for human/audit readability.
+  - `trackone-gateway/src/ots.rs` remains a placeholder boundary and is unchanged by this migration.
+- 2026-02-26 local validation notes:
+  - Targeted ADR-039 suites passed (`tests/unit/gateway/test_merkle_batcher.py`, `tests/integration/test_merkle_batcher.py`, `tests/integration/test_verify_cli*.py`, `tests/integration/test_replay_merkle_integration.py`).
+  - `tox` execution is currently blocked in this environment by network-restricted dependency resolution for `maturin` (PyPI DNS unavailable).
+  - Broader `tests/unit/gateway` collection is additionally blocked here where `pynacl` is unavailable.
 
 ## [0.1.0-alpha.3] - 2026-02-07
 
