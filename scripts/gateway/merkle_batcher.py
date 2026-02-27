@@ -176,9 +176,15 @@ def load_facts(facts_dir: Path) -> list[bytes]:
     if not fact_files:
         json_candidates = sorted(facts_dir.glob("*.json"))
         if json_candidates:
-            raise ValueError(
-                "JSON facts found but CBOR facts are required for commitments (ADR-039)"
+            # During migration, legacy JSON facts may exist without CBOR equivalents.
+            # Emit a clear CLI error and return an empty list so callers can fail gracefully
+            # instead of surfacing an unhandled ValueError.
+            print(
+                "[ERROR] JSON facts found but CBOR facts are required for "
+                "commitments (ADR-039). Please regenerate facts as CBOR.",
+                file=sys.stderr,
             )
+            return []
     leaves: list[bytes] = []
     for fpath in fact_files:
         try:
