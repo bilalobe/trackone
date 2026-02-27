@@ -7,6 +7,10 @@ try:
 except ImportError:
     _ots = None  # type: ignore[assignment]
 
+if _ots is not None:
+    OtsStatus = _ots.OtsStatus
+    OtsVerifyResult = _ots.OtsVerifyResult
+
 
 def __getattr__(name: str):  # noqa: ANN201
     if _ots is None:
