@@ -5,6 +5,15 @@ All notable changes to `trackone-gateway` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0-alpha.5] - 2026-02-27
+
+### Added
+- `ots` submodule now exposes `hash_for_ots(...)`, `verify_ots_proof(...)`, `validate_meta_sidecar(...)`, and the `OtsStatus` / `OtsVerifyResult` result types for native OTS boundary checks.
+- Rust unit tests now cover placeholder proofs, stationary stubs, real proofs, and OTS metadata validation edge cases.
+
+### Changed
+- Added direct `sha2`, `serde_json`, and `trackone-constants` dependencies so OTS validation logic can hash artifacts, parse sidecars natively, and share the default verify timeout constant.
+
 ## [0.1.0-alpha.4] - 2026-02-26
 
 ### Added
