@@ -1,23 +1,33 @@
 # Changelog
 
-All notable changes to Track1 (Barnacle Sentinel) will be documented in this file.
+All notable changes to TrackOne will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+
 ## [0.1.0-alpha.5] - 2026-02-27
 
 ### Added
-- Native `trackone_core.ots` boundary helpers in `trackone-gateway`: `verify_ots_proof`, `validate_meta_sidecar`, `OtsStatus`, and `OtsVerifyResult`.
+- Native `trackone_core.ots` boundary helpers in `trackone-gateway`: `hash_for_ots`, `verify_ots_proof`, `validate_meta_sidecar`, `OtsStatus`, and `OtsVerifyResult`.
 - Rust unit coverage for OTS placeholder, stationary stub, real proof, and metadata sidecar validation paths.
-- `scripts/gateway/frame_verifier.py` now emits structured rejection evidence to `audit/rejections-<day>.ndjson` for parse, replay, and decrypt rejects.
+- `scripts/gateway/frame_verifier.py` now emits structured rejection evidence to `audit/rejections-<day>.ndjson` (next to `--out-facts`, or under `--out-audit` when provided) for parse, replay, and decrypt rejects. Each record includes `device_id`, `fc`, `reason`, `observed_at_utc`, and `frame_sha256`.
 - Python test coverage for rejection audit logging, append behavior, and Merkle/audit separation.
 
 ### Changed
+- ADR-038 protocol-critical operations now explicitly include the OTS boundary checks (`verify_ots_proof`, `validate_meta_sidecar`) as authoritative `trackone-gateway` operations governed by the Rust boundary.
 - `scripts/gateway/verify_cli.py` now prefers `trackone_core.ots` for OTS proof and sidecar validation when the native extension is available, while preserving the Python fallback helpers.
-- OTS verification now uses a bounded default timeout and a shared hash helper for the native boundary.
+- OTS verification now uses a bounded default timeout (`OTS_VERIFY_TIMEOUT_SECS`, shared via `trackone-constants`) and a shared `hash_for_ots` helper for the native boundary.
 - `scripts/gateway/merkle_batcher.py` now documents that sibling `audit/` evidence is not part of ledger inputs and must not affect Merkle roots.
-- Workspace crate versions are aligned to `0.1.0-alpha.5`, and ADR-038 now lists the OTS boundary checks as protocol-critical operations.
+- Workspace crate versions are aligned to `0.1.0-alpha.5`.
+
+### Integration Notes
+- The native `ots verify` subprocess is now bounded by the shared `OTS_VERIFY_TIMEOUT_SECS` default so verification can fail closed instead of blocking indefinitely on calendar lookups.
+- `verify_cli.py` still preserves the Python fallback path when the native extension is unavailable; the Rust OTS boundary is preferred, not required.
+- Rejection evidence stays outside the commitment path: `frame_verifier.py` writes `audit/rejections-<day>.ndjson`, and `merkle_batcher.py` ignores sibling `audit/` content when building Merkle roots.
+- `OtsStatus` now includes `Skipped` so the native and Python policy layers can report the same channel-level status vocabulary.
 
 ## [0.1.0-alpha.4] - 2026-02-26
 
