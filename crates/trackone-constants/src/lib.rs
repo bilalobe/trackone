@@ -10,3 +10,6 @@ pub const AEAD_NONCE_LEN: usize = 24;
 
 /// AEAD authentication tag length in bytes (Poly1305).
 pub const AEAD_TAG_LEN: usize = 16;
+
+/// Default timeout for invoking `ots verify` in gateway-side validation.
+pub const OTS_VERIFY_TIMEOUT_SECS: u64 = 30;
