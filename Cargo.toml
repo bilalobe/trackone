@@ -9,7 +9,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.0-alpha.4"
+version = "0.1.0-alpha.5"
 edition = "2021"
 publish = true
 license = "MIT"
@@ -35,9 +35,9 @@ repository = "https://github.com/bilalobe/trackone"
    serde_json_canonicalizer = "0.3.2"
 
    # Internal crates (workspace path + pinned version for publish compatibility)
-   trackone-core = { path = "crates/trackone-core", version = "0.1.0-alpha.4", default-features = false }
-   trackone-ledger = { path = "crates/trackone-ledger", version = "0.1.0-alpha.4" }
-   trackone-constants = { path = "crates/trackone-constants", version = "0.1.0-alpha.4" }
+   trackone-core = { path = "crates/trackone-core", version = "0.1.0-alpha.5", default-features = false }
+   trackone-ledger = { path = "crates/trackone-ledger", version = "0.1.0-alpha.5" }
+   trackone-constants = { path = "crates/trackone-constants", version = "0.1.0-alpha.5" }
 
 [profile.release]
 lto = true
