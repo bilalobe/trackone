@@ -36,7 +36,7 @@ impl From<serde_json::Error> for Error {
 
 pub type Result<T> = core::result::Result<T, Error>;
 
-pub(crate) fn hex_lower(bytes: &[u8]) -> String {
+pub fn hex_lower(bytes: &[u8]) -> String {
     const HEX: &[u8; 16] = b"0123456789abcdef";
     let mut out = String::with_capacity(bytes.len() * 2);
     for b in bytes {
