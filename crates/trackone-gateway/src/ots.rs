@@ -48,14 +48,14 @@ fn normalize_hex(value: &str) -> String {
 
 /// Derive the artifact path from an OTS proof path by stripping the trailing
 /// `.ots` extension (for example, `2025-10-07.cbor.ots` -> `2025-10-07.cbor`).
-fn artifact_path_for_ots(ots_path: &Path) -> PathBuf {
-    debug_assert_eq!(
-        ots_path.extension().and_then(|ext| ext.to_str()),
-        Some("ots")
-    );
+/// Returns `None` if the path does not have an `.ots` extension.
+fn artifact_path_for_ots(ots_path: &Path) -> Option<PathBuf> {
+    if ots_path.extension().and_then(|ext| ext.to_str()) != Some("ots") {
+        return None;
+    }
     let mut artifact = ots_path.to_path_buf();
     artifact.set_extension("");
-    artifact
+    Some(artifact)
 }
 
 fn parse_stationary_stub(raw: &[u8]) -> Option<String> {
@@ -106,7 +106,14 @@ fn default_verify_timeout() -> Duration {
 
 fn timeout_from_secs(timeout_secs: Option<f64>) -> Duration {
     match timeout_secs {
-        Some(value) if value.is_finite() && value > 0.0 => Duration::from_secs_f64(value),
+        Some(value) if value.is_finite() && value > 0.0 => {
+            let max_secs = Duration::MAX.as_secs_f64();
+            if value <= max_secs {
+                Duration::from_secs_f64(value)
+            } else {
+                default_verify_timeout()
+            }
+        }
         _ => default_verify_timeout(),
     }
 }
@@ -296,14 +303,16 @@ fn verify_ots_proof_impl(
 
         let expected = if let Some(expected) = expected_artifact_sha {
             if !is_sha256_hex(expected) {
-                return OtsVerifyResult::failure(
-                    OtsStatus::Failed,
-                    "stationary-stub-hash-mismatch",
-                );
+                return OtsVerifyResult::failure(OtsStatus::Failed, "stationary-stub-invalid");
             }
             normalize_hex(expected)
         } else {
-            let artifact_path = artifact_path_for_ots(ots_path);
+            let artifact_path = match artifact_path_for_ots(ots_path) {
+                Some(path) => path,
+                None => {
+                    return OtsVerifyResult::failure(OtsStatus::Failed, "ots-invalid-path");
+                }
+            };
             let artifact_bytes = match fs::read(&artifact_path) {
                 Ok(bytes) => bytes,
                 Err(_) => {
@@ -405,7 +414,32 @@ fn validate_meta_sidecar_impl(
         None => return OtsVerifyResult::failure(OtsStatus::Failed, "meta-missing-fields"),
     };
 
-    if resolve_from(repo_root, Path::new(artifact_rel)) != normalize_path(expected_artifact_path) {
+    let meta_artifact_path = resolve_from(repo_root, Path::new(artifact_rel));
+    let canonical_expected_artifact_path = match fs::canonicalize(expected_artifact_path) {
+        Ok(path) => path,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+            return OtsVerifyResult::failure(OtsStatus::Missing, "meta-artifact-missing");
+        }
+        Err(_) => {
+            return OtsVerifyResult::failure(
+                OtsStatus::Failed,
+                "meta-artifact-path-resolution-failed",
+            );
+        }
+    };
+    let canonical_meta_artifact_path = match fs::canonicalize(&meta_artifact_path) {
+        Ok(path) => path,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+            return OtsVerifyResult::failure(OtsStatus::Missing, "meta-artifact-missing");
+        }
+        Err(_) => {
+            return OtsVerifyResult::failure(
+                OtsStatus::Failed,
+                "meta-artifact-path-resolution-failed",
+            );
+        }
+    };
+    if canonical_meta_artifact_path != canonical_expected_artifact_path {
         return OtsVerifyResult::failure(OtsStatus::Failed, "meta-artifact-path-mismatch");
     }
 
@@ -429,12 +463,27 @@ fn validate_meta_sidecar_impl(
         return OtsVerifyResult::failure(OtsStatus::Failed, "meta-artifact-hash-mismatch");
     }
 
-    if resolve_from(repo_root, Path::new(ots_rel)) != normalize_path(expected_ots_path) {
+    let meta_ots_path = resolve_from(repo_root, Path::new(ots_rel));
+    let canonical_expected_ots_path = match fs::canonicalize(expected_ots_path) {
+        Ok(path) => path,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+            return OtsVerifyResult::failure(OtsStatus::Missing, "ots-proof-not-found");
+        }
+        Err(_) => {
+            return OtsVerifyResult::failure(OtsStatus::Failed, "ots-proof-path-resolution-failed");
+        }
+    };
+    let canonical_meta_ots_path = match fs::canonicalize(&meta_ots_path) {
+        Ok(path) => path,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+            return OtsVerifyResult::failure(OtsStatus::Missing, "ots-proof-not-found");
+        }
+        Err(_) => {
+            return OtsVerifyResult::failure(OtsStatus::Failed, "ots-proof-path-resolution-failed");
+        }
+    };
+    if canonical_meta_ots_path != canonical_expected_ots_path {
         return OtsVerifyResult::failure(OtsStatus::Failed, "meta-ots-path-mismatch");
-    }
-
-    if !expected_ots_path.exists() {
-        return OtsVerifyResult::failure(OtsStatus::Missing, "ots-proof-not-found");
     }
 
     OtsVerifyResult::success(OtsStatus::Verified, "meta-valid")
