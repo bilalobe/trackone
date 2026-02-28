@@ -22,6 +22,11 @@ Currently exposed:
 - Ledger helpers (ADR-003):
   - `trackone_core.ledger.canonicalize_json_bytes(...)`
   - `trackone_core.ledger.build_day_v1_single_batch(...)` (canonical block header + `day.bin` bytes)
+- OTS boundary helpers:
+  - `trackone_core.ots.hash_for_ots(...)`
+  - `trackone_core.ots.verify_ots_proof(...)`
+  - `trackone_core.ots.validate_meta_sidecar(...)`
+  - `trackone_core.ots.OtsStatus` and `trackone_core.ots.OtsVerifyResult`
 - `PyRadio` adapter for delegating frame I/O to Python implementations (`send_frame`, optional `receive_frame`).
 
 ## Responsibilities and dependencies
