@@ -421,7 +421,10 @@ fn validate_meta_sidecar_impl(
             return OtsVerifyResult::failure(OtsStatus::Missing, "meta-artifact-missing");
         }
         Err(_) => {
-            return OtsVerifyResult::failure(OtsStatus::Failed, "meta-artifact-read-failed");
+            return OtsVerifyResult::failure(
+                OtsStatus::Failed,
+                "meta-artifact-path-resolution-failed",
+            );
         }
     };
     let canonical_meta_artifact_path = match fs::canonicalize(&meta_artifact_path) {
@@ -430,7 +433,10 @@ fn validate_meta_sidecar_impl(
             return OtsVerifyResult::failure(OtsStatus::Missing, "meta-artifact-missing");
         }
         Err(_) => {
-            return OtsVerifyResult::failure(OtsStatus::Failed, "meta-artifact-read-failed");
+            return OtsVerifyResult::failure(
+                OtsStatus::Failed,
+                "meta-artifact-path-resolution-failed",
+            );
         }
     };
     if canonical_meta_artifact_path != canonical_expected_artifact_path {
@@ -464,7 +470,7 @@ fn validate_meta_sidecar_impl(
             return OtsVerifyResult::failure(OtsStatus::Missing, "ots-proof-not-found");
         }
         Err(_) => {
-            return OtsVerifyResult::failure(OtsStatus::Failed, "ots-proof-read-failed");
+            return OtsVerifyResult::failure(OtsStatus::Failed, "ots-proof-path-resolution-failed");
         }
     };
     let canonical_meta_ots_path = match fs::canonicalize(&meta_ots_path) {
@@ -473,7 +479,7 @@ fn validate_meta_sidecar_impl(
             return OtsVerifyResult::failure(OtsStatus::Missing, "ots-proof-not-found");
         }
         Err(_) => {
-            return OtsVerifyResult::failure(OtsStatus::Failed, "ots-proof-read-failed");
+            return OtsVerifyResult::failure(OtsStatus::Failed, "ots-proof-path-resolution-failed");
         }
     };
     if canonical_meta_ots_path != canonical_expected_ots_path {
