@@ -5,6 +5,20 @@ All notable changes to Track1 (Barnacle Sentinel) will be documented in this fil
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0-alpha.5] - 2026-02-27
+
+### Added
+- Native `trackone_core.ots` boundary helpers in `trackone-gateway`: `verify_ots_proof`, `validate_meta_sidecar`, `OtsStatus`, and `OtsVerifyResult`.
+- Rust unit coverage for OTS placeholder, stationary stub, real proof, and metadata sidecar validation paths.
+- `scripts/gateway/frame_verifier.py` now emits structured rejection evidence to `audit/rejections-<day>.ndjson` for parse, replay, and decrypt rejects.
+- Python test coverage for rejection audit logging, append behavior, and Merkle/audit separation.
+
+### Changed
+- `scripts/gateway/verify_cli.py` now prefers `trackone_core.ots` for OTS proof and sidecar validation when the native extension is available, while preserving the Python fallback helpers.
+- OTS verification now uses a bounded default timeout and a shared hash helper for the native boundary.
+- `scripts/gateway/merkle_batcher.py` now documents that sibling `audit/` evidence is not part of ledger inputs and must not affect Merkle roots.
+- Workspace crate versions are aligned to `0.1.0-alpha.5`, and ADR-038 now lists the OTS boundary checks as protocol-critical operations.
+
 ## [0.1.0-alpha.4] - 2026-02-26
 
 ### Added
