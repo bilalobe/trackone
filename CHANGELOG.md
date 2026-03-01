@@ -5,6 +5,14 @@ All notable changes to Track1 (Barnacle Sentinel) will be documented in this fil
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0-alpha.6] - 2026-03-01
+
+### Added
+- `trackone-pod-fw` now includes a hardware watchdog slice for unattended pod recovery: quorum-based liveness tracking, a local reset-counter persistence hook, and mock watchdog support for host-side tests.
+
+### Changed
+- Workspace crate versions are aligned to `0.1.0-alpha.6` for the alpha.6 release cut.
+
 ## [0.1.0-alpha.5] - 2026-02-27
 
 ### Added
