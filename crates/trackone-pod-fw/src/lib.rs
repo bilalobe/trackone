@@ -14,6 +14,9 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(debug_assertions), deny(warnings))]
 
+#[cfg(all(feature = "production", feature = "mock-hal"))]
+compile_error!("trackone-pod-fw production builds must disable the mock-hal feature");
+
 use trackone_core as core;
 
 pub mod hal;
@@ -21,10 +24,16 @@ pub mod nonce;
 pub mod pod;
 pub mod power;
 pub mod stress;
+#[cfg(feature = "wdg")]
+pub mod watchdog;
 
 pub use crate::nonce::{CounterNonce24, Nonce24};
 pub use crate::pod::Pod;
 pub use crate::power::{enter_low_power, idle_wait, EventWaiter, LowPowerMode};
+#[cfg(feature = "wdg")]
+pub use crate::watchdog::{
+    record_watchdog_reset, LivenessRegistry, ResetCounterStore, DEFAULT_WATCHDOG_MS,
+};
 
 /// Firmware version, delegates to core version
 pub fn version() -> &'static str {
