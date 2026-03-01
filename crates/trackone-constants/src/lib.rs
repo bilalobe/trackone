@@ -13,3 +13,6 @@ pub const AEAD_TAG_LEN: usize = 16;
 
 /// Default timeout for invoking `ots verify` in gateway-side validation.
 pub const OTS_VERIFY_TIMEOUT_SECS: u64 = 30;
+
+/// Default pod watchdog timeout in milliseconds.
+pub const DEFAULT_WATCHDOG_MS: u32 = 1_000;
