@@ -5,6 +5,18 @@ All notable changes to `trackone-pod-fw` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0-alpha.6] - 2026-03-01
+
+### Added
+- Hardware watchdog support for pod firmware via the new `wdg` feature:
+  - quorum-based liveness registry that feeds the watchdog only after all enabled tasks check in
+  - local `reset_counter` persistence hook for watchdog-triggered resets
+  - `MockWatchdog` and host-side tests for local/CI validation
+
+### Changed
+- Added a compile-time production guard so `production` builds refuse to compile if `mock-hal` is still enabled.
+- Expanded the HAL surface with `ResetCause` and `ResetCauseSource` to normalize boot-reset handling across board support packages.
+
 ## [0.1.0-alpha.5] - 2026-02-27
 
 ### Notes
