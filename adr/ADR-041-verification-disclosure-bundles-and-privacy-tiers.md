@@ -10,6 +10,7 @@
 - [ADR-039](ADR-039-cbor-first-commitment-profile-and-artifact-authority.md): Canonical artifact authority
 - [ADR-015](ADR-015-parallel-anchoring-ots-rfc3161-tsa.md): Optional parallel attestations
 - [ADR-032](ADR-032-informational-rfc-verifiable-telemetry-ledger.md): RFC posture
+- [ADR-043](ADR-043-phased-bundle-manifest-maturity-for-id.md): Phased manifest maturity for the I-D
 
 ## Context
 
@@ -30,18 +31,23 @@ TrackOne defines three disclosure tiers:
 
 ### 2) Normative minimum for Tier A
 
-A Tier A bundle MUST contain:
+At the current `0.1.0-alpha.6` maturity level, a Tier A bundle MUST contain:
 
 - canonical fact artifacts for the day, as defined by the active commitment profile;
 - day artifact, as defined by the active commitment profile;
 - authoritative block/day records;
 - OTS proof and OTS metadata sidecar;
-- profile version identifier;
-- verification manifest (paths + digests).
+- sufficient information to identify the active commitment profile.
+
+A standalone verification manifest (paths + digests) is RECOMMENDED and
+SHOULD be included when the producing tool emits one. Per ADR-043, this
+manifest requirement MAY be raised to MUST only after manifest emission and
+consumption are uniformly supported across the main tooling paths.
 
 During the ADR-039 dual-artifact migration window, Tier A verification MUST
-treat the following as equivalent only when the verification manifest binds the
-selected profile and artifact digests unambiguously:
+treat the following as equivalent only when the selected profile and artifact
+digests are bound unambiguously by a verification manifest or equivalent
+verifier input:
 
 - CBOR-first artifacts: `facts/*.cbor` and `day/YYYY-MM-DD.cbor`;
 - transitional artifacts: `facts/*.json` and `day/YYYY-MM-DD.bin` (canonical JSON bytes).
@@ -51,8 +57,10 @@ Bundles using transitional artifacts MUST be labeled as
 artifacts are the sole authoritative profile output, this transitional
 equivalence MUST be removed.
 
-If any required element is missing, output MUST be labeled "not independently
-recomputable".
+If any required Tier A recomputation element is missing, output MUST be
+labeled "not independently recomputable". If the standalone manifest is
+absent, output SHOULD be labeled "manifest-absent" or equivalent transitional
+wording rather than treated as a Tier A failure by default.
 
 ### 3) Normative minimum for Tier B
 
@@ -93,14 +101,15 @@ explicitly state which checks were possible vs skipped due to disclosure limits.
 
 ## Alternatives Considered
 
-- Keep disclosure policy purely operational (no ADR contract): rejected
+- Keep the disclosure policy purely operational (no ADR contract): rejected
   (inconsistent claims across deployments).
 - Single-tier bundle for all contexts: rejected (unrealistic for privacy and
   institutional constraints).
 
 ## Testing & Migration
 
-1. Add disclosure class field to verification manifest.
-1. Update verifier to emit disclosure-class aware results.
+1. Add the disclosure class field to the verification manifest where manifests are emitted.
+1. Update verifier to emit disclosure-class aware results and manifest-absent transitional labeling.
 1. Add tests proving Tier B/C cannot report full recomputation success.
 1. Update documentation and I-D language to align claims with disclosure tier.
+1. Revisit the Tier A manifest requirement once ADR-043 Phase B is implemented, and raise SHOULD to MUST only after tooling enforces the same contract.
