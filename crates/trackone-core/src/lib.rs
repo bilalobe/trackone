@@ -10,7 +10,7 @@
 #![cfg_attr(not(debug_assertions), deny(warnings))]
 
 /// Protocol version string
-pub const VERSION: &str = "0.1.0-alpha.5";
+pub const VERSION: &str = "0.1.0-alpha.6";
 
 /// Core shared types for frames, identifiers, and errors.
 pub mod types;
@@ -40,7 +40,7 @@ pub mod provisioning;
 #[cfg(feature = "std")]
 pub mod cbor;
 
-pub use trackone_constants::{AEAD_NONCE_LEN, AEAD_TAG_LEN, MAX_FACT_LEN};
+pub use trackone_constants::{AEAD_NONCE_LEN, AEAD_TAG_LEN, DEFAULT_WATCHDOG_MS, MAX_FACT_LEN};
 
 #[cfg(test)]
 mod tests {
@@ -48,7 +48,7 @@ mod tests {
 
     #[test]
     fn version_sanity() {
-        assert_eq!(VERSION, "0.1.0-alpha.5");
+        assert_eq!(VERSION, "0.1.0-alpha.6");
     }
 
     #[test]
