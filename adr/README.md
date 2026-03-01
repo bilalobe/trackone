@@ -189,7 +189,7 @@ Entries list **Status** and **Summary**. Related references are grouped under **
 
 - **[ADR-019](ADR-019-rust-gateway-chain-of-trust.md): Rust gateway chain of trust for the stationary calendar**
   **Status**: Accepted
-  **Summary**: Treat the stationary calendar as a named component in the TraceOne chain of trust; move gateway logic into Rust, run OTS anchoring through the calendar + public pools, and document provable paths from pods to Bitcoin headers.
+  **Summary**: Treat the stationary calendar as a named component in the TrackOne chain of trust; move gateway logic into Rust, run OTS anchoring through the calendar + public pools, and document provable paths from pods to Bitcoin headers.
 
   - **See also**: [ADR-024](ADR-024-anti-replay-and-ots-backed-ledger.md), [ADR-025](ADR-025-adaptive-uplink-cadence-over-lora.md), [ADR-026](ADR-026-ota-firmware-updates-over-lora.md)
 
