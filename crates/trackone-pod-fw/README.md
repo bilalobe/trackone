@@ -21,6 +21,14 @@ Additional firmware-side notes and patterns are documented in the broader [Track
 - `hal` module with small hardware abstraction traits (GPIO, clocks, buses, RNG, power) and optional mocks (`mock`, `mock-log` features).
 - `power` helpers: `idle_wait`, `enter_low_power`, and `EventWaiter`.
 - `stress` helpers: stack-guard paint/scan utilities for high-water mark checks.
+- `watchdog` helpers (feature `wdg`) for quorum-based hardware watchdog feeding and local reset-count persistence.
+
+## Feature model
+
+- `wdg` enables the watchdog/liveness-registry helpers.
+- `mock-hal` enables host-side mock HAL implementations for tests and local bring-up.
+- `mock-log` adds `println!` tracing to the mock HALs.
+- `production` implies `wdg` and must be built with `mock-hal` disabled.
 
 ## Responsibilities and dependencies
 
