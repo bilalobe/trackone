@@ -95,13 +95,27 @@ pub trait PowerControl {
     fn battery_mv(&self) -> Option<u16>;
 }
 
+/// Reset cause observed at boot.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ResetCause {
+    PowerOn,
+    Watchdog,
+    Software,
+    Other,
+}
+
+/// Boot-time reset cause provider.
+pub trait ResetCauseSource {
+    fn reset_cause(&self) -> ResetCause;
+}
+
 /// Watchdog trait.
 pub trait Watchdog {
     fn feed(&mut self);
     fn start(&mut self, timeout_ms: u32);
 }
 
-#[cfg(feature = "mock")]
+#[cfg(feature = "mock-hal")]
 pub mod mock {
     use core::cell::Cell;
 
@@ -257,6 +271,52 @@ pub mod mock {
                 self.seed = self.seed.wrapping_mul(1103515245).wrapping_add(12345);
                 *byte = (self.seed >> 16) as u8;
             }
+        }
+    }
+
+    /// Mock watchdog with observable start/feed behavior.
+    pub struct MockWatchdog {
+        started: Cell<bool>,
+        timeout_ms: Cell<u32>,
+        feed_count: Cell<u32>,
+    }
+
+    impl MockWatchdog {
+        pub const fn new() -> Self {
+            Self {
+                started: Cell::new(false),
+                timeout_ms: Cell::new(0),
+                feed_count: Cell::new(0),
+            }
+        }
+
+        pub fn is_started(&self) -> bool {
+            self.started.get()
+        }
+
+        pub fn timeout_ms(&self) -> u32 {
+            self.timeout_ms.get()
+        }
+
+        pub fn feed_count(&self) -> u32 {
+            self.feed_count.get()
+        }
+    }
+
+    impl Default for MockWatchdog {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
+    impl Watchdog for MockWatchdog {
+        fn feed(&mut self) {
+            self.feed_count.set(self.feed_count.get().saturating_add(1));
+        }
+
+        fn start(&mut self, timeout_ms: u32) {
+            self.started.set(true);
+            self.timeout_ms.set(timeout_ms);
         }
     }
 
