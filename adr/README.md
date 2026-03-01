@@ -47,6 +47,7 @@ Each ADR captures context, the decision, consequences, and alternatives.
 - [ADR-040: Commitment Test Vectors and Cross-Implementation Conformance Gates](ADR-040-commitment-test-vectors-and-conformance-gates.md)
 - [ADR-041: Verification Disclosure Bundles and Privacy Tiers](ADR-041-verification-disclosure-bundles-and-privacy-tiers.md)
 - [ADR-042: Hardware Watchdog & Liveness-Registry Policy](ADR-042-hardware-watchdog-and-liveness-registry.md)
+- [ADR-043: Phased Bundle-Manifest Maturity for the I-D](ADR-043-phased-bundle-manifest-maturity-for-id.md)
 
 ## Index Conventions
 
@@ -290,6 +291,10 @@ Entries list **Status** and **Summary**. Related references are grouped under **
   **Status**: Accepted
   **Summary**: Defines Tier A/B/C disclosure classes, minimum verification bundle requirements, and mandatory labeling of recomputation capability vs anchor-only evidence.
 
+- **[ADR-043](ADR-043-phased-bundle-manifest-maturity-for-id.md): Phased bundle-manifest maturity for the I-D**
+  **Status**: Accepted
+  **Summary**: Keeps the stronger I-D structure now, but phases standalone verification-manifest requirements so the draft stays truthful to the `0.1.0-alpha.6` implementation while preserving a path to stricter bundle contracts later.
+
 ### Future Roadmap
 
 - **[ADR-017](ADR-017-rust-core-and-pyo3-integration.md): Rust Core and PyO3 Integration Strategy (Latent Goal)**
@@ -311,7 +316,7 @@ Entries list **Status** and **Summary**. Related references are grouped under **
 **Calendar & Trust**: [ADR-014](ADR-014-stationary-ots-calendar.md) \<- [ADR-020](ADR-020-stationary-ots-calendar-followup.md), [ADR-022](ADR-022-first-party-stationary-ots-calendar-service.md); [ADR-019](ADR-019-rust-gateway-chain-of-trust.md) \<- [ADR-024](ADR-024-anti-replay-and-ots-backed-ledger.md), [ADR-025](ADR-025-adaptive-uplink-cadence-over-lora.md), [ADR-026](ADR-026-ota-firmware-updates-over-lora.md)
 **Ledger & Anti-Replay**: [ADR-024](ADR-024-anti-replay-and-ots-backed-ledger.md) \<- [ADR-002](ADR-002-telemetry-framing-and-replay-policy.md), [ADR-003](ADR-003-merkle-canonicalization-and-ots-anchoring.md), [ADR-006](ADR-006-forward-only-schema-and-salt8.md), [ADR-025](ADR-025-adaptive-uplink-cadence-over-lora.md), [ADR-026](ADR-026-ota-firmware-updates-over-lora.md), [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md), [ADR-041](ADR-041-verification-disclosure-bundles-and-privacy-tiers.md)
 **Firmware Runtime & Recovery**: [ADR-042](ADR-042-hardware-watchdog-and-liveness-registry.md) \<- [ADR-021](ADR-021-safety-net-ots-pipeline-verification.md), [ADR-024](ADR-024-anti-replay-and-ots-backed-ledger.md)
-**Conformance & Interop**: [ADR-032](ADR-032-informational-rfc-verifiable-telemetry-ledger.md) \<- [ADR-039](ADR-039-cbor-first-commitment-profile-and-artifact-authority.md), [ADR-040](ADR-040-commitment-test-vectors-and-conformance-gates.md), [ADR-041](ADR-041-verification-disclosure-bundles-and-privacy-tiers.md)
+**Conformance & Interop**: [ADR-032](ADR-032-informational-rfc-verifiable-telemetry-ledger.md) \<- [ADR-039](ADR-039-cbor-first-commitment-profile-and-artifact-authority.md), [ADR-040](ADR-040-commitment-test-vectors-and-conformance-gates.md), [ADR-041](ADR-041-verification-disclosure-bundles-and-privacy-tiers.md), [ADR-043](ADR-043-phased-bundle-manifest-maturity-for-id.md)
 **Sensing Integration**: [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md) \<- [ADR-027](ADR-027-sensorthings-shtc3-representation.md), [ADR-028](ADR-028-sensorthings-projection-mapping.md), [ADR-029](ADR-029-env-daily-summaries-and-usecases.md)
 **Future Roadmap**: [ADR-017](ADR-017-rust-core-and-pyo3-integration.md), [ADR-036](ADR-036-post-quantum-kem.md), [ADR-037](ADR-037-signature-roles-and-verification-boundaries.md)
 
