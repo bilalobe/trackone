@@ -25,10 +25,11 @@ Additional firmware-side notes and patterns are documented in the broader [Track
 
 ## Feature model
 
+- `default` enables only `std` for local development and host-side testing.
 - `wdg` enables the watchdog/liveness-registry helpers.
 - `mock-hal` enables host-side mock HAL implementations for tests and local bring-up.
 - `mock-log` adds `println!` tracing to the mock HALs.
-- `production` implies `wdg` and must be built with `mock-hal` disabled.
+- `production` implies `wdg` and is intended for embedded/production builds; use it with defaults disabled, e.g. `--no-default-features --features production`, to build without `mock-hal`/`mock-log`.
 
 ## Responsibilities and dependencies
 

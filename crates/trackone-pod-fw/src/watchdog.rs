@@ -57,9 +57,15 @@ impl LivenessRegistry {
     }
 
     /// True only when every enabled task has checked in at least once.
+    ///
+    /// When no tasks are enabled the condition is vacuously true.
     pub fn all_ready(&self) -> bool {
         let enabled = self.enabled_mask;
-        enabled != 0 && (self.heartbeat_mask.load(Ordering::Relaxed) & enabled) == enabled
+        if enabled == 0 {
+            // With no enabled tasks, the readiness condition is vacuously true.
+            return true;
+        }
+        (self.heartbeat_mask.load(Ordering::Relaxed) & enabled) == enabled
     }
 
     /// Return the subset of enabled tasks that still have not checked in.
@@ -152,6 +158,16 @@ mod tests {
         assert!(registry.feed_if_ready(&mut watchdog));
         assert_eq!(watchdog.feed_count(), 1);
         assert_eq!(registry.pending_mask(), 0b0111);
+    }
+
+    #[test]
+    fn empty_enabled_mask_is_vacuously_ready() {
+        let registry = LivenessRegistry::new(0);
+        let mut watchdog = MockWatchdog::new();
+
+        assert!(registry.all_ready());
+        assert!(registry.feed_if_ready(&mut watchdog));
+        assert_eq!(watchdog.feed_count(), 1);
     }
 
     #[test]

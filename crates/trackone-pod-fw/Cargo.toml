@@ -16,7 +16,7 @@ trackone-core.workspace = true
 trackone-core = { workspace = true, features = ["dummy-aead"] }
 
 [features]
-default = ["std", "wdg", "mock-hal"]
+default = ["std"]
 std = []
 wdg = []
 mock-hal = []

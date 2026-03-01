@@ -15,7 +15,12 @@
 #![cfg_attr(not(debug_assertions), deny(warnings))]
 
 #[cfg(all(feature = "production", feature = "mock-hal"))]
-compile_error!("trackone-pod-fw production builds must disable the mock-hal feature");
+compile_error!(
+    "trackone-pod-fw production builds must disable the `mock-hal` feature.\n\n\
+     Ensure `mock-hal` is not enabled when using the `production` feature, for example:\n\
+       - cargo: `cargo build --no-default-features --features production`\n\
+       - Cargo.toml: `default-features = false, features = [\"production\"]`"
+);
 
 use trackone_core as core;
 
