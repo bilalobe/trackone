@@ -75,3 +75,93 @@ TrackOne’s preferred validation layering (when firmware binaries exist) is:
 The current workspace focuses on the shared protocol (`trackone-core`) and
 portable helpers (`trackone-pod-fw`); board-specific binaries live outside this
 workspace.
+
+## Pod Bring-Up Checklist
+
+Use this as the minimum "do not skip" checklist when bringing up a new pod
+board, a major firmware refactor, or a hardware respin.
+
+### 1. Pre-power checks
+
+- Confirm board revision, schematic, and BOM match the firmware target.
+- Inspect solder joints, polarity-sensitive parts, crystals, antenna path, and
+  any bodge wires before applying power.
+- Verify SWD/UART headers, reset line, and boot-selection strapping are
+  reachable on the bench.
+- Confirm expected power rails, brown-out threshold, and current-limit settings
+  on the lab supply before first power-on.
+
+### 2. First power-on
+
+- Power the board from a current-limited bench supply first, not battery.
+- Record idle current draw at reset and compare it to the expected envelope.
+- Confirm the MCU stays out of a reset loop and is debuggable over SWD/JTAG.
+- Verify a basic "alive" indicator (LED toggle, UART banner, or debug pulse).
+
+### 3. Clock and reset sanity
+
+- Confirm the selected clock source starts reliably (HSI/HSE/LSE/LSI as
+  applicable).
+- Verify the system tick or monotonic timer advances at the expected rate.
+- Exercise manual reset, software reset, and power-cycle reset paths.
+- Confirm reset-cause decoding is correct for at least `PowerOn`, `Software`,
+  and `Watchdog`.
+
+### 4. Watchdog (WDG / IWDG)
+
+- Start the watchdog early enough that normal boot still completes with margin.
+- Confirm the watchdog feed path is driven by the liveness quorum, not a timer
+  ISR alone.
+- Deliberately block one periodic task and verify the watchdog expires and
+  resets the MCU.
+- Verify the retained `reset_counter` path increments across watchdog resets.
+- Confirm production builds keep the watchdog enabled and reject `mock-hal`.
+
+### 5. Storage and retained state
+
+- Verify flash/NVM reads, writes, and sector erase behavior on real hardware.
+- Confirm retained RAM or alternate storage survives watchdog resets as
+  expected.
+- Validate that corrupted or blank retained state fails safe and does not wedge
+  boot.
+
+### 6. Radio and transport smoke test
+
+- Confirm SPI/UART transport to the radio is functional on real pins.
+- Execute one known-good TX/RX smoke test at short range before field-range
+  tuning.
+- Measure one representative frame airtime and compare it to the expected duty
+  cycle budget.
+- Confirm the pod can emit at least one encrypted frame end-to-end with the
+  target nonce path.
+
+### 7. Sensor and power-path checks
+
+- Verify each required sensor bus enumerates and returns sane values.
+- Confirm out-of-range sensor data is surfaced as an error or status flag, not
+  silently treated as valid.
+- Measure sleep current, wake current, and TX peak current on the real board.
+- Confirm the reservoir capacitor / supply path keeps the MCU and radio inside
+  safe voltage during TX peaks.
+
+### 8. Fault-injection checks
+
+- Force a bad config or missing device state and confirm boot fails safe.
+- Corrupt one radio transaction and confirm the firmware recovers or surfaces a
+  clear error.
+- Trigger a low-battery or brown-out condition and confirm behavior is
+  predictable.
+- If stack-guard checks are enabled, verify the guard reports before silent
+  corruption.
+
+### 9. Sign-off before field use
+
+- Capture the measured boot current, sleep current, and TX peak current for the
+  board revision.
+- Record the chosen watchdog timeout and why it has sufficient runtime margin.
+- Record the tested radio preset (frequency, spreading factor, bandwidth, power
+  level).
+- Link the bring-up notes to the relevant ADRs (at minimum ADR-042 for the
+  watchdog policy).
+- Do not move to unattended deployment until the board passes the watchdog trip
+  test, one radio smoke test, and one power-cycle recovery test.
