@@ -73,15 +73,33 @@ an \ac{AEAD} implementation, and emit encrypted frames to the transport layer (r
 This steady-state telemetry framing
 does not change as part of post-quantum planning.
 
-Post-quantum hedging is therefore treated as a \textbf{control-plane / provisioning concern}.
-The gateway side (which is
-less constrained and can be upgraded more readily) is expected to be capable of post-quantum primitives.
-TrackOne
+Post-quantum hedging is therefore treated as a \textbf{control-plane / provisioning concern}. The gateway side (which is
+less constrained and can be upgraded more readily) is expected to be capable of post-quantum primitives. TrackOne
 adopts \textbf{algorithm agility} in provisioning (e.g., a negotiated \texttt{kex\_suite}) so that a future \emph{hybrid}
-mode can be enabled without redesigning the telemetry plane (\ac{ADR}-036).
+mode can be enabled without redesigning the telemetry plane (ADR-036).
+
+\paragraph{Operational trend alignment (PQ-era artifact size).}
+Recent web-PKI transition work highlights a practical constraint that is also relevant here:
+post-quantum trust artifacts are often significantly larger than classical ones, so systems increasingly rely on
+\emph{compact commitment-and-proof patterns} (e.g., Merkle-backed inclusion proofs) rather than shipping large
+verification material on every transaction.
+TrackOne follows the same engineering principle:
+keep telemetry transport compact, and attach stronger audit evidence at batch/day boundaries where bandwidth and
+latency costs are amortized.
+
+Recent work by Google on hybrid X25519 + ML-KEM certificates for the public
+web demonstrates that large-scale, production-grade deployments can migrate to
+post-quantum key exchange without breaking existing clients
+(\cite{ars2026_google_pq_https}; see also the design parallels in
+\cite{rfc9162} Section 8). TrackOne's provisioning handshake follows the same
+hybrid ``hedged'' model, but constrains artifact size with Merkle aggregation
+instead of sending full-size PQ material on every frame. For timestamp
+anchoring, TrackOne can retain compatibility with the OpenTimestamps workflow
+\cite{ots_project} while reserving a migration path for post-quantum upgrade
+once standardized KEMs are practical on constrained hardware.
 
 In a hybrid provisioning mode, a classical secret (from X25519) is combined with a post-quantum secret from a
-\ac{NIST}-standardized KEM (e.g., \textbf{ML-KEM}, standardized by \ac{NIST}; historically referred to as ``Kyber'') through a \ac{KDF}.
+NIST-standardized KEM (e.g., \textbf{ML-KEM}, standardized by NIST; historically referred to as ``Kyber'') through a KDF.
 The derived symmetric keys retain the same sizes and are used by the same \ac{AEAD} framing rules.
 The purpose of a hybrid
 key establishment is \textbf{hedging}: confidentiality should hold if at least one of the constituent key exchanges
