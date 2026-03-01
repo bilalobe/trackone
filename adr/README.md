@@ -287,7 +287,7 @@ Entries list **Status** and **Summary**. Related references are grouped under **
   **Summary**: Requires machine-readable canonical commitment vectors and mandatory Rust/Python parity checks in CI for commitment bytes and roots.
 
 - **[ADR-041](ADR-041-verification-disclosure-bundles-and-privacy-tiers.md): Verification disclosure bundles and privacy tiers**
-  **Status**: Proposed
+  **Status**: Accepted
   **Summary**: Defines Tier A/B/C disclosure classes, minimum verification bundle requirements, and mandatory labeling of recomputation capability vs anchor-only evidence.
 
 ### Future Roadmap

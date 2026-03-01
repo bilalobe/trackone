@@ -1,8 +1,8 @@
 # ADR-041: Verification Disclosure Bundles and Privacy Tiers
 
-**Status**: Proposed
+**Status**: Accepted
 **Date**: 2026-02-23
-**Updated**: 2026-02-25
+**Updated**: 2026-03-01
 
 ## Related ADRs
 
@@ -14,7 +14,7 @@
 ## Context
 
 The project currently mixes strong independent-verification claims with privacy
-minimization language, but does not define a normative minimum disclosure
+minimization language but does not define a normative minimum disclosure
 bundle. Without a clear minimum, operators can over-redact and still claim
 "verified," creating ambiguity and potential audit disputes.
 
