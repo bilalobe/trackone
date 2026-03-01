@@ -16,10 +16,13 @@ trackone-core.workspace = true
 trackone-core = { workspace = true, features = ["dummy-aead"] }
 
 [features]
-default = ["std"]
+default = ["std", "wdg", "mock-hal"]
 std = []
-mock = []
-mock-log = ["mock", "std"]
+wdg = []
+mock-hal = []
+mock = ["mock-hal"]
+mock-log = ["mock-hal", "std"]
+production = ["wdg"]
 
 # Future: when targeting embedded platforms
 # [profile.release]
