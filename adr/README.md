@@ -221,9 +221,9 @@ Entries list **Status** and **Summary**. Related references are grouped under **
 
   - **See also**: [ADR-001](ADR-001-primitives-x25519-hkdf-xchacha.md), [ADR-002](ADR-002-telemetry-framing-and-replay-policy.md), [ADR-018](ADR-018-cryptographic-randomness-and-nonce-policy.md), [ADR-019](ADR-019-rust-gateway-chain-of-trust.md), [ADR-024](ADR-024-anti-replay-and-ots-backed-ledger.md), [ADR-026](ADR-026-ota-firmware-updates-over-lora.md), [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md)
 
-- **[ADR-026](ADR-026-ota-firmware-updates-over-lora.md): Future OTA Firmware Updates over LoRa (Signed, Chunked, Dual-Slot)**
-  **Status**: Proposed (Later milestone, LoRa M#N)
-  **Summary**: Design for signed, chunked firmware delivery over LoRa with dual-slot validation and rollback; complements [ADR-025](ADR-025-adaptive-uplink-cadence-over-lora.md) downlink infrastructure.
+- **[ADR-026](ADR-026-ota-firmware-updates-over-lora.md): Operator-Driven OTA Firmware Distribution over LoRa (NTN-Aware, Signed, Chunked, Dual-Slot)**
+  **Status**: Proposed
+  **Summary**: Defines CBOR-first, signed firmware campaigns over the LoRa control plane with dual-slot rollback semantics, explicit pod confirmations, and an NTN transport profile that preserves the same trust model.
 
   - **See also**: [ADR-001](ADR-001-primitives-x25519-hkdf-xchacha.md), [ADR-002](ADR-002-telemetry-framing-and-replay-policy.md), [ADR-003](ADR-003-merkle-canonicalization-and-ots-anchoring.md), [ADR-018](ADR-018-cryptographic-randomness-and-nonce-policy.md), [ADR-019](ADR-019-rust-gateway-chain-of-trust.md), [ADR-024](ADR-024-anti-replay-and-ots-backed-ledger.md), [ADR-025](ADR-025-adaptive-uplink-cadence-over-lora.md), [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md)
 

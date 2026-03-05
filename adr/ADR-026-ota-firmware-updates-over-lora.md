@@ -1,212 +1,182 @@
-# ADR-026: Future OTA Firmware Updates over LoRa (Signed, Chunked, Dual-Slot)
+# ADR-026: Operator-Driven OTA Firmware Distribution over LoRa (NTN-Aware, Signed, Chunked, Dual-Slot)
 
-**Status**: Proposed (Later milestone, LoRa M#N)
+**Status**: Proposed
 **Date**: 2025-12-15
+**Updated**: 2026-03-05
 
 ## Related ADRs
 
-- [ADR-001](ADR-001-primitives-x25519-hkdf-xchacha.md): Core cryptographic primitives (Ed25519 firmware signatures)
-- [ADR-002](ADR-002-telemetry-framing-and-replay-policy.md): Telemetry framing and replay policy (device state model)
-- [ADR-003](ADR-003-merkle-canonicalization-and-ots-anchoring.md): Merkle canonicalization and OTS anchoring (manifest canonicalization)
-- [ADR-018](ADR-018-cryptographic-randomness-and-nonce-policy.md): Cryptographic randomness and nonce policy (secure RNG for nonces)
-- [ADR-019](ADR-019-rust-gateway-chain-of-trust.md): Gateway chain of trust (firmware provenance and verification)
-- [ADR-024](ADR-024-anti-replay-and-ots-backed-ledger.md): Anti-replay and OTS-backed ledger (OTA events as facts)
-- [ADR-025](ADR-025-adaptive-uplink-cadence-over-lora.md): Adaptive uplink cadence (downlink infrastructure reuse)
-- [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md): EnvFact schema and duty-cycled day.bin anchoring (operational context)
+- [ADR-001](ADR-001-primitives-x25519-hkdf-xchacha.md): Core cryptographic primitives
+- [ADR-002](ADR-002-telemetry-framing-and-replay-policy.md): Telemetry framing and replay policy
+- [ADR-018](ADR-018-cryptographic-randomness-and-nonce-policy.md): Cryptographic randomness and nonce policy
+- [ADR-019](ADR-019-rust-gateway-chain-of-trust.md): Gateway chain of trust
+- [ADR-024](ADR-024-anti-replay-and-ots-backed-ledger.md): OTS-backed ledger semantics
+- [ADR-025](ADR-025-adaptive-uplink-cadence-over-lora.md): Adaptive uplink cadence and authenticated downlink policy
+- [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md): Duty-cycled operational context
+- [ADR-034](ADR-034-serialization-boundaries-transport-vs-commitments.md): Transport vs commitment boundary
+- [ADR-039](ADR-039-cbor-first-commitment-profile-and-artifact-authority.md): CBOR-first commitment profile
 
 ## Context
 
-- TrackOne’s current focus is secure telemetry ingestion and verifiable storage:
-  - ADR-001 defines cryptographic primitives, including Ed25519 for firmware/config signatures.
-  - ADR-002 defines telemetry framing and anti-replay policies for uplinks.
-  - ADR-003 defines canonicalization and Merkle + OpenTimestamps anchoring.
-  - ADR-019 defines the Rust gateway chain of trust for the stationary calendar and upstream verification.
-  - ADR-024 defines anti-replay policies and an OTS-backed ledger for telemetry and related events.
-- Over-the-air (OTA) firmware updates are not required for the initial LoRa milestones, but:
-  - Physical access to deployed devices is expensive or impossible for some use cases.
-  - Critical security fixes and protocol changes may be required over the device lifetime.
-- LoRa and similar LPWANs impose severe constraints:
-  - Low data rates, strict duty cycle limits, and very limited downlink capacity.
-  - Class A-style devices listen only in short RX windows after uplinks.
-  - Firmware images are typically 100s of KiB, requiring many downlink fragments.
-- We already plan to introduce authenticated downlink control messages for adaptive uplink cadence (ADR-025).
-  - OTA updates must **reuse and extend** that chain of trust, not invent a parallel mechanism.
-- Requirements for OTA firmware:
-  - Signed firmware manifests with verifiable provenance (ADR-001, ADR-019).
-  - Chunked/segmented transfer resilient to loss and intermittent connectivity.
-  - Dual-slot or similar bootloader with rollback capability on failure.
-  - Operator-controlled and rare (e.g., emergency security fixes, critical feature changes), not routine.
+- OTA firmware is not part of the initial TrackOne pod milestone, but some deployments will be too remote or too costly to service physically.
+- The target pods are still constrained LPWAN devices:
+  - sparse uplinks;
+  - short downlink receive windows;
+  - strict power and regulatory budgets;
+  - flash and bootloader limitations.
+- A firmware image is materially larger and riskier than the cadence-control policies defined in ADR-025.
+- The chain of trust must stay unified:
+  - one authority model for manifests, signatures, and ledger facts;
+  - one anti-replay story for pod/gateway interaction;
+  - no separate OTA trust domain.
+- ADR-039 now makes canonical CBOR the authoritative commitment format. This ADR must not keep older JSON-as-canonical language.
+- In 2025-2026, non-terrestrial LoRa is no longer hypothetical. Satellite / NTN variants, especially LoRaWAN-over-satellite ecosystems, are becoming relevant for sparse remote coverage. That changes reachability options, but it does not remove the cost, latency, or campaign-risk profile of firmware delivery.
 
-This ADR defines the high-level architecture and constraints for future OTA firmware updates over LoRa, without specifying the exact on-device bootloader implementation, which may be platform-specific.
+This ADR defines the architectural contract for firmware distribution and activation. It does not standardize a specific MCU bootloader implementation, radio vendor, or satellite provider.
 
 ## Decision
 
-We will support **rare, operator-driven OTA firmware updates over LoRa** using:
+TrackOne will treat OTA firmware as a **rare, operator-driven maintenance operation** carried over the existing LoRa control plane, with an optional NTN transport profile.
 
-- A signed firmware manifest model anchored in the TrackOne chain of trust.
-- Chunked firmware transfer using authenticated downlink fragments.
-- A dual-slot (A/B) or equivalent bootloader with rollback and integrity checks.
-- Explicit separation from adaptive cadence control (ADR-025), with shared cryptographic and ledger primitives.
+The design has five hard requirements:
 
-### Firmware Manifest
+1. Firmware release artifacts are authenticated by the same chain of trust used elsewhere in TrackOne.
+1. Canonical commitment bytes are CBOR-first, with JSON only as a projection.
+1. Devices use dual-slot (A/B) or equivalent rollback-safe installation.
+1. Ledger facts distinguish between firmware publication, delivery attempts, application, and rollback.
+1. NTN-LoRa / LoRaWAN-over-satellite is a transport extension, not a semantic fork.
 
-- For each firmware release, we define a **Firmware Manifest**, modeled as a canonical JSON (ADR-003) object:
-  - `fw_id`: unique identifier (e.g., semantic version + build hash).
-  - `target_hardware`: platform identifier(s) (MCU, board revision, radio type).
-  - `image_digest`: SHA-256 digest of the full firmware image (ADR-001).
-  - `image_size_bytes`: total size of the firmware image.
-  - `chunk_size_bytes`: intended maximum chunk size for LoRa transfer.
-  - `required_min_fw_id`: minimum currently-running firmware version that can accept this update (to control upgrade paths).
-  - `release_channel`: e.g., `stable`, `beta`, `emergency_patch`.
-  - `valid_from_unix_s` / `valid_until_unix_s` (optional).
-  - `metadata`: optional notes, flags (e.g., `security_fix`, `breaking_change`).
-- The manifest is:
-  - Canonicalized per ADR-003.
-  - Signed with an Ed25519 key rooted in the TrackOne chain of trust (ADR-001, ADR-019).
-  - Optionally anchored in the TrackOne ledger (ADR-024) together with:
-    - The manifest itself (or its digest).
-    - The deployment decision (which fleets/sites it applies to).
+### Firmware Release Artifact
 
-### Dual-Slot / Rollback Bootloader
+- Each release defines a canonical **Firmware Manifest**.
+- The authoritative artifact is deterministic CBOR, consistent with ADR-034 and ADR-039.
+- A JSON rendering may be emitted for operator inspection, but it is not authoritative.
+- The manifest includes:
+  - `manifest_id`: stable identifier for this release artifact;
+  - `fw_id`: firmware version/build identifier;
+  - `target_hardware`: compatible board / MCU / radio profile;
+  - `image_digest`: SHA-256 of the full candidate image;
+  - `image_size_bytes`;
+  - `chunk_size_bytes`;
+  - `required_min_fw_id` (optional);
+  - `release_channel` (for example `stable`, `pilot`, `emergency_patch`);
+  - `activate_delay_s` (optional, relative to confirmed receipt);
+  - `campaign_ttl_s` (optional, relative validity window for transfer completion);
+  - `metadata` (optional operator notes or flags).
+- The manifest is signed with a TrackOne firmware authority key rooted in the gateway chain of trust.
+- The ledger may anchor the manifest digest and deployment scope, but the authoritative release artifact remains the signed CBOR manifest plus the image digest it authorizes.
 
-- Devices must implement a **dual-slot (A/B) or equivalent bootloader**:
-  - Two firmware slots in flash:
-    - `slot_active`: currently running, known-good firmware.
-    - `slot_candidate`: target of the OTA update.
-  - A small, robust bootloader region that is:
-    - Immutable or updated only under tightly controlled conditions.
-    - Responsible for selecting which slot to boot, verifying integrity, and performing rollback.
-- Boot-time behavior:
-  - Verify the integrity of the active slot and, if instructed to switch to the candidate slot:
-    - Verify the candidate image digest matches the manifest.
-    - Verify the candidate manifest signature against a built-in trust anchor (ADR-001, ADR-019).
-  - Only mark the new firmware as “confirmed” after successful boot and basic self-checks.
-  - If the new firmware fails to boot or self-check:
-    - Roll back to the previously known-good slot.
-    - Record an event for later upload via telemetry (e.g., “OTA failure, rolled back to fw_id=X”).
+### Device Boot and Rollback Contract
 
-### Chunked Transfer over LoRa
+- OTA-capable pods must implement dual-slot (A/B) or an equivalent rollback-safe arrangement.
+- The pod maintains:
+  - `slot_active`: the currently running known-good image;
+  - `slot_candidate`: the staging slot for a new image;
+  - minimal boot metadata indicating pending activation, confirmation state, and rollback reason if any.
+- The bootloader or equivalent early-boot stage MUST:
+  - verify the manifest signature against an embedded trust anchor;
+  - verify the candidate image digest against `image_digest`;
+  - refuse activation if `target_hardware` or upgrade constraints do not match;
+  - require post-boot confirmation before marking the candidate as good.
+- If boot confirmation fails, the device MUST roll back to the last known-good slot and report the rollback on the next available uplink.
 
-- Firmware image transfer is **chunked into small fragments** suitable for LoRa downlink:
-  - Chunk size is determined by:
-    - `chunk_size_bytes` in the manifest.
-    - Local regulatory and radio constraints (duty cycle, maximum payload).
-  - Each chunk is addressed and authenticated:
-    - Contains manifest identifier (`fw_id` or manifest digest), chunk index, and total chunk count.
-    - Uses AEAD with a nonce construction compatible with ADR-002 and ADR-018.
-    - Is bound to a specific device or device group to mitigate cross-device replay.
-- Transfer protocol:
-  - The device announces **OTA readiness** in regular uplinks (e.g., via a flag or a dedicated message type):
-    - Includes currently running `fw_id`, battery condition, and free flash state.
-  - The gateway schedules downlink chunks in RX windows (Class A-style).
-  - The device:
-    - Receives and validates each chunk.
-    - Writes chunks to the candidate slot with integrity checks (e.g., per-chunk CRC).
-    - Tracks which chunks are received; periodically includes missing-chunk bitmaps or ranges in uplinks to support selective retransmission.
-  - Upon receiving all chunks, the device:
-    - Verifies the full image digest matches the manifest `image_digest`.
-    - Marks the candidate slot as ready for boot; actual slot switch is orchestrated by the bootloader.
+### Transfer Protocol over LoRa
 
-### Operator Control and Rarity
+- OTA transfer reuses the authenticated downlink model from ADR-025 rather than inventing a parallel control channel.
+- A campaign begins with a pod receiving and authenticating the firmware manifest or a compact manifest offer bound to `manifest_id`.
+- The pod explicitly acknowledges manifest acceptance before bulk transfer begins.
+- Firmware chunks:
+  - are bound to `manifest_id` or the manifest digest;
+  - carry chunk index and total-count metadata;
+  - are authenticated with the downlink trust model used for control-plane traffic;
+  - may be retransmitted selectively based on pod-reported gaps.
+- The pod reports OTA state through authenticated uplink status, including:
+  - current `fw_id`;
+  - `manifest_id` in progress, if any;
+  - transfer completeness / missing ranges;
+  - final states such as `applied`, `rejected`, `rolled_back`, or `aborted`.
+- Time handling is receipt-relative:
+  - `activate_delay_s` starts when the pod confirms receipt of a valid manifest;
+  - `campaign_ttl_s` is evaluated relative to the accepted campaign state, not against an assumed accurate RTC.
 
-- OTA is **operator-initiated and rare**, not an automatic background mechanism:
-  - Only authorized operators (as per TrackOne's operational policy) can:
-    - Approve manifests for deployment to specific fleets.
-    - Trigger OTA campaigns via the gateway/control plane.
-  - Defaults:
-    - No OTA transfer is attempted unless:
-      - The device is in an allowed state (e.g., sufficient battery, good link).
-      - The operator has explicitly scheduled an update campaign.
-- All OTA-related decisions and events are recorded in the TrackOne ledger (ADR-024):
-  - Manifest approvals.
-  - Campaign definitions (fleet, site, time range).
-  - Success/failure outcomes for each device.
+### Ledger and Audit Semantics
 
-### Relationship to ADR-025 and Existing ADRs
+- Lifecycle stage MUST separate OTA-related facts. At minimum:
+  - `fw_manifest_published`;
+  - `fw_campaign_scheduled`;
+  - `fw_transfer_started`;
+  - `fw_applied`;
+  - `fw_rollback` or `fw_failed`.
+- The gateway MUST NOT record `fw_applied` merely because it issued a campaign.
+- Pod-originated confirmation is required before the ledger claims a pod accepted or applied firmware.
+- These facts allow later audits to distinguish:
+  - what was authorized;
+  - what was actually delivered;
+  - what the pod claims it installed;
+  - whether rollback occurred.
 
-- OTA uses:
-  - The same cryptographic primitives and RNG policy as ADR-001 and ADR-018.
-  - The same chain of trust defined in ADR-019.
-  - The same anti-replay and ledger principles as ADR-002 and ADR-024.
-- OTA is **logically separate** from adaptive cadence (ADR-025):
-  - ADR-025 controls how often devices send telemetry and listen for control messages.
-  - ADR-026 defines a higher-cost, slow path for firmware distribution and boot control.
-  - Cadence policies may be temporarily adjusted (via ADR-025) to facilitate an OTA campaign (e.g., more frequent uplinks during a scheduled update window), but:
-    - The ADRs remain independent and can be implemented on different timelines.
+### NTN Transport Profile
+
+- TrackOne remains designed around sparse, duty-cycled pod behavior. Terrestrial LoRa is still the baseline deployment assumption.
+- NTN-LoRa is treated as an additional transport profile for remote fleets where terrestrial gateways are infeasible.
+- In practice, current NTN options are most likely to arrive through LoRaWAN-over-satellite or a relay architecture rather than raw terrestrial-style LoRa links.
+- This ADR does not require TrackOne to adopt a specific NTN provider or a full LoRaWAN stack.
+- If an NTN profile is introduced, it MUST preserve:
+  - the same signed manifest format;
+  - the same digest and chunk semantics;
+  - the same bootloader validation rules;
+  - the same ledger fact model.
+- NTN changes campaign assumptions, not firmware authority semantics:
+  - coverage may improve;
+  - latency may become less predictable;
+  - downlink opportunities may remain scarce and expensive;
+  - large images still remain exceptional operations.
+- NTN therefore improves reachability for manifest offers, sparse control traffic, and critical recovery cases more than it makes routine large-scale firmware rollout attractive.
 
 ## Consequences
 
 ### Positive
 
-- **Long-lived, upgradable deployments**:
-  - Devices can receive security patches and protocol upgrades without physical access.
-- **Strong integrity and provenance**:
-  - Firmware manifests and images are signed and verified per ADR-001 and ADR-019.
-  - OTA decisions are anchored in the TrackOne ledger (ADR-024), ensuring auditability.
-- **Resilient to failures**:
-  - Dual-slot/rollback design avoids bricking devices on failed updates.
-  - Chunked transfer with per-chunk and whole-image validation tolerates packet loss.
-- **Clear separation of concerns**:
-  - Firmware distribution is distinct from telemetry cadence.
-  - Operators can reason about OTA as an explicit, higher-risk maintenance operation.
+- OTA is no longer described as a vague future capability; the trust and audit boundaries are explicit.
+- The ADR now aligns with TrackOne's accepted CBOR-first artifact model.
+- Operators get a clear distinction between:
+  - firmware publication;
+  - transfer attempts;
+  - confirmed application;
+  - rollback.
+- The design remains usable across terrestrial LoRa and future NTN transport variants without redefining firmware provenance.
 
 ### Negative
 
-- **Higher on-device complexity and resource requirements**:
-  - Requires additional flash for dual slots and metadata.
-  - Requires a more capable bootloader, potentially increasing development and certification costs.
-- **Operational cost and risk**:
-  - Poorly planned OTA campaigns could:
-    - Exhaust device batteries (excessive downlink, extended update windows).
-    - Violate regional RF duty cycle rules if not throttled.
-  - Requires careful rollout planning and monitoring.
-- **Slow and limited bandwidth**:
-  - Large firmware images may take hours or days to fully transfer for sparse, lossy links.
-  - OTA over LoRa is practical only for occasional, critical updates, not frequent feature delivery.
+- OTA remains operationally expensive and slow for sparse duty-cycled pods.
+- Dual-slot support raises flash, bootloader, and testing requirements.
+- NTN does not solve the core bandwidth problem for large images; it only changes coverage and control-plane reachability.
+- Any future LoRaWAN-over-satellite integration will still need an explicit mapping from TrackOne's trust model to the chosen network stack.
 
 ## Alternatives Considered
 
-- **No OTA (physical access only)**:
-  - Simplest implementation with no bootloader or LoRa transfer complexity.
-  - Rejected for remote or harsh deployments where physical access is impractical.
-- **Full LoRaWAN FUOTA (Firmware Update Over The Air) standard adoption**:
-  - Pros:
-    - Leverages standardized mechanisms, ecosystem tools.
-  - Cons:
-    - Adds dependency on a full LoRaWAN network server and FUOTA infrastructure.
-    - May not align with TrackOne’s bespoke chain-of-trust and ledger integration.
-  - We may later integrate with FUOTA or mirror its patterns where appropriate, but this ADR defines requirements we must satisfy regardless of the underlying stack.
-- **Single-slot updates with in-place overwrite**:
-  - Uses less flash, simpler in concept.
-  - Rejected due to high bricking risk; power or link failures mid-update can leave devices unbootable.
-- **Out-of-band firmware via local side channels (e.g., Wi-Fi, Bluetooth, USB)**:
-  - Can be faster and more convenient in some scenarios.
-  - Not always available in constrained, remote deployments and does not address the LoRa-only fleet case this ADR is concerned with.
+- **No OTA; physical servicing only**
+  - Simplest and lowest-risk firmware model.
+  - Rejected because some deployments will not be serviceable at acceptable cost or cadence.
+- **Treat OTA as a normal background feature-delivery channel**
+  - Rejected because the radio, duty-cycle, and power model do not support routine feature shipping.
+- **LoRaWAN FUOTA as the normative design**
+  - Rejected as the default because TrackOne still requires its own artifact authority, ledger semantics, and constrained-device assumptions.
+  - If a LoRaWAN or NTN provider is used later, it must be treated as a transport realization of this ADR rather than the source of truth.
+- **Single-slot overwrite**
+  - Rejected because power loss or partial transfer can brick a pod.
 
 ## Testing & Migration
 
-- **Pre-deployment testing**:
-  - Bootloader:
-    - Platform-specific tests of dual-slot switch, rollback, and self-check logic.
-    - Fault-injection tests simulating power loss at critical points (e.g., mid-chunk write, pre/post-slot switch).
-  - Manifest and verification:
-    - Unit tests for manifest canonicalization, signing, and verification (ADR-001, ADR-003).
-    - Integration tests verifying that devices reject:
-      - Invalid signatures.
-      - Mismatched `image_digest`.
-      - Incompatible `target_hardware` or `required_min_fw_id`.
-- **Gateway/control-plane testing**:
-  - Simulated OTA campaigns against virtual fleets:
-    - Chunk scheduling respecting duty cycle limits and RX windows.
-    - Campaign pause/resume and abort behavior.
-    - Comprehensive logging and ledger facts (ADR-024, ADR-019).
-- **Migration**:
-  - Early hardware revisions may not support OTA:
-    - Mark these explicitly in inventory, and never schedule OTA campaigns for them.
-  - New hardware revisions should:
-    - Ship with a bootloader conforming to this ADR.
-    - Expose metadata in telemetry indicating OTA capability and current `fw_id`.
-  - OTA functionality should:
-    - Be disabled by default in production until:
-      - End-to-end tests on pilot fleets validate reliability.
-      - Operational runbooks and monitoring dashboards are in place.
+- Bootloader validation:
+  - test slot switching, confirmation, and rollback under power-loss fault injection;
+  - test rejection of mismatched `target_hardware`, bad signatures, and bad digests.
+- Control-plane validation:
+  - test manifest offer, pod acknowledgement, chunk transfer, resume, and abort flows;
+  - verify that ledger facts never overclaim application before pod confirmation.
+- Transport validation:
+  - terrestrial LoRa remains the baseline test profile;
+  - if NTN is introduced, run the same campaign-state tests under higher latency and sparser downlink assumptions.
+- Migration:
+  - pods lacking dual-slot support or sufficient flash are permanently non-OTA-capable inventory;
+  - OTA stays disabled by default until pilot-fleet testing demonstrates acceptable battery, reliability, and rollback behavior.
