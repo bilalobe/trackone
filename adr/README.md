@@ -216,8 +216,8 @@ Entries list **Status** and **Summary**. Related references are grouped under **
 ### LoRa Control Plane (Adaptive & Updates)
 
 - **[ADR-025](ADR-025-adaptive-uplink-cadence-over-lora.md): Adaptive Uplink Cadence via Authenticated LoRa Downlink Policy**
-  **Status**: Proposed
-  **Summary**: Gateway delivers cadence policy updates over authenticated LoRa downlink; pod applies and measures compliance; cadence changes logged as facts for auditing and anti-replay.
+  **Status**: Accepted
+  **Summary**: Gateway delivers canonical cadence policies over authenticated LoRa downlink; pods confirm applied epochs via authenticated uplink, and the ledger distinguishes issued from applied policy facts.
 
   - **See also**: [ADR-001](ADR-001-primitives-x25519-hkdf-xchacha.md), [ADR-002](ADR-002-telemetry-framing-and-replay-policy.md), [ADR-018](ADR-018-cryptographic-randomness-and-nonce-policy.md), [ADR-019](ADR-019-rust-gateway-chain-of-trust.md), [ADR-024](ADR-024-anti-replay-and-ots-backed-ledger.md), [ADR-026](ADR-026-ota-firmware-updates-over-lora.md), [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md)
 

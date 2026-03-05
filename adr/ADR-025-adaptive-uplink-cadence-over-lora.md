@@ -1,202 +1,299 @@
 # ADR-025: Adaptive Uplink Cadence via Authenticated LoRa Downlink Policy
 
-**Status**: Proposed
+**Status**: Accepted
 **Date**: 2025-12-15
+**Updated**: 2026-03-05
 
 ## Related ADRs
 
 - [ADR-001](ADR-001-primitives-x25519-hkdf-xchacha.md): Core cryptographic primitives (Ed25519, HKDF, XChaCha20-Poly1305)
-- [ADR-002](ADR-002-telemetry-framing-and-replay-policy.md): Telemetry framing and replay policy (pod uplink model)
+- [ADR-002](ADR-002-telemetry-framing-and-replay-policy.md): Telemetry framing and replay policy (uplink framing, `cfg_ack`, device table)
+- [ADR-003](ADR-003-merkle-canonicalization-and-ots-anchoring.md): Canonicalization and Merkle/OTS anchoring (ledger facts)
 - [ADR-018](ADR-018-cryptographic-randomness-and-nonce-policy.md): Cryptographic randomness and nonce policy (RNG usage)
 - [ADR-019](ADR-019-rust-gateway-chain-of-trust.md): Gateway chain of trust (authentication/verification)
-- [ADR-024](ADR-024-anti-replay-and-ots-backed-ledger.md): Anti-replay and OTS-backed ledger (policy-change facts)
-- [ADR-026](ADR-026-ota-firmware-updates-over-lora.md): OTA firmware updates over LoRa (uses same downlink infrastructure)
-- [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md): EnvFact schema and duty-cycled day.bin anchoring (duty cycle interaction)
+- [ADR-024](ADR-024-anti-replay-and-ots-backed-ledger.md): Anti-replay and OTS-backed ledger (ledger semantics)
+- [ADR-026](ADR-026-ota-firmware-updates-over-lora.md): OTA firmware updates over LoRa (shares downlink infrastructure)
+- [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md): EnvFact schema and duty-cycled day.cbor anchoring (duty cycle interaction)
+- [ADR-034](ADR-034-serialization-boundaries-transport-vs-commitments.md): Transport vs. commitment encodings (canonical CBOR for signed/anchored bytes)
 
 ## Context
 
-- TrackOne today focuses on secure, replay-safe telemetry ingestion and verifiable storage:
-  - ADR-001 defines the core cryptographic primitives (X25519, HKDF, XChaCha20-Poly1305, Ed25519, SHA-256).
-  - ADR-002 defines the telemetry framing, nonce/replay policy, and gateway device table.
-  - ADR-003 defines canonicalization and Merkle + OpenTimestamps anchoring.
-  - ADR-019 defines the Rust gateway chain of trust for the stationary calendar and upstream verification pipeline.
-  - ADR-024 extends anti-replay policy and introduces an OTS-backed ledger for telemetry.
-- TrackOne devices are expected to operate over constrained LPWAN links such as LoRa, often battery-powered and deployed in harsh environments.
-- Fixed uplink periods are wasteful:
-  - They over-sample during low-risk, stable conditions.
-  - They can under-sample or saturate the network during high-risk, rapidly changing conditions if not dimensioned conservatively.
-- Operators want to dynamically adjust uplink frequency based on:
-  - Environmental risk indicators (e.g., weather alerts, flood/wildfire risk).
-  - Observed device behavior (signal quality, battery state, anomaly scores).
-  - Network conditions (channel utilization, duty cycle limits).
-- LoRa-like constraints apply even if we are not strictly implementing full LoRaWAN:
-  - Devices will mostly behave like Class A: open short RX windows after each uplink; no continuous listening.
-  - Downlink capacity is scarce; control messages must be compact and infrequent.
-- We must preserve:
-  - End-to-end cryptographic guarantees (ADR-001, ADR-018).
-  - Replay safety (ADR-002, ADR-024).
-  - Clear auditability of policy changes through the TrackOne ledger (ADR-003, ADR-024, ADR-019).
+- TrackOne already defines:
+  - cryptographic primitives and signatures (ADR-001),
+  - replay-safe uplink framing and gateway device state (ADR-002, ADR-024),
+  - canonical, auditable ledger artifacts (ADR-003, ADR-019, ADR-024),
+  - a low-duty-cycle pod operating model with short RX windows after uplinks (ADR-030).
+- TrackOne pods operate over constrained LPWAN links such as LoRa:
+  - downlink airtime is scarce,
+  - pods are usually Class A-like rather than continuously listening,
+  - many pods are battery powered and may deep-sleep between uplinks.
+- Fixed uplink cadence is operationally poor:
+  - it wastes battery and airtime in quiet conditions,
+  - it delays richer observation when local or external risk rises,
+  - it forces one conservative cadence across unlike deployments.
+- Operators want to adjust cadence using:
+  - external hazard signals,
+  - device health and battery state,
+  - network congestion and duty-cycle conditions.
+- Three constraints must remain explicit:
+  - Control decisions can only reach a pod during a later RX window. A gateway cannot force an immediate reaction before the pod's next uplink.
+  - Not all pods have a trustworthy wall clock while sleeping or after reboot, so absolute Unix-time activation is a poor control primitive.
+  - The control plane must bind to the canonical pod identity used by the TrackOne ledger, even if some transports still use a compact local alias for routing.
 
-We need a minimally sufficient adaptive uplink policy mechanism using authenticated downlink control messages over LoRa, without committing to a full LoRaWAN stack or OTA firmware scope (which is handled separately in ADR-026).
+We need a minimally sufficient adaptive cadence mechanism that remains replay-safe, auditable, and implementable on Class A-style LoRa links without expanding into full LoRaWAN MAC behavior or OTA firmware scope.
 
 ## Decision
 
-We introduce an **adaptive uplink cadence policy** driven by authenticated, compact downlink policy updates. The scope is limited to configuring uplink timing and burst patterns; firmware update, app-level configuration, and key management remain out of scope for this ADR.
+We adopt an **adaptive uplink cadence policy** carried over authenticated LoRa downlink, with:
 
-### Policy Object and Epoch
+- a per-pod monotonic `policy_epoch`,
+- a canonical policy object with deterministic bytes,
+- receipt-relative activation and expiry semantics,
+- explicit distinction between `policy_issued` and `policy_applied`,
+- authenticated pod confirmation of the epoch actually in effect.
 
-- Define a **`policy_epoch`** as a monotonically increasing unsigned integer per device.
-  - `policy_epoch` is:
-    - Assigned and updated by the gateway/controller.
-    - Persisted in the gateway's device table (ADR-002) and the TrackOne ledger (ADR-003, ADR-024).
-    - Persisted on the device in non-volatile storage.
-  - Devices reject any downlink policy update whose `policy_epoch` is:
-    - Less than the locally stored epoch (replay/rollback protection).
-    - Equal to the locally stored epoch but with a mismatched signature or payload.
-- Define a **Cadence Policy** structure (logical model; wire format can be CBOR/TLV/packed struct):
+### 1. Policy identity and epochs
+
+- `policy_epoch` is a monotonically increasing unsigned integer **per pod**.
+- Controllers may compute the same cadence parameters for many pods, but each pod receives its own policy object bound to its own target identity and epoch.
+- The gateway/controller persists the latest issued epoch for each pod.
+- The pod persists the latest accepted policy and active epoch in non-volatile storage.
+- Pods reject any policy update whose `policy_epoch` is less than or equal to the locally stored epoch.
+
+Rationale:
+
+- Treating epochs as per-pod avoids ambiguity when a "fleet policy" is delivered opportunistically over separate RX windows.
+- Equal-epoch replacement is not allowed; any material policy change requires a new epoch.
+
+### 2. Normative policy object
+
+The normative cadence artifact is the logical object below. Its commitment and signature bytes are the TrackOne canonical CBOR encoding of these fields, per ADR-034.
+
+- `type: "trackone/cadence_policy"`
+- `schema_version: u16`
+- `target_pod_id: bytes[8]`
+  - Canonical TrackOne pod identity.
+  - If a deployment still routes LoRa frames using a local `dev_id` alias, that alias is not the normative signed identity and MUST resolve unambiguously to the same `target_pod_id`.
 - `policy_epoch: u32`
-- `base_period_s: u32` — nominal telemetry period, in seconds.
-- `jitter_pct: u8` — bounded randomization (e.g., 0–25%) to avoid synchronization.
-- `burst_profile: enum` — one of:
-  - `Normal`: single uplink per period.
-  - `BurstOnEvent`: N quick uplinks when a local event triggers, then revert to `Normal`.
-  - `HighFrequencyWindow`: shorter period for a limited time window (see below).
-- `hf_window_s: u32` — optional duration for high-frequency profile (seconds, 0 = disabled).
-- `valid_from_unix_s: u32` — optional start time to apply policy (0 = immediate).
-- `valid_until_unix_s: u32` — optional soft expiry for policy; upon expiry, device falls back to a safe baseline period.
-- `flags: u16` — reserved bitfield for future extension (e.g., battery-aware adjustments, priority channels).
+- `base_period_s: u32`
+  - Baseline telemetry period while the policy is active.
+- `jitter_pct: u8`
+  - Bounded randomization, typically 0-25%, to avoid herd synchronization.
+- `burst_profile: enum`
+  - `Normal`
+  - `BurstOnEvent`
+  - `HighFrequencyWindow`
+- `burst_count: u8`
+  - Number of extra event-driven uplinks permitted when `burst_profile = BurstOnEvent`.
+  - `0` means "implementation default disabled".
+- `hf_period_s: u32`
+  - Temporary faster period used only when `burst_profile = HighFrequencyWindow`.
+  - `0` means unused.
+- `hf_window_s: u32`
+  - Duration, relative to activation, for which `hf_period_s` applies.
+  - `0` means unused.
+- `activate_delay_s: u32`
+  - Delay relative to verified receipt on the pod.
+  - `0` means immediate activation.
+- `policy_ttl_s: u32`
+  - Lifetime relative to activation.
+  - `0` means "until superseded by a newer epoch".
+- `flags: u16`
+  - Reserved for future bounded extensions.
 
-### Authenticated Downlink Control Messages
+Validation rules:
 
-- Each policy update is sent as a **small, authenticated control message** over LoRa:
-  - The control message payload includes at least:
-    - Device identifier (as per ADR-002).
-    - `policy_epoch`.
-    - Cadence parameters listed above.
-  - The message is authenticated using:
-    - A key derivation and AEAD scheme consistent with ADR-001 and ADR-018 (e.g., X25519 + HKDF + XChaCha20-Poly1305), or
-    - An Ed25519-signed policy object verified with a provisioned device trust anchor.
-  - The chosen concrete mechanism must:
-    - Bind the policy to a specific device or device group.
-    - Be replay-resistant, by using `policy_epoch` and an AEAD nonce/sequence approach coherent with ADR-002 and ADR-024.
-- Downlink messages are scheduled **only in Class A-style RX windows**:
-  - The device opens one or more short RX windows after each uplink.
-  - The gateway schedules policy updates in these RX windows.
-  - No continuous listening or Class C-like behavior is required; energy remains bounded.
+- `base_period_s` MUST be non-zero.
+- `jitter_pct` MUST be bounded by deployment policy; recommended maximum is 25.
+- `burst_count`, `hf_period_s`, and `hf_window_s` MUST be zero when their corresponding profile is not active.
+- `hf_period_s` MUST be non-zero and strictly less than or equal to `base_period_s` when `burst_profile = HighFrequencyWindow`.
+- Gateways and pods MUST reject policies that would violate deployment battery or airtime guardrails.
 
-### Gateway-Side Policy Computation
+### 3. Authentication, transport, and replay resistance
 
-- Gateways (and/or upstream controllers) are responsible for computing cadence policies.
-  - Inputs may include:
-    - External risk feeds (e.g., weather APIs, hazard indices).
-    - Network telemetry (packet loss, RSSI/SNR, duty cycle utilization).
-    - Device state (battery levels, internal alerts).
-    - Historical patterns from the TrackOne ledger (ADR-024).
-  - The computation strategy (e.g., heuristic vs. ML-based risk scoring) is out of scope for this ADR and can evolve independently.
-- Gateways log:
-  - The proposed policy objects.
-  - The resulting signed/AEAD-wrapped control messages.
-- Gateways write a **policy-change fact** into the TrackOne ledger (ADR-003, ADR-024, ADR-019) whenever:
-  - A new `policy_epoch` is issued for a device or group.
-  - A policy is rolled back or overridden.
+- Downlink policy messages are scheduled only in Class A-style RX windows after uplinks.
+- The authenticated policy payload is the canonical CBOR byte string of the `CadencePolicy` object above.
+- Deployments MUST provide authenticity, integrity, and replay resistance using one of these mechanisms:
+  - an Ed25519 signature over the canonical policy bytes, verified against a provisioned policy signer key; or
+  - a device-specific AEAD envelope carrying the canonical policy bytes.
+- If AEAD downlink is used:
+  - the downlink key MUST be distinct from the uplink key; refer to it as `ck_down`,
+  - reusing `ck_up` for downlink protection is forbidden,
+  - the gateway device table is extended with `ck_down` or equivalent derivation inputs,
+  - the downlink nonce/sequence space MUST be independent of uplink frame counters.
+- If signatures are used:
+  - the signature MUST cover the canonical CBOR bytes only,
+  - the policy signer is a control-plane authority, not a transport shortcut,
+  - transport-specific packed/TLV framing is allowed only as an envelope around the canonical policy bytes and optional signature.
+- Replay/rollback resistance is achieved by the combination of:
+  - target identity binding,
+  - `policy_epoch`,
+  - authenticated transport or signature verification,
+  - pod-side rejection of stale or duplicate epochs.
 
-### Device Behavior
+### 4. Gateway-side policy computation, latency, and ledger facts
 
-- On boot, the device:
-  - Loads its persisted `policy_epoch` and latest policy.
-  - If no policy is present, uses a **safe default**:
-    - E.g., `base_period_s` = configured baseline for the deployment profile.
-    - `jitter_pct` = small default (e.g., 10%).
-    - `burst_profile` = `Normal`.
-- On receiving a policy update in an RX window:
-  - Verify authenticity (signature/AEAD) and integrity.
-  - Check `policy_epoch`:
-    - If `new_epoch <= current_epoch`: discard and log locally for diagnostics.
-    - If `new_epoch > current_epoch`: accept, persist, and take effect at `valid_from_unix_s` or immediately.
-- While running:
-  - Derive actual send times from `base_period_s` + jitter.
-  - Apply `burst_profile` logic locally (e.g., temporary high-frequency sending after an internal event).
-  - Respect `valid_until_unix_s`; on expiration, revert to safe default cadence until a new policy is received.
+- Gateways or upstream controllers compute cadence policies from inputs such as:
+  - external hazard feeds,
+  - network telemetry,
+  - pod battery and health state,
+  - historical patterns in the TrackOne ledger.
+- The scoring or heuristic algorithm remains out of scope for this ADR.
+- The gateway MUST treat control-plane latency honestly:
+  - a new policy can only take effect after the pod's next uplink opens an RX window,
+  - deployments that require faster response MUST use a shorter baseline heartbeat, pod-local escalation heuristics, or a different radio mode,
+  - this ADR does not claim real-time hazard fan-out to sleeping Class A pods.
+- The gateway logs:
+  - the canonical policy object,
+  - its policy digest (`SHA-256` of canonical policy bytes),
+  - the resulting transport envelope or signature material,
+  - delivery attempts and failures.
 
-### Scope and Non-Goals
+Ledger facts are split as follows:
 
-- In scope:
-  - Uplink timing and burst profile control via authenticated downlink policies.
-  - Policy epoching, replay/rollback protection, and ledger visibility for policy changes.
-- Explicitly out of scope for this ADR:
-  - Firmware or bootloader updates (handled by ADR-026).
-  - Device key provisioning beyond references to ADR-001/018/019.
-  - Full LoRaWAN MAC/stack behavior beyond the simplified Class A-style assumption.
-  - Application-level configuration that is not directly related to uplink timing.
+- `policy_issued`
+  - emitted when a new canonical policy object is minted for a pod and queued or transmitted,
+  - records at least `target_pod_id`, `policy_epoch`, policy digest, issuer identity, and issuance time.
+- `policy_applied`
+  - emitted only after authenticated pod confirmation that the epoch is active,
+  - records at least `target_pod_id`, `policy_epoch`, policy digest, pod-confirmed active time or receipt-relative status, and gateway observation time.
+
+A gateway MUST NOT claim that a policy was applied merely because it was issued or because a downlink was attempted.
+
+### 5. Pod behavior and acknowledgement
+
+- On boot, the pod loads:
+  - the persisted active policy and epoch, if any,
+  - otherwise a safe deployment default:
+    - baseline `base_period_s`,
+    - modest jitter,
+    - `burst_profile = Normal`.
+- On receiving a downlink policy update during an RX window, the pod MUST:
+  - verify the transport/authentication mechanism,
+  - reconstruct and validate the canonical policy bytes,
+  - verify that `target_pod_id` matches the local provisioned identity,
+  - reject the message if `policy_epoch <= current_epoch`,
+  - persist the candidate policy and its digest if valid.
+- Activation is relative to receipt:
+  - if `activate_delay_s = 0`, activate immediately,
+  - otherwise schedule activation after `activate_delay_s` based on local monotonic uptime or sleep timer semantics,
+  - no trusted wall clock is required.
+- Expiry is also relative:
+  - if `policy_ttl_s = 0`, the policy remains active until superseded,
+  - otherwise the pod reverts to the safe default cadence after `policy_ttl_s` has elapsed from activation.
+- While active, the pod applies:
+  - `base_period_s + jitter` for `Normal`,
+  - `base_period_s + jitter` plus up to `burst_count` extra transmissions for local events in `BurstOnEvent`,
+  - `hf_period_s + jitter` for `hf_window_s` after activation, then `base_period_s + jitter` for the remainder of the active policy in `HighFrequencyWindow`.
+
+Authenticated confirmation is mandatory:
+
+- The pod MUST confirm the accepted policy on the next feasible authenticated uplink using `cfg_ack` or an equivalent authenticated control-status field.
+- The confirmation MUST include at least:
+  - `target_pod_id` or unambiguous local alias,
+  - `policy_epoch`,
+  - `policy_digest`,
+  - `status`.
+- Minimum statuses:
+  - `stored`
+  - `applied`
+  - `rejected`
+  - `expired`
+- The gateway writes `policy_applied` only after receiving authenticated confirmation that resolves to `status = applied`, or after a later authenticated telemetry/control uplink that explicitly reports the active epoch and matching digest.
+
+### 6. Scope and non-goals
+
+In scope:
+
+- Authenticated downlink control of telemetry cadence.
+- Per-pod policy epochs and replay/rollback protection.
+- Canonical policy bytes for signatures, digests, and ledger facts.
+- Authenticated pod confirmation of applied policy state.
+
+Out of scope:
+
+- Firmware or bootloader updates, handled by ADR-026.
+- Full LoRaWAN MAC behavior beyond the simplified Class A-style model.
+- Absolute wall-clock scheduling of future policies on pods without a trusted clock.
+- Application configuration unrelated to uplink cadence.
 
 ## Consequences
 
 ### Positive
 
-- **Adaptive efficiency**:
-  - Devices spend minimal airtime in low-risk scenarios, extending battery life and reducing network load.
-  - Gateways can temporarily increase sampling under high-risk conditions without long-term reconfiguration.
-- **Replay-safe, auditable policy changes**:
-  - `policy_epoch` prevents rollback attacks and stale policies.
-  - Every accepted policy change is attributable, timestamped, and anchored via the TrackOne ledger (ADR-003, ADR-024, ADR-019).
-- **Small, infrequent control messages**:
-  - Designed to fit within tight downlink budgets for LoRa Class A-style deployments.
+- **Auditable state transitions**:
+  - The ledger now distinguishes `policy_issued` from `policy_applied`.
+  - Verifiers can tell the difference between operator intent and pod-confirmed reality.
+- **No hidden clock dependency**:
+  - Pods activate and expire policies using receipt-relative timers rather than unsupported Unix-time assumptions.
+- **Deterministic control artifacts**:
+  - Signatures, digests, and ledger references all point at the same canonical policy bytes.
+- **Bounded operational claims**:
+  - The ADR now states the real latency limit of Class A-style policy delivery.
 - **Separation of concerns**:
-  - Cadence control is decoupled from firmware updates and more invasive maintenance flows (ADR-026 can build on this).
+  - Cadence control remains separate from OTA firmware delivery, though both may share downlink infrastructure.
 
 ### Negative
 
-- **Increased complexity in gateway and device logic**:
-  - Gateways must track policy epochs, compute cadence, and schedule downlink updates.
-  - Devices must implement policy storage, validation, and local state machines for burst profiles.
-- **Risk of misconfiguration**:
-  - Aggressive high-frequency policies could exhaust device batteries or violate duty cycle limits.
-  - Overly conservative policies may reduce situational awareness in high-risk scenarios.
-- **Dependency on reliable RX windows**:
-  - If devices miss multiple RX windows (e.g., due to RF issues), policy updates may be delayed.
-  - Gateway logic must tolerate and retry missed updates idempotently.
+- **More device and gateway state**:
+  - Pods must persist policy digest, epoch, and activation state.
+  - Gateways must track issued-vs-applied facts and confirmation status.
+- **Additional control traffic**:
+  - `cfg_ack` or equivalent status reporting consumes scarce uplink bytes.
+- **Downlink keying complexity**:
+  - AEAD-based downlinks require an explicit `ck_down` story instead of informally reusing uplink state.
+- **Latency remains bounded by uplink opportunity**:
+  - Hazard-driven policy changes are only as fast as the next uplink/RX window.
 
-## Alternatives Considered
+## Alternatives considered
 
-- **Fixed uplink intervals configured at provisioning time only**:
+- **Fixed cadence configured only at provisioning time**
   - Simpler, no control channel required.
-  - Rejected because it cannot respond to evolving risk and network conditions, leading to poor battery and spectrum utilization.
-- **Application-level adaptive logic only (no downlink control)**:
-  - Devices self-adjust cadence based solely on local sensors and heuristics.
-  - Rejected because operators cannot coordinate fleet-level behavior or respond to external risk feeds; also harder to audit.
-- **Full LoRaWAN MAC with network server–driven ADR (Adaptive Data Rate)**:
-  - Use existing LoRaWAN mechanisms for rate and power control.
-  - Partially overlaps with our needs but:
-    - Locks us into a specific stack and server implementation.
-    - Does not directly express application cadence semantics (risk/weather-based telemetry timing).
-  - We may later integrate with LoRaWAN ADR but still want an explicit, audited cadence policy concept.
-- **Out-of-band re-provisioning (USB/JTAG/local Wi-Fi)**:
+  - Rejected because it cannot respond to changing risk or network conditions.
+- **Pod-local adaptation only, with no downlink policy**
+  - Saves downlink airtime.
+  - Rejected because operators cannot coordinate fleet behavior or audit externally driven changes.
+- **Absolute Unix-time `valid_from` / `valid_until` fields**
+  - Attractive for centrally scheduled campaigns.
+  - Rejected for this ADR because many duty-cycled pods lack a trustworthy wall clock during sleep, reboot, or RTC loss.
+- **Full LoRaWAN ADR / FUOTA-style dependence**
+  - Useful in some ecosystems.
+  - Rejected here because TrackOne needs explicit cadence semantics and ledger-visible control facts independent of a specific LoRaWAN stack.
+- **Out-of-band reconfiguration only**
   - No downlink control channel.
-  - Rejected since it does not scale for distributed, remote deployments and undermines automated risk response.
+  - Rejected because it does not scale to remote, battery-powered deployments.
 
-## Testing & Migration
+## Testing and migration
 
-- **Gateway-side testing**:
-  - Unit tests for:
-    - Policy object construction and validation.
-    - Signature/AEAD wrapping and unwrapping (ADR-001, ADR-018).
-    - Epoch and replay/rollback rules.
-  - Integration tests for:
-    - Policy computation based on synthetic risk inputs.
-    - Logging and ledger emission of policy-change facts (ADR-003, ADR-024, ADR-019).
-- **Device-side testing**:
-  - Unit and integration tests for:
-    - Policy storage and recovery across reboots.
-    - Correct handling of `policy_epoch` and `valid_from`/`valid_until`.
-    - Burst profiles and jittered send schedules.
-  - Hardware-in-the-loop tests with a gateway simulator to test:
-    - Missed RX windows and retry behavior.
-    - Policy rollback attempts and replays.
-- **Migration**:
-  - Existing deployments without adaptive cadence:
-    - Default to a safe baseline policy (`policy_epoch = 0`).
-    - Gradually roll out policy support with feature flags on the gateway.
-  - Once device and gateway support is verified:
-    - Start issuing `policy_epoch = 1` policies to pilot fleets.
-    - Monitor ledger entries and telemetry cadence for anomalies.
-  - No schema-breaking changes are required for the TrackOne ledger; policy changes are represented as additional canonical facts linked to devices and time ranges.
+### Testing
+
+- Gateway-side tests:
+  - canonical CBOR stability for `CadencePolicy`,
+  - signature verification and AEAD unwrap for downlink policy envelopes,
+  - rejection of stale/duplicate epochs,
+  - correct emission of `policy_issued` vs. `policy_applied`,
+  - handling of missed RX windows and retried delivery attempts.
+- Pod-side tests:
+  - persistence across reboot,
+  - receipt-relative activation and expiry,
+  - profile-specific scheduling (`Normal`, `BurstOnEvent`, `HighFrequencyWindow`),
+  - authenticated `cfg_ack` generation with matching policy digest,
+  - rejection of wrong target identity, wrong signer, wrong digest, stale epoch, and malformed canonical bytes.
+- Hardware-in-the-loop tests:
+  - loss and delayed RX windows,
+  - battery guardrail rejection,
+  - confirmation arriving much later than issuance,
+  - fallback to safe defaults after expiry or reboot.
+
+### Migration
+
+- Existing deployments without adaptive cadence remain on safe default policy behavior with `policy_epoch = 0`.
+- Rollout sequence:
+  - provision or derive `ck_down` where AEAD downlink is used, or provision the policy signer key where signatures are used,
+  - enable `cfg_ack` or equivalent authenticated control-status uplinks,
+  - start issuing `policy_epoch = 1` to pilot pods,
+  - promote to broader fleets once `policy_issued` and `policy_applied` facts remain consistent in the ledger.
+- Draft-era fields `valid_from_unix_s` and `valid_until_unix_s` are superseded by `activate_delay_s` and `policy_ttl_s`.
+  - Immediate policies map to `activate_delay_s = 0`.
+  - Indefinite policies map to `policy_ttl_s = 0`.
+  - Absolute future scheduling on sleeping pods remains out of scope unless a later ADR introduces a trusted time model.
