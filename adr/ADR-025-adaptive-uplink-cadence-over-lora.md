@@ -106,7 +106,7 @@ Validation rules:
 - `base_period_s` MUST be non-zero.
 - `jitter_pct` MUST be bounded by deployment policy; recommended maximum is 25.
 - `burst_count`, `hf_period_s`, and `hf_window_s` MUST be zero when their corresponding profile is not active.
-- `hf_period_s` MUST be non-zero and strictly less than or equal to `base_period_s` when `burst_profile = HighFrequencyWindow`.
+- `hf_period_s` MUST be non-zero and less than `base_period_s` when `burst_profile = HighFrequencyWindow`.
 - Gateways and pods MUST reject policies that would violate deployment battery or airtime guardrails.
 
 ### 3. Authentication, transport, and replay resistance
@@ -245,7 +245,7 @@ Out of scope:
 - **Latency remains bounded by uplink opportunity**:
   - Hazard-driven policy changes are only as fast as the next uplink/RX window.
 
-## Alternatives considered
+## Alternatives Considered
 
 - **Fixed cadence configured only at provisioning time**
   - Simpler, no control channel required.
@@ -263,7 +263,7 @@ Out of scope:
   - No downlink control channel.
   - Rejected because it does not scale to remote, battery-powered deployments.
 
-## Testing and migration
+## Testing & Migration
 
 ### Testing
 
