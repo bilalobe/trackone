@@ -3,8 +3,38 @@
   "$id": "https://example.org/schemas/fact.schema.json",
   "title": "Telemetry Fact",
   "type": "object",
-  "description": "Atomic telemetry fact produced by a pod device before batching/anchoring.",
+  "description": "Atomic telemetry fact produced by a pod device before batching/anchoring. Transitional shape contains canonical fields with legacy compatibility keys.",
   "properties": {
+    "pod_id": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{16}$"
+    },
+    "fc": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "ingest_time": {
+      "type": "integer"
+    },
+    "ingest_time_rfc3339_utc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "pod_time": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "Env",
+        "Pipeline",
+        "Health",
+        "Custom"
+      ]
+    },
     "device_id": {
       "type": "string",
       "minLength": 1
@@ -27,6 +57,11 @@
     }
   },
   "required": [
+    "pod_id",
+    "fc",
+    "ingest_time",
+    "pod_time",
+    "kind",
     "device_id",
     "timestamp",
     "nonce",
