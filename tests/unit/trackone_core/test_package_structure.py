@@ -3,7 +3,7 @@
 
 These tests verify that:
 - trackone_core can be imported when the native extension is available
-- Shim modules (merkle, crypto, ledger, ots) correctly forward to _native submodules
+- Shim modules (merkle, crypto, ledger, ots, sensorthings) correctly forward to _native submodules
 - The radio shim forwards to _native directly (not a non-existent radio submodule)
 - A failed radio import does not prevent the rest of the package from loading
 """
@@ -30,7 +30,7 @@ def _make_mock_native() -> MagicMock:
     native.PyRadio = MagicMock(name="PyRadio")
 
     # Submodules registered via register() in Rust
-    for sub in ("crypto", "ledger", "merkle", "ots"):
+    for sub in ("crypto", "ledger", "merkle", "ots", "sensorthings"):
         setattr(native, sub, MagicMock(name=sub))
 
     return native
@@ -101,11 +101,11 @@ class TestPackageImport:
         assert "radio" not in tc.__all__
 
     def test_all_contains_expected_submodules(self, mock_native: MagicMock) -> None:
-        """__all__ should list the four stable shim submodules."""
+        """__all__ should list the stable shim submodules."""
         import importlib
 
         tc = importlib.import_module("trackone_core")
-        for name in ("crypto", "ledger", "merkle", "ots"):
+        for name in ("crypto", "ledger", "merkle", "ots", "sensorthings"):
             assert name in tc.__all__, f"'{name}' missing from __all__"
 
 
@@ -115,7 +115,7 @@ class TestPackageImport:
 
 
 class TestShimSubmodules:
-    """Verify that the four shim modules can be imported and forward correctly."""
+    """Verify that the shim modules can be imported and forward correctly."""
 
     def test_ots_shim_tolerates_legacy_native_surface(
         self, mock_native: MagicMock
@@ -135,7 +135,9 @@ class TestShimSubmodules:
         assert ots.verify_ots_proof is legacy_ots.verify_ots_proof
         assert not hasattr(ots, "OtsStatus")
 
-    @pytest.mark.parametrize("submod", ["crypto", "ledger", "merkle", "ots"])
+    @pytest.mark.parametrize(
+        "submod", ["crypto", "ledger", "merkle", "ots", "sensorthings"]
+    )
     def test_submodule_accessible(self, mock_native: MagicMock, submod: str) -> None:
         """Each shim submodule should be importable via trackone_core.<submod>."""
         import importlib
@@ -143,7 +145,9 @@ class TestShimSubmodules:
         m = importlib.import_module(f"trackone_core.{submod}")
         assert m is not None
 
-    @pytest.mark.parametrize("submod", ["crypto", "ledger", "merkle", "ots"])
+    @pytest.mark.parametrize(
+        "submod", ["crypto", "ledger", "merkle", "ots", "sensorthings"]
+    )
     def test_submodule_forwards_attributes(
         self, mock_native: MagicMock, submod: str
     ) -> None:
