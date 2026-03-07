@@ -21,6 +21,66 @@
       "additionalProperties": false
     }
   },
+  "definitions": {
+    "deployment_metadata": {
+      "type": "object",
+      "properties": {
+        "deployment_sensor_key": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sensor_keys": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "sensors": {
+          "type": [
+            "object",
+            "array"
+          ]
+        }
+      },
+      "required": [
+        "deployment_sensor_key"
+      ],
+      "additionalProperties": false
+    },
+    "provisioning_metadata": {
+      "type": "object",
+      "properties": {
+        "identity_pubkey": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "firmware_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32
+        },
+        "firmware_hash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "birth_cert_sig": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{128}$"
+        },
+        "provisioned_at": {
+          "type": "integer"
+        },
+        "site_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "identity_pubkey"
+      ],
+      "additionalProperties": false
+    }
+  },
   "patternProperties": {
     "^\\d{1,5}$": {
       "type": "object",
@@ -53,6 +113,27 @@
             "integer",
             "number"
           ]
+        },
+        "site_id": {
+          "type": "string"
+        },
+        "sensor_keys": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "sensors": {
+          "type": [
+            "object",
+            "array"
+          ]
+        },
+        "deployment": {
+          "$ref": "#/definitions/deployment_metadata"
+        },
+        "provisioning": {
+          "$ref": "#/definitions/provisioning_metadata"
         }
       },
       "required": [
