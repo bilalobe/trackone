@@ -390,13 +390,27 @@ def frame_to_fact(frame: dict[str, Any], payload: dict[str, Any]) -> dict[str, A
         fact dict matching fact.schema.json
     """
     hdr = frame["hdr"]
-    dev_id_str = f"pod-{hdr['dev_id']:03d}"
+    dev_id_u16 = int(hdr["dev_id"])
+    dev_id_str = f"pod-{dev_id_u16:03d}"
+    now = datetime.now(UTC)
+    ingest_time = int(now.timestamp())
+    ingest_time_rfc3339 = now.replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    pod_id = f"{dev_id_u16:016x}"
 
+    # Transitional shape:
+    # - canonical fields (`pod_id`, `fc`, `ingest_time`, `kind`) are now emitted;
+    # - legacy fields are retained until all downstream consumers are migrated.
     return {
-        "device_id": dev_id_str,
-        "timestamp": datetime.now(UTC).isoformat(),
-        "nonce": frame.get("nonce", ""),
+        "pod_id": pod_id,
+        "fc": int(hdr["fc"]),
+        "ingest_time": ingest_time,
+        "pod_time": None,
+        "kind": "Custom",
         "payload": payload,
+        "ingest_time_rfc3339_utc": ingest_time_rfc3339,
+        "device_id": dev_id_str,
+        "timestamp": ingest_time_rfc3339,
+        "nonce": frame.get("nonce", ""),
     }
 
 
