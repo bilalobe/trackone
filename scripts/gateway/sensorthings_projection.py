@@ -117,7 +117,10 @@ def load_provisioning_records(path: Path | None) -> dict[str, Any]:
 def load_facts(facts_dir: Path) -> list[dict[str, Any]]:
     facts: list[dict[str, Any]] = []
     for path in sorted(facts_dir.glob("*.json")):
-        data = json.loads(path.read_text(encoding="utf-8"))
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            continue
         if isinstance(data, dict):
             facts.append(data)
     return facts
@@ -223,12 +226,12 @@ def _project_env_payload(
         return None
 
     value = env_payload.get("value")
-    if isinstance(value, int | float):
+    if isinstance(value, (int, float)):
         scalar_value = float(value)
         stream_key = "raw"
     else:
         mean_value = env_payload.get("mean")
-        if not isinstance(mean_value, int | float):
+        if not isinstance(mean_value, (int, float)):
             return None
         scalar_value = float(mean_value)
         stream_key = "summary"
@@ -548,7 +551,7 @@ def _projection_context_from_record(record: dict[str, Any]) -> dict[str, Any] | 
             context["sensor_keys"] = clean_sensor_keys
 
     sensors = deployment.get("sensors")
-    if isinstance(sensors, list | dict):
+    if isinstance(sensors, (list, dict)):
         context["sensors"] = sensors
 
     identity_pubkey = record.get("identity_pubkey")

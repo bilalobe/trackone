@@ -102,7 +102,7 @@ def _deployment_object(
         "sensor_keys": clean_sensor_keys,
     }
     sensors = deployment_obj.get("sensors")
-    if isinstance(sensors, list | dict):
+    if isinstance(sensors, (list, dict)):
         out["sensors"] = sensors
     return out
 
