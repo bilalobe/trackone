@@ -3,7 +3,7 @@
 
 These tests verify that:
 - trackone_core can be imported when the native extension is available
-- Shim modules (merkle, crypto, ledger, ots, sensorthings) correctly forward to _native submodules
+- Shim modules (`merkle`, `crypto`, `ledger`, `ots`) correctly forward to `_native` submodules
 - The radio shim forwards to _native directly (not a non-existent radio submodule)
 - A failed radio import does not prevent the rest of the package from loading
 """
@@ -30,7 +30,7 @@ def _make_mock_native() -> MagicMock:
     native.PyRadio = MagicMock(name="PyRadio")
 
     # Submodules registered via register() in Rust
-    for sub in ("crypto", "ledger", "merkle", "ots", "sensorthings"):
+    for sub in ("crypto", "ledger", "merkle", "ots"):
         setattr(native, sub, MagicMock(name=sub))
 
     return native
@@ -105,7 +105,7 @@ class TestPackageImport:
         import importlib
 
         tc = importlib.import_module("trackone_core")
-        for name in ("crypto", "ledger", "merkle", "ots", "sensorthings"):
+        for name in ("crypto", "ledger", "merkle", "ots"):
             assert name in tc.__all__, f"'{name}' missing from __all__"
 
 
@@ -135,9 +135,7 @@ class TestShimSubmodules:
         assert ots.verify_ots_proof is legacy_ots.verify_ots_proof
         assert not hasattr(ots, "OtsStatus")
 
-    @pytest.mark.parametrize(
-        "submod", ["crypto", "ledger", "merkle", "ots", "sensorthings"]
-    )
+    @pytest.mark.parametrize("submod", ["crypto", "ledger", "merkle", "ots"])
     def test_submodule_accessible(self, mock_native: MagicMock, submod: str) -> None:
         """Each shim submodule should be importable via trackone_core.<submod>."""
         import importlib
@@ -145,9 +143,7 @@ class TestShimSubmodules:
         m = importlib.import_module(f"trackone_core.{submod}")
         assert m is not None
 
-    @pytest.mark.parametrize(
-        "submod", ["crypto", "ledger", "merkle", "ots", "sensorthings"]
-    )
+    @pytest.mark.parametrize("submod", ["crypto", "ledger", "merkle", "ots"])
     def test_submodule_forwards_attributes(
         self, mock_native: MagicMock, submod: str
     ) -> None:
