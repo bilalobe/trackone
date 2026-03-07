@@ -1,0 +1,95 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Provisioning Records Bundle",
+  "type": "object",
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "generated_at_utc": {
+      "type": "string"
+    },
+    "site_id": {
+      "type": "string"
+    },
+    "records": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "pod_id": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{16}$"
+          },
+          "firmware_version": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32
+          },
+          "firmware_hash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "identity_pubkey": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "birth_cert_sig": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{128}$"
+          },
+          "provisioned_at": {
+            "type": "integer"
+          },
+          "site_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "deployment": {
+            "type": "object",
+            "properties": {
+              "deployment_sensor_key": {
+                "type": "string",
+                "minLength": 1
+              },
+              "sensor_keys": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "sensors": {
+                "type": [
+                  "array",
+                  "object"
+                ]
+              }
+            },
+            "required": [
+              "deployment_sensor_key"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "pod_id",
+          "firmware_version",
+          "firmware_hash",
+          "identity_pubkey",
+          "birth_cert_sig",
+          "provisioned_at",
+          "deployment"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "version",
+    "records"
+  ],
+  "additionalProperties": false
+}
