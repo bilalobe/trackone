@@ -6,17 +6,11 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import sys
 from collections.abc import Iterable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, cast
-
-try:  # pragma: no cover - optional native acceleration
-    import trackone_core
-
-    _RUST_SENSORTHINGS = getattr(trackone_core, "sensorthings", None)
-except Exception:  # pragma: no cover - native extension unavailable
-    _RUST_SENSORTHINGS = None
+from typing import Any
 
 OBSERVED_PROPERTIES: dict[str, dict[str, str]] = {
     "temp_c": {
@@ -30,6 +24,23 @@ OBSERVED_PROPERTIES: dict[str, dict[str, str]] = {
         "unit": "1",
     },
 }
+
+SAMPLE_TYPE_TO_PROPERTY_KEY: dict[str, str] = {
+    "AmbientAirTemperature": "temperature_air",
+    "AmbientRelativeHumidity": "relative_humidity",
+    "BioImpedanceMagnitude": "bioimpedance_magnitude",
+}
+
+SENSOR_METADATA_SCOPES = ("deployment", "provisioning")
+SENSOR_IDENTITY_FIELDS = ("sensor_key", "sensor_id", "identity_pubkey", "device_id")
+
+
+class ProjectionError(ValueError):
+    """Raised when a SensorThings projection cannot be derived safely."""
+
+
+class SensorIdentityResolutionError(ProjectionError):
+    """Raised when a SensorThings Sensor identity cannot be resolved."""
 
 
 def _entity_id(kind: str, *components: str) -> str:
@@ -65,22 +76,21 @@ def resolve_sensor_key(
     observed_property_key: str,
     *,
     device_meta: dict[str, Any] | None,
+    sensor_channel: int | None = None,
 ) -> str:
     if isinstance(device_meta, dict):
-        sensor_keys = device_meta.get("sensor_keys")
-        if isinstance(sensor_keys, dict):
-            candidate = sensor_keys.get(observed_property_key)
-            if isinstance(candidate, str) and candidate.strip():
-                return candidate
-        sensors = device_meta.get("sensors")
-        if isinstance(sensors, dict):
-            for sensor_key, sensor_meta in sensors.items():
-                if not isinstance(sensor_meta, dict):
-                    continue
-                observed = sensor_meta.get("observed_property_keys")
-                if isinstance(observed, list) and observed_property_key in observed:
-                    return str(sensor_key)
-    return f"{device_id}:{observed_property_key}"
+        for metadata_scope in _sensor_metadata_scopes(device_meta):
+            resolved = _resolve_sensor_key_from_metadata(
+                metadata_scope,
+                observed_property_key,
+                sensor_channel=sensor_channel,
+            )
+            if resolved is not None:
+                return resolved
+    raise SensorIdentityResolutionError(
+        "missing provisioning/deployment-backed sensor identity for "
+        f"{device_id} observed_property={observed_property_key}"
+    )
 
 
 def project_fact(
@@ -89,11 +99,23 @@ def project_fact(
     site_id: str,
     device_meta: dict[str, Any] | None,
 ) -> list[dict[str, Any]]:
-    device_id = str(fact["device_id"])
-    timestamp = str(fact["timestamp"])
-    payload = fact.get("payload")
-    if not isinstance(payload, dict):
+    device_id = _device_id_from_fact(fact)
+    result_time = _result_time_from_fact(fact)
+    payload = _payload_from_fact(fact)
+    if payload is None:
         return []
+
+    kind = str(fact.get("kind", ""))
+    if kind == "Env":
+        env_projection = _project_env_payload(
+            payload,
+            device_id=device_id,
+            site_id=site_id,
+            device_meta=device_meta,
+            result_time=result_time,
+        )
+        if env_projection is not None:
+            return [env_projection]
 
     observations: list[dict[str, Any]] = []
     for payload_key, mapping in OBSERVED_PROPERTIES.items():
@@ -102,35 +124,23 @@ def project_fact(
 
         observed_property_key = mapping["key"]
         sensor_key = resolve_sensor_key(
-            device_id, observed_property_key, device_meta=device_meta
+            device_id,
+            observed_property_key,
+            device_meta=device_meta,
         )
         scalar_value = float(payload[payload_key])
 
-        rust_projection = _project_via_rust(
+        projection = _project_via_python(
             device_id=device_id,
             site_id=site_id,
             sensor_key=sensor_key,
             observed_property_key=observed_property_key,
             stream_key="raw",
-            phenomenon_time_start=timestamp,
-            phenomenon_time_end=timestamp,
-            result_time=timestamp,
+            phenomenon_time_start=result_time,
+            phenomenon_time_end=result_time,
+            result_time=result_time,
             scalar_value=scalar_value,
         )
-        if rust_projection is not None:
-            projection = rust_projection
-        else:
-            projection = _project_via_python(
-                device_id=device_id,
-                site_id=site_id,
-                sensor_key=sensor_key,
-                observed_property_key=observed_property_key,
-                stream_key="raw",
-                phenomenon_time_start=timestamp,
-                phenomenon_time_end=timestamp,
-                result_time=timestamp,
-                scalar_value=scalar_value,
-            )
 
         projection["observed_property"] = {
             "id": _entity_id("observed-property", observed_property_key),
@@ -145,39 +155,75 @@ def project_fact(
     return observations
 
 
-def _project_via_rust(
+def _project_env_payload(
+    env_payload: dict[str, Any],
     *,
     device_id: str,
     site_id: str,
-    sensor_key: str,
-    observed_property_key: str,
-    stream_key: str,
-    phenomenon_time_start: str,
-    phenomenon_time_end: str,
+    device_meta: dict[str, Any] | None,
     result_time: str,
-    scalar_value: float,
 ) -> dict[str, Any] | None:
-    if _RUST_SENSORTHINGS is None:
+    sample_type = env_payload.get("sample_type")
+    if not isinstance(sample_type, str):
         return None
-    try:
-        raw = _RUST_SENSORTHINGS.project_env_observation_json(
-            device_id,
-            site_id,
-            sensor_key,
-            observed_property_key,
-            stream_key,
-            phenomenon_time_start,
-            phenomenon_time_end,
-            result_time,
-            scalar_result=scalar_value,
-        )
-        if isinstance(raw, str):
-            parsed: object = json.loads(raw)
-            if isinstance(parsed, dict):
-                return cast(dict[str, Any], parsed)
-    except Exception:
+    observed_property_key = SAMPLE_TYPE_TO_PROPERTY_KEY.get(sample_type)
+    if observed_property_key is None:
         return None
-    return None
+
+    value = env_payload.get("value")
+    if isinstance(value, int | float):
+        scalar_value = float(value)
+        stream_key = "raw"
+    else:
+        mean_value = env_payload.get("mean")
+        if not isinstance(mean_value, int | float):
+            return None
+        scalar_value = float(mean_value)
+        stream_key = "summary"
+
+    sensor_key = resolve_sensor_key(
+        device_id,
+        observed_property_key,
+        device_meta=device_meta,
+        sensor_channel=_sensor_channel_from_payload(env_payload),
+    )
+    phenomenon_start = _normalize_time(
+        env_payload.get("phenomenon_time_start"), fallback=result_time
+    )
+    phenomenon_end = _normalize_time(
+        env_payload.get("phenomenon_time_end"), fallback=phenomenon_start
+    )
+
+    projection = _project_via_python(
+        device_id=device_id,
+        site_id=site_id,
+        sensor_key=sensor_key,
+        observed_property_key=observed_property_key,
+        stream_key=stream_key,
+        phenomenon_time_start=phenomenon_start,
+        phenomenon_time_end=phenomenon_end,
+        result_time=result_time,
+        scalar_value=scalar_value,
+    )
+
+    observed_property_meta = next(
+        (
+            val
+            for val in OBSERVED_PROPERTIES.values()
+            if val["key"] == observed_property_key
+        ),
+        {"key": observed_property_key, "label": observed_property_key, "unit": "1"},
+    )
+    projection["observed_property"] = {
+        "id": _entity_id("observed-property", observed_property_key),
+        "key": observed_property_key,
+        "label": observed_property_meta["label"],
+        "unit_of_measurement": {
+            "symbol": observed_property_meta["unit"],
+            "name": observed_property_meta["label"],
+        },
+    }
+    return projection
 
 
 def _project_via_python(
@@ -238,6 +284,193 @@ def _project_via_python(
     }
 
 
+def _payload_from_fact(fact: dict[str, Any]) -> dict[str, Any] | None:
+    payload = fact.get("payload")
+    if isinstance(payload, dict):
+        if "Custom" in payload and isinstance(payload["Custom"], dict):
+            return payload["Custom"]
+        if "Env" in payload and isinstance(payload["Env"], dict):
+            return payload["Env"]
+        return payload
+    return None
+
+
+def _sensor_metadata_scopes(device_meta: dict[str, Any]) -> list[dict[str, Any]]:
+    scopes = [device_meta]
+    for key in SENSOR_METADATA_SCOPES:
+        nested = device_meta.get(key)
+        if isinstance(nested, dict):
+            scopes.append(nested)
+    return scopes
+
+
+def _resolve_sensor_key_from_metadata(
+    metadata: dict[str, Any],
+    observed_property_key: str,
+    *,
+    sensor_channel: int | None,
+) -> str | None:
+    sensor_keys = metadata.get("sensor_keys")
+    if isinstance(sensor_keys, dict):
+        candidate = sensor_keys.get(observed_property_key)
+        if isinstance(candidate, str) and candidate.strip():
+            return candidate.strip()
+
+    for sensor_key, sensor_meta in _iter_sensor_records(metadata.get("sensors")):
+        if _sensor_record_matches(
+            sensor_meta,
+            sensor_key=sensor_key,
+            observed_property_key=observed_property_key,
+            sensor_channel=sensor_channel,
+        ):
+            return sensor_key
+
+    for field_name in ("sensor_key", "sensor_id"):
+        candidate = metadata.get(field_name)
+        if isinstance(candidate, str) and candidate.strip():
+            return candidate.strip()
+
+    identity = _sensor_identity_from_metadata(metadata)
+    if identity is None:
+        return None
+    return _derived_provisioned_sensor_key(
+        identity,
+        observed_property_key,
+        sensor_channel=sensor_channel,
+    )
+
+
+def _iter_sensor_records(sensors: Any) -> Iterable[tuple[str, dict[str, Any]]]:
+    if isinstance(sensors, dict):
+        for sensor_key, sensor_meta in sensors.items():
+            if (
+                isinstance(sensor_key, str)
+                and sensor_key.strip()
+                and isinstance(sensor_meta, dict)
+            ):
+                yield sensor_key.strip(), sensor_meta
+        return
+
+    if isinstance(sensors, list):
+        for sensor_meta in sensors:
+            if not isinstance(sensor_meta, dict):
+                continue
+            sensor_key = sensor_meta.get("sensor_key") or sensor_meta.get("sensor_id")
+            if isinstance(sensor_key, str) and sensor_key.strip():
+                yield sensor_key.strip(), sensor_meta
+
+
+def _sensor_record_matches(
+    sensor_meta: dict[str, Any],
+    *,
+    sensor_key: str,
+    observed_property_key: str,
+    sensor_channel: int | None,
+) -> bool:
+    direct_property = sensor_meta.get("observed_property_key")
+    if direct_property == observed_property_key:
+        return True
+
+    observed = sensor_meta.get("observed_property_keys")
+    if isinstance(observed, list) and observed_property_key in observed:
+        return True
+
+    if sensor_channel is not None:
+        for field_name in ("sensor_channel", "channel"):
+            channel_value = sensor_meta.get(field_name)
+            if isinstance(channel_value, int) and channel_value == sensor_channel:
+                return True
+
+    return bool(sensor_meta.get("default")) and bool(sensor_key)
+
+
+def _sensor_identity_from_metadata(metadata: dict[str, Any]) -> str | None:
+    for field_name in SENSOR_IDENTITY_FIELDS:
+        candidate = metadata.get(field_name)
+        if isinstance(candidate, str) and candidate.strip():
+            return candidate.strip()
+    return None
+
+
+def _derived_provisioned_sensor_key(
+    identity: str,
+    observed_property_key: str,
+    *,
+    sensor_channel: int | None,
+) -> str:
+    fingerprint = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:16]
+    suffix = (
+        f"ch{sensor_channel}"
+        if isinstance(sensor_channel, int)
+        else observed_property_key.replace("_", "-")
+    )
+    return f"prov-{fingerprint}-{suffix}"
+
+
+def _device_id_from_fact(fact: dict[str, Any]) -> str:
+    legacy_device_id = fact.get("device_id")
+    if isinstance(legacy_device_id, str) and legacy_device_id:
+        return legacy_device_id
+
+    pod_id = fact.get("pod_id")
+    if isinstance(pod_id, str):
+        try:
+            pod_value = int(pod_id, 16)
+            return f"pod-{pod_value & 0xFFFF:03d}"
+        except ValueError:
+            pass
+    return "pod-000"
+
+
+def _result_time_from_fact(fact: dict[str, Any]) -> str:
+    for key in ("ingest_time_rfc3339_utc", "timestamp"):
+        val = fact.get(key)
+        if isinstance(val, str) and val:
+            return val
+    ingest_time = fact.get("ingest_time")
+    if isinstance(ingest_time, int):
+        return (
+            datetime.fromtimestamp(ingest_time, tz=UTC)
+            .isoformat()
+            .replace("+00:00", "Z")
+        )
+    return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _normalize_time(value: Any, *, fallback: str) -> str:
+    if isinstance(value, str) and value:
+        return value
+    if isinstance(value, int):
+        return datetime.fromtimestamp(value, tz=UTC).isoformat().replace("+00:00", "Z")
+    return fallback
+
+
+def _sensor_channel_from_payload(payload: dict[str, Any]) -> int | None:
+    value = payload.get("sensor_channel")
+    return value if isinstance(value, int) else None
+
+
+def _device_meta_from_table(
+    fact: dict[str, Any], device_table: dict[str, Any]
+) -> dict[str, Any] | None:
+    device_id = _device_id_from_fact(fact)
+    candidates: list[str] = [device_id]
+
+    device_num = _device_num_from_id(device_id)
+    if device_num is not None:
+        candidates.insert(0, str(device_num))
+
+    pod_id = fact.get("pod_id")
+    if isinstance(pod_id, str) and pod_id:
+        candidates.append(pod_id)
+
+    for candidate in candidates:
+        device_meta = device_table.get(candidate)
+        if isinstance(device_meta, dict):
+            return device_meta
+    return None
+
+
 def build_bundle(
     facts: Iterable[dict[str, Any]],
     *,
@@ -252,16 +485,10 @@ def build_bundle(
     device_table = device_table or {}
 
     for fact in facts:
-        device_id = str(fact.get("device_id", ""))
-        device_num = _device_num_from_id(device_id)
-        device_meta = (
-            device_table.get(str(device_num)) if device_num is not None else None
-        )
-
         for projection in project_fact(
             fact,
             site_id=site_id,
-            device_meta=device_meta if isinstance(device_meta, dict) else None,
+            device_meta=_device_meta_from_table(fact, device_table),
         ):
             thing = projection["thing"]
             datastream = projection["datastream"]
@@ -329,12 +556,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    write_bundle(
-        facts_dir=args.facts,
-        device_table_path=args.device_table,
-        site_id=args.site,
-        out_path=args.out,
-    )
+    try:
+        write_bundle(
+            facts_dir=args.facts,
+            device_table_path=args.device_table,
+            site_id=args.site,
+            out_path=args.out,
+        )
+    except ProjectionError as exc:
+        print(f"[ERROR] {exc}", file=sys.stderr)
+        return 2
     return 0
 
 
