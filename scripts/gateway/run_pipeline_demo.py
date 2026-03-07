@@ -80,7 +80,7 @@ def clean_outputs(out_dir: Path, frames_file: Path, *, keep_existing: bool) -> N
     for path in (frames_file, out_dir / "frames.ndjson"):
         if Path(path).is_file():
             Path(path).unlink()
-    for subdir in ("facts", "blocks", "day"):
+    for subdir in ("facts", "blocks", "day", "sensorthings"):
         target = out_dir / subdir
         if target.exists():
             shutil.rmtree(target)
@@ -109,6 +109,7 @@ def artifact_manifest(
     tsa_artifacts: dict[str, Path] | None = None,
     peer_attest: Path | None = None,
     verifier_summary: dict[str, Any] | None = None,
+    sensorthings_projection: Path | None = None,
 ) -> Path:
     artifacts = {
         "day_cbor": rel(day_artifact),
@@ -121,6 +122,8 @@ def artifact_manifest(
         artifacts.update({name: rel(path) for name, path in tsa_artifacts.items()})
     if peer_attest:
         artifacts["peer_attest"] = rel(peer_attest)
+    if sensorthings_projection:
+        artifacts["sensorthings_projection"] = rel(sensorthings_projection)
 
     manifest = {
         "date": date,
@@ -402,13 +405,15 @@ def main() -> None:
     device_table = out_dir / "device_table.json"
     day_dir = out_dir / "day"
     day_cbor = day_dir / f"{args.date}.cbor"
+    sensorthings_dir = out_dir / "sensorthings"
+    sensorthings_projection = sensorthings_dir / f"{args.date}.observations.json"
     tsa_out_dir = resolve_repo_path(args.tsa_out) or day_dir
     peer_dir = resolve_repo_path(args.peer_dir) or (day_dir / "peers")
     tsa_artifacts: dict[str, Path] | None = None
     peer_attest_path: Path | None = None
 
     clean_outputs(out_dir, frames_file, keep_existing=args.keep_existing)
-    ensure_dirs(out_dir, facts_dir, day_dir)
+    ensure_dirs(out_dir, facts_dir, day_dir, sensorthings_dir)
 
     scripts_dir = REPO_ROOT / "scripts"
     gateway_dir = scripts_dir / "gateway"
@@ -458,6 +463,23 @@ def main() -> None:
             str(device_table),
             "--window",
             str(args.frame_window),
+        ],
+        cwd=REPO_ROOT,
+    )
+
+    run_cmd(
+        "Projecting SensorThings view",
+        [
+            sys.executable,
+            str(gateway_dir / "sensorthings_projection.py"),
+            "--facts",
+            str(facts_dir),
+            "--site",
+            args.site,
+            "--device-table",
+            str(device_table),
+            "--out",
+            str(sensorthings_projection),
         ],
         cwd=REPO_ROOT,
     )
@@ -664,6 +686,7 @@ def main() -> None:
         tsa_artifacts=tsa_artifacts,
         peer_attest=peer_attest_path,
         verifier_summary=verifier_summary,
+        sensorthings_projection=sensorthings_projection,
     )
 
     if overall == "success":
