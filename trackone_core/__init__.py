@@ -17,6 +17,7 @@ from . import crypto as crypto  # noqa: F401
 from . import ledger as ledger  # noqa: F401
 from . import merkle as merkle  # noqa: F401
 from . import ots as ots  # noqa: F401
+from . import sensorthings as sensorthings  # noqa: F401
 
 try:
     from . import radio as radio  # noqa: F401
@@ -49,4 +50,5 @@ __all__ = [
     "ledger",
     "merkle",
     "ots",
+    "sensorthings",
 ]
