@@ -12,6 +12,15 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+jsonschema: Any | None
+try:
+    import jsonschema
+
+    JSONSCHEMA_AVAILABLE = True
+except ImportError:
+    jsonschema = None
+    JSONSCHEMA_AVAILABLE = False
+
 OBSERVED_PROPERTIES: dict[str, dict[str, str]] = {
     "temp_c": {
         "key": "temperature_air",
@@ -43,6 +52,42 @@ class SensorIdentityResolutionError(ProjectionError):
     """Raised when a SensorThings Sensor identity cannot be resolved."""
 
 
+def _schema_path(name: str) -> Path:
+    return (
+        Path(__file__).parent.parent.parent
+        / "toolset"
+        / "unified"
+        / "schemas"
+        / f"{name}.schema.json"
+    )
+
+
+def _load_schema(name: str) -> dict[str, Any] | None:
+    path = _schema_path(name)
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _validate_against_schema(payload: dict[str, Any], schema_name: str) -> None:
+    if not JSONSCHEMA_AVAILABLE or jsonschema is None:
+        return
+    schema = _load_schema(schema_name)
+    if schema is None:
+        return
+    try:
+        assert jsonschema is not None  # nosec B101 - type narrowing
+        jsonschema.validate(instance=payload, schema=schema)
+    except (jsonschema.ValidationError, jsonschema.SchemaError) as exc:
+        raise ProjectionError(
+            f"{schema_name}.schema.json validation failed: {exc}"
+        ) from exc
+
+
 def _entity_id(kind: str, *components: str) -> str:
     digest = hashlib.sha256()
     digest.update(kind.encode("utf-8"))
@@ -52,14 +97,21 @@ def _entity_id(kind: str, *components: str) -> str:
     return f"trackone:{kind}:{digest.hexdigest()}"
 
 
-def load_device_table(path: Path | None) -> dict[str, Any]:
-    if path is None or not path.exists():
-        return {}
+def load_provisioning_records(path: Path | None) -> dict[str, Any]:
+    if path is None:
+        raise ProjectionError("--provisioning-records is required")
+    if not path.exists():
+        raise ProjectionError(f"provisioning records file not found: {path}")
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
-        return {}
-    return data if isinstance(data, dict) else {}
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise ProjectionError(
+            f"unable to read provisioning records file: {path}"
+        ) from exc
+    if not isinstance(data, dict):
+        raise ProjectionError("provisioning records must be a JSON object")
+    _validate_against_schema(data, "provisioning_records")
+    return data
 
 
 def load_facts(facts_dir: Path) -> list[dict[str, Any]]:
@@ -310,6 +362,10 @@ def _resolve_sensor_key_from_metadata(
     *,
     sensor_channel: int | None,
 ) -> str | None:
+    deployment_sensor_key = metadata.get("deployment_sensor_key")
+    if isinstance(deployment_sensor_key, str) and deployment_sensor_key.strip():
+        return deployment_sensor_key.strip()
+
     sensor_keys = metadata.get("sensor_keys")
     if isinstance(sensor_keys, dict):
         candidate = sensor_keys.get(observed_property_key)
@@ -385,7 +441,7 @@ def _sensor_record_matches(
 
 
 def _sensor_identity_from_metadata(metadata: dict[str, Any]) -> str | None:
-    for field_name in SENSOR_IDENTITY_FIELDS:
+    for field_name in ("provisioning_identity", *SENSOR_IDENTITY_FIELDS):
         candidate = metadata.get(field_name)
         if isinstance(candidate, str) and candidate.strip():
             return candidate.strip()
@@ -471,24 +527,81 @@ def _device_meta_from_table(
     return None
 
 
+def _projection_context_from_record(record: dict[str, Any]) -> dict[str, Any] | None:
+    deployment = record.get("deployment")
+    if not isinstance(deployment, dict):
+        return None
+
+    context: dict[str, Any] = {}
+    deployment_sensor_key = deployment.get("deployment_sensor_key")
+    if isinstance(deployment_sensor_key, str) and deployment_sensor_key.strip():
+        context["deployment_sensor_key"] = deployment_sensor_key.strip()
+
+    sensor_keys = deployment.get("sensor_keys")
+    if isinstance(sensor_keys, dict):
+        clean_sensor_keys = {
+            str(k): str(v).strip()
+            for k, v in sensor_keys.items()
+            if isinstance(k, str) and isinstance(v, str) and v.strip()
+        }
+        if clean_sensor_keys:
+            context["sensor_keys"] = clean_sensor_keys
+
+    sensors = deployment.get("sensors")
+    if isinstance(sensors, list | dict):
+        context["sensors"] = sensors
+
+    identity_pubkey = record.get("identity_pubkey")
+    if isinstance(identity_pubkey, str) and identity_pubkey.strip():
+        context["provisioning_identity"] = identity_pubkey.strip()
+
+    return context if context else None
+
+
+def _index_provisioning_records(bundle: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    indexed: dict[str, dict[str, Any]] = {}
+    records = bundle.get("records")
+    if not isinstance(records, list):
+        return indexed
+
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+        pod_id = record.get("pod_id")
+        if not isinstance(pod_id, str):
+            continue
+        context = _projection_context_from_record(record)
+        if context is None:
+            continue
+        indexed[pod_id] = context
+        try:
+            value = int(pod_id, 16)
+            indexed[str(value & 0xFFFF)] = context
+            indexed[f"pod-{value & 0xFFFF:03d}"] = context
+        except ValueError:
+            continue
+    return indexed
+
+
 def build_bundle(
     facts: Iterable[dict[str, Any]],
     *,
     site_id: str,
-    device_table: dict[str, Any] | None = None,
+    provisioning_records: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     things: dict[str, dict[str, Any]] = {}
     datastreams: dict[str, dict[str, Any]] = {}
     observed_properties: dict[str, dict[str, Any]] = {}
     observations: list[dict[str, Any]] = []
 
-    device_table = device_table or {}
+    provisioning_index = _index_provisioning_records(provisioning_records or {})
 
     for fact in facts:
+        provisioning_context = _device_meta_from_table(fact, provisioning_index)
         for projection in project_fact(
             fact,
             site_id=site_id,
-            device_meta=_device_meta_from_table(fact, device_table),
+            device_meta=provisioning_context,
         ):
             thing = projection["thing"]
             datastream = projection["datastream"]
@@ -517,14 +630,14 @@ def build_bundle(
 def write_bundle(
     *,
     facts_dir: Path,
-    device_table_path: Path | None,
+    provisioning_records_path: Path | None,
     site_id: str,
     out_path: Path,
 ) -> Path:
     bundle = build_bundle(
         load_facts(facts_dir),
         site_id=site_id,
-        device_table=load_device_table(device_table_path),
+        provisioning_records=load_provisioning_records(provisioning_records_path),
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(
@@ -549,7 +662,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--facts", type=Path, required=True)
     parser.add_argument("--site", required=True)
-    parser.add_argument("--device-table", type=Path, default=None)
+    parser.add_argument("--provisioning-records", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
     return parser.parse_args(argv)
 
@@ -559,7 +672,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         write_bundle(
             facts_dir=args.facts,
-            device_table_path=args.device_table,
+            provisioning_records_path=args.provisioning_records,
             site_id=args.site,
             out_path=args.out,
         )
