@@ -80,7 +80,7 @@ def clean_outputs(out_dir: Path, frames_file: Path, *, keep_existing: bool) -> N
     for path in (frames_file, out_dir / "frames.ndjson"):
         if Path(path).is_file():
             Path(path).unlink()
-    for subdir in ("facts", "blocks", "day", "sensorthings"):
+    for subdir in ("facts", "blocks", "day", "sensorthings", "provisioning"):
         target = out_dir / subdir
         if target.exists():
             shutil.rmtree(target)
@@ -110,6 +110,7 @@ def artifact_manifest(
     peer_attest: Path | None = None,
     verifier_summary: dict[str, Any] | None = None,
     sensorthings_projection: Path | None = None,
+    provisioning_records: Path | None = None,
 ) -> Path:
     artifacts = {
         "day_cbor": rel(day_artifact),
@@ -124,6 +125,8 @@ def artifact_manifest(
         artifacts["peer_attest"] = rel(peer_attest)
     if sensorthings_projection:
         artifacts["sensorthings_projection"] = rel(sensorthings_projection)
+    if provisioning_records:
+        artifacts["provisioning_records"] = rel(provisioning_records)
 
     manifest = {
         "date": date,
@@ -407,13 +410,15 @@ def main() -> None:
     day_cbor = day_dir / f"{args.date}.cbor"
     sensorthings_dir = out_dir / "sensorthings"
     sensorthings_projection = sensorthings_dir / f"{args.date}.observations.json"
+    provisioning_dir = out_dir / "provisioning"
+    provisioning_records = provisioning_dir / "records.json"
     tsa_out_dir = resolve_repo_path(args.tsa_out) or day_dir
     peer_dir = resolve_repo_path(args.peer_dir) or (day_dir / "peers")
     tsa_artifacts: dict[str, Path] | None = None
     peer_attest_path: Path | None = None
 
     clean_outputs(out_dir, frames_file, keep_existing=args.keep_existing)
-    ensure_dirs(out_dir, facts_dir, day_dir, sensorthings_dir)
+    ensure_dirs(out_dir, facts_dir, day_dir, sensorthings_dir, provisioning_dir)
 
     scripts_dir = REPO_ROOT / "scripts"
     gateway_dir = scripts_dir / "gateway"
@@ -468,6 +473,21 @@ def main() -> None:
     )
 
     run_cmd(
+        "Materializing canonical provisioning records",
+        [
+            sys.executable,
+            str(gateway_dir / "provisioning_records.py"),
+            "--device-table",
+            str(device_table),
+            "--site",
+            args.site,
+            "--out",
+            str(provisioning_records),
+        ],
+        cwd=REPO_ROOT,
+    )
+
+    run_cmd(
         "Projecting SensorThings view",
         [
             sys.executable,
@@ -476,8 +496,8 @@ def main() -> None:
             str(facts_dir),
             "--site",
             args.site,
-            "--device-table",
-            str(device_table),
+            "--provisioning-records",
+            str(provisioning_records),
             "--out",
             str(sensorthings_projection),
         ],
@@ -653,6 +673,7 @@ def main() -> None:
         day_cbor,
         day_cbor.with_suffix(".json"),
         day_cbor.with_suffix(".cbor.sha256"),
+        provisioning_records,
     ]
     if channels["ots"]["status"] in {STATUS_VERIFIED, STATUS_PENDING}:
         expected_artifacts.append(Path(f"{day_cbor}.ots"))
@@ -687,6 +708,7 @@ def main() -> None:
         peer_attest=peer_attest_path,
         verifier_summary=verifier_summary,
         sensorthings_projection=sensorthings_projection,
+        provisioning_records=provisioning_records,
     )
 
     if overall == "success":
