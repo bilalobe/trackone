@@ -674,6 +674,7 @@ def main() -> None:
         day_cbor.with_suffix(".json"),
         day_cbor.with_suffix(".cbor.sha256"),
         provisioning_records,
+        sensorthings_projection,
     ]
     if channels["ots"]["status"] in {STATUS_VERIFIED, STATUS_PENDING}:
         expected_artifacts.append(Path(f"{day_cbor}.ots"))
