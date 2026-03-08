@@ -14,10 +14,6 @@
 #   auth:
 #     existingSecret: shared-postgres-auth
 
-postgres:
-  auth:
-    existingSecret: shared-postgres-auth
-
 imagePullSecrets:
   # GHCR package images are often private; create this secret in the namespace:
   #   kubectl -n trackone create secret docker-registry ghcr-creds \
