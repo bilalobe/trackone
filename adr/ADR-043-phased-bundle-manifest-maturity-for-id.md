@@ -2,7 +2,7 @@
 
 **Status**: Accepted
 **Date**: 2026-03-01
-**Updated**: 2026-03-01
+**Updated**: 2026-03-08
 
 ## Related ADRs
 
@@ -19,18 +19,18 @@ ordering, bundle semantics, and a machine-readable verification manifest
 concept.
 
 That structure is correct in direction, but the current TrackOne
-implementation snapshot (`0.1.0-alpha.6`) does not yet provide first-class,
+implementation snapshot (`0.1.0-alpha.7`) does not yet provide first-class,
 end-to-end bundle packaging with a required emitted verification manifest for
 all disclosure classes.
 
-At `alpha.6`, TrackOne does support:
+At `alpha.7`, TrackOne does support:
 
 - authoritative CBOR fact and day artifacts;
 - OTS proof plus sidecar binding to the day artifact digest;
 - verifier recomputation from disclosed canonical artifacts; and
 - disclosure-tier language and conformance vectors in the draft.
 
-At `alpha.6`, TrackOne does not yet uniformly guarantee:
+At `alpha.7`, TrackOne does not yet uniformly guarantee:
 
 - automatic emission of a standalone verification manifest for every bundle;
 - stable packaging of `disclosure_class`, `commitment_profile_id`,
@@ -62,7 +62,7 @@ This structure is kept now because it expresses the correct long-term
 interoperability shape and avoids a weaker `-00` that would need avoidable
 restructuring in `-01`.
 
-### 2) Downtune manifest requirements at `alpha.6`
+### 2) Downtune manifest requirements at `alpha.7`
 
 Until first-class manifest tooling is implemented, the following posture
 applies:
@@ -87,7 +87,7 @@ One exception remains:
 
 TrackOne adopts the following phases for bundle-manifest maturity.
 
-#### Phase A: `0.1.0-alpha.6` (current)
+#### Phase A: `0.1.0-alpha.7` (current)
 
 - Keep the I-D structure.
 - Keep standalone manifests optional-but-recommended in the I-D.
@@ -133,7 +133,7 @@ The I-D is allowed to describe the intended verification-bundle model, but it
 MUST distinguish between:
 
 - the structure the project is converging on; and
-- what the current shipped tooling guarantees at `alpha.6`.
+- what the current shipped tooling guarantees at `alpha.7`.
 
 Where there is a mismatch, the document MUST choose wording that is both
 truthful and forward-compatible, rather than weakening the architecture or
@@ -145,7 +145,7 @@ overstating implementation status.
 
 - Preserves the stronger `-00` document architecture without misrepresenting
   current tooling.
-- Aligns the I-D with the real `alpha.6` implementation boundary.
+- Aligns the I-D with the real `alpha.7` implementation boundary.
 - Creates a clean migration path from optional manifests to required
   manifests.
 - Reduces reviewer criticism that the draft overclaims packaging maturity.
@@ -161,7 +161,7 @@ overstating implementation status.
 ## Alternatives Considered
 
 - **Make manifests unconditional MUST now**: rejected because it overstates
-  `alpha.6` support.
+  `alpha.7` support.
 - **Remove bundle-manifest structure from the `-00` draft**: rejected because
   it weakens the draft and delays the correct interoperability shape.
 - **Keep the requirements vague**: rejected because vague wording recreates
