@@ -9,6 +9,7 @@ Tests the verify_cli module for:
 
 from __future__ import annotations
 
+import json
 import shutil
 import stat
 from pathlib import Path
@@ -410,3 +411,112 @@ class TestVerifyCliTsaPeerIntegration:
         rc = verify_cli.main(verify_args)
         # Should fail with exit code 6
         assert rc == 6
+
+
+def test_disclosure_class_b_reports_non_public_recompute(
+    tmp_path: Path,
+    merkle_batcher,
+    verify_cli,
+    write_sample_facts_fixture,
+    sample_facts,
+    write_ots_placeholder,
+    capsys,
+):
+    """Class B must skip fact-level recomputation and never claim public recompute."""
+    facts_dir = tmp_path / "facts"
+    out_dir = tmp_path / "out"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    write_sample_facts_fixture(facts_dir, sample_facts)
+    assert (
+        merkle_batcher.main(
+            [
+                "--facts",
+                str(facts_dir),
+                "--out",
+                str(out_dir),
+                "--site",
+                "test-site",
+                "--date",
+                "2025-10-07",
+            ]
+        )
+        == 0
+    )
+
+    write_ots_placeholder(out_dir, "2025-10-07")
+    capsys.readouterr()
+    rc = verify_cli.main(
+        [
+            "--root",
+            str(out_dir),
+            "--facts",
+            str(facts_dir),
+            "--disclosure-class",
+            "B",
+            "--json",
+        ]
+    )
+    assert rc == 0
+
+    parsed = json.loads(capsys.readouterr().out)
+    assert parsed["verification"]["disclosure_class"] == "B"
+    assert parsed["verification"]["publicly_recomputable"] is False
+    assert parsed["checks"]["root_match"] is None
+    assert {
+        "check": "fact_level_recompute",
+        "reason": "disclosure-class-b",
+    } in parsed["checks_skipped"]
+
+
+def test_disclosure_class_c_reports_anchor_only(
+    tmp_path: Path,
+    merkle_batcher,
+    verify_cli,
+    write_sample_facts_fixture,
+    sample_facts,
+    write_ots_placeholder,
+    capsys,
+):
+    """Class C must label anchor-only evidence and skip fact recomputation."""
+    facts_dir = tmp_path / "facts"
+    out_dir = tmp_path / "out"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    write_sample_facts_fixture(facts_dir, sample_facts)
+    assert (
+        merkle_batcher.main(
+            [
+                "--facts",
+                str(facts_dir),
+                "--out",
+                str(out_dir),
+                "--site",
+                "test-site",
+                "--date",
+                "2025-10-07",
+            ]
+        )
+        == 0
+    )
+
+    write_ots_placeholder(out_dir, "2025-10-07")
+    capsys.readouterr()
+    rc = verify_cli.main(
+        [
+            "--root",
+            str(out_dir),
+            "--facts",
+            str(facts_dir),
+            "--disclosure-class",
+            "C",
+            "--json",
+        ]
+    )
+    assert rc == 0
+
+    parsed = json.loads(capsys.readouterr().out)
+    assert parsed["verification"]["disclosure_class"] == "C"
+    assert parsed["verification"]["disclosure_label"] == "anchor-only-evidence"
+    assert parsed["verification"]["publicly_recomputable"] is False
+    assert parsed["checks"]["root_match"] is None
