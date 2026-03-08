@@ -2,7 +2,7 @@
 
 **Status**: Accepted
 **Date**: 2026-02-23
-**Updated**: 2026-03-01
+**Updated**: 2026-03-08
 
 ## Related ADRs
 
@@ -31,7 +31,7 @@ TrackOne defines three disclosure tiers:
 
 ### 2) Normative minimum for Tier A
 
-At the current `0.1.0-alpha.6` maturity level, a Tier A bundle MUST contain:
+At the current `0.1.0-alpha.7` maturity level, a Tier A bundle MUST contain:
 
 - canonical fact artifacts for the day, as defined by the active commitment profile;
 - day artifact, as defined by the active commitment profile;
