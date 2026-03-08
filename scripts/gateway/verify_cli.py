@@ -46,6 +46,17 @@ STATUS_MISSING = "missing"
 STATUS_PENDING = "pending"
 STATUS_SKIPPED = "skipped"
 OTS_VERIFY_TIMEOUT_SECS = 30.0
+DEFAULT_COMMITMENT_PROFILE_ID = "trackone-canonical-cbor-v1"
+DISCLOSURE_CLASS_LABELS: dict[str, str] = {
+    "A": "public-recompute",
+    "B": "partner-audit",
+    "C": "anchor-only-evidence",
+}
+CHECK_DAY_ARTIFACT = "day_artifact_validation"
+CHECK_FACT_RECOMPUTE = "fact_level_recompute"
+CHECK_OTS = "ots_verification"
+CHECK_TSA = "tsa_verification"
+CHECK_PEERS = "peer_signature_verification"
 
 # Optional Rust extension (`trackone_core`) for single-sourced ledger policy.
 _RUST_MERKLE: Any | None = None
@@ -547,13 +558,29 @@ def _channel(enabled: bool, status: str, reason: str = "") -> dict[str, Any]:
     return {"enabled": enabled, "status": status, "reason": reason}
 
 
+def _record_executed(summary: dict[str, Any], check: str) -> None:
+    checks = summary.setdefault("checks_executed", [])
+    if isinstance(checks, list):
+        checks.append(check)
+
+
+def _record_skipped(summary: dict[str, Any], check: str, reason: str) -> None:
+    checks = summary.setdefault("checks_skipped", [])
+    if isinstance(checks, list):
+        checks.append({"check": check, "reason": reason})
+
+
 def _emit(summary: dict[str, Any], json_mode: bool) -> None:
     if json_mode:
         print(json.dumps(summary, indent=2, sort_keys=True))
         return
+    verification = summary.get("verification", {})
+    disclosure = verification.get("disclosure_class", "A")
+    public_claim = verification.get("publicly_recomputable", False)
     print(
-        f"Policy={summary['policy']['mode']} Overall={summary['overall']} "
-        f"RootMatch={summary['checks']['root_match']}"
+        f"Policy={summary['policy']['mode']} Disclosure={disclosure} "
+        f"Overall={summary['overall']} RootMatch={summary['checks']['root_match']} "
+        f"PubliclyRecomputable={public_claim}"
     )
     for name in ("ots", "tsa", "peers"):
         item = summary["channels"][name]
@@ -638,6 +665,17 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Allow placeholder OTS proofs explicitly.",
     )
+    p.add_argument(
+        "--disclosure-class",
+        choices=["A", "B", "C"],
+        default="A",
+        help="Verification disclosure class (A=public recompute, B=partner audit, C=anchor-only).",
+    )
+    p.add_argument(
+        "--commitment-profile-id",
+        default=DEFAULT_COMMITMENT_PROFILE_ID,
+        help="Commitment profile identifier for verifier output metadata.",
+    )
 
     args = p.parse_args(argv)
     cfg = _load_cfg(args)
@@ -691,16 +729,24 @@ def main(argv: list[str] | None = None) -> int:
 
     summary: dict[str, Any] = {
         "policy": {"mode": cfg.policy.mode},
+        "verification": {
+            "disclosure_class": args.disclosure_class,
+            "disclosure_label": DISCLOSURE_CLASS_LABELS[args.disclosure_class],
+            "commitment_profile_id": args.commitment_profile_id,
+            "publicly_recomputable": False,
+        },
         "artifacts": {
             "block": str(block_path),
             "day_cbor": str(day_artifact),
             "day_ots": str(ots_path),
         },
         "checks": {
-            "root_match": False,
+            "root_match": None,
             "artifact_valid": False,
             "meta_valid": True,
         },
+        "checks_executed": [],
+        "checks_skipped": [],
         "channels": {
             "ots": _channel(
                 cfg.ots.enabled or args.require_ots, STATUS_SKIPPED, "disabled"
@@ -714,6 +760,7 @@ def main(argv: list[str] | None = None) -> int:
         },
         "overall": "failed",
     }
+    _record_executed(summary, CHECK_DAY_ARTIFACT)
 
     # Optional OTS metadata sidecar checks
     repo_root = root_dir.parent
@@ -832,39 +879,48 @@ def main(argv: list[str] | None = None) -> int:
         _emit(summary, args.json)
         return 1
 
-    # Recompute Merkle root
-    fact_files = sorted(facts_dir.glob("*.cbor"))
-    if not fact_files:
-        json_candidates = sorted(facts_dir.glob("*.json"))
-        if json_candidates:
-            print(
-                "ERROR: JSON facts found but CBOR facts are required for commitments (ADR-039)."
-            )
-            _emit(summary, args.json)
-            return 1
-    leaves: list[bytes] = []
-    for fpath in fact_files:
-        try:
-            leaves.append(fpath.read_bytes())
-        except OSError as exc:
-            print(f"ERROR: Failed to read fact artifact {fpath}: {exc}")
-            _emit(summary, args.json)
-            return 1
+    # Fact-level recomputation is only valid for disclosure class A.
+    if args.disclosure_class == "A":
+        _record_executed(summary, CHECK_FACT_RECOMPUTE)
+        fact_files = sorted(facts_dir.glob("*.cbor"))
+        if not fact_files:
+            json_candidates = sorted(facts_dir.glob("*.json"))
+            if json_candidates:
+                print(
+                    "ERROR: JSON facts found but CBOR facts are required for commitments (ADR-039)."
+                )
+                _emit(summary, args.json)
+                return 1
+        leaves: list[bytes] = []
+        for fpath in fact_files:
+            try:
+                leaves.append(fpath.read_bytes())
+            except OSError as exc:
+                print(f"ERROR: Failed to read fact artifact {fpath}: {exc}")
+                _emit(summary, args.json)
+                return 1
 
-    recomputed_root = merkle_root(leaves)
-    if recomputed_root != recorded_root:
-        print(
-            f"ERROR: Merkle root mismatch. Computed: {recomputed_root}, Recorded: {recorded_root}"
+        recomputed_root = merkle_root(leaves)
+        if recomputed_root != recorded_root:
+            print(
+                f"ERROR: Merkle root mismatch. Computed: {recomputed_root}, Recorded: {recorded_root}"
+            )
+            summary["checks"]["root_match"] = False
+            _emit(summary, args.json)
+            return 2
+        summary["checks"]["root_match"] = True
+    else:
+        _record_skipped(
+            summary,
+            CHECK_FACT_RECOMPUTE,
+            f"disclosure-class-{args.disclosure_class.lower()}",
         )
-        summary["checks"]["root_match"] = False
-        _emit(summary, args.json)
-        return 2
-    summary["checks"]["root_match"] = True
 
     # OTS channel
     check_ots = cfg.ots.enabled or args.require_ots
     require_ots = args.require_ots or (strict_mode and check_ots)
     if check_ots:
+        _record_executed(summary, CHECK_OTS)
         if not ots_path.exists():
             summary["channels"]["ots"] = _channel(
                 True, STATUS_MISSING, "ots-proof-not-found"
@@ -907,6 +963,7 @@ def main(argv: list[str] | None = None) -> int:
     check_tsa = args.verify_tsa or cfg.tsa.enabled
     tsa_strict = args.tsa_strict or (strict_mode and check_tsa)
     if check_tsa:
+        _record_executed(summary, CHECK_TSA)
         tsr_path = day_artifact.parent / f"{day}.tsr"
         if tsr_path.exists():
             if verify_tsa(tsr_path, day_artifact):
@@ -939,6 +996,7 @@ def main(argv: list[str] | None = None) -> int:
         args.peers_min if args.peers_min is not None else cfg.peers.min_signatures
     )
     if check_peers:
+        _record_executed(summary, CHECK_PEERS)
         peer_attest_path = day_artifact.parent / "peers" / f"{day}.peers.json"
         if peer_attest_path.exists():
             site_id = block_header.get("site_id", "")
@@ -972,6 +1030,11 @@ def main(argv: list[str] | None = None) -> int:
 
     summary["overall"] = compute_overall_status(
         policy_mode=cfg.policy.mode, channels=summary["channels"]
+    )
+    summary["verification"]["publicly_recomputable"] = (
+        args.disclosure_class == "A"
+        and summary["checks"]["artifact_valid"] is True
+        and summary["checks"]["root_match"] is True
     )
     _emit(summary, args.json)
     return 0 if summary["overall"] == "success" else 1
