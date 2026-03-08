@@ -12,6 +12,45 @@ jobs:
   ci:
     uses: ./.github/workflows/ci.yml
 
+  publish-helm:
+    runs-on: ubuntu-latest
+    needs: ci
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Package chart for release tag
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          helm package deploy/helm/trackone \
+            --version "${version}" \
+            --app-version "${version}" \
+            --destination dist
+
+      - name: Log in to GHCR
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          echo "${GHCR_TOKEN}" | helm registry login ghcr.io \
+            --username "${owner}" \
+            --password-stdin
+
+      - name: Push OCI chart artifact
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          helm push "dist/trackone-${version}.tgz" "oci://ghcr.io/${owner}/trackone/charts"
+
   publish-crates:
     runs-on: ubuntu-latest
     needs: ci
