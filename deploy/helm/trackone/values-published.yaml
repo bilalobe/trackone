@@ -1,7 +1,22 @@
-# Published-artifact deployment profile.
+# Published-artifact overlay.
 #
-# Use this when the TrackOne wheel/crates are already published and your images are built
-# from those published artifacts (no local crate builds inside Minikube).
+# The base chart now defaults to the published deployment model. Use this file
+# when you want an additional overlay for private GHCR pulls or to pin digests
+# without repeating the rest of the chart values.
+# Runtime config and credentials still come from the chart-managed
+# ConfigMap/Secret objects.
+#
+# Optional:
+# gateway:
+#   existingConfigMap: shared-trackone-gateway-config
+#   existingSecret: shared-trackone-gateway-env
+# postgres:
+#   auth:
+#     existingSecret: shared-postgres-auth
+
+postgres:
+  auth:
+    existingSecret: shared-postgres-auth
 
 imagePullSecrets:
   # GHCR package images are often private; create this secret in the namespace:
@@ -12,24 +27,10 @@ imagePullSecrets:
   #     --docker-email=<EMAIL>
   - name: ghcr-creds
 
-jobs:
-  enabled: false
-
-gateway:
-  image:
-    # Recommended: publish/pin a gateway OCI image that `pip install`s the TrackOne wheel.
-    # Example: ghcr.io/<org>/<repo>/gateway:<version>
-    repository: ghcr.io/bilalobe/trackone/gateway
-    tag: latest
-    # For immutability, prefer a digest pin:
-    # digest: sha256:<...>
-    pullPolicy: IfNotPresent
-
-otsCalendar:
-  image:
-    # Recommended: publish/pin the calendar OCI image.
-    repository: ghcr.io/bilalobe/trackone/ots-calendar
-    tag: latest
-    # For immutability, prefer a digest pin:
-    # digest: sha256:<...>
-    pullPolicy: IfNotPresent
+# Optional: override to digest pins instead of the release tags in values.yaml.
+# gateway:
+#   image:
+#     digest: sha256:<...>
+# otsCalendar:
+#   image:
+#     digest: sha256:<...>

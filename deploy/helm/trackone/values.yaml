@@ -11,13 +11,13 @@ imagePullSecrets: []
 otsCalendar:
   enabled: true
   image:
-    repository: ots/calendar
-    tag: 0.1.0
+    repository: ghcr.io/bilalobe/trackone/ots-calendar
+    tag: 0.1.0-alpha.7
     pullPolicy: IfNotPresent
   port: 8468
   logLevel: info
   persistence:
-    enabled: false
+    enabled: true
     size: 1Gi
   resources:
     requests:
@@ -36,13 +36,22 @@ postgres:
     tag: "16"
     pullPolicy: IfNotPresent
   auth:
+    # If set, the chart will not create postgres-auth and will instead
+    # reference this pre-existing Secret for Postgres bootstrap credentials.
+    existingSecret: ""
+    # Set to true only for explicit local/dev installs that intentionally use
+    # the stock trackone/trackone/trackone bootstrap credentials.
+    allowInsecureDefaults: false
+    # Rendered into the generated postgres-auth Secret when existingSecret is
+    # empty. Override in environment-specific values if Postgres is shared or
+    # managed externally.
     database: trackone
     username: trackone
     password: trackone
   service:
     port: 5432
   persistence:
-    enabled: false
+    enabled: true
     size: 5Gi
   resources:
     requests:
@@ -56,16 +65,24 @@ postgres:
 
 gateway:
   enabled: true
+  # If set, the chart will not create trackone-gateway-config and will instead
+  # reference this pre-existing ConfigMap for non-secret gateway config.
+  existingConfigMap: ""
+  # If set, the chart will not create trackone-gateway-env and will instead
+  # reference this pre-existing Secret for sensitive gateway config.
+  existingSecret: ""
   image:
-    repository: trackone/gateway
-    tag: local
+    repository: ghcr.io/bilalobe/trackone/gateway
+    tag: 0.1.0-alpha.7
     pullPolicy: IfNotPresent
   service:
     type: ClusterIP
     port: 8080
     nodePort: 30080
   env:
+    # Rendered into the generated trackone-gateway-config ConfigMap.
     otsCalendars: http://ots-calendar:8468
+    # Rendered into the generated trackone-gateway-env Secret.
     databaseUrl: postgresql://trackone:trackone@postgres:5432/trackone
   probes:
     readinessPath: /health
@@ -85,7 +102,7 @@ gateway:
       ephemeral-storage: 512Mi
 
 jobs:
-  enabled: true
+  enabled: false
   backoffLimit: 0
   core:
     enabled: true

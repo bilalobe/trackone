@@ -1,6 +1,14 @@
+#
+# Legacy local/Minikube override.
+# Applies on top of the published-artifact defaults in values.yaml.
+# Runtime config and credentials still come from the chart-managed
+# ConfigMap/Secret objects; this file only changes deployment behavior.
+#
 namespace:
   create: true
   name: trackone
+
+imagePullSecrets: []
 
 otsCalendar:
   image:
@@ -12,6 +20,8 @@ otsCalendar:
     size: 1Gi
 
 postgres:
+  auth:
+    allowInsecureDefaults: true
   persistence:
     enabled: true
     size: 5Gi
@@ -24,3 +34,6 @@ gateway:
   service:
     type: NodePort
     nodePort: 30080
+
+jobs:
+  enabled: true
