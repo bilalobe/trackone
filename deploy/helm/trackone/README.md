@@ -1,27 +1,40 @@
-# TrackOne Helm chart (published-artifact defaults)
+# TrackOne Helm chart (published OCI artifact workflow)
 
-This chart now defaults to the published-artifact deployment model.
+This chart now defaults to the published-artifact deployment model, and tagged
+releases publish the chart itself as an OCI artifact in GHCR.
 
-## Default workflow: published artifacts
+## Recommended workflow: install the published chart artifact
 
-The base [values.yaml](/home/beb/GolandProjects/trackone/deploy/helm/trackone/values.yaml) assumes:
+Use the published chart for normal deployments:
+
+```bash
+helm upgrade --install trackone oci://ghcr.io/bilalobe/trackone/charts/trackone \
+  --version <release-version> \
+  --namespace trackone \
+  --create-namespace \
+  --set postgres.auth.existingSecret=<your-postgres-secret>
+```
+
+For example, release tag `v0.1.0-alpha.7` publishes chart version
+`0.1.0-alpha.7`.
+
+The base [values.yaml](values.yaml)
+inside that OCI chart assumes:
 
 - `gateway` and `ots-calendar` run from registry images
 - in-cluster build jobs are disabled
 - persistent storage is enabled for Postgres and the OTS calendar
 - runtime config is generated into Kubernetes config objects instead of being embedded inline in pod specs
 
-Typical install:
+If your GHCR images are private, add the published overlay from this repo:
 
 ```bash
-helm upgrade --install trackone deploy/helm/trackone \
+helm upgrade --install trackone oci://ghcr.io/bilalobe/trackone/charts/trackone \
+  --version <release-version> \
+  --namespace trackone \
+  --create-namespace \
+  -f deploy/helm/trackone/values-published.yaml \
   --set postgres.auth.existingSecret=<your-postgres-secret>
-```
-
-If your GHCR images are private, add the published overlay:
-
-```bash
-helm upgrade --install trackone deploy/helm/trackone -f deploy/helm/trackone/values-published.yaml
 ```
 
 The chart now fails fast if you leave the stock `trackone/trackone/trackone`
@@ -33,16 +46,35 @@ non-local installs, either:
 
 ## Optional legacy local / Minikube override
 
-Use [values-local.yaml](/home/beb/GolandProjects/trackone/deploy/helm/trackone/values-local.yaml) only when you explicitly want local images and build jobs again.
+Use the local chart directory and
+[values-local.yaml](values-local.yaml)
+only when you explicitly want local images and build jobs again.
 
 Typical flow:
 
 ```bash
 scripts/minikube-build-local-images.sh
-helm upgrade --install trackone deploy/helm/trackone -f deploy/helm/trackone/values-local.yaml
+helm upgrade --install trackone deploy/helm/trackone \
+  -f deploy/helm/trackone/values-local.yaml
 ```
 
 `values-local.yaml` explicitly opts in to the stock local Postgres credentials.
+
+## Maintainer workflow: publish the chart artifact
+
+Tagged releases publish the chart to:
+
+```text
+oci://ghcr.io/bilalobe/trackone/charts/trackone
+```
+
+The release workflow packages `deploy/helm/trackone` with:
+
+- chart `version = ${GITHUB_REF_NAME#v}`
+- chart `appVersion = ${GITHUB_REF_NAME#v}`
+
+That keeps the install version aligned with the release tag instead of the
+checked-in `Chart.yaml` version.
 
 ## Generated runtime config
 
