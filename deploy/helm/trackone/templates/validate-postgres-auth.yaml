@@ -1,0 +1,5 @@
+{{- $usesGeneratedSecret := and .Values.postgres.enabled (not .Values.postgres.auth.existingSecret) -}}
+{{- $usesStockDefaults := and (eq .Values.postgres.auth.database "trackone") (eq .Values.postgres.auth.username "trackone") (eq .Values.postgres.auth.password "trackone") -}}
+{{- if and $usesGeneratedSecret $usesStockDefaults (not .Values.postgres.auth.allowInsecureDefaults) -}}
+{{- fail "postgres.auth uses insecure default credentials (trackone/trackone/trackone); set postgres.auth.existingSecret, override database/username/password, or opt in via values-local.yaml" -}}
+{{- end -}}

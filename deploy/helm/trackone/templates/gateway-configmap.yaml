@@ -1,0 +1,12 @@
+{{- if and .Values.gateway.enabled (not .Values.gateway.existingConfigMap) }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "trackone.gatewayConfigMapName" . }}
+  namespace: {{ include "trackone.namespace" . }}
+  labels:
+    app.kubernetes.io/name: trackone-gateway
+    {{ include "trackone.commonLabels" . | nindent 4 }}
+data:
+  OTS_CALENDARS: {{ .Values.gateway.env.otsCalendars | quote }}
+{{- end }}

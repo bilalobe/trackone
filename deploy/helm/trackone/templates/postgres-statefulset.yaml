@@ -29,7 +29,7 @@ spec:
               containerPort: {{ .Values.postgres.service.port }}
           envFrom:
             - secretRef:
-                name: postgres-auth
+                name: {{ include "trackone.postgresSecretName" . }}
           resources:
             {{ toYaml .Values.postgres.resources | nindent 12 }}
           volumeMounts:

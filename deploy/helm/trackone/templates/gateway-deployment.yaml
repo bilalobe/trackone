@@ -27,11 +27,15 @@ spec:
         - name: gateway
           image: {{ include "trackone.image" .Values.gateway.image }}
           imagePullPolicy: {{ .Values.gateway.image.pullPolicy }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "trackone.gatewayConfigMapName" . }}
           env:
-            - name: OTS_CALENDARS
-              value: {{ .Values.gateway.env.otsCalendars | quote }}
             - name: DATABASE_URL
-              value: {{ .Values.gateway.env.databaseUrl | quote }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "trackone.gatewaySecretName" . }}
+                  key: DATABASE_URL
           ports:
             - name: http
               containerPort: {{ .Values.gateway.service.port }}

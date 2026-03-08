@@ -1,6 +1,6 @@
 apiVersion: v2
 name: trackone
-description: TrackOne local Kubernetes deployment (gateway, OTS calendar, postgres, build jobs)
+description: TrackOne Kubernetes deployment (published-artifact defaults, optional local override)
 type: application
 version: 0.1.0
-appVersion: "0.1.0-alpha.2"
+appVersion: "0.1.0-alpha.5"
