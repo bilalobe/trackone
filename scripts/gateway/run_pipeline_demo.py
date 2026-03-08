@@ -45,6 +45,8 @@ DEFAULT_SITE = "an-001"
 DEFAULT_FRAME_COUNT = 7
 DEFAULT_FRAME_WINDOW = 64
 
+DEFAULT_COMMITMENT_PROFILE_ID = "trackone-canonical-cbor-v1"
+
 STATUS_VERIFIED = "verified"
 STATUS_FAILED = "failed"
 STATUS_MISSING = "missing"
@@ -112,7 +114,7 @@ def artifact_manifest(
     sensorthings_projection: Path | None = None,
     provisioning_records: Path | None = None,
     disclosure_class: str = "A",
-    commitment_profile_id: str = "trackone-canonical-cbor-v1",
+    commitment_profile_id: str = DEFAULT_COMMITMENT_PROFILE_ID,
 ) -> Path:
     artifacts = {
         "day_cbor": rel(day_artifact),
@@ -319,7 +321,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--commitment-profile-id",
         default=os.environ.get(
-            "PIPELINE_COMMITMENT_PROFILE_ID", "trackone-canonical-cbor-v1"
+            "PIPELINE_COMMITMENT_PROFILE_ID", DEFAULT_COMMITMENT_PROFILE_ID
         ),
         help="Commitment profile identifier passed to verify_cli and manifests.",
     )

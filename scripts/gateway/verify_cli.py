@@ -669,7 +669,12 @@ def main(argv: list[str] | None = None) -> int:
         "--disclosure-class",
         choices=["A", "B", "C"],
         default="A",
-        help="Verification disclosure class (A=public recompute, B=partner audit, C=anchor-only).",
+        help=(
+            "Verification disclosure class: "
+            "A=public recompute (uses --facts for fact-level recomputation), "
+            "B=partner audit (skips fact-level recomputation; --facts is not used), "
+            "C=anchor-only (skips fact-level recomputation; --facts is not used)."
+        ),
     )
     p.add_argument(
         "--commitment-profile-id",

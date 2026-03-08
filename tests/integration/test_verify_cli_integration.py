@@ -520,3 +520,7 @@ def test_disclosure_class_c_reports_anchor_only(
     assert parsed["verification"]["disclosure_label"] == "anchor-only-evidence"
     assert parsed["verification"]["publicly_recomputable"] is False
     assert parsed["checks"]["root_match"] is None
+    assert {
+        "check": "fact_level_recompute",
+        "reason": "disclosure-class-c",
+    } in parsed["checks_skipped"]
