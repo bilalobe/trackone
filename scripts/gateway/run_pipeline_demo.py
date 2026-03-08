@@ -111,6 +111,8 @@ def artifact_manifest(
     verifier_summary: dict[str, Any] | None = None,
     sensorthings_projection: Path | None = None,
     provisioning_records: Path | None = None,
+    disclosure_class: str = "A",
+    commitment_profile_id: str = "trackone-canonical-cbor-v1",
 ) -> Path:
     artifacts = {
         "day_cbor": rel(day_artifact),
@@ -128,7 +130,12 @@ def artifact_manifest(
     if provisioning_records:
         artifacts["provisioning_records"] = rel(provisioning_records)
 
-    manifest = {
+    verification_bundle: dict[str, Any] = {
+        "disclosure_class": disclosure_class,
+        "commitment_profile_id": commitment_profile_id,
+    }
+
+    manifest: dict[str, Any] = {
         "date": date,
         "site": site,
         "device_id": device_id,
@@ -137,9 +144,25 @@ def artifact_manifest(
         "facts_dir": rel(facts_dir),
         "artifacts": artifacts,
         "anchoring": anchoring,
+        "verification_bundle": verification_bundle,
     }
     if verifier_summary is not None:
         manifest["verifier"] = verifier_summary
+        verification = verifier_summary.get("verification")
+        if isinstance(verification, dict):
+            cls = verification.get("disclosure_class")
+            prof = verification.get("commitment_profile_id")
+            if isinstance(cls, str):
+                verification_bundle["disclosure_class"] = cls
+            if isinstance(prof, str):
+                verification_bundle["commitment_profile_id"] = prof
+
+        checks_executed = verifier_summary.get("checks_executed")
+        checks_skipped = verifier_summary.get("checks_skipped")
+        if isinstance(checks_executed, list):
+            verification_bundle["checks_executed"] = checks_executed
+        if isinstance(checks_skipped, list):
+            verification_bundle["checks_skipped"] = checks_skipped
 
     manifest_path = day_artifact.parent / f"{date}.pipeline-manifest.json"
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
@@ -287,6 +310,19 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Treat peer attestation failures as fatal (override policy)",
     )
+    parser.add_argument(
+        "--disclosure-class",
+        choices=["A", "B", "C"],
+        default=os.environ.get("PIPELINE_DISCLOSURE_CLASS", "A"),
+        help="Disclosure class passed to verify_cli and recorded in manifests.",
+    )
+    parser.add_argument(
+        "--commitment-profile-id",
+        default=os.environ.get(
+            "PIPELINE_COMMITMENT_PROFILE_ID", "trackone-canonical-cbor-v1"
+        ),
+        help="Commitment profile identifier passed to verify_cli and manifests.",
+    )
     return parser.parse_args()
 
 
@@ -346,6 +382,8 @@ def _run_verify_cli(
     skip_ots: bool,
     skip_tsa: bool,
     skip_peers: bool,
+    disclosure_class: str,
+    commitment_profile_id: str,
 ) -> tuple[int, dict[str, Any] | None]:
     verify_cmd = [
         sys.executable,
@@ -357,6 +395,10 @@ def _run_verify_cli(
         "--json",
         "--policy-mode",
         cfg.policy.mode,
+        "--disclosure-class",
+        disclosure_class,
+        "--commitment-profile-id",
+        commitment_profile_id,
     ]
     if cfg.path.exists():
         verify_cmd.extend(["--config", str(cfg.path)])
@@ -652,6 +694,8 @@ def main() -> None:
             skip_ots=args.skip_ots,
             skip_tsa=args.skip_tsa,
             skip_peers=args.skip_peers,
+            disclosure_class=args.disclosure_class,
+            commitment_profile_id=args.commitment_profile_id,
         )
         if verify_rc != 0:
             if args.fail_on_verify:
@@ -710,6 +754,8 @@ def main() -> None:
         verifier_summary=verifier_summary,
         sensorthings_projection=sensorthings_projection,
         provisioning_records=provisioning_records,
+        disclosure_class=args.disclosure_class,
+        commitment_profile_id=args.commitment_profile_id,
     )
 
     if overall == "success":
