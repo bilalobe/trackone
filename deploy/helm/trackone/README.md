@@ -89,15 +89,17 @@ them via `configMapRef` / `secretKeyRef` instead of inline `env.value` entries.
 
 If you already manage non-secret gateway config elsewhere, set
 `gateway.existingConfigMap` and the chart will reuse that ConfigMap instead of
-creating `trackone-gateway-config`.
+creating `trackone-gateway-config`. That ConfigMap must define an `OTS_CALENDARS` key to match the environment consumed via `envFrom`.
 
 If you already manage sensitive gateway config elsewhere, set
 `gateway.existingSecret` and the chart will reuse that Secret instead of
-creating `trackone-gateway-env`.
+creating `trackone-gateway-env`. That Secret must define a `DATABASE_URL` key to match the environment consumed via `secretKeyRef`.
 
 If you already manage Postgres bootstrap credentials elsewhere, set
 `postgres.auth.existingSecret` and the chart will reuse that Secret instead of
-creating `postgres-auth`.
+creating `postgres-auth`. That Secret must contain, at minimum, the keys
+`POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD`, since the Postgres
+pod consumes them via `envFrom`.
 
 ### Private GHCR images
 
