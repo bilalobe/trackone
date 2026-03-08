@@ -1,0 +1,360 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "TrackOne Helm Values",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "namespace": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "create": {
+          "type": "boolean"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "imagePullSecrets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "name"
+        ]
+      }
+    },
+    "otsCalendar": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "image": {
+          "$ref": "#/definitions/imageConfig"
+        },
+        "port": {
+          "$ref": "#/definitions/port"
+        },
+        "logLevel": {
+          "type": "string",
+          "minLength": 1
+        },
+        "persistence": {
+          "$ref": "#/definitions/persistenceConfig"
+        },
+        "resources": {
+          "$ref": "#/definitions/resources"
+        }
+      }
+    },
+    "postgres": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "image": {
+          "$ref": "#/definitions/basicImageConfig"
+        },
+        "auth": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "existingSecret": {
+              "type": "string"
+            },
+            "allowInsecureDefaults": {
+              "type": "boolean"
+            },
+            "database": {
+              "type": "string",
+              "minLength": 1
+            },
+            "username": {
+              "type": "string",
+              "minLength": 1
+            },
+            "password": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "service": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "port": {
+              "$ref": "#/definitions/port"
+            }
+          }
+        },
+        "persistence": {
+          "$ref": "#/definitions/persistenceConfig"
+        },
+        "resources": {
+          "$ref": "#/definitions/resources"
+        }
+      }
+    },
+    "gateway": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "existingConfigMap": {
+          "type": "string"
+        },
+        "existingSecret": {
+          "type": "string"
+        },
+        "image": {
+          "$ref": "#/definitions/imageConfig"
+        },
+        "service": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "ClusterIP",
+                "NodePort",
+                "LoadBalancer"
+              ]
+            },
+            "port": {
+              "$ref": "#/definitions/port"
+            },
+            "nodePort": {
+              "$ref": "#/definitions/nodePort"
+            }
+          }
+        },
+        "env": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "otsCalendars": {
+              "type": "string",
+              "minLength": 1
+            },
+            "databaseUrl": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "probes": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "readinessPath": {
+              "type": "string",
+              "minLength": 1
+            },
+            "livenessPath": {
+              "type": "string",
+              "minLength": 1
+            },
+            "readinessInitialDelay": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "readinessPeriod": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "livenessInitialDelay": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "livenessPeriod": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "resources": {
+          "$ref": "#/definitions/resources"
+        }
+      }
+    },
+    "jobs": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "backoffLimit": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "core": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "image": {
+              "$ref": "#/definitions/imageConfig"
+            },
+            "features": {
+              "type": "string"
+            },
+            "noDefaultFeatures": {
+              "type": "string",
+              "enum": [
+                "0",
+                "1"
+              ]
+            },
+            "resources": {
+              "$ref": "#/definitions/resources"
+            }
+          }
+        },
+        "constants": {
+          "$ref": "#/definitions/jobConfig"
+        },
+        "podFw": {
+          "$ref": "#/definitions/jobConfig"
+        }
+      }
+    }
+  },
+  "definitions": {
+    "imageConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "repository": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tag": {
+          "type": "string",
+          "minLength": 1
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^sha256:[a-fA-F0-9]{64}$"
+        },
+        "pullPolicy": {
+          "type": "string",
+          "enum": [
+            "Always",
+            "IfNotPresent",
+            "Never"
+          ]
+        }
+      }
+    },
+    "basicImageConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "repository": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tag": {
+          "type": "string",
+          "minLength": 1
+        },
+        "pullPolicy": {
+          "type": "string",
+          "enum": [
+            "Always",
+            "IfNotPresent",
+            "Never"
+          ]
+        }
+      }
+    },
+    "persistenceConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "size": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "requests": {
+          "$ref": "#/definitions/resourceSet"
+        },
+        "limits": {
+          "$ref": "#/definitions/resourceSet"
+        }
+      }
+    },
+    "resourceSet": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "cpu": {
+          "type": "string",
+          "minLength": 1
+        },
+        "memory": {
+          "type": "string",
+          "minLength": 1
+        },
+        "ephemeral-storage": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "jobConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "image": {
+          "$ref": "#/definitions/imageConfig"
+        },
+        "resources": {
+          "$ref": "#/definitions/resources"
+        }
+      }
+    },
+    "port": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 65535
+    },
+    "nodePort": {
+      "type": "integer",
+      "minimum": 30000,
+      "maximum": 32767
+    }
+  }
+}
