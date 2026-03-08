@@ -243,6 +243,7 @@
     "imageConfig": {
       "type": "object",
       "additionalProperties": false,
+      "required": ["repository"],
       "properties": {
         "repository": {
           "type": "string",
