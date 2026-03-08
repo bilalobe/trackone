@@ -293,7 +293,7 @@ Entries list **Status** and **Summary**. Related references are grouped under **
 
 - **[ADR-043](ADR-043-phased-bundle-manifest-maturity-for-id.md): Phased bundle-manifest maturity for the I-D**
   **Status**: Accepted
-  **Summary**: Keeps the stronger I-D structure now, but phases standalone verification-manifest requirements so the draft stays truthful to the `0.1.0-alpha.6` implementation while preserving a path to stricter bundle contracts later.
+  **Summary**: Keeps the stronger I-D structure now, but phases standalone verification-manifest requirements so the draft stays truthful to the `0.1.0-alpha.7` implementation while preserving a path to stricter bundle contracts later.
 
 ### Future Roadmap
 
