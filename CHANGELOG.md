@@ -5,6 +5,44 @@ All notable changes to Track1 (Barnacle Sentinel) will be documented in this fil
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [0.1.0-alpha.7] - 2026-03-07
+
+### Added
+- Canonical fact migration groundwork:
+  - `frame_verifier.py` now emits canonical top-level fact fields (`pod_id`, `fc`, `ingest_time`, `pod_time`, `kind`) alongside legacy compatibility fields during the transition.
+  - `scripts/gateway/sensorthings_projection.py` accepts canonical fact shapes directly while still tolerating older fact JSON on input.
+- Provisioning-backed SensorThings projection inputs:
+  - Added `scripts/gateway/provisioning_records.py` and `toolset/unified/schemas/provisioning_records.schema.json`.
+  - `run_pipeline_demo.py` now emits `provisioning/records.json` and feeds it into SensorThings projection.
+
+### Changed
+- SensorThings projection hardening:
+  - missing deployment/provisioning-backed sensor identity is now an explicit projection failure instead of silently generating synthetic Sensor IDs;
+  - CLI projection now exits non-zero on unresolved sensor identity;
+  - provisioning/deployment metadata is schema-validated before projection starts.
+- Disclosure-aware verification behavior:
+  - fact-level recomputation now only runs for disclosure class `A`;
+  - disclosure classes `B` and `C` explicitly skip fact-level recomputation and report that the bundle is not publicly recomputable;
+  - verifier summaries now expose `checks_executed` / `checks_skipped` for machine-readable partial-disclosure reporting.
+- The experimental Python SensorThings native bridge surface was removed:
+  - `trackone_core.sensorthings` shim is no longer exported;
+  - `crates/trackone-gateway` no longer registers a SensorThings PyO3 submodule.
+- Workspace crate versions are aligned to `0.1.0-alpha.7` for the alpha.7 release cut.
+
+### Notes
+- `alpha.7` is a hardening release, not full closure of the current migration plan.
+- Canonical fact convergence remains in progress:
+  - the live Python gateway still emits a transitional fact JSON shape with legacy fields, rather than a pure `trackone-core::Fact` / `EnvFact` contract end-to-end.
+- Provisioning-backed sensor identity is improved but not fully formalized:
+  - projection now requires provisioning records, but those records are still derived from the current device-table/deployment metadata path rather than a fully separate validated provisioning source of truth.
+- ADR-041/043 Phase B disclosure manifests are only partially shipped in `alpha.7`:
+  - pipeline/verifier outputs now carry `disclosure_class`, `commitment_profile_id`, and executed/skipped-check metadata;
+  - standalone bundle packaging and a locked artifact-digest/verification-bundle contract remain for a later phase.
+- Environment hardening is partial:
+  - `verify_cli.py` avoids one direct `PyNaCl` import trap through lazy peer-verification loading, but the demo/frame-ingest path still depends on `PyNaCl` being installed.
+
 ## [0.1.0-alpha.6] - 2026-03-01
 
 ### Added
