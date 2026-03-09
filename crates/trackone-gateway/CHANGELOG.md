@@ -5,6 +5,29 @@ All notable changes to `trackone-gateway` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [0.1.0-alpha.7] - 2026-03-07
+
+### Added
+- Feature-gated `sensorthings` domain module for deterministic SensorThings projection helpers:
+  - entity ID derivation;
+  - RFC3339 validation and UTC formatting;
+  - canonical observation projection types and mapping;
+  - adapter helpers from `trackone-core::Fact` / `EnvFact`.
+- Provisioning-aware SensorThings adapter inputs:
+  - deployment and provisioning sensor keys can be passed explicitly;
+  - stable `prov-...` sensor keys can be derived from provisioning identity when needed.
+
+### Changed
+- SensorThings adapter hardening:
+  - missing provisioning/deployment-backed sensor identity now returns an explicit adapter error instead of falling back to `sensor-default` or channel placeholders.
+- Removed the experimental `trackone_core.sensorthings` Python bridge surface; Python callers should use the projection script/domain directly.
+
+### Notes
+- The Rust `sensorthings` module is a framework/helper boundary for projection logic, validation, and IDs.
+- It is not yet the authoritative live gateway ingress path; the Python gateway still emits transitional fact JSON on the operational pipeline side.
+
 ## [0.1.0-alpha.6] - 2026-03-01
 
 ### Notes
