@@ -249,7 +249,20 @@ jobs:
       - name: Smoke test wheel import
         run: |
           python -m pip install --upgrade pip
-          python -m pip install target/wheels/*.whl
+          python - <<'PY'
+          import glob
+          import os
+          import subprocess
+          import sys
+
+          wheels = sorted(glob.glob("target/wheels/trackone-*.whl"))
+          if not wheels:
+              raise SystemExit("No wheel found under target/wheels")
+
+          preferred = next((w for w in wheels if "manylinux" in os.path.basename(w)), wheels[-1])
+          print(f"Installing wheel: {preferred}")
+          subprocess.check_call([sys.executable, "-m", "pip", "install", preferred])
+          PY
           python -c "import trackone_core; print('trackone_core', trackone_core.__version__)"
 
       - name: Upload wheel artifact
