@@ -1,6 +1,7 @@
 use serde_json::Value;
 
 use super::ids::{entity_id, SensorThingsEntityKind};
+use super::timefmt::{format_rfc3339_utc, parse_rfc3339_timestamp};
 use super::types::{
     ObservationPayload, SensorThingsDatastream, SensorThingsEntityIds, SensorThingsObservation,
     SensorThingsThing, TimeInterval,
@@ -38,6 +39,16 @@ pub fn project_env_observation(
     input: &EnvObservationProjectionInput,
 ) -> Result<EnvObservationProjection, ValidationError> {
     validate_env_observation_input(input)?;
+    let phenomenon_time_start_rfc3339_utc = normalize_rfc3339_utc(
+        "phenomenon_time_start_rfc3339_utc",
+        &input.phenomenon_time_start_rfc3339_utc,
+    )?;
+    let phenomenon_time_end_rfc3339_utc = normalize_rfc3339_utc(
+        "phenomenon_time_end_rfc3339_utc",
+        &input.phenomenon_time_end_rfc3339_utc,
+    )?;
+    let result_time_rfc3339_utc =
+        normalize_rfc3339_utc("result_time_rfc3339_utc", &input.result_time_rfc3339_utc)?;
 
     let thing_id = entity_id(SensorThingsEntityKind::Thing, &[&input.pod_id]);
     let sensor_id = entity_id(
@@ -61,9 +72,9 @@ pub fn project_env_observation(
         SensorThingsEntityKind::Observation,
         &[
             &datastream_id,
-            &input.phenomenon_time_start_rfc3339_utc,
-            &input.phenomenon_time_end_rfc3339_utc,
-            &input.result_time_rfc3339_utc,
+            &phenomenon_time_start_rfc3339_utc,
+            &phenomenon_time_end_rfc3339_utc,
+            &result_time_rfc3339_utc,
         ],
     );
 
@@ -93,10 +104,10 @@ pub fn project_env_observation(
         id: observation_id,
         datastream_id,
         phenomenon_time: TimeInterval {
-            start_rfc3339_utc: input.phenomenon_time_start_rfc3339_utc.clone(),
-            end_rfc3339_utc: input.phenomenon_time_end_rfc3339_utc.clone(),
+            start_rfc3339_utc: phenomenon_time_start_rfc3339_utc,
+            end_rfc3339_utc: phenomenon_time_end_rfc3339_utc,
         },
-        result_time_rfc3339_utc: input.result_time_rfc3339_utc.clone(),
+        result_time_rfc3339_utc,
         result: match &input.result {
             ObservationResult::Scalar(value) => ObservationPayload::Scalar(*value),
             ObservationResult::Structured(value) => ObservationPayload::Structured(value.clone()),
@@ -109,6 +120,12 @@ pub fn project_env_observation(
         datastream,
         observation,
     })
+}
+
+fn normalize_rfc3339_utc(field: &'static str, value: &str) -> Result<String, ValidationError> {
+    let timestamp =
+        parse_rfc3339_timestamp(value).map_err(|_| ValidationError::InvalidRfc3339(field))?;
+    Ok(format_rfc3339_utc(timestamp.unix_seconds))
 }
 
 #[cfg(test)]

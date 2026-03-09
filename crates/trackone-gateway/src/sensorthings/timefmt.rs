@@ -69,7 +69,7 @@ pub fn parse_rfc3339_timestamp(value: &str) -> Result<Timestamp, ()> {
     })
 }
 
-pub fn format_rfc3339_utc(unix_seconds: i64) -> Result<String, ()> {
+pub fn format_rfc3339_utc(unix_seconds: i64) -> String {
     let days = unix_seconds.div_euclid(86_400);
     let seconds_of_day = unix_seconds.rem_euclid(86_400);
     let (year, month, day) = civil_from_days(days);
@@ -77,9 +77,7 @@ pub fn format_rfc3339_utc(unix_seconds: i64) -> Result<String, ()> {
     let minute = (seconds_of_day % 3600) / 60;
     let second = seconds_of_day % 60;
 
-    Ok(format!(
-        "{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}Z"
-    ))
+    format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}Z")
 }
 
 fn parse_u32(bytes: &[u8], start: usize, len: usize) -> Result<u32, ()> {
@@ -188,9 +186,6 @@ mod tests {
 
     #[test]
     fn formats_unix_time() {
-        assert_eq!(
-            format_rfc3339_utc(1_772_755_501).expect("format should succeed"),
-            "2026-03-06T00:05:01Z"
-        );
+        assert_eq!(format_rfc3339_utc(1_772_755_501), "2026-03-06T00:05:01Z");
     }
 }

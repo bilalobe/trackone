@@ -26,7 +26,6 @@ pub enum AdapterError {
         observed_property_key: &'static str,
         sensor_channel: Option<u8>,
     },
-    InvalidUnixTimestamp { field: &'static str, value: i64 },
     Validation(ValidationError),
 }
 
@@ -43,9 +42,6 @@ impl core::fmt::Display for AdapterError {
                 "missing provisioning/deployment-backed sensor identity for {pod_id} \
 observed_property={observed_property_key} sensor_channel={sensor_channel:?}"
             ),
-            Self::InvalidUnixTimestamp { field, value } => {
-                write!(f, "invalid unix timestamp for {field}: {value}")
-            }
             Self::Validation(err) => err.fmt(f),
         }
     }
@@ -76,11 +72,7 @@ pub fn adapt_env_fact_input(
         .or_else(|| ctx.provisioning_sensor_key.clone())
         .or_else(|| {
             ctx.provisioning_identity.as_deref().map(|identity| {
-                derive_provisioned_sensor_key(
-                    identity,
-                    observed_property_key,
-                    env.sensor_channel,
-                )
+                derive_provisioned_sensor_key(identity, observed_property_key, env.sensor_channel)
             })
         })
         .ok_or_else(|| AdapterError::MissingSensorIdentity {
@@ -99,15 +91,9 @@ pub fn adapt_env_fact_input(
         } else {
             "summary".to_owned()
         },
-        phenomenon_time_start_rfc3339_utc: unix_to_rfc3339(
-            "phenomenon_time_start",
-            env.phenomenon_time_start,
-        )?,
-        phenomenon_time_end_rfc3339_utc: unix_to_rfc3339(
-            "phenomenon_time_end",
-            env.phenomenon_time_end,
-        )?,
-        result_time_rfc3339_utc: unix_to_rfc3339("ingest_time", fact.ingest_time)?,
+        phenomenon_time_start_rfc3339_utc: unix_to_rfc3339(env.phenomenon_time_start),
+        phenomenon_time_end_rfc3339_utc: unix_to_rfc3339(env.phenomenon_time_end),
+        result_time_rfc3339_utc: unix_to_rfc3339(fact.ingest_time),
         result: match env.value {
             Some(value) => ObservationResult::Scalar(f64::from(value)),
             None => ObservationResult::Structured(json!({
@@ -130,8 +116,8 @@ pub fn project_fact_env_observation(
     Ok(project_env_observation(&input)?)
 }
 
-fn unix_to_rfc3339(field: &'static str, value: i64) -> Result<String, AdapterError> {
-    format_rfc3339_utc(value).map_err(|_| AdapterError::InvalidUnixTimestamp { field, value })
+fn unix_to_rfc3339(value: i64) -> String {
+    format_rfc3339_utc(value)
 }
 
 fn observed_property_key(sample_type: SampleType) -> &'static str {
@@ -231,18 +217,17 @@ mod tests {
             )),
         };
 
-        let projection =
-            project_fact_env_observation(
-                &fact,
-                &EnvObservationAdapterContext {
-                    site_id: None,
-                    sensor_key_override: None,
-                    deployment_sensor_key: Some("shtc3-rh".to_owned()),
-                    provisioning_sensor_key: None,
-                    provisioning_identity: None,
-                },
-            )
-            .expect("projection should succeed");
+        let projection = project_fact_env_observation(
+            &fact,
+            &EnvObservationAdapterContext {
+                site_id: None,
+                sensor_key_override: None,
+                deployment_sensor_key: Some("shtc3-rh".to_owned()),
+                provisioning_sensor_key: None,
+                provisioning_identity: None,
+            },
+        )
+        .expect("projection should succeed");
 
         assert_eq!(projection.thing.pod_id, "0000000000000009");
         assert_eq!(projection.datastream.stream_key, "summary");

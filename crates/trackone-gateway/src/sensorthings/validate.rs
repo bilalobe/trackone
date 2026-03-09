@@ -2,7 +2,7 @@ use std::error::Error;
 use std::fmt::{Display, Formatter};
 
 use super::mapping::EnvObservationProjectionInput;
-use super::timefmt::{parse_rfc3339_timestamp, Timestamp};
+use super::timefmt::{format_rfc3339_utc, parse_rfc3339_timestamp, Timestamp};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ValidationError {
@@ -66,7 +66,12 @@ fn require_field(field: &'static str, value: &str) -> Result<(), ValidationError
 }
 
 fn parse_rfc3339_utc(field: &'static str, value: &str) -> Result<Timestamp, ValidationError> {
-    parse_rfc3339_timestamp(value).map_err(|_| ValidationError::InvalidRfc3339(field))
+    let timestamp =
+        parse_rfc3339_timestamp(value).map_err(|_| ValidationError::InvalidRfc3339(field))?;
+    if format_rfc3339_utc(timestamp.unix_seconds) != value {
+        return Err(ValidationError::InvalidRfc3339(field));
+    }
+    Ok(timestamp)
 }
 
 #[cfg(test)]
@@ -102,6 +107,48 @@ mod tests {
             observed_property_key: "temperature_air".to_owned(),
             stream_key: "raw".to_owned(),
             phenomenon_time_start_rfc3339_utc: "2026-03-06 00:00:00".to_owned(),
+            phenomenon_time_end_rfc3339_utc: "2026-03-06T00:05:00Z".to_owned(),
+            result_time_rfc3339_utc: "2026-03-06T00:05:01Z".to_owned(),
+            result: ObservationResult::Scalar(21.5),
+        };
+        assert_eq!(
+            validate_env_observation_input(&input),
+            Err(ValidationError::InvalidRfc3339(
+                "phenomenon_time_start_rfc3339_utc"
+            ))
+        );
+    }
+
+    #[test]
+    fn rejects_non_canonical_utc_offset_timestamp() {
+        let input = EnvObservationProjectionInput {
+            pod_id: "0000000000000007".to_owned(),
+            site_id: None,
+            sensor_key: "shtc3".to_owned(),
+            observed_property_key: "temperature_air".to_owned(),
+            stream_key: "raw".to_owned(),
+            phenomenon_time_start_rfc3339_utc: "2026-03-06T01:00:00+01:00".to_owned(),
+            phenomenon_time_end_rfc3339_utc: "2026-03-06T00:05:00Z".to_owned(),
+            result_time_rfc3339_utc: "2026-03-06T00:05:01Z".to_owned(),
+            result: ObservationResult::Scalar(21.5),
+        };
+        assert_eq!(
+            validate_env_observation_input(&input),
+            Err(ValidationError::InvalidRfc3339(
+                "phenomenon_time_start_rfc3339_utc"
+            ))
+        );
+    }
+
+    #[test]
+    fn rejects_non_canonical_fractional_seconds() {
+        let input = EnvObservationProjectionInput {
+            pod_id: "0000000000000007".to_owned(),
+            site_id: None,
+            sensor_key: "shtc3".to_owned(),
+            observed_property_key: "temperature_air".to_owned(),
+            stream_key: "raw".to_owned(),
+            phenomenon_time_start_rfc3339_utc: "2026-03-06T00:00:00.000Z".to_owned(),
             phenomenon_time_end_rfc3339_utc: "2026-03-06T00:05:00Z".to_owned(),
             result_time_rfc3339_utc: "2026-03-06T00:05:01Z".to_owned(),
             result: ObservationResult::Scalar(21.5),
