@@ -8,6 +8,8 @@ mod ledger;
 mod merkle;
 mod ots;
 mod radio;
+#[cfg(feature = "sensorthings")]
+pub mod sensorthings;
 
 fn extract_frames(py_frames: &Bound<'_, PyAny>) -> PyResult<Vec<Vec<u8>>> {
     let capacity = py_frames.len().unwrap_or(0);
