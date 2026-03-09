@@ -18,11 +18,12 @@ Project status: active R&D with a Python‑first reference gateway. See ADRs for
   - XChaCha20‑Poly1305 AEAD (24‑byte nonce)
   - Ed25519 signatures
   - SHA‑256 Merkle trees
-- Deterministic data model (ADR‑003): canonical JSON, schema validation, hash‑sorted leaves, day chaining.
+- Deterministic data model: canonical CBOR commitment artifacts with JSON projections, schema validation, hash‑sorted leaves, and day chaining.
 - Verifiable daily anchoring with OTS, plus CLI to verify roots and proofs end‑to‑end.
 - Forward‑only schema/policy (ADR‑006).
+- Read-only SensorThings projection artifacts for interoperability without making SensorThings the root of truth.
 - Extensive tests, benchmarks, and ADRs documenting decisions.
-- Optional Rust gateway extension module (`trackone_core`) built from `crates/trackone-gateway` (PyO3 + maturin).
+- Optional Rust gateway extension module (`trackone_core`) built from `crates/trackone-gateway` (PyO3 + maturin) for Merkle, ledger, OTS, and radio boundaries.
 
 ## Bench topology (lab)
 
@@ -34,15 +35,38 @@ End‑to‑end (see `scripts/gateway/run_pipeline.sh`):
 
 1. Pod simulator emits framed telemetry (`pod_sim.py --framed`).
 1. Gateway verifies frames, enforces replay window, emits canonical facts (`frame_verifier.py`).
+1. Gateway derives a read-only SensorThings projection from the verified fact set (`sensorthings_projection.py`).
 1. Facts are batched into a daily Merkle tree and persisted with headers (`merkle_batcher.py`).
 1. Day blob is anchored with OpenTimestamps (`ots_anchor.py`).
 1. Independent verification recomputes the Merkle root and checks the OTS proof (`verify_cli.py`).
 
 Outputs live under `out/site_demo/` by default:
 
-- `facts/` canonical JSON facts
+- `facts/` authoritative CBOR facts plus JSON projections
 - `blocks/` block headers that record the authoritative daily Merkle root
 - `day/YYYY-MM-DD.cbor` the day blob, with `*.ots` proof
+- `provisioning/records.json` canonical provisioning-record bundle used for projection context
+- `sensorthings/YYYY-MM-DD.observations.json` read-only SensorThings-style projection artifact
+
+## Alpha.7 boundary
+
+`0.1.0-alpha.7` should be read as a hardening and convergence release.
+
+- Done in `alpha.7`:
+  - read-only SensorThings projection remains outside the trust root;
+  - projection now requires provisioning-backed sensor identity instead of projection-time fallback;
+  - the demo pipeline emits a canonical `provisioning/records.json` artifact for projection input;
+  - the experimental Python SensorThings native bridge was removed.
+- Partial in `alpha.7`:
+  - the live Python gateway still emits a transitional fact JSON shape with both canonical and legacy fields;
+  - provisioning records are still materialized from current device-table/deployment metadata rather than a fully separate provisioning source of truth;
+  - pipeline manifests exist, but ADR-041/043 Phase B fields such as `disclosure_class`, `commitment_profile_id`, and `checks_executed` are not yet a locked emitted contract;
+  - `verify_cli.py` is less sensitive to optional peer-verification imports, but the demo/frame-ingest path still expects `PyNaCl`.
+- Deferred past `alpha.7`:
+  - end-to-end `trackone-core::Fact` / `EnvFact` convergence in the live gateway path;
+  - a formal provisioning/deployment identity contract enforced before projection time;
+  - Phase B disclosure manifest emission and verification;
+  - a locked SensorThings projection artifact schema plus broader ADR parity tests.
 
 ## Quick start
 
@@ -50,6 +74,7 @@ Prereqs:
 
 - Python 3.12+ (project tests target 3.12–3.14)
 - A virtualenv (recommended)
+- `PyNaCl` for the demo/frame-ingest path (`pod_sim.py`, `frame_verifier.py`)
 - Optional: `ots` CLI in your PATH for real OTS verification (tests fall back to placeholders)
 
 Install dependencies (recommended, lockfile-first):
@@ -252,8 +277,9 @@ are built from the `trackone-gateway` crate and installed alongside the
   ```
 
 The Python API and CLI remain the canonical interface; Rust is an internal
-implementation detail used to accelerate hot paths and to support future
-firmware/pod work.
+implementation detail used to accelerate hot paths, host shared verification
+logic, and support future firmware/pod work. SensorThings projection remains a
+read-only Python/domain concern rather than a separate native bridge surface.
 
 ## Project layout
 
