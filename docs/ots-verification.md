@@ -111,30 +111,16 @@ Path filters: This workflow runs only when OTS-related files change (workflow, h
 ## Running a real OTS calendar locally
 
 For local development and CI-style testing against a real OTS calendar (instead
-of the stationary stub), you can run the official OTS calendar in Docker.
-
-A minimal compose file is provided as `docker-compose.ots.yml`:
-
-```yaml
-version: '3.8'
-
-services:
-  ots-calendar:
-    image: ots/calendar:latest
-    container_name: ots-calendar
-    restart: unless-stopped
-    ports:
-      - "8468:8468"
-    environment:
-      OTS_LOG_LEVEL: info
-    volumes:
-      - ./data/ots-calendar:/var/lib/ots-calendar
-```
+of the stationary stub), run the TrackOne calendar image directly in Docker.
 
 To start the calendar locally:
 
 ```bash
-docker compose -f docker-compose.ots.yml up -d ots-calendar
+repo="${GITHUB_REPOSITORY:-bilalobe/trackone}"
+docker run -d \
+  -p 8468:8468 \
+  --name trackone_ots_calendar \
+  "ghcr.io/${repo}/ots-calendar:latest"
 ```
 
 Then point the gateway tools at this calendar via `OTS_CALENDARS` and disable
@@ -151,8 +137,15 @@ python scripts/gateway/ots_anchor.py out/site_demo/day/2025-10-07.cbor
 RUN_REAL_OTS=1 pytest -m real_ots tests/integration/test_ots_integration.py
 ```
 
+When you are done:
+
+```bash
+docker stop trackone_ots_calendar
+docker rm -f trackone_ots_calendar
+```
+
 The `tox -e ots-cal` environment and `.github/workflows/ots-cal.yml` workflow
-use the same pattern: start a local `ots-calendar` container, set
+use the same pattern: start a local `trackone_ots_calendar` container, set
 `OTS_STATIONARY_STUB=0` and `OTS_CALENDARS` to `http://127.0.0.1:8468`, then run
 only the `real_ots` tests. This gives ADR-014 a concrete, reproducible path
 from the stationary stub in unit tests to a real calendar in CI.

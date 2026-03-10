@@ -15,8 +15,8 @@ helm upgrade --install trackone oci://ghcr.io/bilalobe/trackone/charts/trackone 
   --set postgres.auth.existingSecret=<your-postgres-secret>
 ```
 
-For example, release tag `v0.1.0-alpha.7` publishes chart version
-`0.1.0-alpha.7`.
+For example, release tag `v0.1.0-alpha.8` publishes chart version
+`0.1.0-alpha.8`.
 
 The base [values.yaml](values.yaml)
 inside that OCI chart assumes:
@@ -53,7 +53,12 @@ only when you explicitly want local images and build jobs again.
 Typical flow:
 
 ```bash
-scripts/minikube-build-local-images.sh
+eval "$(minikube -p minikube docker-env)"
+docker build -t trackone/ots-calendar:local -f docker/calendar/Dockerfile docker/calendar
+docker build -t trackone/gateway:local -f docker/gateway/Dockerfile .
+docker build -t trackone/core:local -f docker/core/Dockerfile .
+docker build -t trackone/constants:local -f docker/constants/Dockerfile .
+docker build -t trackone/pod-fw:local -f docker/pod-fw/Dockerfile .
 helm upgrade --install trackone deploy/helm/trackone \
   -f deploy/helm/trackone/values-local.yaml
 ```

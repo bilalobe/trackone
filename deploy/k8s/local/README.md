@@ -26,10 +26,15 @@ Images:
 - `trackone/constants:local`
 - `trackone/pod-fw:local`
 
-Build them into Minikube (docker driver) with:
+Build them into Minikube's Docker daemon (docker driver) with:
 
 ```bash
-scripts/minikube-build-local-images.sh
+eval "$(minikube -p minikube docker-env)"
+docker build -t trackone/ots-calendar:local -f docker/calendar/Dockerfile docker/calendar
+docker build -t trackone/gateway:local -f docker/gateway/Dockerfile .
+docker build -t trackone/core:local -f docker/core/Dockerfile .
+docker build -t trackone/constants:local -f docker/constants/Dockerfile .
+docker build -t trackone/pod-fw:local -f docker/pod-fw/Dockerfile .
 ```
 
 Run one to sanity-check it:
