@@ -70,17 +70,17 @@ mod tests {
 
     #[test]
     fn counter_nonce_increments() {
-        let mut gen = CounterNonce24::new([0u8; 16], 0);
-        let nonce1 = gen.next_nonce();
-        let nonce2 = gen.next_nonce();
+        let mut nonce_gen = CounterNonce24::new([0u8; 16], 0);
+        let nonce1 = nonce_gen.next_nonce();
+        let nonce2 = nonce_gen.next_nonce();
         assert_ne!(nonce1, nonce2);
-        assert_eq!(gen.counter(), 2);
+        assert_eq!(nonce_gen.counter(), 2);
     }
 
     #[test]
     #[should_panic(expected = "CounterNonce24 counter exhausted")]
     fn counter_nonce_panics_at_max() {
-        let mut gen = CounterNonce24::new([0u8; 16], u64::MAX);
-        gen.next_nonce();
+        let mut nonce_gen = CounterNonce24::new([0u8; 16], u64::MAX);
+        nonce_gen.next_nonce();
     }
 }
