@@ -10,7 +10,7 @@ members = [
 
 [workspace.package]
 version = "0.1.0-alpha.7"
-edition = "2021"
+edition = "2024"
 publish = true
 license = "MIT"
 authors = ["BILAL <elkhatabibilal@gmail.com>"]
