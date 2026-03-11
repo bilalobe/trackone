@@ -126,6 +126,30 @@ jobs:
           name: wheel-py314
           path: dist/
 
+      - name: Keep only publishable wheel artifacts
+        run: |
+          shopt -s nullglob
+          wheels=(dist/trackone-*.whl)
+          if [ ${#wheels[@]} -eq 0 ]; then
+            echo "No wheels found under dist/"
+            exit 1
+          fi
+
+          for wheel in "${wheels[@]}"; do
+            case "$wheel" in
+              *manylinux*.whl) ;;
+              *)
+                rm -f "$wheel" "$wheel.publish.attestation"
+                ;;
+            esac
+          done
+
+          remaining=(dist/trackone-*.whl)
+          if [ ${#remaining[@]} -eq 0 ]; then
+            echo "No publishable manylinux wheel remains under dist/"
+            exit 1
+          fi
+
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
