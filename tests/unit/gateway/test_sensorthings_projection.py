@@ -21,7 +21,6 @@ def test_build_bundle_uses_provisioning_metadata_and_time_fields(load_module) ->
             "counter": 1,
             "temp_c": 23.5,
         },
-        "nonce": "abc",
     }
     provisioning_records = {
         "version": 1,
@@ -81,9 +80,12 @@ def test_write_bundle_emits_projection_file(tmp_path: Path, load_module) -> None
     (facts_dir / "pod-003-00000002.json").write_text(
         json.dumps(
             {
-                "device_id": "pod-003",
-                "timestamp": "2026-03-06T00:06:01Z",
-                "nonce": "def",
+                "pod_id": "0000000000000003",
+                "fc": 2,
+                "ingest_time": 1_772_755_561,
+                "ingest_time_rfc3339_utc": "2026-03-06T00:06:01Z",
+                "pod_time": None,
+                "kind": "Custom",
                 "payload": {"temp_c": 24.0},
             }
         ),
@@ -132,6 +134,7 @@ def test_write_bundle_emits_projection_file(tmp_path: Path, load_module) -> None
 
     assert rc == 0
     bundle = json.loads(out_path.read_text(encoding="utf-8"))
+    assert bundle["projection_mode"] == "read_only_canonical_fact_json"
     assert len(bundle["observations"]) == 3
     observed_keys = {item["key"] for item in bundle["observed_properties"]}
     assert observed_keys == {"temperature_air", "bioimpedance_magnitude"}
@@ -221,6 +224,36 @@ def test_build_bundle_rejects_missing_sensor_identity_metadata(load_module) -> N
         assert "missing provisioning/deployment-backed sensor identity" in str(exc)
     else:  # pragma: no cover - defensive branch
         raise AssertionError("expected SensorIdentityResolutionError")
+
+
+def test_build_bundle_rejects_missing_canonical_pod_id_with_context(
+    load_module,
+) -> None:
+    module = load_module(
+        "sensorthings_projection_missing_pod_id_under_test",
+        Path("scripts/gateway/sensorthings_projection.py"),
+    )
+
+    fact = {
+        "fc": 9,
+        "ingest_time": 1_772_755_622,
+        "ingest_time_rfc3339_utc": "2026-03-06T00:07:02Z",
+        "pod_time": None,
+        "kind": "Custom",
+        "payload": {"temp_c": 24.5},
+    }
+
+    try:
+        module.build_bundle(
+            [fact],
+            site_id="an-001",
+            provisioning_records={"version": 1, "records": []},
+        )
+    except ValueError as exc:
+        assert "fc=9" in str(exc)
+        assert "missing canonical pod_id" in str(exc)
+    else:  # pragma: no cover - defensive branch
+        raise AssertionError("expected ValueError")
 
 
 def test_main_accepts_valid_provisioning_records_file(

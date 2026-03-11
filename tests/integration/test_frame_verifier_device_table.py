@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import importlib.util
 import json
 
 import pytest
@@ -70,6 +71,13 @@ def test_parse_frame_error_cases(frame_verifier):
 
 
 def test_aead_decrypt_success_and_failures(tmp_path, frame_verifier, pod_sim):
+    try:
+        spec = importlib.util.find_spec("nacl.bindings")
+    except ModuleNotFoundError:
+        spec = None
+    if spec is None:
+        pytest.skip("PyNaCl not installed")
+
     # Prepare a device table path for pod_sim to populate
     dt_path = tmp_path / "device_table.json"
     dt_path.write_text("{}", encoding="utf-8")

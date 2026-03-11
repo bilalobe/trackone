@@ -55,9 +55,12 @@ class TestMerkleReproduction:
     def test_single_fact_reproducibility(self):
         """Single fact should always produce the same root."""
         fact = {
-            "device_id": "pod-test",
-            "timestamp": "2025-10-06T12:00:00Z",
-            "nonce": "a1b2c3d4e5f6",
+            "pod_id": "0000000000000001",
+            "fc": 1,
+            "ingest_time": 1759752000,
+            "ingest_time_rfc3339_utc": "2025-10-06T12:00:00Z",
+            "pod_time": None,
+            "kind": "Custom",
             "payload": {"temp": 22.5},
         }
 
@@ -73,15 +76,21 @@ class TestMerkleReproduction:
         """Multiple facts should produce consistent roots."""
         facts = [
             {
-                "device_id": "pod-01",
-                "timestamp": "2025-10-06T10:00:00Z",
-                "nonce": "aaa",
+                "pod_id": "0000000000000001",
+                "fc": 1,
+                "ingest_time": 1759744800,
+                "ingest_time_rfc3339_utc": "2025-10-06T10:00:00Z",
+                "pod_time": None,
+                "kind": "Custom",
                 "payload": {"x": 1},
             },
             {
-                "device_id": "pod-02",
-                "timestamp": "2025-10-06T11:00:00Z",
-                "nonce": "bbb",
+                "pod_id": "0000000000000002",
+                "fc": 2,
+                "ingest_time": 1759748400,
+                "ingest_time_rfc3339_utc": "2025-10-06T11:00:00Z",
+                "pod_time": None,
+                "kind": "Custom",
                 "payload": {"x": 2},
             },
         ]

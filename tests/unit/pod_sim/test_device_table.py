@@ -28,14 +28,47 @@ class TestDeviceTableOperations:
 
     def test_save_device_table(self, tmp_path, pod_sim):
         dt_path = tmp_path / "device_table.json"
-        data = {"100": {"salt": "base64data", "aead_key": "base64key"}}
+        data = {
+            "100": {
+                "salt8": "base64data",
+                "ck_up": "base64key",
+                "deployment": {
+                    "deployment_sensor_key": "shtc3-ambient",
+                    "sensor_keys": {"temperature_air": "shtc3-ambient"},
+                },
+                "provisioning": {
+                    "identity_pubkey": "a" * 64,
+                    "firmware_version": "v1.0.0",
+                    "firmware_hash": "b" * 64,
+                    "birth_cert_sig": "c" * 128,
+                    "provisioned_at": 1,
+                },
+            }
+        }
         pod_sim.save_device_table(dt_path, data)
         assert dt_path.exists()
         assert json.loads(dt_path.read_text(encoding="utf-8")) == data
 
     def test_device_table_roundtrip(self, tmp_path, pod_sim):
         dt_path = tmp_path / "device_table.json"
-        original = {"100": {"salt": "xyz", "aead_key": "abc", "highest_fc_seen": 10}}
+        original = {
+            "100": {
+                "salt8": "xyz",
+                "ck_up": "abc",
+                "highest_fc_seen": 10,
+                "deployment": {
+                    "deployment_sensor_key": "shtc3-ambient",
+                    "sensor_keys": {"temperature_air": "shtc3-ambient"},
+                },
+                "provisioning": {
+                    "identity_pubkey": "a" * 64,
+                    "firmware_version": "v1.0.0",
+                    "firmware_hash": "b" * 64,
+                    "birth_cert_sig": "c" * 128,
+                    "provisioned_at": 1,
+                },
+            }
+        }
         pod_sim.save_device_table(dt_path, original)
         loaded = pod_sim.load_device_table(dt_path)
         assert loaded == original

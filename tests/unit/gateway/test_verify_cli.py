@@ -4,6 +4,10 @@ Edge cases for verify_cli (moved from test_edge_cases.py)
 """
 from __future__ import annotations
 
+import contextlib
+import io
+import json
+
 
 class TestVerifyCliEdgeCases:
     """Test edge cases in verify_cli."""
@@ -63,3 +67,31 @@ class TestVerifyCliEdgeCases:
         result = verify_cli.main(args)
         # Missing block header -> return code 1 (no block header found)
         assert result == 1
+
+    def test_verify_rejects_legacy_day_bin_artifact(
+        self, tmp_path, verify_cli, facts_dir
+    ):
+        root = tmp_path / "out"
+        day_dir = root / "day"
+        blocks_dir = root / "blocks"
+        day_dir.mkdir(parents=True)
+        blocks_dir.mkdir(parents=True)
+
+        day = "2025-10-07"
+        (day_dir / f"{day}.bin").write_bytes(b"legacy")
+        (day_dir / f"{day}.json").write_text(
+            json.dumps({"date": day, "day_root": "a" * 64}),
+            encoding="utf-8",
+        )
+        (blocks_dir / f"{day}-00.block.json").write_text(
+            json.dumps({"day": day, "merkle_root": "a" * 64}),
+            encoding="utf-8",
+        )
+
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            result = verify_cli.main(["--root", str(root), "--facts", str(facts_dir)])
+        assert result == 1
+        err = stderr.getvalue()
+        assert "legacy day artifact found" in err
+        assert ".cbor" in err

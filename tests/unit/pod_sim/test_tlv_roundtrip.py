@@ -4,11 +4,12 @@ Property-based round-trip TLV tests (moved from test_tlv_properties.py)
 """
 from __future__ import annotations
 
-from hypothesis import given
+from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
 
 class TestTLVRoundTrip:
+    @settings(suppress_health_check=[HealthCheck.too_slow])
     @given(
         counter=st.integers(min_value=0, max_value=0xFFFFFFFF),
         bioimpedance=st.floats(

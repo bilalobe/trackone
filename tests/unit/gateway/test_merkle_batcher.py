@@ -50,9 +50,12 @@ class TestMerkleBatcherEdgeCases:
 
         # Create a fact file (authoritative CBOR + JSON projection)
         fact_obj = {
-            "device_id": "test",
-            "timestamp": "2025-10-07T10:00:00Z",
-            "nonce": "abc123",
+            "pod_id": "0000000000000001",
+            "fc": 1,
+            "ingest_time": 1759831200,
+            "ingest_time_rfc3339_utc": "2025-10-07T10:00:00Z",
+            "pod_time": None,
+            "kind": "Custom",
             "payload": {},
         }
         fact_stem = facts_dir / "fact"
@@ -110,9 +113,12 @@ class TestMerkleBatcherEdgeCases:
         out_dir.mkdir()
 
         fact_obj = {
-            "device_id": "test",
-            "timestamp": "2025-10-07T10:00:00Z",
-            "nonce": "abc123",
+            "pod_id": "0000000000000001",
+            "fc": 1,
+            "ingest_time": 1759831200,
+            "ingest_time_rfc3339_utc": "2025-10-07T10:00:00Z",
+            "pod_time": None,
+            "kind": "Custom",
             "payload": {},
         }
         fact_stem = facts_dir / "fact"

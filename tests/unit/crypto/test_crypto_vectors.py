@@ -5,6 +5,7 @@ into focused offshoot modules (AEAD, HKDF, X25519, Ed25519) to avoid duplication
 """
 from __future__ import annotations
 
+import importlib.util
 import json
 from hashlib import sha256
 from pathlib import Path
@@ -120,9 +121,12 @@ class TestFactSchemaCompliance:
             pytest.skip("Fact schema not available")
 
         fact = {
-            "device_id": "test-pod",
-            "timestamp": "2025-10-06T12:00:00Z",
-            "nonce": "aabbccddeeff00112233",
+            "pod_id": "0000000000000001",
+            "fc": 1,
+            "ingest_time": 1759752000,
+            "ingest_time_rfc3339_utc": "2025-10-06T12:00:00Z",
+            "pod_time": None,
+            "kind": "Custom",
             "payload": {},
         }
 
@@ -135,9 +139,12 @@ class TestFactSchemaCompliance:
             pytest.skip("Fact schema not available")
 
         fact = {
-            "device_id": "test-pod",
-            "timestamp": "2025-10-06T12:00:00Z",
-            "nonce": "aabbccddeeff00112233",
+            "pod_id": "0000000000000001",
+            "fc": 1,
+            "ingest_time": 1759752000,
+            "ingest_time_rfc3339_utc": "2025-10-06T12:00:00Z",
+            "pod_time": None,
+            "kind": "Custom",
             "payload": {"data": "test"},
             "signature": "deadbeef",
         }
@@ -152,10 +159,13 @@ class TestFactSchemaCompliance:
         if "fact" not in schemas:
             pytest.skip("Fact schema not available")
 
-        # Missing device_id
+        # Missing pod_id
         fact = {
-            "timestamp": "2025-10-06T12:00:00Z",
-            "nonce": "aabbccddeeff00112233",
+            "fc": 1,
+            "ingest_time": 1759752000,
+            "ingest_time_rfc3339_utc": "2025-10-06T12:00:00Z",
+            "pod_time": None,
+            "kind": "Custom",
             "payload": {},
         }
 
@@ -181,9 +191,11 @@ class TestVectorCoverage:
 
             # Verify fact structure
             fact = vector["fact"]
-            assert "device_id" in fact
-            assert "timestamp" in fact
-            assert "nonce" in fact
+            assert "pod_id" in fact
+            assert "fc" in fact
+            assert "ingest_time" in fact
+            assert "pod_time" in fact
+            assert "kind" in fact
             assert "payload" in fact
 
     def test_vectors_have_varied_payloads(self, test_vectors):
@@ -199,6 +211,12 @@ class TestVectorCoverage:
 class TestDeterministicAEADVectors:
     def test_chacha20poly1305_vector_matches(self):
         """Verify ciphertext and tag match deterministic vector exactly."""
+        try:
+            spec = importlib.util.find_spec("nacl.bindings")
+        except ModuleNotFoundError:
+            spec = None
+        if spec is None:
+            pytest.skip("PyNaCl not installed")
         import nacl.bindings
 
         vectors_path = _find_vectors_path()
@@ -228,6 +246,12 @@ class TestDeterministicAEADVectors:
 
     def test_xchacha20poly1305_vector_matches(self):
         """Verify XChaCha ciphertext and tag match deterministic vector exactly."""
+        try:
+            spec = importlib.util.find_spec("nacl.bindings")
+        except ModuleNotFoundError:
+            spec = None
+        if spec is None:
+            pytest.skip("PyNaCl not installed")
         import nacl.bindings
 
         vectors_path = _find_vectors_path()

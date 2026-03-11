@@ -4,29 +4,54 @@ Tests covering pod_sim.main CLI behavior (plain/framed/facts-out/defaults)
 """
 from __future__ import annotations
 
+import importlib.util
 import json
+
+import pytest
 
 
 class TestMainFunction:
     """Test main function and CLI."""
 
+    @staticmethod
+    def _require_pynacl() -> None:
+        try:
+            spec = importlib.util.find_spec("nacl.bindings")
+        except ModuleNotFoundError:
+            spec = None
+        if spec is None:
+            pytest.skip("PyNaCl not installed")
+
     def test_main_plain_mode(self, tmp_path, pod_sim):
         out_file = tmp_path / "facts.ndjson"
-        args = ["--device-id", "pod-001", "--count", "3", "--out", str(out_file)]
+        args = [
+            "--device-id",
+            "pod-001",
+            "--site",
+            "an-001",
+            "--count",
+            "3",
+            "--out",
+            str(out_file),
+        ]
         assert pod_sim.main(args) == 0
         assert out_file.exists()
         lines = out_file.read_text(encoding="utf-8").strip().split("\n")
         assert len(lines) == 3
         for line in lines:
             fact = json.loads(line)
-            assert fact.get("device_id") == "pod-001"
+            assert fact.get("pod_id") == "0000000000000001"
+            assert fact.get("kind") == "Custom"
 
     def test_main_framed_mode(self, tmp_path, pod_sim):
+        self._require_pynacl()
         out_file = tmp_path / "frames.ndjson"
         dt_file = tmp_path / "device_table.json"
         args = [
             "--device-id",
             "pod-002",
+            "--site",
+            "an-001",
             "--count",
             "2",
             "--framed",
@@ -42,13 +67,18 @@ class TestMainFunction:
         for line in lines:
             frame = json.loads(line)
             assert {"hdr", "nonce", "ct", "tag"}.issubset(frame)
+        device_table = json.loads(dt_file.read_text(encoding="utf-8"))
+        assert device_table["2"]["provisioning"]["site_id"] == "an-001"
 
     def test_main_with_facts_out(self, pod_sim, facts_dir, tmp_path):
+        self._require_pynacl()
         frames_file = tmp_path / "frames.ndjson"
         dt_file = tmp_path / "device_table.json"
         args = [
             "--device-id",
             "pod-003",
+            "--site",
+            "an-001",
             "--count",
             "2",
             "--framed",
