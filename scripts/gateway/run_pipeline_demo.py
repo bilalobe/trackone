@@ -489,6 +489,8 @@ def main() -> None:
             "--framed",
             "--device-id",
             args.device_id,
+            "--site",
+            args.site,
             "--count",
             str(args.frame_count),
             "--device-table",
