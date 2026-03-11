@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::canonical_json;
 use crate::merkle;
-use crate::{hex_lower, Result};
+use crate::{Result, hex_lower};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BlockHeaderV1 {

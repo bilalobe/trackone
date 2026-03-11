@@ -1,12 +1,12 @@
 use serde_json::Value;
 
-use super::ids::{entity_id, SensorThingsEntityKind};
+use super::ids::{SensorThingsEntityKind, entity_id};
 use super::timefmt::{format_rfc3339_utc, parse_rfc3339_timestamp};
 use super::types::{
     ObservationPayload, SensorThingsDatastream, SensorThingsEntityIds, SensorThingsObservation,
     SensorThingsThing, TimeInterval,
 };
-use super::validate::{validate_env_observation_input, ValidationError};
+use super::validate::{ValidationError, validate_env_observation_input};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum ObservationResult {
@@ -130,7 +130,7 @@ fn normalize_rfc3339_utc(field: &'static str, value: &str) -> Result<String, Val
 
 #[cfg(test)]
 mod tests {
-    use super::{project_env_observation, EnvObservationProjectionInput, ObservationResult};
+    use super::{EnvObservationProjectionInput, ObservationResult, project_env_observation};
 
     #[test]
     fn projects_ids_and_observation() {

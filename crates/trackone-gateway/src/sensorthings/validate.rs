@@ -2,7 +2,7 @@ use std::error::Error;
 use std::fmt::{Display, Formatter};
 
 use super::mapping::EnvObservationProjectionInput;
-use super::timefmt::{format_rfc3339_utc, parse_rfc3339_timestamp, Timestamp};
+use super::timefmt::{Timestamp, format_rfc3339_utc, parse_rfc3339_timestamp};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ValidationError {
@@ -76,7 +76,7 @@ fn parse_rfc3339_utc(field: &'static str, value: &str) -> Result<Timestamp, Vali
 
 #[cfg(test)]
 mod tests {
-    use super::{validate_env_observation_input, ValidationError};
+    use super::{ValidationError, validate_env_observation_input};
     use crate::sensorthings::mapping::{EnvObservationProjectionInput, ObservationResult};
 
     #[test]

@@ -7,7 +7,7 @@
 //! This module provides a simple, `no_std`-friendly counter-based nonce
 //! generator suitable for embedded pods (ADR-018).
 
-use trackone_core::{PodId, AEAD_NONCE_LEN};
+use trackone_core::{AEAD_NONCE_LEN, PodId};
 
 /// A 24-byte nonce generator.
 pub trait Nonce24 {

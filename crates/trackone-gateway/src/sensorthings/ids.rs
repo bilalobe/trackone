@@ -49,7 +49,7 @@ fn hex_lower(bytes: &[u8]) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{entity_id, SensorThingsEntityKind};
+    use super::{SensorThingsEntityKind, entity_id};
 
     #[test]
     fn ids_are_stable() {

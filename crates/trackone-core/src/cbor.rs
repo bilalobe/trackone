@@ -314,7 +314,7 @@ impl CanonicalCbor for Fact {
             FactPayload::Env(env) => {
                 cbor_array_len(&mut buf, 2);
                 cbor_uint(&mut buf, 0); // discriminant: 0 = Env
-                                        // env_bytes already begins with its own array header (schema v1)
+                // env_bytes already begins with its own array header (schema v1)
                 let env_bytes = env.to_canonical_cbor_vec();
                 buf.extend_from_slice(&env_bytes);
             }

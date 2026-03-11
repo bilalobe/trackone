@@ -3,8 +3,8 @@ use sha2::{Digest, Sha256};
 use trackone_core::{Fact, FactKind, FactPayload, SampleType};
 
 use super::mapping::{
-    project_env_observation, EnvObservationProjection, EnvObservationProjectionInput,
-    ObservationResult,
+    EnvObservationProjection, EnvObservationProjectionInput, ObservationResult,
+    project_env_observation,
 };
 use super::timefmt::format_rfc3339_utc;
 use super::validate::ValidationError;
@@ -158,8 +158,8 @@ mod tests {
     use trackone_core::{EnvFact, Fact, FactKind, FactPayload, PodId, SampleType};
 
     use super::{
-        adapt_env_fact_input, derive_provisioned_sensor_key, project_fact_env_observation,
-        EnvObservationAdapterContext,
+        EnvObservationAdapterContext, adapt_env_fact_input, derive_provisioned_sensor_key,
+        project_fact_env_observation,
     };
 
     #[test]

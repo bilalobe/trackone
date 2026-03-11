@@ -162,7 +162,7 @@ fn civil_from_days(days: i64) -> (i32, u32, u32) {
 
 #[cfg(test)]
 mod tests {
-    use super::{format_rfc3339_utc, parse_rfc3339_timestamp, Timestamp};
+    use super::{Timestamp, format_rfc3339_utc, parse_rfc3339_timestamp};
 
     #[test]
     fn parses_zulu_time() {

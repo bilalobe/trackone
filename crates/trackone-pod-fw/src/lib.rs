@@ -34,10 +34,10 @@ pub mod watchdog;
 
 pub use crate::nonce::{CounterNonce24, Nonce24};
 pub use crate::pod::Pod;
-pub use crate::power::{enter_low_power, idle_wait, EventWaiter, LowPowerMode};
+pub use crate::power::{EventWaiter, LowPowerMode, enter_low_power, idle_wait};
 #[cfg(feature = "wdg")]
 pub use crate::watchdog::{
-    record_watchdog_reset, LivenessRegistry, ResetCounterStore, DEFAULT_WATCHDOG_MS,
+    DEFAULT_WATCHDOG_MS, LivenessRegistry, ResetCounterStore, record_watchdog_reset,
 };
 
 /// Firmware version, delegates to core version
