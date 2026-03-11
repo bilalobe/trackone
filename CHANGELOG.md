@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Planned
+- Provisioning/control-plane separation:
+  - replace device-table-derived provisioning materialization with authoritative provisioning/deployment inputs, while keeping runtime replay state separate.
+- Verification bundle contract hardening:
+  - finish ADR-041/043 Phase B with a locked manifest artifact carrying `disclosure_class`, `commitment_profile_id`, artifact digests, and executed checks.
+- Rust ingress and projection convergence:
+  - move live frame verification and canonical `Fact` / `EnvFact` construction toward Rust-owned boundaries;
+  - lock the SensorThings projection artifact schema and add broader ADR-028/030 parity vectors.
+- Runtime/tooling hardening:
+  - reduce the default demo/frame-ingest dependency surface around `PyNaCl`;
+  - keep release-boundary, README, and crate changelog updates synchronized by default.
+
+## [0.1.0-alpha.8] - 2026-03-11
+
+### Changed
+- Canonical fact convergence for the Python gateway:
+  - `scripts/gateway/frame_verifier.py` now emits the canonical top-level fact shape without the transitional `device_id`, `timestamp`, and `nonce` compatibility keys.
+  - `toolset/unified/schemas/fact.schema.json` now defines only the canonical fact contract.
+  - `scripts/gateway/sensorthings_projection.py` now requires canonical fact identifiers/timestamps and reports `read_only_canonical_fact_json` output mode.
+- Hard-break provisioning/demo alignment:
+  - `scripts/pod_sim/pod_sim.py` now seeds current-schema `deployment` and `provisioning` blocks into demo device tables, so the demo pipeline remains runnable under the strict provisioning contract.
+  - `scripts/gateway/provisioning_records.py` now validates authoritative provisioning fields strictly, including hex formatting, instead of fabricating missing identity or deployment data.
+  - `scripts/gateway/verify_cli.py` now rejects legacy `day/*.bin` artifacts with an explicit migration message.
+- Rust workspace/tooling hardening:
+  - the workspace baseline now targets Rust edition `2024`;
+  - `trackone-pod-fw` local/test code was adjusted for Rust 2024 reserved-keyword compatibility;
+  - bundled canonical fact vectors and schema-oriented tests now follow the canonical fact contract.
+
 ## [0.1.0-alpha.7] - 2026-03-07
 
 ### Added
