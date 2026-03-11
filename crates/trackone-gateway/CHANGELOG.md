@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-alpha.8] - 2026-03-11
+
+### Notes
+- No new Rust-side gateway API surface was added in this release; the crate stays aligned with the workspace `0.1.0-alpha.8` release line while the operational hardening work remained concentrated in the Python gateway/demo path.
+
 ## [0.1.0-alpha.7] - 2026-03-07
 
 ### Added
