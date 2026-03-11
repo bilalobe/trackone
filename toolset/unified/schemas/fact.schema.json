@@ -3,7 +3,7 @@
   "$id": "https://example.org/schemas/fact.schema.json",
   "title": "Telemetry Fact",
   "type": "object",
-  "description": "Atomic telemetry fact produced by a pod device before batching/anchoring. Transitional shape contains canonical fields with legacy compatibility keys.",
+  "description": "Atomic telemetry fact produced by a pod device before batching/anchoring using the canonical TrackOne fact shape.",
   "properties": {
     "pod_id": {
       "type": "string",
@@ -35,18 +35,6 @@
         "Custom"
       ]
     },
-    "device_id": {
-      "type": "string",
-      "minLength": 1
-    },
-    "timestamp": {
-      "type": "string",
-      "format": "date-time"
-    },
-    "nonce": {
-      "type": "string",
-      "description": "Monotonic or random 96+ bit nonce encoded as hex/base64."
-    },
     "payload": {
       "type": "object",
       "additionalProperties": true
@@ -62,9 +50,6 @@
     "ingest_time",
     "pod_time",
     "kind",
-    "device_id",
-    "timestamp",
-    "nonce",
     "payload"
   ],
   "additionalProperties": false
