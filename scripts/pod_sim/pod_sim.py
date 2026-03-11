@@ -6,7 +6,7 @@ Pod simulator that emits NDJSON facts or framed records for testing.
 
 This simulator supports two modes:
 
-1. **Plain mode** (M#0): Emits canonical fact JSON (device_id, timestamp, nonce, payload)
+1. **Plain mode** (M#0): Emits canonical fact JSON (`pod_id`, `fc`, `ingest_time`, `kind`, `payload`)
    Usage: python pod_sim.py --device-id pod-001 --count 10
 
 2. **Framed mode** (M#2/Production): Emits NDJSON frames with {hdr, nonce, ct, tag} fields using AEAD (XChaCha20-Poly1305)
@@ -31,22 +31,21 @@ from __future__ import annotations
 
 import argparse
 import base64
+import hashlib
+import importlib
+import importlib.util
 import json
 import secrets
 import struct
 import time
 from datetime import UTC, datetime
+from importlib import import_module
 from pathlib import Path
 from typing import Any
-
-import nacl.bindings
 
 # Local crypto helpers (HKDF)
 try:
     # Prefer importing from gateway utils to avoid duplication
-    import importlib
-    import importlib.util
-
     GW_DIR = Path(__file__).parent.parent / "gateway"
     cu_spec = importlib.util.spec_from_file_location(
         "crypto_utils", str(GW_DIR / "crypto_utils.py")
@@ -90,17 +89,33 @@ else:
 _rnd = secrets.SystemRandom()
 
 
+def _load_nacl_bindings() -> Any:
+    try:
+        return import_module("nacl.bindings")
+    except ImportError as exc:
+        raise RuntimeError(
+            "PyNaCl is required for framed AEAD emission paths. "
+            "Install with: pip install PyNaCl"
+        ) from exc
+
+
 def emit_fact(device_id: str, counter: int) -> dict[str, Any]:
-    now = datetime.now(UTC).isoformat()
+    dev_id_u16 = parse_dev_id_u16(device_id)
+    now_dt = datetime.now(UTC)
     payload: dict[str, Any] = {
         "counter": counter,
         "bioimpedance": round(_rnd.uniform(50.0, 120.0), 2),
         "temp_c": round(_rnd.uniform(20.0, 40.0), 2),
     }
     return {
-        "device_id": device_id,
-        "timestamp": now,
-        "nonce": f"{counter:016x}",
+        "pod_id": f"{dev_id_u16:016x}",
+        "fc": counter,
+        "ingest_time": int(now_dt.timestamp()),
+        "ingest_time_rfc3339_utc": now_dt.replace(microsecond=0)
+        .isoformat()
+        .replace("+00:00", "Z"),
+        "pod_time": None,
+        "kind": "Custom",
         "payload": payload,
     }
 
@@ -123,6 +138,57 @@ def parse_dev_id_u16(device_id: str) -> int:
 
 def b64(data: bytes) -> str:
     return base64.b64encode(data).decode("ascii")
+
+
+def _hex_digest(*parts: bytes) -> str:
+    h = hashlib.sha256()
+    for part in parts:
+        h.update(part)
+    return h.hexdigest()
+
+
+def _demo_provisioning_metadata(
+    master_seed: bytes, dev_id_u16: int, site_id: str | None
+) -> dict[str, Any]:
+    dev_bytes = f"{dev_id_u16:05d}".encode("ascii")
+    firmware_version = "v0.0.0-demo"
+    identity_pubkey = _hex_digest(
+        b"trackone:demo:identity-pubkey:", master_seed, b":", dev_bytes
+    )
+    firmware_hash = _hex_digest(
+        b"trackone:demo:firmware-hash:", firmware_version.encode("utf-8")
+    )
+    birth_cert_sig = (
+        _hex_digest(
+            b"trackone:demo:birth-cert:",
+            identity_pubkey.encode("ascii"),
+            b":",
+            firmware_hash.encode("ascii"),
+            b":",
+            dev_bytes,
+        )
+        * 2
+    )
+    out: dict[str, Any] = {
+        "identity_pubkey": identity_pubkey,
+        "firmware_version": firmware_version,
+        "firmware_hash": firmware_hash,
+        "birth_cert_sig": birth_cert_sig,
+        "provisioned_at": int(time.time()),
+    }
+    if site_id:
+        out["site_id"] = site_id
+    return out
+
+
+def _demo_deployment_metadata() -> dict[str, Any]:
+    return {
+        "deployment_sensor_key": "shtc3-ambient",
+        "sensor_keys": {
+            "temperature_air": "shtc3-ambient",
+            "bioimpedance_magnitude": "bioimpedance-pad",
+        },
+    }
 
 
 # --- TLV helpers (very small, for demo/test) ---
@@ -173,7 +239,7 @@ def save_device_table(path: Path | None, tbl: dict[str, dict[str, Any]]) -> None
 
 
 def ensure_device_entry(
-    tbl: dict[str, dict[str, Any]], dev_id_u16: int
+    tbl: dict[str, dict[str, Any]], dev_id_u16: int, site_id: str | None = None
 ) -> dict[str, Any]:
     # Top-level metadata for key derivation
     meta = tbl.get("_meta")
@@ -187,9 +253,9 @@ def ensure_device_entry(
 
     key = str(dev_id_u16)
     if key not in tbl:
+        master_seed = base64.b64decode(meta["master_seed"])
         salt8 = secrets.token_bytes(8)
         # Derive per-device uplink key from master seed and salt8
-        master_seed = base64.b64decode(meta["master_seed"])
         info = f"barnacle:up:dev={dev_id_u16:05d}".encode("ascii")
         ck_up = hkdf_sha256(master_seed, salt8, info, 32)
         tbl[key] = {
@@ -197,7 +263,17 @@ def ensure_device_entry(
             "ck_up": b64(ck_up),
             "highest_fc_seen": -1,
         }
-    return tbl[key]
+    entry = tbl[key]
+    if not isinstance(entry.get("deployment"), dict):
+        entry["deployment"] = _demo_deployment_metadata()
+    if not isinstance(entry.get("provisioning"), dict):
+        master_seed = base64.b64decode(meta["master_seed"])
+        entry["provisioning"] = _demo_provisioning_metadata(
+            master_seed, dev_id_u16, site_id
+        )
+    elif site_id and not isinstance(entry["provisioning"].get("site_id"), str):
+        entry["provisioning"]["site_id"] = site_id
+    return entry
 
 
 def build_nonce(salt8: bytes, fc64: int) -> bytes:
@@ -211,6 +287,7 @@ def emit_framed(
     counter: int,
     payload: dict[str, Any],
     device_table_path: Path | None,
+    site_id: str | None = None,
 ) -> dict[str, Any]:
     """
     Emit a framed record with header dict and base64-encoded fields using AEAD (XChaCha20-Poly1305).
@@ -223,7 +300,7 @@ def emit_framed(
 
     # Device table / keys
     tbl = load_device_table(device_table_path) if device_table_path else {}
-    entry = ensure_device_entry(tbl, dev_id_u16)
+    entry = ensure_device_entry(tbl, dev_id_u16, site_id=site_id)
 
     # Retrieve salt8, ensuring it's exactly 8 bytes
     salt8_raw = entry.get("salt8")
@@ -256,7 +333,8 @@ def emit_framed(
 
     # TLV payload and AEAD encrypt (XChaCha20-Poly1305)
     tlv = encode_tlv(payload)
-    combined = nacl.bindings.crypto_aead_xchacha20poly1305_ietf_encrypt(
+    nacl_bindings = _load_nacl_bindings()
+    combined = nacl_bindings.crypto_aead_xchacha20poly1305_ietf_encrypt(
         tlv, aad, nonce, ck_up
     )
     ct, tag = combined[:-16], combined[-16:]
@@ -292,6 +370,7 @@ def main(argv: list[str] | None = None) -> int:
         description="Emit NDJSON facts or framed records for testing"
     )
     p.add_argument("--device-id", default="pod-001")
+    p.add_argument("--site", default=None)
     p.add_argument("--count", type=int, default=10)
     p.add_argument("--sleep", type=float, default=0.0, help="Seconds between records")
     p.add_argument("--out", type=Path, help="Path to write NDJSON (defaults to stdout)")
@@ -318,7 +397,11 @@ def main(argv: list[str] | None = None) -> int:
             fact = emit_fact(args.device_id, i)
             if args.framed:
                 frame = emit_framed(
-                    args.device_id, i, fact["payload"], args.device_table
+                    args.device_id,
+                    i,
+                    fact["payload"],
+                    args.device_table,
+                    site_id=args.site,
                 )
                 line = json.dumps(frame, separators=(",", ":"))
                 if args.facts_out:
