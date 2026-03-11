@@ -28,32 +28,41 @@
     {
       "description": "Minimal fact with empty payload",
       "fact": {
-        "device_id": "pod-001",
-        "timestamp": "2025-10-06T12:00:00Z",
-        "nonce": "aabbccddeeff00112233",
+        "pod_id": "0000000000000001",
+        "fc": 1,
+        "ingest_time": 1759752000,
+        "ingest_time_rfc3339_utc": "2025-10-06T12:00:00Z",
+        "pod_time": null,
+        "kind": "Custom",
         "payload": {}
       },
-      "expected_canonical_json": "{\"device_id\":\"pod-001\",\"nonce\":\"aabbccddeeff00112233\",\"payload\":{},\"timestamp\":\"2025-10-06T12:00:00Z\"}"
+      "expected_canonical_json": "{\"fc\":1,\"ingest_time\":1759752000,\"ingest_time_rfc3339_utc\":\"2025-10-06T12:00:00Z\",\"kind\":\"Custom\",\"payload\":{},\"pod_id\":\"0000000000000001\",\"pod_time\":null}"
     },
     {
       "description": "Nested payload with list and object",
       "fact": {
-        "device_id": "pod-002",
-        "timestamp": "2025-10-06T12:00:01Z",
-        "nonce": "00112233445566778899",
+        "pod_id": "0000000000000002",
+        "fc": 2,
+        "ingest_time": 1759752001,
+        "ingest_time_rfc3339_utc": "2025-10-06T12:00:01Z",
+        "pod_time": null,
+        "kind": "Custom",
         "payload": {"a": 1, "b": [2, 1], "c": {"nested": true}}
       },
-      "expected_canonical_json": "{\"device_id\":\"pod-002\",\"nonce\":\"00112233445566778899\",\"payload\":{\"a\":1,\"b\":[2,1],\"c\":{\"nested\":true}},\"timestamp\":\"2025-10-06T12:00:01Z\"}"
+      "expected_canonical_json": "{\"fc\":2,\"ingest_time\":1759752001,\"ingest_time_rfc3339_utc\":\"2025-10-06T12:00:01Z\",\"kind\":\"Custom\",\"payload\":{\"a\":1,\"b\":[2,1],\"c\":{\"nested\":true}},\"pod_id\":\"0000000000000002\",\"pod_time\":null}"
     },
     {
       "description": "Different payload structure for variety",
       "fact": {
-        "device_id": "pod-003",
-        "timestamp": "2025-10-06T12:00:02Z",
-        "nonce": "deadbeefcafebabe0001",
+        "pod_id": "0000000000000003",
+        "fc": 3,
+        "ingest_time": 1759752002,
+        "ingest_time_rfc3339_utc": "2025-10-06T12:00:02Z",
+        "pod_time": null,
+        "kind": "Custom",
         "payload": {"k": "v", "n": 2}
       },
-      "expected_canonical_json": "{\"device_id\":\"pod-003\",\"nonce\":\"deadbeefcafebabe0001\",\"payload\":{\"k\":\"v\",\"n\":2},\"timestamp\":\"2025-10-06T12:00:02Z\"}"
+      "expected_canonical_json": "{\"fc\":3,\"ingest_time\":1759752002,\"ingest_time_rfc3339_utc\":\"2025-10-06T12:00:02Z\",\"kind\":\"Custom\",\"payload\":{\"k\":\"v\",\"n\":2},\"pod_id\":\"0000000000000003\",\"pod_time\":null}"
     }
   ]
 }
