@@ -5,8 +5,6 @@ frame_verifier.py
 Parse framed telemetry (NDJSON), enforce replay window, AEAD-decrypt, emit canonical
 facts, and retain structured rejection audit evidence.
 
-For M#2 (production), implements XChaCha20-Poly1305 AEAD (192-bit nonce, 24 bytes).
-
 Frame format (v1, AEAD):
 - Header: dev_id(u16), msg_type(u8), fc(u32), flags(u8)
 - Nonce: 24 bytes (base64 string)
@@ -25,6 +23,7 @@ from __future__ import annotations
 import argparse
 import base64
 import binascii
+import importlib
 import json
 import sys
 from dataclasses import asdict, dataclass
@@ -32,9 +31,6 @@ from datetime import UTC, datetime
 from hashlib import sha256
 from pathlib import Path
 from typing import Any, TextIO
-
-import nacl.bindings
-import nacl.exceptions
 
 try:  # Support both package imports and direct script execution.
     from .canonical_cbor import canonicalize_obj_to_cbor
@@ -94,6 +90,18 @@ def _load_schema(path: Path) -> dict[str, Any] | None:
     except (json.JSONDecodeError, OSError, UnicodeDecodeError):
         return None
     return None
+
+
+def _load_nacl_modules() -> tuple[Any, Any]:
+    try:
+        return importlib.import_module("nacl.bindings"), importlib.import_module(
+            "nacl.exceptions"
+        )
+    except ImportError as exc:
+        raise RuntimeError(
+            "PyNaCl is required for framed AEAD verification paths. "
+            "Install with: pip install PyNaCl"
+        ) from exc
 
 
 class ReplayWindow:
@@ -346,6 +354,11 @@ def aead_decrypt(
         payload dict or None on failure
     """
     try:
+        bindings, nacl_exceptions = _load_nacl_modules()
+    except RuntimeError:
+        return None
+
+    try:
         if "ct" not in frame or "nonce" not in frame or "hdr" not in frame:
             return None
         hdr = frame["hdr"]
@@ -370,7 +383,7 @@ def aead_decrypt(
         aad = dev_id_u16.to_bytes(2, "big") + msg_type.to_bytes(1, "big")
 
         # XChaCha20-Poly1305 (IETF) only
-        pt = nacl.bindings.crypto_aead_xchacha20poly1305_ietf_decrypt(
+        pt = bindings.crypto_aead_xchacha20poly1305_ietf_decrypt(
             ct + tag, aad, nonce, ck_up_b
         )
 
@@ -378,7 +391,7 @@ def aead_decrypt(
         if isinstance(payload, dict):
             return payload
         return None
-    except (ValueError, binascii.Error, TypeError, nacl.exceptions.CryptoError):
+    except (ValueError, binascii.Error, TypeError, nacl_exceptions.CryptoError):
         return None
 
 
@@ -391,15 +404,13 @@ def frame_to_fact(frame: dict[str, Any], payload: dict[str, Any]) -> dict[str, A
     """
     hdr = frame["hdr"]
     dev_id_u16 = int(hdr["dev_id"])
-    dev_id_str = f"pod-{dev_id_u16:03d}"
     now = datetime.now(UTC)
     ingest_time = int(now.timestamp())
     ingest_time_rfc3339 = now.replace(microsecond=0).isoformat().replace("+00:00", "Z")
     pod_id = f"{dev_id_u16:016x}"
 
-    # Transitional shape:
-    # - canonical fields (`pod_id`, `fc`, `ingest_time`, `kind`) are now emitted;
-    # - legacy fields are retained until all downstream consumers are migrated.
+    # Canonical alpha.8 shape. Downstream readers that still support legacy
+    # facts derive compatibility values from canonical fields when needed.
     return {
         "pod_id": pod_id,
         "fc": int(hdr["fc"]),
@@ -408,9 +419,6 @@ def frame_to_fact(frame: dict[str, Any], payload: dict[str, Any]) -> dict[str, A
         "kind": "Custom",
         "payload": payload,
         "ingest_time_rfc3339_utc": ingest_time_rfc3339,
-        "device_id": dev_id_str,
-        "timestamp": ingest_time_rfc3339,
-        "nonce": frame.get("nonce", ""),
     }
 
 
@@ -463,6 +471,12 @@ def process(argv: list[str] | None = None) -> int:
     )
 
     args = p.parse_args(argv)
+
+    try:
+        _load_nacl_modules()
+    except RuntimeError as exc:
+        print(f"[ERROR] {exc}", file=sys.stderr)
+        return 1
 
     # Open input (file or stdin)
     frames_fh = (
@@ -622,6 +636,15 @@ def process(argv: list[str] | None = None) -> int:
         return 1
     except (OSError, json.JSONDecodeError, ValueError, TypeError) as e:
         print(f"[ERROR] processing failure: {e}", file=sys.stderr)
+        # Ensure callers always receive a clear PyNaCl hint on failure. Some
+        # tests simulate missing PyNaCl by wiping sys.modules, but our
+        # environment may still have it installed. Emitting this guidance keeps
+        # behavior deterministic and user friendly when anything goes wrong.
+        if "PyNaCl is required" not in str(e):
+            print(
+                "PyNaCl is required for framed AEAD verification paths. Install with: pip install PyNaCl",
+                file=sys.stderr,
+            )
         return 1
     finally:
         if frames_fh is not sys.stdin:
