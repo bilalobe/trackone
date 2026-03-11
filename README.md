@@ -58,8 +58,8 @@ Outputs live under `out/site_demo/` by default:
   - the demo pipeline emits a canonical `provisioning/records.json` artifact for projection input;
   - the experimental Python SensorThings native bridge was removed.
 - Partial in `alpha.7`:
-  - the live Python gateway still emits a transitional fact JSON shape with both canonical and legacy fields;
-  - provisioning records are still materialized from current device-table/deployment metadata rather than a fully separate provisioning source of truth;
+  - the live Python gateway has moved to canonical top-level fact emission and downstream projection/schema consumers now follow the same canonical contract;
+  - provisioning records are still materialized from current device-table/deployment metadata rather than a fully separate provisioning source of truth, but the demo path now seeds current-schema deployment/provisioning blocks into its device tables;
   - pipeline manifests exist, but ADR-041/043 Phase B fields such as `disclosure_class`, `commitment_profile_id`, and `checks_executed` are not yet a locked emitted contract;
   - `verify_cli.py` is less sensitive to optional peer-verification imports, but the demo/frame-ingest path still expects `PyNaCl`.
 - Deferred past `alpha.7`:
