@@ -1,6 +1,6 @@
 [project]
 name = "trackone"
-version = "0.0.1"
+version = "0.1.0a8"
 description = "Ultra-Low-Power, Verifiable Telemetry (Barnacle Sentinel)"
 authors = [{ name = "BILAL", email = "elkhatabibilal@gmail.com" }]
 license = { text = "MIT" }
@@ -67,7 +67,7 @@ anchoring = [
 #   pip install -e ".[lint,type,security,test,anchoring]"
 # or install only what you need.
 dev = [
-    "uv==0.10.8",
+    "uv==0.10.9",
     "time-machine>=3.1.0",
 ]
 
@@ -212,7 +212,6 @@ exclude = [
     "dist",
     "out",
 ]
-line-length = 88
 
 [tool.ruff.lint]
 # Select a focused set of rules; expand as needed
