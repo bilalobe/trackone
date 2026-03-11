@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Planned
+- Expand Rust-side gateway boundaries for manifest-first verification bundles and live frame-to-fact convergence.
+- Add stricter SensorThings projection parity coverage for ADR-028/030 time and identity semantics.
+
 ## [0.1.0-alpha.8] - 2026-03-11
 
 ### Notes
