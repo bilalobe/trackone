@@ -226,12 +226,12 @@ def _project_env_payload(
         return None
 
     value = env_payload.get("value")
-    if isinstance(value, (int, float)):
+    if isinstance(value, int | float):
         scalar_value = float(value)
         stream_key = "raw"
     else:
         mean_value = env_payload.get("mean")
-        if not isinstance(mean_value, (int, float)):
+        if not isinstance(mean_value, int | float):
             return None
         scalar_value = float(mean_value)
         stream_key = "summary"
@@ -467,9 +467,13 @@ def _derived_provisioned_sensor_key(
 
 
 def _device_id_from_fact(fact: dict[str, Any]) -> str:
-    legacy_device_id = fact.get("device_id")
-    if isinstance(legacy_device_id, str) and legacy_device_id:
-        return legacy_device_id
+    fact_ref = "fact"
+    fc = fact.get("fc")
+    ingest_time = fact.get("ingest_time")
+    if isinstance(fc, int):
+        fact_ref = f"fact fc={fc}"
+    elif isinstance(ingest_time, int):
+        fact_ref = f"fact ingest_time={ingest_time}"
 
     pod_id = fact.get("pod_id")
     if isinstance(pod_id, str):
@@ -477,15 +481,16 @@ def _device_id_from_fact(fact: dict[str, Any]) -> str:
             pod_value = int(pod_id, 16)
             return f"pod-{pod_value & 0xFFFF:03d}"
         except ValueError:
-            pass
-    return "pod-000"
+            raise ValueError(
+                f"{fact_ref} has invalid canonical pod_id: {pod_id}"
+            ) from None
+    raise ValueError(f"{fact_ref} missing canonical pod_id")
 
 
 def _result_time_from_fact(fact: dict[str, Any]) -> str:
-    for key in ("ingest_time_rfc3339_utc", "timestamp"):
-        val = fact.get(key)
-        if isinstance(val, str) and val:
-            return val
+    val = fact.get("ingest_time_rfc3339_utc")
+    if isinstance(val, str) and val:
+        return val
     ingest_time = fact.get("ingest_time")
     if isinstance(ingest_time, int):
         return (
@@ -551,7 +556,7 @@ def _projection_context_from_record(record: dict[str, Any]) -> dict[str, Any] | 
             context["sensor_keys"] = clean_sensor_keys
 
     sensors = deployment.get("sensors")
-    if isinstance(sensors, (list, dict)):
+    if isinstance(sensors, list | dict):
         context["sensors"] = sensors
 
     identity_pubkey = record.get("identity_pubkey")
@@ -620,7 +625,7 @@ def build_bundle(
     return {
         "generated_at_utc": datetime.now(UTC).isoformat(),
         "site_id": site_id,
-        "projection_mode": "read_only_legacy_fact_json",
+        "projection_mode": "read_only_canonical_fact_json",
         "things": sorted(things.values(), key=lambda item: item["id"]),
         "datastreams": sorted(datastreams.values(), key=lambda item: item["id"]),
         "observed_properties": sorted(
