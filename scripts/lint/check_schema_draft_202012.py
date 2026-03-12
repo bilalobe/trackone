@@ -29,7 +29,7 @@ def _iter_targets(argv: Sequence[str]) -> list[Path]:
         for path in candidates
         if path.suffix == ".json"
         and path.name.endswith(".schema.json")
-        and SCHEMA_ROOT in path.resolve().parents
+        and SCHEMA_ROOT.resolve() in path.resolve().parents
     ]
 
 

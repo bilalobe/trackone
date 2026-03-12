@@ -34,10 +34,16 @@ from typing import Any, TextIO
 
 try:  # Support both package imports and direct script execution.
     from .canonical_cbor import canonicalize_obj_to_cbor
-    from .schema_validation import load_schema, validate_instance
+    from .schema_validation import load_schema, load_schema_from_path, validate_instance
+    from .schema_validation import schema_path as _schema_path
 except ImportError:  # pragma: no cover - fallback when run as a script
     from canonical_cbor import canonicalize_obj_to_cbor  # type: ignore
-    from schema_validation import load_schema, validate_instance  # type: ignore
+    from schema_validation import (  # type: ignore
+        load_schema,
+        load_schema_from_path,
+        validate_instance,
+    )
+    from schema_validation import schema_path as _schema_path  # type: ignore
 
 # Constants for maintainability
 DEFAULT_REPLAY_WINDOW = 64
@@ -162,9 +168,24 @@ class ReplayWindow:
 
 def load_fact_schema() -> dict[str, Any] | None:
     """Load fact.schema.json for optional validation."""
-    schema = load_schema("fact")
+    schema_name = "fact"
+    expected_path = _schema_path(schema_name)
+    try:
+        schema = load_schema_from_path(expected_path)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
+        print(
+            f"[WARN] Failed to load {schema_name} schema "
+            f"(expected at '{expected_path}'): {exc}. "
+            "Schema validation will be disabled.",
+            file=sys.stderr,
+        )
+        return None
     if schema is None:
-        print("[WARN] Failed to load fact schema.", file=sys.stderr)
+        print(
+            f"[WARN] {schema_name.capitalize()} schema not available "
+            f"(expected at '{expected_path}'); schema validation will be disabled.",
+            file=sys.stderr,
+        )
     return schema
 
 
