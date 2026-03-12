@@ -7,8 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Planned
-- Add helper surfaces needed for a locked verification-manifest contract, including stable artifact-digest handling across tooling paths.
+## [0.1.0-alpha.9] - 2026-03-12
+
+### Added
+- A parser-backed CDDL conformance test that parses `toolset/unified/cddl/commitment-artifacts-v1.cddl` and asserts the expected commitment-family top-level rules.
+
+### Changed
+- `trackone-ledger` dev/test tooling now depends on the published `cddl` crate, aligning the contract gate with the workspace Rust `1.88` baseline.
 
 ## [0.1.0-alpha.8] - 2026-03-11
 
