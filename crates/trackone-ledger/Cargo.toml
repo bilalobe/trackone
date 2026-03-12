@@ -19,4 +19,5 @@ serde_json.workspace = true
 sha2.workspace = true
 
 [dev-dependencies]
+cddl = { version = "0.10.3", default-features = false, features = ["std", "ast-span", "ast-comments", "json", "cbor", "additional-controls", "ast-parent"] }
 serde_json.workspace = true
