@@ -48,6 +48,7 @@ frames.ndjson
 device_table.json
 *.bin
 *.bin.sha256
+proofs/
 
 # LaTeX
 *.aux
