@@ -11,8 +11,7 @@
       "description": "Project milestone label associated with this artifact (e.g., m4)."
     },
     "day": {
-      "type": "string",
-      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "$ref": "https://example.org/schemas/common.schema.json#/$defs/utc_date",
       "description": "UTC date (YYYY-MM-DD) of the anchored day artifact."
     },
     "artifact": {
@@ -21,8 +20,7 @@
       "description": "Relative path to the canonical artifact file that was stamped (e.g., out/site_demo/day/2025-10-07.bin)."
     },
     "artifact_sha256": {
-      "type": "string",
-      "pattern": "^[0-9a-f]{64}$",
+      "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex64_lower",
       "description": "Hex-encoded SHA-256 of the artifact at the time of stamping."
     },
     "ots_proof": {
@@ -40,16 +38,13 @@
       "description": "Bitcoin anchoring details derived from the OTS proof.",
       "properties": {
         "height": {
-          "type": "integer",
-          "minimum": 0
+          "$ref": "https://example.org/schemas/common.schema.json#/$defs/non_negative_integer"
         },
         "blockhash": {
-          "type": "string",
-          "pattern": "^[0-9a-f]{64}$"
+          "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex64_lower"
         },
         "merkleroot": {
-          "type": "string",
-          "pattern": "^[0-9a-f]{64}$"
+          "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex64_lower"
         }
       },
       "required": [
@@ -60,8 +55,7 @@
       "additionalProperties": false
     },
     "verified_at_utc": {
-      "type": "string",
-      "format": "date-time",
+      "$ref": "https://example.org/schemas/common.schema.json#/$defs/rfc3339_utc",
       "description": "ISO-8601 timestamp when the OTS proof was last verified."
     }
   },

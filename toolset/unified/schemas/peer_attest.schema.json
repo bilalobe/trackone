@@ -6,18 +6,15 @@
   "type": "object",
   "properties": {
     "day": {
-      "type": "string",
-      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "$ref": "https://example.org/schemas/common.schema.json#/$defs/utc_date",
       "description": "UTC date (YYYY-MM-DD) this attestation covers."
     },
     "site_id": {
-      "type": "string",
-      "minLength": 1,
+      "$ref": "https://example.org/schemas/common.schema.json#/$defs/site_id",
       "description": "Site identifier corresponding to the day record."
     },
     "day_root": {
-      "type": "string",
-      "pattern": "^[0-9a-f]{64}$",
+      "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex64_lower",
       "description": "Hex-encoded SHA-256 Merkle root for the day (matches day_record.day_root)."
     },
     "context": {
@@ -37,13 +34,11 @@
             "description": "Peer identifier (human-readable or stable ID)."
           },
           "signature_hex": {
-            "type": "string",
-            "pattern": "^[0-9a-f]+$",
+            "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex_lower",
             "description": "Hex-encoded Ed25519 signature over the attestation message."
           },
           "pubkey_hex": {
-            "type": "string",
-            "pattern": "^[0-9a-f]{64}$",
+            "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex64_lower",
             "description": "Hex-encoded Ed25519 public key for this peer (32 bytes)."
           }
         },

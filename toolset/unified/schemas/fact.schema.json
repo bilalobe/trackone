@@ -6,25 +6,19 @@
   "description": "Atomic telemetry fact produced by a pod device before batching/anchoring using the canonical TrackOne fact shape.",
   "properties": {
     "pod_id": {
-      "type": "string",
-      "pattern": "^[0-9a-fA-F]{16}$"
+      "$ref": "https://example.org/schemas/common.schema.json#/$defs/pod_id_hex16"
     },
     "fc": {
-      "type": "integer",
-      "minimum": 0
+      "$ref": "https://example.org/schemas/common.schema.json#/$defs/non_negative_integer"
     },
     "ingest_time": {
-      "type": "integer"
+      "$ref": "https://example.org/schemas/common.schema.json#/$defs/integer_timestamp"
     },
     "ingest_time_rfc3339_utc": {
-      "type": "string",
-      "format": "date-time"
+      "$ref": "https://example.org/schemas/common.schema.json#/$defs/rfc3339_utc"
     },
     "pod_time": {
-      "type": [
-        "integer",
-        "null"
-      ]
+      "$ref": "https://example.org/schemas/common.schema.json#/$defs/nullable_integer_timestamp"
     },
     "kind": {
       "type": "string",

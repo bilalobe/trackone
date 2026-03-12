@@ -5,7 +5,9 @@
   "type": "object",
   "description": "Metadata artifact produced by the Weekly Ratchet workflow (ADR-022).",
   "properties": {
-    "timestamp_utc": { "type": "string", "format": "date-time" },
+    "timestamp_utc": {
+      "$ref": "https://example.org/schemas/common.schema.json#/$defs/rfc3339_utc"
+    },
     "run": {
       "type": "object",
       "properties": {

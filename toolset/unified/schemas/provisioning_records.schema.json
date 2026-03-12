@@ -1,5 +1,6 @@
 {
-  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/schemas/provisioning_records.schema.json",
   "title": "Provisioning Records Bundle",
   "type": "object",
   "properties": {
@@ -7,84 +8,58 @@
       "const": 1
     },
     "generated_at_utc": {
-      "type": "string"
+      "type": "string",
+      "format": "date-time"
     },
     "site_id": {
-      "type": "string"
+      "$ref": "https://example.org/schemas/common.schema.json#/$defs/site_id"
     },
     "records": {
       "type": "array",
       "items": {
-        "type": "object",
-        "properties": {
-          "pod_id": {
-            "type": "string",
-            "pattern": "^[0-9a-f]{16}$"
-          },
-          "firmware_version": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 32
-          },
-          "firmware_hash": {
-            "type": "string",
-            "pattern": "^[0-9a-f]{64}$"
-          },
-          "identity_pubkey": {
-            "type": "string",
-            "pattern": "^[0-9a-f]{64}$"
-          },
-          "birth_cert_sig": {
-            "type": "string",
-            "pattern": "^[0-9a-f]{128}$"
-          },
-          "provisioned_at": {
-            "type": "integer"
-          },
-          "site_id": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "deployment": {
-            "type": "object",
-            "properties": {
-              "deployment_sensor_key": {
-                "type": "string",
-                "minLength": 1
-              },
-              "sensor_keys": {
-                "type": "object",
-                "additionalProperties": {
-                  "type": "string",
-                  "minLength": 1
-                }
-              },
-              "sensors": {
-                "type": [
-                  "array",
-                  "object"
-                ]
-              }
-            },
-            "required": [
-              "deployment_sensor_key"
-            ],
-            "additionalProperties": false
-          }
-        },
-        "required": [
-          "pod_id",
-          "firmware_version",
-          "firmware_hash",
-          "identity_pubkey",
-          "birth_cert_sig",
-          "provisioned_at",
-          "deployment"
-        ],
-        "additionalProperties": false
+        "$ref": "#/$defs/provisioning_record"
       }
+    }
+  },
+  "$defs": {
+    "provisioning_record": {
+      "type": "object",
+      "properties": {
+        "pod_id": {
+          "$ref": "https://example.org/schemas/common.schema.json#/$defs/pod_id_hex16"
+        },
+        "firmware_version": {
+          "$ref": "https://example.org/schemas/common.schema.json#/$defs/firmware_version"
+        },
+        "firmware_hash": {
+          "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex64_lower"
+        },
+        "identity_pubkey": {
+          "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex64_lower"
+        },
+        "birth_cert_sig": {
+          "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex128_lower"
+        },
+        "provisioned_at": {
+          "$ref": "https://example.org/schemas/common.schema.json#/$defs/integer_timestamp"
+        },
+        "site_id": {
+          "$ref": "https://example.org/schemas/common.schema.json#/$defs/nullable_site_id"
+        },
+        "deployment": {
+          "$ref": "https://example.org/schemas/common.schema.json#/$defs/deployment_metadata"
+        }
+      },
+      "required": [
+        "pod_id",
+        "firmware_version",
+        "firmware_hash",
+        "identity_pubkey",
+        "birth_cert_sig",
+        "provisioned_at",
+        "deployment"
+      ],
+      "additionalProperties": false
     }
   },
   "required": [

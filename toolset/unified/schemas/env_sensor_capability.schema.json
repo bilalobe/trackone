@@ -47,7 +47,16 @@
           "required": ["min", "max"],
           "additionalProperties": false
         },
-        "calibration_date": { "type": ["string", "null"], "format": "date-time" },
+        "calibration_date": {
+          "anyOf": [
+            {
+              "$ref": "https://example.org/schemas/common.schema.json#/$defs/rfc3339_utc"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "calibration_notes": { "type": ["string", "null"] }
       },
       "required": [

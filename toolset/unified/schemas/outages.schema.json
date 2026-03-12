@@ -6,12 +6,10 @@
   "additionalProperties": false,
   "properties": {
     "date": {
-      "type": "string",
-      "format": "date"
+      "$ref": "https://example.org/schemas/common.schema.json#/$defs/utc_date"
     },
     "site_id": {
-      "type": "string",
-      "minLength": 1
+      "$ref": "https://example.org/schemas/common.schema.json#/$defs/site_id"
     },
     "incidents": {
       "type": "array",
@@ -33,12 +31,10 @@
             ]
           },
           "start_utc": {
-            "type": "string",
-            "format": "date-time"
+            "$ref": "https://example.org/schemas/common.schema.json#/$defs/rfc3339_utc"
           },
           "end_utc": {
-            "type": "string",
-            "format": "date-time",
+            "$ref": "https://example.org/schemas/common.schema.json#/$defs/rfc3339_utc",
             "$comment": "end_utc should be greater than or equal to start_utc; enforce via external validation"
           },
           "components": {
@@ -85,8 +81,7 @@
                     "type": "string"
                   },
                   "first_detected_utc": {
-                    "type": "string",
-                    "format": "date-time"
+                    "$ref": "https://example.org/schemas/common.schema.json#/$defs/rfc3339_utc"
                   }
                 },
                 "required": [
@@ -143,15 +138,13 @@
                 "type": "string"
               },
               "merkle_index": {
-                "type": "integer",
-                "minimum": 0,
+                "$ref": "https://example.org/schemas/common.schema.json#/$defs/non_negative_integer",
                 "description": "Position of the fact in the day's Merkle tree"
               },
               "merkle_proof": {
                 "type": "array",
                 "items": {
-                  "type": "string",
-                  "pattern": "^[0-9a-f]{64}$"
+                  "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex64_lower"
                 },
                 "description": "SHA-256 sibling hashes from leaf to root"
               }

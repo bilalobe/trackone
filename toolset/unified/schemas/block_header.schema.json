@@ -2,56 +2,10 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://example.org/schemas/block_header.schema.json",
   "title": "Merkle Block Header",
-  "type": "object",
   "description": "Header for a batch of facts committed via Merkle root. OTS proofs are external artifacts; this header may at most carry a reference path, not embedded proof bytes.",
-  "properties": {
-    "version": {
-      "type": "integer",
-      "minimum": 1,
-      "description": "Schema version (currently 1)."
-    },
-    "site_id": {
-      "type": "string",
-      "minLength": 1,
-      "description": "Site identifier (e.g., an-001)."
-    },
-    "day": {
-      "type": "string",
-      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-      "description": "UTC date (YYYY-MM-DD) grouping."
-    },
-    "batch_id": {
-      "type": "string",
-      "minLength": 1,
-      "description": "Unique batch identifier (e.g., site-day-seq)."
-    },
-    "merkle_root": {
-      "type": "string",
-      "pattern": "^[0-9a-f]{64}$",
-      "description": "Hex-encoded SHA256 Merkle root of included facts."
-    },
-    "count": {
-      "type": "integer",
-      "minimum": 0,
-      "description": "Number of facts in this batch."
-    },
-    "leaf_hashes": {
-      "type": "array",
-      "items": {
-        "type": "string",
-        "pattern": "^[0-9a-f]{64}$"
-      },
-      "description": "Sorted leaf hashes for auditor verification."
+  "allOf": [
+    {
+      "$ref": "https://example.org/schemas/common.schema.json#/$defs/block_header_v1"
     }
-  },
-  "required": [
-    "version",
-    "site_id",
-    "day",
-    "batch_id",
-    "merkle_root",
-    "count",
-    "leaf_hashes"
-  ],
-  "additionalProperties": false
+  ]
 }

@@ -1,5 +1,6 @@
 {
-  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/schemas/device_table.schema.json",
   "title": "Device Table",
   "type": "object",
   "properties": {
@@ -7,8 +8,7 @@
       "type": "object",
       "properties": {
         "master_seed": {
-          "type": "string",
-          "pattern": "^[A-Za-z0-9+/]+=*$"
+          "$ref": "https://example.org/schemas/common.schema.json#/$defs/base64_string"
         },
         "version": {
           "const": "1.0"
@@ -21,77 +21,42 @@
       "additionalProperties": false
     }
   },
-  "definitions": {
-    "deployment_metadata": {
-      "type": "object",
-      "properties": {
-        "deployment_sensor_key": {
-          "type": "string",
-          "minLength": 1
-        },
-        "sensor_keys": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "string",
-            "minLength": 1
-          }
-        },
-        "sensors": {
-          "type": [
-            "object",
-            "array"
-          ]
-        }
-      },
-      "required": [
-        "deployment_sensor_key"
-      ],
-      "additionalProperties": false
-    },
+  "$defs": {
     "provisioning_metadata": {
       "type": "object",
       "properties": {
         "identity_pubkey": {
-          "type": "string",
-          "pattern": "^[0-9a-f]{64}$"
+          "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex64_lower"
         },
         "firmware_version": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 32
+          "$ref": "https://example.org/schemas/common.schema.json#/$defs/firmware_version"
         },
         "firmware_hash": {
-          "type": "string",
-          "pattern": "^[0-9a-f]{64}$"
+          "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex64_lower"
         },
         "birth_cert_sig": {
-          "type": "string",
-          "pattern": "^[0-9a-f]{128}$"
+          "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex128_lower"
         },
         "provisioned_at": {
-          "type": "integer"
+          "$ref": "https://example.org/schemas/common.schema.json#/$defs/integer_timestamp"
         },
         "site_id": {
-          "type": "string"
+          "$ref": "https://example.org/schemas/common.schema.json#/$defs/site_id"
         }
       },
       "required": [
         "identity_pubkey"
       ],
       "additionalProperties": false
-    }
-  },
-  "patternProperties": {
-    "^\\d{1,5}$": {
+    },
+    "device_entry": {
       "type": "object",
       "properties": {
         "salt8": {
-          "type": "string",
-          "pattern": "^[A-Za-z0-9+/]+=*$"
+          "$ref": "https://example.org/schemas/common.schema.json#/$defs/base64_string"
         },
         "ck_up": {
-          "type": "string",
-          "pattern": "^[A-Za-z0-9+/]+=*$"
+          "$ref": "https://example.org/schemas/common.schema.json#/$defs/base64_string"
         },
         "highest_fc_seen": {
           "type": [
@@ -115,25 +80,26 @@
           ]
         },
         "site_id": {
-          "type": "string"
+          "$ref": "https://example.org/schemas/common.schema.json#/$defs/site_id"
         },
         "sensor_keys": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "string"
-          }
+          "$ref": "https://example.org/schemas/common.schema.json#/$defs/sensor_key_map"
         },
         "sensors": {
-          "type": [
-            "object",
-            "array"
+          "anyOf": [
+            {
+              "type": "object"
+            },
+            {
+              "type": "array"
+            }
           ]
         },
         "deployment": {
-          "$ref": "#/definitions/deployment_metadata"
+          "$ref": "https://example.org/schemas/common.schema.json#/$defs/deployment_metadata"
         },
         "provisioning": {
-          "$ref": "#/definitions/provisioning_metadata"
+          "$ref": "#/$defs/provisioning_metadata"
         }
       },
       "required": [
@@ -141,6 +107,11 @@
         "ck_up"
       ],
       "additionalProperties": false
+    }
+  },
+  "patternProperties": {
+    "^\\d{1,5}$": {
+      "$ref": "#/$defs/device_entry"
     }
   },
   "required": [

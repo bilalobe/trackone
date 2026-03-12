@@ -11,73 +11,26 @@
       "description": "Schema version (currently 1)."
     },
     "site_id": {
-      "type": "string",
-      "minLength": 1,
+      "$ref": "https://example.org/schemas/common.schema.json#/$defs/site_id",
       "description": "Site identifier."
     },
     "date": {
-      "type": "string",
-      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "$ref": "https://example.org/schemas/common.schema.json#/$defs/utc_date",
       "description": "UTC date (YYYY-MM-DD)."
     },
     "prev_day_root": {
-      "type": "string",
-      "pattern": "^[0-9a-f]{64}$",
+      "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex64_lower",
       "description": "Merkle root of previous day (chain linkage); 64 zeros if first day."
     },
     "batches": {
       "type": "array",
       "items": {
-        "type": "object",
-        "properties": {
-          "version": {
-            "type": "integer",
-            "minimum": 1
-          },
-          "site_id": {
-            "type": "string",
-            "minLength": 1
-          },
-          "day": {
-            "type": "string",
-            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
-          },
-          "batch_id": {
-            "type": "string",
-            "minLength": 1
-          },
-          "merkle_root": {
-            "type": "string",
-            "pattern": "^[0-9a-f]{64}$"
-          },
-          "count": {
-            "type": "integer",
-            "minimum": 0
-          },
-          "leaf_hashes": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "pattern": "^[0-9a-f]{64}$"
-            }
-          }
-        },
-        "required": [
-          "version",
-          "site_id",
-          "day",
-          "batch_id",
-          "merkle_root",
-          "count",
-          "leaf_hashes"
-        ],
-        "additionalProperties": false
+        "$ref": "https://example.org/schemas/block_header.schema.json"
       },
       "description": "Array of block headers for this day."
     },
     "day_root": {
-      "type": "string",
-      "pattern": "^[0-9a-f]{64}$",
+      "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex64_lower",
       "description": "Aggregate Merkle root for the entire day."
     }
   },
