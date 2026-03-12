@@ -38,7 +38,11 @@ try:  # Support both package imports and direct script execution.
     from .schema_validation import schema_path as _schema_path
 except ImportError:  # pragma: no cover - fallback when run as a script
     from canonical_cbor import canonicalize_obj_to_cbor  # type: ignore
-    from schema_validation import load_schema, load_schema_from_path, validate_instance  # type: ignore
+    from schema_validation import (  # type: ignore
+        load_schema,
+        load_schema_from_path,
+        validate_instance,
+    )
     from schema_validation import schema_path as _schema_path  # type: ignore
 
 # Constants for maintainability
