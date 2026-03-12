@@ -7,9 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Planned
-- Add Rust-owned canonical `Fact` / `EnvFact` ingress helpers so the live gateway path can converge on workspace types instead of Python-side shaping.
-- Clarify crate-local provisioning/deployment identity types that can back authoritative control-plane inputs.
+## [0.1.0-alpha.9] - 2026-03-12
+
+### Changed
+- `trackone-core::VERSION` now reports `0.1.0-alpha.9` to match the workspace release.
 
 ## [0.1.0-alpha.8] - 2026-03-11
 
