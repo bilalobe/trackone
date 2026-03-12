@@ -7,8 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-alpha.9] - 2026-03-12
+
 ### Notes
-- No pod-firmware-specific `alpha.9` work is queued yet; current next-release hardening is centered on gateway, provisioning, and verification-bundle boundaries.
+- No pod-firmware-specific changes landed in this release beyond staying aligned with the workspace `0.1.0-alpha.9` release line.
 
 ## [0.1.0-alpha.8] - 2026-03-11
 
