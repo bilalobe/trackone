@@ -1,4 +1,13 @@
-# TrackOne — Ultra‑Low‑Power, Verifiable Telemetry
+# TrackOne
+
+TrackOne is an alpha-stage telemetry and verification workspace for low-power devices, gateway-side ingest, deterministic artifact generation, and publishable release artifacts.
+
+The repository combines:
+
+- Python tooling for gateway, verification, and demo/pipeline flows
+- Rust workspace crates for shared protocol, ledger, gateway bindings, and pod firmware helpers
+- Helm packaging for Kubernetes deployment
+- Release automation for crates, wheels, and chart artifacts
 
 [![crates.io](https://img.shields.io/crates/v/trackone-core)](https://crates.io/crates/trackone-core)
 [![crates.io](https://img.shields.io/crates/v/trackone-constants)](https://crates.io/crates/trackone-constants)
@@ -7,31 +16,171 @@
 [![crates.io](https://img.shields.io/crates/v/trackone-ledger)](https://crates.io/crates/trackone-ledger)
 [![PyPI](https://img.shields.io/pypi/v/trackone)](https://pypi.org/project/trackone/)
 
-Secure ingestion, canonicalization, Merkle batching, and public anchoring of sensor telemetry. TrackOne produces an auditable, append‑only ledger of daily telemetry “facts” and anchors each day’s digest to public time via OpenTimestamps (OTS). Auditors can independently recompute Merkle roots and verify proofs without trusting the gateway operator.
+## What TrackOne is for
 
-Project status: active R&D with a Python‑first reference gateway. See ADRs for design decisions and roadmap.
+TrackOne is organized around a simple idea:
 
-## Highlights
+- Device-side telemetry should be bounded and replay-resistant
+- Gateway-side processing should converge toward canonical, deterministic artifacts
+- Verification outputs should be machine-checkable and releaseable
+- Deployment artifacts should be reproducible and version-aligned
 
-- Modern cryptography (per ADR‑001):
-  - X25519 + HKDF key derivation
-  - XChaCha20‑Poly1305 AEAD (24‑byte nonce)
-  - Ed25519 signatures
-  - SHA‑256 Merkle trees
-- Deterministic data model: canonical CBOR commitment artifacts with JSON projections, schema validation, hash‑sorted leaves, and day chaining.
-- Verifiable daily anchoring with OTS, plus CLI to verify roots and proofs end‑to‑end.
-- Forward‑only schema/policy (ADR‑006).
-- Read-only SensorThings projection artifacts for interoperability without making SensorThings the root of truth.
-- Extensive tests, benchmarks, and ADRs documenting decisions.
-- Optional Rust gateway extension module (`trackone_core`) built from `crates/trackone-gateway` (PyO3 + maturin) for Merkle, ledger, OTS, and radio boundaries.
+At a high level, the repo covers:
 
-## Bench topology (lab)
+- Shared protocol and crypto-adjacent types
+- Deterministic canonicalization and ledger helpers
+- Python-facing gateway bindings
+- Pod firmware support helpers
+- Pipeline/demo and verification tooling
+- Kubernetes packaging via Helm
 
-The original bench-scale deployment topology (pod → relay → gateway → VMs) is documented in `docs/bench-network.md`.
+## Repository layout
+
+```
+.
+├── crates/                  # Rust workspace crates
+│   ├── trackone-core
+│   ├── trackone-constants
+│   ├── trackone-ledger
+│   ├── trackone-gateway
+│   └── trackone-pod-fw
+├── trackone_core/           # Python package surface for native bindings
+├── scripts/                 # Gateway/demo/verification tooling
+├── tests/                   # Python test suites
+├── deploy/helm/trackone/    # Helm chart
+├── docs/                    # Project documentation
+├── adr/                     # Architecture Decision Records
+├── Cargo.toml               # Rust workspace root
+└── pyproject.toml           # Python package + tooling config
+```
+
+## Main components
+
+### Rust workspace crates
+
+- `trackone-core` — core protocol, framing, bounded types, and shared invariants
+- `trackone-constants` — shared constants used across crates
+- `trackone-ledger` — canonicalization and deterministic ledger/commitment helpers
+- `trackone-gateway` — PyO3-backed Rust gateway crate exposed to Python
+- `trackone-pod-fw` — firmware-side helpers for pod integration
+
+### Python/tooling side
+
+- `trackone_core/` — Python package wrapper around the native extension
+- `scripts/` — gateway, verification, and demo pipeline scripts
+- `tests/` — unit, integration, and end-to-end validation
+
+### Deployment side
+
+- `deploy/helm/trackone/` — Helm chart for published-artifact deployments and optional local overrides
+
+## Quick start
+
+### Python development setup
+
+This project uses **uv** for Python environment and dependency management.
+
+```bash
+uv sync
+```
+
+If you want the broader local developer toolset:
+
+```bash
+uv sync --extra ci --extra test --extra security
+```
+
+### Rust workspace checks
+
+```bash
+cargo check --workspace
+cargo test --workspace
+```
+
+### Python test run
+
+```bash
+uv run pytest
+```
+
+## Common developer workflows
+
+### Run focused Rust checks
+
+```bash
+cargo check -p trackone-core
+cargo test -p trackone-ledger
+cargo test -p trackone-pod-fw
+```
+
+### Build the Python extension locally
+
+```bash
+uv run maturin develop --manifest-path crates/trackone-gateway/Cargo.toml
+```
+
+### Run project-wide quality checks
+
+```bash
+uv run tox
+```
+
+Or run a focused tox environment:
+
+```bash
+uv run tox -e lint
+uv run tox -e type
+uv run tox -e security
+```
+
+## Releases
+
+Tagged releases publish release artifacts through GitHub Actions.
+
+Current release outputs include:
+
+- Rust crates
+- Python wheel artifacts
+- Helm chart OCI artifacts
+
+Version alignment matters across workspace crates, Python packaging, and deployment artifacts, so release cuts should be treated as coordinated workspace releases rather than isolated per-language bumps.
+
+## Deployment
+
+### Recommended: install the published Helm chart artifact
+
+For normal deployments, use the published OCI chart:
+
+```bash
+helm upgrade --install trackone oci://ghcr.io/<owner>/trackone/charts/trackone \
+  --version <release-version> \
+  --namespace trackone \
+  --create-namespace \
+  --set postgres.auth.existingSecret=<your-postgres-secret>
+```
+
+If registry images are private, add your image-pull secret and any deployment-specific values overrides.
+
+### Optional local / Minikube-style workflow
+
+Use the local chart and local image overrides only when you explicitly want local image builds and in-cluster development behavior.
+
+```bash
+eval "$(minikube -p ${MINIKUBE_PROFILE:-minikube} docker-env)"
+docker build -t trackone/ots-calendar:local -f docker/calendar/Dockerfile docker/calendar
+docker build -t trackone/gateway:local -f docker/gateway/Dockerfile .
+docker build -t trackone/core:local -f docker/core/Dockerfile .
+docker build -t trackone/constants:local -f docker/constants/Dockerfile .
+docker build -t trackone/pod-fw:local -f docker/pod-fw/Dockerfile .
+helm upgrade --install trackone deploy/helm/trackone \
+  -f deploy/helm/trackone/values-local.yaml
+```
+
+For detailed chart configuration and deployment options, see [`deploy/helm/trackone/README.md`](deploy/helm/trackone/README.md).
 
 ## How it works (pipeline)
 
-End‑to‑end (see `scripts/gateway/run_pipeline.sh`):
+End-to-end (see `scripts/gateway/run_pipeline.sh`):
 
 1. Pod simulator emits framed telemetry (`pod_sim.py --framed`).
 1. Gateway verifies frames, enforces replay window, emits canonical facts (`frame_verifier.py`).
@@ -42,136 +191,55 @@ End‑to‑end (see `scripts/gateway/run_pipeline.sh`):
 
 Outputs live under `out/site_demo/` by default:
 
-- `facts/` authoritative CBOR facts plus JSON projections
-- `blocks/` block headers that record the authoritative daily Merkle root
-- `day/YYYY-MM-DD.cbor` the day blob, with `*.ots` proof
-- `provisioning/records.json` canonical provisioning-record bundle used for projection context
-- `sensorthings/YYYY-MM-DD.observations.json` read-only SensorThings-style projection artifact
+- `facts/` — authoritative CBOR facts plus JSON projections
+- `blocks/` — block headers that record the authoritative daily Merkle root
+- `day/YYYY-MM-DD.cbor` — the day blob, with `*.ots` proof
+- `provisioning/records.json` — canonical provisioning-record bundle used for projection context
+- `sensorthings/YYYY-MM-DD.observations.json` — read-only SensorThings-style projection artifact
 
-## Alpha.7 boundary
+Machine-readable contract split:
 
-`0.1.0-alpha.7` should be read as a hardening and convergence release.
+- JSON projection and operational artifact contracts live under `toolset/unified/schemas/` as JSON Schema.
+- The authoritative CBOR commitment family is described separately in `toolset/unified/cddl/commitment-artifacts-v1.cddl`.
 
-- Done in `alpha.7`:
-  - read-only SensorThings projection remains outside the trust root;
-  - projection now requires provisioning-backed sensor identity instead of projection-time fallback;
-  - the demo pipeline emits a canonical `provisioning/records.json` artifact for projection input;
-  - the experimental Python SensorThings native bridge was removed.
-- Partial in `alpha.7`:
-  - the live Python gateway has moved to canonical top-level fact emission and downstream projection/schema consumers now follow the same canonical contract;
-  - provisioning records are still materialized from current device-table/deployment metadata rather than a fully separate provisioning source of truth, but the demo path now seeds current-schema deployment/provisioning blocks into its device tables;
-  - pipeline manifests exist, but ADR-041/043 Phase B fields such as `disclosure_class`, `commitment_profile_id`, and `checks_executed` are not yet a locked emitted contract;
-  - `verify_cli.py` is less sensitive to optional peer-verification imports, but the demo/frame-ingest path still expects `PyNaCl`.
-- Deferred past `alpha.7`:
-  - end-to-end `trackone-core::Fact` / `EnvFact` convergence in the live gateway path;
-  - a formal provisioning/deployment identity contract enforced before projection time;
-  - Phase B disclosure manifest emission and verification;
-  - a locked SensorThings projection artifact schema plus broader ADR parity tests.
+## Alpha.9 boundary
 
-## Quick start
+`0.1.0-alpha.9` is the current release.
 
-Prereqs:
+- Done in `alpha.9`:
 
-- Python 3.12+ (project tests target 3.12–3.14)
-- A virtualenv (recommended)
-- `PyNaCl` for the demo/frame-ingest path (`pod_sim.py`, `frame_verifier.py`)
-- Optional: `ots` CLI in your PATH for real OTS verification (tests fall back to placeholders)
+  - Workspace and internal crates bumped to alpha.9
+  - Python package version aligned to `0.1.0a9`
+  - Helm chart deployment defaults and image tags aligned to alpha.9
+  - The CBOR-authoritative commitment family now has a checked-in CDDL contract plus a parser-backed Rust gate
+  - Unified JSON Schema contracts now share common definitions and centralized cross-file `$ref` validation
 
-Install dependencies (recommended, lockfile-first):
+- Carried over from `alpha.8`:
 
-```bash
-make dev-setup
-```
+  - Read-only SensorThings projection remains outside the trust root
+  - Projection requires provisioning-backed sensor identity instead of projection-time fallback
+  - Demo pipeline emits a canonical `provisioning/records.json` artifact for projection input
 
-This installs the full developer toolchain via focused extras:
-`.[lint,type,security,test,anchoring]`.
+- Partial in `alpha.9`:
 
-Run the demo pipeline via Make:
+  - Live Python gateway uses canonical top-level fact emission
+  - Provisioning records are materialized from current device-table/deployment metadata
+  - Pipeline manifests exist, but ADR-041/043 Phase B fields (`disclosure_class`, `commitment_profile_id`, `checks_executed`) are not yet a locked emitted contract
+  - `verify_cli.py` is less sensitive to optional peer-verification imports, but demo/frame-ingest path still expects `PyNaCl`
 
-```bash
-make run
-```
+- Deferred past `alpha.9`:
 
-Or directly via the script:
+  - End-to-end `trackone-core::Fact` / `EnvFact` convergence in the live gateway path
+  - Formal provisioning/deployment identity contract enforced before projection time
+  - Phase B disclosure manifest emission and verification
+  - Locked SensorThings projection artifact schema plus broader ADR parity tests
 
-```bash
-bash scripts/gateway/run_pipeline.sh
-```
+## Documentation
 
-This generates frames, extracts canonical facts, builds the Merkle day, anchors it, and verifies the result.
-
-## Verify a day manually
-
-The verifier recomputes the Merkle root from facts and checks the OTS proof:
-
-```bash
-python scripts/gateway/verify_cli.py \
-  --root out/site_demo \
-  --facts out/site_demo/facts
-```
-
-Optional: verify RFC 3161 TSA timestamps and peer co-signatures:
-
-```bash
-# Warn-only mode (default)
-python scripts/gateway/verify_cli.py \
-  --root out/site_demo \
-  --facts out/site_demo/facts \
-  --verify-tsa \
-  --verify-peers
-
-# Strict mode (fail on missing/invalid TSA or peer artifacts)
-python scripts/gateway/verify_cli.py \
-  --root out/site_demo \
-  --facts out/site_demo/facts \
-  --verify-tsa --tsa-strict \
-  --verify-peers --peers-strict --peers-min 2
-```
-
-Exit codes: 0=OK, 1=invalid/missing artifacts, 2=root mismatch, 3=missing required OTS proof (`--require-ots`), 4=OTS verify failed, 5=TSA failed (strict), 6=peer failed (strict), 7=OTS meta/path mismatch, 8=OTS meta invalid, 9=OTS meta artifact SHA mismatch.
-
-If `ots` is not installed, tests and demos can use a placeholder `.ots` proof written by the pipeline script; the verifier treats the string `OTS_PROOF_PLACEHOLDER` as success for local runs.
-
-## Makefile shortcuts
-
-Useful targets (run `make help` for the full list):
-
-- `make install` — install runtime dependencies
-- `make dev-setup` — install dev dependencies (lint, typing, tests, security)
-- `make export-requirements` — export pinned `out/requirements*.txt` from `uv.lock`
-- `make run` — run the end‑to‑end pipeline via tox
-- `make test` — run the test suite
-- `make tox-readme` — format/validate README and ADR index
-- `make tox-security` — Bandit and pip‑audit
-- `make bench` — run pytest‑benchmark suite
-
-## Testing
-
-We use pytest and tox:
-
-```bash
-# Fast local run
-pytest -q
-
-# Multi‑env via tox (3.12, 3.13, 3.14)
-tox -e py312,py313,py314
-
-# Coverage reports
-tox -e coverage
-
-# Lint and type‑check
-tox -e lint
-tox -e type
-
-# End‑to‑end tests
-tox -e e2e
-```
-
-Real OTS integration tests require `RUN_REAL_OTS=1` and an `ots` binary in PATH:
-
-```bash
-RUN_REAL_OTS=1 tox -e slow
-```
+- `adr/` — architecture decisions and protocol boundaries
+- `docs/` — supporting docs and operational notes
+- Per-crate `README.md` files under `crates/` — crate-local purpose and usage
+- `CHANGELOG.md` — workspace-level release notes
 
 ## Configuration knobs
 
@@ -191,15 +259,11 @@ You can also pass CLI flags to individual scripts (see `--help` on each):
 
 ## OpenTimestamps configuration
 
-The gateway uses OpenTimestamps (OTS) to anchor daily Merkle roots. There are
-three environment variables that control how the OTS client behaves:
+The gateway uses OpenTimestamps (OTS) to anchor daily Merkle roots. There are three environment variables that control how the OTS client behaves:
 
 - `OTS_STATIONARY_STUB`
 
-  - When set to `1`, `scripts/gateway/ots_anchor.py` does **not** call the real
-    `ots` binary. Instead it writes a deterministic stub proof
-    (`STATIONARY-OTS:<sha256(day.cbor)>`) and an `ots_meta` sidecar. This mode is
-    used by the test suite to avoid slow or flaky network calls.
+  - When set to `1`, `scripts/gateway/ots_anchor.py` does **not** call the real `ots` binary. Instead it writes a deterministic stub proof (`STATIONARY-OTS:<sha256(day.cbor)>`) and an `ots_meta` sidecar. This mode is used by the test suite to avoid slow or flaky network calls.
 
   - Default in tests (via `tests/conftest.py`): `OTS_STATIONARY_STUB=1`.
 
@@ -211,8 +275,7 @@ three environment variables that control how the OTS client behaves:
 
 - `OTS_CALENDARS`
 
-  - Optional comma-separated list of calendar URLs that is forwarded to the
-    underlying `ots` client via the `OTS_CALENDARS` environment variable.
+  - Optional comma-separated list of calendar URLs that is forwarded to the underlying `ots` client via the `OTS_CALENDARS` environment variable.
 
   - Example (local real calendar first, then public):
 
@@ -223,11 +286,9 @@ three environment variables that control how the OTS client behaves:
 
 - `RUN_REAL_OTS`
 
-  - Used by a small set of integration tests (marked `real_ots`) to control
-    whether they should exercise the real `ots` client.
+  - Used by a small set of integration tests (marked `real_ots`) to control whether they should exercise the real `ots` client.
 
-  - These tests are **skipped by default**. To run them (for example against a
-    locally running OTS calendar), use:
+  - These tests are **skipped by default**. To run them (for example against a locally running OTS calendar), use:
 
     ```bash
     export OTS_STATIONARY_STUB=0
@@ -236,74 +297,53 @@ three environment variables that control how the OTS client behaves:
     pytest -m real_ots tests/integration/test_ots_integration.py
     ```
 
-In day-to-day development and CI, you do not need to configure anything: tests
-run in stationary stub mode and still enforce the `ots_meta` + artifact hashing
-contract without talking to external calendaring services.
+In day-to-day development and CI, you do not need to configure anything: tests run in stationary stub mode and still enforce the `ots_meta` + artifact hashing contract without talking to external calendaring services.
 
-## Rust core and PyO3 gateway
+## Testing
 
-TrackOne now includes a Rust workspace used to host the shared core logic and a
-Python-facing gateway extension (ADR-017):
+We use pytest and tox:
 
-- `crates/trackone-core` — platform-agnostic Rust crate for protocol and crypto
-  primitives (protocol types, framing, crypto traits).
-- `crates/trackone-ledger` — canonical JSON + Merkle policy + day/block record helpers (ADR-003),
-  shared by batching and verification code.
-- `crates/trackone-gateway` — Rust `cdylib` crate exposed to Python via PyO3 and
-  built with `maturin`. This crate will gradually wrap `trackone-core` and
-  surface optimized operations to Python.
-- `crates/trackone-pod-fw` — Rust crate for future pod/firmware logic, depending
-  on `trackone-core`.
+```bash
+# Fast local run
+pytest -q
 
-Python packaging uses `maturin` as the build backend in `pyproject.toml`. Wheels
-are built from the `trackone-gateway` crate and installed alongside the
-`scripts` package. For most contributors, the Rust layer is optional:
+# Multi-env via tox (3.12, 3.13, 3.14)
+tox -e py312,py313,py314
 
-- To build the wheel locally:
+# Coverage reports
+tox -e coverage
 
-  ```bash
-  make build-wheel
-  # or
-  tox -e maturin-build
-  ```
+# Lint and type-check
+tox -e lint
+tox -e type
 
-- To run Rust tests and checks:
+# End-to-end tests
+tox -e e2e
+```
 
-  ```bash
-  make cargo-test      # cargo test --workspace
-  make cargo-check     # cargo check --workspace --all-targets
-  make cargo-fmt       # cargo fmt --all
-  make cargo-clippy    # cargo clippy --workspace --all-targets -- -D warnings
-  ```
+Real OTS integration tests require `RUN_REAL_OTS=1` and an `ots` binary in PATH:
 
-The Python API and CLI remain the canonical interface; Rust is an internal
-implementation detail used to accelerate hot paths, host shared verification
-logic, and support future firmware/pod work. SensorThings projection remains a
-read-only Python/domain concern rather than a separate native bridge surface.
+```bash
+RUN_REAL_OTS=1 tox -e slow
+```
 
-## Project layout
+## Makefile shortcuts
 
-- `scripts/`
-  - `pod_sim/` — simulator for framed telemetry (`pod_sim.py`)
-  - `gateway/` — gateway components: `frame_verifier.py`, `merkle_batcher.py`, `ots_anchor.py`, `verify_cli.py`, `run_pipeline.sh`
-- `crates/`
-  - `trackone-core/` — shared Rust core (protocol + crypto, ADR-017)
-  - `trackone-constants/` — shared sizing/policy constants for no_std + host crates
-  - `trackone-ledger/` — canonicalization + Merkle batching helpers (ADR-003)
-  - `trackone-gateway/` — PyO3/maturin gateway extension crate
-  - `trackone-pod-fw/` — future pod/firmware crate depending on `trackone-core`
-- `toolset/` — examples and test vectors (e.g., `toolset/unified/examples/`)
-- `tests/` — unit, integration, e2e, and benchmark suites
-- `adr/` — Architecture Decision Records and index
-- `docs/` — additional documentation (if present)
-- `out/` — generated artifacts (git-ignored)
+Useful targets (run `make help` for the full list):
 
-See `adr/README.md` for the full ADR index and implementation status.
+- `make install` — install runtime dependencies
+- `make dev-setup` — install dev dependencies (lint, typing, tests, security)
+- `make export-requirements` — export pinned `out/requirements*.txt` from `uv.lock`
+- `make run` — run the end-to-end pipeline via tox
+- `make test` — run the test suite
+- `make tox-readme` — format/validate README and ADR index
+- `make tox-security` — Bandit and pip-audit
+- `make bench` — run pytest-benchmark suite
 
 ## Security notes
 
-- Cryptographic randomness and nonce policy are documented in ADR‑018; we standardize on OS‑backed CSPRNGs.
-- AEAD is XChaCha20‑Poly1305 with a 24‑byte nonce (salt||fc||rand) per ADR‑002.
+- Cryptographic randomness and nonce policy are documented in ADR-018; we standardize on OS-backed CSPRNGs.
+- AEAD is XChaCha20-Poly1305 with a 24-byte nonce (salt||fc||rand) per ADR-002.
 - OTS verification uses a validated full path to `ots` and avoids shells; tests include placeholder paths and mocks.
 - For production use, run security scans and audits:
 
@@ -311,9 +351,27 @@ See `adr/README.md` for the full ADR index and implementation status.
 tox -e security
 ```
 
+## Project status
+
+TrackOne is currently in an **alpha** phase.
+
+That means:
+
+- APIs and release boundaries may still tighten
+- Crate surfaces are stabilizing, but not yet final
+- Deployment and verification workflows are actively being refined
+- Changelogs and ADRs should be treated as the source of truth for current release behavior
+
 ## Contributing
 
-Contributions are welcome! Please read `CONTRIBUTING.md`, file or reference ADRs for significant changes, and keep tests green. We follow a forward‑only schema policy (ADR‑006) and document major decisions as ADRs.
+Contributions are welcome! Please read `CONTRIBUTING.md`, file or reference ADRs for significant changes, and keep tests green. We follow a forward-only schema policy (ADR-006) and document major decisions as ADRs.
+
+Schema notes:
+
+- JSON artifact contracts live under `toolset/unified/schemas/`.
+- Shared reusable JSON Schema definitions live in `toolset/unified/schemas/common.schema.json`.
+- Runtime schema loading and cross-file `$ref` resolution are centralized in `scripts/gateway/schema_validation.py`.
+- New schema work should use JSON Schema draft 2020-12 and prefer `$defs` / `$ref` reuse over copy-pasted inline fragments.
 
 ## License
 
@@ -324,26 +382,3 @@ MIT — see `LICENSE`.
 - Repository: https://github.com/bilalobe/trackone
 - ADR index: `adr/README.md`
 - Changelog: `CHANGELOG.md`
-
-## Setup
-
-### Python environment
-
-TrackOne uses `pyproject.toml` for dependency declarations and commits `uv.lock` for deterministic resolution.
-
-Recommended (developer toolchain):
-
-```bash
-make dev-setup
-# or (equivalent)
-uv pip install -e ".[lint,type,security,test,anchoring]"
-```
-
-Notes:
-
-- `tox` is used to run the test matrix and checks; tox installs dependencies via focused extras.
-- When you change dependency constraints in `pyproject.toml`, regenerate the lockfile:
-
-```bash
-uv lock
-```
