@@ -7,8 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-alpha.9] - 2026-03-12
+
 ### Notes
-- No `alpha.9` shared-constant changes are queued yet; add entries here only if provisioning, manifest, or verification hardening introduces new workspace-wide policy constants.
+- No crate-specific constant changes in this release; the crate remains aligned with the workspace `0.1.0-alpha.9` release line.
 
 ## [0.1.0-alpha.8] - 2026-03-11
 
