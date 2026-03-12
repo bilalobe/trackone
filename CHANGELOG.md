@@ -7,17 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Planned
-- Provisioning/control-plane separation:
-  - replace device-table-derived provisioning materialization with authoritative provisioning/deployment inputs, while keeping runtime replay state separate.
-- Verification bundle contract hardening:
-  - finish ADR-041/043 Phase B with a locked manifest artifact carrying `disclosure_class`, `commitment_profile_id`, artifact digests, and executed checks.
-- Rust ingress and projection convergence:
-  - move live frame verification and canonical `Fact` / `EnvFact` construction toward Rust-owned boundaries;
-  - lock the SensorThings projection artifact schema and add broader ADR-028/030 parity vectors.
-- Runtime/tooling hardening:
-  - reduce the default demo/frame-ingest dependency surface around `PyNaCl`;
-  - keep release-boundary, README, and crate changelog updates synchronized by default.
+## [0.1.0-alpha.9] - 2026-03-12
+
+### Added
+- A first CDDL contract for the CBOR-authoritative commitment family in `toolset/unified/cddl/commitment-artifacts-v1.cddl`, covering canonical `EnvFact`, `Fact`, `BlockHeaderV1`, and `DayRecordV1`.
+- A parser-backed Rust conformance gate in `trackone-ledger` that parses the checked-in CDDL and asserts the expected top-level rule set.
+
+### Changed
+- The Rust workspace minimum version is now `1.88` so the CDDL parser-backed gate can rely on the published `cddl` crate.
+- Unified JSON Schema contracts were refactored around shared definitions and cross-file `$ref` reuse, with `common.schema.json` introduced as the shared schema registry surface.
+- Runtime schema validation in the Python gateway now goes through a centralized registry-aware loader/validator, so cross-file `$ref` resolution works consistently across fact, device table, day, OTS, and projection artifacts.
+- Integration coverage now validates every checked-in schema document against its metaschema and includes schema-only coverage for `peer_attest`.
 
 ## [0.1.0-alpha.8] - 2026-03-11
 
