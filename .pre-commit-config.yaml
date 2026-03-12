@@ -43,3 +43,9 @@ repos:
         language: system
         files: '\.py$'
         pass_filenames: true
+      - id: check-schema-draft-202012
+        name: check unified schemas use draft 2020-12
+        entry: python scripts/lint/check_schema_draft_202012.py
+        language: system
+        files: ^toolset/unified/schemas/.*\.schema\.json$
+        pass_filenames: true
