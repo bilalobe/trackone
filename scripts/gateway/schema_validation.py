@@ -25,6 +25,21 @@ def _load_schema_path(path: Path) -> dict[str, Any] | None:
     return data if isinstance(data, dict) else None
 
 
+def load_schema_from_path(path: Path) -> dict[str, Any] | None:
+    """Load a JSON schema from an explicit filesystem path.
+
+    Returns None if the file does not exist.
+    Raises OSError, UnicodeDecodeError, or json.JSONDecodeError on read/parse failures.
+    Raises ValueError if the schema root is not a JSON object.
+    """
+    if not path.exists():
+        return None
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError(f"Schema at '{path}' must be a JSON object")
+    return data
+
+
 def load_schema(name: str) -> dict[str, Any] | None:
     return _load_schema_path(schema_path(name))
 
