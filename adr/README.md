@@ -105,7 +105,7 @@ Entries list **Status** and **Summary**. Related references are grouped under **
   **Summary**: Separate transport encoding (Postcard) from commitment encoding to avoid accidental mixing of wire formats and hash commitments.
 
 - **[ADR-039](ADR-039-cbor-first-commitment-profile-and-artifact-authority.md): CBOR-first commitment profile and artifact authority**
-  **Status**: Accepted
+  **Status**: Accepted, Updated 2026-03-12
   **Summary**: Makes deterministic CBOR the canonical commitment path (RFC 8949 baseline + TrackOne profile constraints), defines `.cbor` artifacts as authoritative, and demotes JSON to projection-only views.
 
 ### Policy & Process
@@ -138,7 +138,7 @@ Entries list **Status** and **Summary**. Related references are grouped under **
   **Summary**: Use a single workspace version for tags and releases; keep crate-local changelogs only when crates become independently consumable.
 
 - **[ADR-044](ADR-044-json-schema-modularity-and-authoritative-contract-artifacts.md): JSON Schema modularity and authoritative contract artifacts**
-  **Status**: Accepted
+  **Status**: Accepted, Updated 2026-03-12
   **Summary**: Standardize unified schemas on JSON Schema 2020-12, prefer `$defs`/`$ref` reuse over ad hoc templating, and keep checked-in `.schema.json` files as the authoritative machine-readable contract.
 
 ### Verification, Integrity & OTS Pipeline

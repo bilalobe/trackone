@@ -2,6 +2,7 @@
 
 **Status**: Accepted
 **Date**: 2026-03-12
+**Updated**: 2026-03-12
 
 ## Related ADRs
 
@@ -15,6 +16,11 @@
 TrackOne uses `toolset/unified/schemas/*.schema.json` as machine-readable
 contracts for facts, day artifacts, provisioning bundles, device tables, and
 related verification outputs.
+
+TrackOne now also distinguishes a smaller CBOR-authoritative commitment family
+from the broader JSON artifact surface. That CBOR family is described
+separately through CDDL, while JSON Schema remains the contract language for
+JSON projections and operational JSON artifacts.
 
 That schema set is currently inconsistent in structure:
 
@@ -47,6 +53,9 @@ checked-in `.schema.json` files under `toolset/unified/schemas/`.
   artifacts, not against a higher-level template language.
 - Any optional higher-level authoring source is an implementation aid, not the
   normative contract.
+
+This policy applies to JSON artifacts. It does not prohibit TrackOne from
+adding CDDL for the CBOR-authoritative commitment family defined by ADR-039.
 
 ### 2) Standardize on JSON Schema draft 2020-12
 
@@ -116,6 +125,8 @@ system in order to interpret the contract.
 - Reduces copy-paste drift across schema files.
 - Makes future schema growth easier without inventing a custom contract DSL.
 - Preserves inspectable, versioned contract artifacts in-repo.
+- Keeps the JSON Schema surface cleanly scoped even when CDDL is added for the
+  narrower CBOR-authoritative family.
 
 ### Negative
 

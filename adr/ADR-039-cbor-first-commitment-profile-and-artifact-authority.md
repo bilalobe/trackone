@@ -2,6 +2,7 @@
 
 **Status**: Accepted
 **Date**: 2026-02-23
+**Updated**: 2026-03-12
 
 ## Related ADRs
 
@@ -45,6 +46,11 @@ TrackOne commitment bytes are **CBOR-first**.
 - Generic serializers (`serde` defaults, generic CBOR writers, pretty JSON)
   MUST NOT be used for commitment bytes.
 
+TrackOne MAY publish CDDL for the authoritative CBOR commitment family as a
+machine-readable structural description of the artifact family. That CDDL is
+additive documentation for the CBOR-authoritative boundary; it MUST NOT be
+treated as expanding authority to JSON projection artifacts.
+
 ### 3) Artifact authority and naming
 
 Canonical commitment artifacts are CBOR:
@@ -52,6 +58,12 @@ Canonical commitment artifacts are CBOR:
 - `facts/<fact-id>.cbor` is authoritative for fact commitments.
 - `day/YYYY-MM-DD.cbor` is authoritative for day-level commitment hashing.
 - OTS/TSA/peer attestations bind to authoritative artifact digests.
+
+The first CDDL introduction for this family covers:
+
+- the canonical `Fact` / `EnvFact` CBOR encodings;
+- `BlockHeaderV1` as part of the day-record commitment family; and
+- `DayRecordV1`.
 
 JSON artifacts are projections:
 
@@ -73,6 +85,8 @@ During migration, a dual-artifact mode is allowed:
 - Removes CBOR/JSON ambiguity in both code and I-D language.
 - Aligns constrained-device performance goals with commitment determinism.
 - Reduces canonicalization attack surface from serializer drift.
+- Provides a machine-readable structural description for the CBOR-authoritative
+  artifact family without promoting JSON projections to commitment authority.
 
 ### Negative
 
