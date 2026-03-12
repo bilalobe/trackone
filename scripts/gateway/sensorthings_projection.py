@@ -12,6 +12,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+try:  # Support both package imports and direct script execution.
+    from .schema_validation import load_schema, validate_instance
+except ImportError:  # pragma: no cover - fallback when run as a script
+    from schema_validation import load_schema, validate_instance  # type: ignore
+
 jsonschema: Any | None
 try:
     import jsonschema
@@ -52,36 +57,14 @@ class SensorIdentityResolutionError(ProjectionError):
     """Raised when a SensorThings Sensor identity cannot be resolved."""
 
 
-def _schema_path(name: str) -> Path:
-    return (
-        Path(__file__).parent.parent.parent
-        / "toolset"
-        / "unified"
-        / "schemas"
-        / f"{name}.schema.json"
-    )
-
-
-def _load_schema(name: str) -> dict[str, Any] | None:
-    path = _schema_path(name)
-    if not path.exists():
-        return None
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
-        return None
-    return data if isinstance(data, dict) else None
-
-
 def _validate_against_schema(payload: dict[str, Any], schema_name: str) -> None:
     if not JSONSCHEMA_AVAILABLE or jsonschema is None:
         return
-    schema = _load_schema(schema_name)
+    schema = load_schema(schema_name)
     if schema is None:
         return
     try:
-        assert jsonschema is not None  # nosec B101 - type narrowing
-        jsonschema.validate(instance=payload, schema=schema)
+        validate_instance(payload, schema)
     except (jsonschema.ValidationError, jsonschema.SchemaError) as exc:
         raise ProjectionError(
             f"{schema_name}.schema.json validation failed: {exc}"

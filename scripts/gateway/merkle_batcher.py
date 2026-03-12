@@ -44,8 +44,10 @@ from typing import Any, cast
 
 try:  # Support both package imports and direct script execution.
     from .canonical_cbor import canonicalize_obj_to_cbor
+    from .schema_validation import load_schema, validate_instance
 except ImportError:  # pragma: no cover - fallback when run as a script
     from canonical_cbor import canonicalize_obj_to_cbor  # type: ignore
+    from schema_validation import load_schema, validate_instance  # type: ignore
 
 jsonschema: Any | None
 try:
@@ -144,14 +146,10 @@ def merkle_root_from_leaves(leaves: list[bytes]) -> tuple[str, list[str]]:
 def load_schemas() -> dict[str, Any]:
     """Load fact, block_header, and day_record schemas if available."""
     schemas: dict[str, Any] = {}
-    schema_dir = Path(__file__).parent.parent.parent / "toolset" / "unified" / "schemas"
-    for name in ["fact", "block_header", "day_record", "ots_meta"]:
-        schema_path = schema_dir / f"{name}.schema.json"
-        if schema_path.exists():
-            try:
-                schemas[name] = json.loads(schema_path.read_text(encoding="utf-8"))
-            except (json.JSONDecodeError, OSError) as e:
-                print(f"[WARN] Failed to load {name} schema: {e}", file=sys.stderr)
+    for name in ["fact", "block_header", "day_record", "ots_meta", "peer_attest"]:
+        schema = load_schema(name)
+        if schema is not None:
+            schemas[name] = schema
     return schemas
 
 
@@ -162,16 +160,10 @@ def validate_against_schema(
     if not JSONSCHEMA_AVAILABLE or jsonschema is None:
         return
     try:
-        # Type narrowing: jsonschema is not None here due to the guard above
-        assert jsonschema is not None  # nosec B101 - type narrowing for mypy
-        jsonschema.validate(instance=obj, schema=schema)
+        validate_instance(obj, schema)
         print(f"[OK] {label} validated against schema.", file=sys.stderr)
     except (jsonschema.ValidationError, jsonschema.SchemaError) as e:
         print(f"[WARN] {label} schema validation failure: {e}", file=sys.stderr)
-    except jsonschema.RefResolutionError as e:
-        print(
-            f"[WARN] {label} schema reference resolution failure: {e}", file=sys.stderr
-        )
 
 
 def load_facts(facts_dir: Path) -> list[bytes]:

@@ -34,8 +34,10 @@ from typing import Any, TextIO
 
 try:  # Support both package imports and direct script execution.
     from .canonical_cbor import canonicalize_obj_to_cbor
+    from .schema_validation import load_schema, validate_instance
 except ImportError:  # pragma: no cover - fallback when run as a script
     from canonical_cbor import canonicalize_obj_to_cbor  # type: ignore
+    from schema_validation import load_schema, validate_instance  # type: ignore
 
 # Constants for maintainability
 DEFAULT_REPLAY_WINDOW = 64
@@ -78,18 +80,6 @@ def _audit_day_label(now: datetime | None = None) -> str:
 def _emit_rejection(out_fh: TextIO, record: RejectionRecord) -> None:
     out_fh.write(json.dumps(asdict(record), sort_keys=True) + "\n")
     out_fh.flush()
-
-
-def _load_schema(path: Path) -> dict[str, Any] | None:
-    try:
-        if path.exists():
-            data = json.loads(path.read_text(encoding="utf-8"))
-            if isinstance(data, dict):
-                return data
-            return None
-    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
-        return None
-    return None
 
 
 def _load_nacl_modules() -> tuple[Any, Any]:
@@ -172,22 +162,10 @@ class ReplayWindow:
 
 def load_fact_schema() -> dict[str, Any] | None:
     """Load fact.schema.json for optional validation."""
-    schema_path = (
-        Path(__file__).parent.parent.parent
-        / "toolset"
-        / "unified"
-        / "schemas"
-        / "fact.schema.json"
-    )
-    if schema_path.exists():
-        try:
-            data = json.loads(schema_path.read_text(encoding="utf-8"))
-            if isinstance(data, dict):
-                return data
-            return None
-        except (json.JSONDecodeError, OSError, UnicodeDecodeError) as e:
-            print(f"[WARN] Failed to load fact schema: {e}", file=sys.stderr)
-    return None
+    schema = load_schema("fact")
+    if schema is None:
+        print("[WARN] Failed to load fact schema.", file=sys.stderr)
+    return schema
 
 
 def validate_fact(obj: dict[str, Any], schema: dict[str, Any] | None) -> None:
@@ -195,9 +173,7 @@ def validate_fact(obj: dict[str, Any], schema: dict[str, Any] | None) -> None:
     if not (schema and JSONSCHEMA_AVAILABLE and jsonschema is not None):
         return
     try:
-        # Type narrowing: jsonschema is not None here due to the guard above
-        assert jsonschema is not None  # nosec B101 - type narrowing for mypy
-        jsonschema.validate(instance=obj, schema=schema)
+        validate_instance(obj, schema)
     except jsonschema.ValidationError as e:
         print(f"[WARN] Fact validation failure: {e}", file=sys.stderr)
     except jsonschema.SchemaError as e:
@@ -229,19 +205,10 @@ def load_device_table(path: Path) -> dict[str, dict[str, Any]]:
 
     # Optional schema validation (tiny schema)
     if JSONSCHEMA_AVAILABLE and jsonschema is not None:
-        schema_path = (
-            Path(__file__).parent.parent.parent
-            / "toolset"
-            / "unified"
-            / "schemas"
-            / "device_table.schema.json"
-        )
-        schema = _load_schema(schema_path)
+        schema = load_schema("device_table")
         if schema:
             try:
-                # Type narrowing: jsonschema is not None here due to the guard above
-                assert jsonschema is not None  # nosec B101 - type narrowing for mypy
-                jsonschema.validate(instance=data, schema=schema)
+                validate_instance(data, schema)
             except (jsonschema.ValidationError, jsonschema.SchemaError) as e:
                 print(
                     f"[ERROR] Device table schema validation failed: {e}",
