@@ -48,6 +48,7 @@ Each ADR captures context, the decision, consequences, and alternatives.
 - [ADR-041: Verification Disclosure Bundles and Privacy Tiers](ADR-041-verification-disclosure-bundles-and-privacy-tiers.md)
 - [ADR-042: Hardware Watchdog & Liveness-Registry Policy](ADR-042-hardware-watchdog-and-liveness-registry.md)
 - [ADR-043: Phased Bundle-Manifest Maturity for the I-D](ADR-043-phased-bundle-manifest-maturity-for-id.md)
+- [ADR-044: JSON Schema Modularity and Authoritative Contract Artifacts](ADR-044-json-schema-modularity-and-authoritative-contract-artifacts.md)
 
 ## Index Conventions
 
@@ -135,6 +136,10 @@ Entries list **Status** and **Summary**. Related references are grouped under **
 - **[ADR-035](ADR-035-workspace-versioning-and-release-visibility.md): Workspace Versioning and Release Visibility (Umbrella vs Per-Crate)**
   **Status**: Accepted
   **Summary**: Use a single workspace version for tags and releases; keep crate-local changelogs only when crates become independently consumable.
+
+- **[ADR-044](ADR-044-json-schema-modularity-and-authoritative-contract-artifacts.md): JSON Schema modularity and authoritative contract artifacts**
+  **Status**: Accepted
+  **Summary**: Standardize unified schemas on JSON Schema 2020-12, prefer `$defs`/`$ref` reuse over ad hoc templating, and keep checked-in `.schema.json` files as the authoritative machine-readable contract.
 
 ### Verification, Integrity & OTS Pipeline
 
