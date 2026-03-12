@@ -1,6 +1,6 @@
 # trackone-core
 
-[![Version](https://img.shields.io/badge/version-0.1.0--alpha.7-orange)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.1.0--alpha.8-orange)](CHANGELOG.md)
 [![Status](https://img.shields.io/badge/status-alpha-yellow)](CHANGELOG.md)
 
 # Overview
