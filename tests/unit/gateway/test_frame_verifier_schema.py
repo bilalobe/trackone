@@ -14,7 +14,7 @@ class TestFrameVerifierSchemaEdgeCases:
     """Test frame_verifier schema loading edge cases."""
 
     def test_load_schema_exception_during_read(self, tmp_path):
-        """Test _load_schema when file.exists() is True but read raises exception."""
+        """Test load_schema when file.exists() is True but read raises exception."""
         schema_path = tmp_path / "schema.json"
         schema_path.write_text('{"test": "data"}', encoding="utf-8")
 
@@ -23,5 +23,5 @@ class TestFrameVerifierSchemaEdgeCases:
             patch.object(Path, "exists", return_value=True),
             patch.object(Path, "read_text", side_effect=OSError("Disk error")),
         ):
-            result = frame_verifier._load_schema(schema_path)
+            result = frame_verifier.load_schema(schema_path)
             assert result is None
