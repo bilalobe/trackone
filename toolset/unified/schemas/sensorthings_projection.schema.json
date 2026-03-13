@@ -58,22 +58,18 @@
     },
     "thing": {
       "type": "object",
-      "required": ["id", "name"],
-      "additionalProperties": true,
+      "required": ["id", "pod_id", "site_id"],
+      "additionalProperties": false,
       "properties": {
         "id": {
           "$ref": "#/$defs/entity_id"
         },
-        "name": {
+        "pod_id": {
           "type": "string",
           "minLength": 1
         },
-        "description": {
+        "site_id": {
           "type": "string"
-        },
-        "properties": {
-          "type": "object",
-          "description": "Arbitrary TrackOne-specific properties (pod_id, site_id, device model, etc.)."
         }
       }
     },
@@ -135,7 +131,7 @@
     },
     "observation": {
       "type": "object",
-      "required": ["id", "datastream_id", "result", "result_time"],
+      "required": ["id", "datastream_id", "result", "result_time_rfc3339_utc"],
       "additionalProperties": true,
       "properties": {
         "id": {
@@ -148,12 +144,22 @@
         "result": {
           "description": "Observed scalar measurement value."
         },
-        "result_time": {
+        "result_time_rfc3339_utc": {
           "$ref": "https://example.org/schemas/common.schema.json#/$defs/rfc3339_utc"
         },
         "phenomenon_time": {
           "type": "object",
-          "description": "Optional time interval or instant for the phenomenon."
+          "required": ["start_rfc3339_utc", "end_rfc3339_utc"],
+          "additionalProperties": false,
+          "description": "Phenomenon time interval for the observation.",
+          "properties": {
+            "start_rfc3339_utc": {
+              "$ref": "https://example.org/schemas/common.schema.json#/$defs/rfc3339_utc"
+            },
+            "end_rfc3339_utc": {
+              "$ref": "https://example.org/schemas/common.schema.json#/$defs/rfc3339_utc"
+            }
+          }
         }
       }
     }
