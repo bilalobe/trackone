@@ -43,6 +43,37 @@ def test_save_and_load_device_table_roundtrip(tmp_path, frame_verifier):
     assert loaded["3"]["highest_fc_seen"] == 10
 
 
+def test_load_device_table_tolerates_legacy_deployment_and_provisioning(
+    tmp_path, frame_verifier
+):
+    dt_path = tmp_path / "device_table.json"
+
+    master_seed = base64.b64encode(b"m" * 32).decode("ascii")
+    salt8 = base64.b64encode(b"s" * 8).decode("ascii")
+    ck_up = base64.b64encode(b"k" * 32).decode("ascii")
+
+    dt_path.write_text(
+        json.dumps(
+            {
+                "_meta": {"version": "1.0", "master_seed": master_seed},
+                "3": {
+                    "salt8": salt8,
+                    "ck_up": ck_up,
+                    "highest_fc_seen": 10,
+                    "deployment": {"deployment_sensor_key": "legacy"},
+                    "provisioning": {"site_id": "an-001"},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    loaded = frame_verifier.load_device_table(dt_path)
+    assert loaded["3"]["highest_fc_seen"] == 10
+    assert loaded["3"]["deployment"]["deployment_sensor_key"] == "legacy"
+    assert loaded["3"]["provisioning"]["site_id"] == "an-001"
+
+
 def test_parse_frame_error_cases(frame_verifier):
     # invalid JSON
     frame, err = frame_verifier.parse_frame("not-json")
@@ -84,7 +115,11 @@ def test_aead_decrypt_success_and_failures(tmp_path, frame_verifier, pod_sim):
 
     # Emit a framed record using pod_sim.emit_framed which also persists device table
     frame = pod_sim.emit_framed(
-        "pod-007", 3, {"counter": 3, "bioimpedance": 75.5, "temp_c": 25.3}, dt_path
+        "pod-007",
+        3,
+        {"counter": 3, "bioimpedance": 75.5, "temp_c": 25.3},
+        dt_path,
+        None,
     )
 
     # Load device_table into memory using pod_sim helper
