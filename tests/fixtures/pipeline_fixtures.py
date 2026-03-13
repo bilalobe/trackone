@@ -75,7 +75,7 @@ def write_ots_placeholder(ots_anchor):
 
     Returns a callable that takes (out_dir, day) and creates:
     - day/<day>.cbor.ots (stationary stub or placeholder)
-    - proofs/<day>.ots.meta.json (metadata sidecar)
+    - day/<day>.ots.meta.json (metadata sidecar)
 
     Returns (ots_path, meta_path) tuple.
     """
@@ -90,14 +90,13 @@ def write_ots_placeholder(ots_anchor):
             day_cbor.write_bytes(b"test day artifact")
 
         ots_path = day_cbor.with_suffix(day_cbor.suffix + ".ots")
-        proofs_dir = out_dir.parent / "proofs"
 
         # In tests we want deterministic, offline behavior.
         # Always route through ots_anchor.ots_stamp, which already honors
         # OTS_STATIONARY_STUB and writes the meta sidecar.
-        ots_anchor.ots_stamp(day_cbor, ots_path, proofs_dir=proofs_dir)
+        ots_anchor.ots_stamp(day_cbor, ots_path)
 
-        meta_path = proofs_dir / f"{day}.ots.meta.json"
+        meta_path = day_cbor.parent / f"{day}.ots.meta.json"
         return ots_path, meta_path
 
     return _write

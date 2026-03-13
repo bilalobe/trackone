@@ -32,17 +32,7 @@ class TestDeviceTableOperations:
             "100": {
                 "salt8": "base64data",
                 "ck_up": "base64key",
-                "deployment": {
-                    "deployment_sensor_key": "shtc3-ambient",
-                    "sensor_keys": {"temperature_air": "shtc3-ambient"},
-                },
-                "provisioning": {
-                    "identity_pubkey": "a" * 64,
-                    "firmware_version": "v1.0.0",
-                    "firmware_hash": "b" * 64,
-                    "birth_cert_sig": "c" * 128,
-                    "provisioned_at": 1,
-                },
+                "highest_fc_seen": 12,
             }
         }
         pod_sim.save_device_table(dt_path, data)
@@ -56,17 +46,6 @@ class TestDeviceTableOperations:
                 "salt8": "xyz",
                 "ck_up": "abc",
                 "highest_fc_seen": 10,
-                "deployment": {
-                    "deployment_sensor_key": "shtc3-ambient",
-                    "sensor_keys": {"temperature_air": "shtc3-ambient"},
-                },
-                "provisioning": {
-                    "identity_pubkey": "a" * 64,
-                    "firmware_version": "v1.0.0",
-                    "firmware_hash": "b" * 64,
-                    "birth_cert_sig": "c" * 128,
-                    "provisioned_at": 1,
-                },
             }
         }
         pod_sim.save_device_table(dt_path, original)

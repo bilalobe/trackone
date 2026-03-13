@@ -63,16 +63,16 @@ class TestSchemaValidation:
         validate_against_schema(header, schemas["block_header"], "Invalid header")
 
     def test_ots_meta_files_match_schema(self):
-        """All OTS metadata JSON files under proofs/ should conform to ots_meta schema."""
+        """Checked-in OTS metadata sidecars should conform to ots_meta schema."""
         schemas = load_schemas()
         if "ots_meta" not in schemas:
             pytest.skip("ots_meta schema not available")
 
         repo_root = Path(__file__).resolve().parents[2]
-        proofs_dir = repo_root / "proofs"
-        meta_files = sorted(proofs_dir.glob("*.ots.meta.json"))
+        meta_dir = repo_root / "out" / "site_demo" / "day"
+        meta_files = sorted(meta_dir.glob("*.ots.meta.json"))
         if not meta_files:
-            pytest.skip("No OTS meta files found under proofs/")
+            pytest.skip("No checked-in OTS meta files found under out/site_demo/day/")
 
         for path in meta_files:
             obj = json.loads(path.read_text(encoding="utf-8"))

@@ -9,26 +9,28 @@ def test_main_writes_canonical_bundle(tmp_path: Path, load_module) -> None:
         "provisioning_records_under_test",
         Path("scripts/gateway/provisioning_records.py"),
     )
-    device_table = tmp_path / "device_table.json"
-    device_table.write_text(
+    authoritative_input = tmp_path / "provisioning-input.json"
+    authoritative_input.write_text(
         json.dumps(
             {
-                "_meta": {"master_seed": "AA==", "version": "1.0"},
-                "3": {
-                    "salt8": "AA==",
-                    "ck_up": "AA==",
-                    "deployment": {
-                        "deployment_sensor_key": "shtc3-ambient",
-                        "sensor_keys": {"temperature_air": "shtc3-ambient"},
-                    },
-                    "provisioning": {
-                        "identity_pubkey": "a" * 64,
-                        "firmware_version": "v1.2.3",
-                        "firmware_hash": "b" * 64,
-                        "birth_cert_sig": "c" * 128,
-                        "provisioned_at": 1_772_755_500,
-                    },
-                },
+                "version": 1,
+                "site_id": "an-001",
+                "records": [
+                    {
+                        "pod_id": "0000000000000003",
+                        "deployment": {
+                            "deployment_sensor_key": "shtc3-ambient",
+                            "sensor_keys": {"temperature_air": "shtc3-ambient"},
+                        },
+                        "provisioning": {
+                            "identity_pubkey": "a" * 64,
+                            "firmware_version": "v1.2.3",
+                            "firmware_hash": "b" * 64,
+                            "birth_cert_sig": "c" * 128,
+                            "provisioned_at": 1_772_755_500,
+                        },
+                    }
+                ],
             }
         ),
         encoding="utf-8",
@@ -37,8 +39,8 @@ def test_main_writes_canonical_bundle(tmp_path: Path, load_module) -> None:
 
     rc = module.main(
         [
-            "--device-table",
-            str(device_table),
+            "--authoritative-input",
+            str(authoritative_input),
             "--site",
             "an-001",
             "--out",
@@ -56,19 +58,20 @@ def test_main_writes_canonical_bundle(tmp_path: Path, load_module) -> None:
     assert record["identity_pubkey"] == "a" * 64
 
 
-def test_main_fails_when_device_table_lacks_authoritative_metadata(
+def test_main_fails_when_input_lacks_authoritative_metadata(
     tmp_path: Path, load_module
 ) -> None:
     module = load_module(
         "provisioning_records_missing_metadata_under_test",
         Path("scripts/gateway/provisioning_records.py"),
     )
-    device_table = tmp_path / "device_table.json"
-    device_table.write_text(
+    authoritative_input = tmp_path / "provisioning-input.json"
+    authoritative_input.write_text(
         json.dumps(
             {
-                "_meta": {"master_seed": "AA==", "version": "1.0"},
-                "3": {"salt8": "AA==", "ck_up": "AA=="},
+                "version": 1,
+                "site_id": "an-001",
+                "records": [{"pod_id": "0000000000000003"}],
             }
         ),
         encoding="utf-8",
@@ -77,8 +80,8 @@ def test_main_fails_when_device_table_lacks_authoritative_metadata(
 
     rc = module.main(
         [
-            "--device-table",
-            str(device_table),
+            "--authoritative-input",
+            str(authoritative_input),
             "--site",
             "an-001",
             "--out",
@@ -96,26 +99,28 @@ def test_main_fails_when_provisioning_hex_is_malformed(
         "provisioning_records_bad_hex_under_test",
         Path("scripts/gateway/provisioning_records.py"),
     )
-    device_table = tmp_path / "device_table.json"
-    device_table.write_text(
+    authoritative_input = tmp_path / "provisioning-input.json"
+    authoritative_input.write_text(
         json.dumps(
             {
-                "_meta": {"master_seed": "AA==", "version": "1.0"},
-                "3": {
-                    "salt8": "AA==",
-                    "ck_up": "AA==",
-                    "deployment": {
-                        "deployment_sensor_key": "shtc3-ambient",
-                        "sensor_keys": {"temperature_air": "shtc3-ambient"},
-                    },
-                    "provisioning": {
-                        "identity_pubkey": "z" * 64,
-                        "firmware_version": "v1.2.3",
-                        "firmware_hash": "g" * 64,
-                        "birth_cert_sig": "h" * 128,
-                        "provisioned_at": 1_772_755_500,
-                    },
-                },
+                "version": 1,
+                "site_id": "an-001",
+                "records": [
+                    {
+                        "pod_id": "0000000000000003",
+                        "deployment": {
+                            "deployment_sensor_key": "shtc3-ambient",
+                            "sensor_keys": {"temperature_air": "shtc3-ambient"},
+                        },
+                        "provisioning": {
+                            "identity_pubkey": "z" * 64,
+                            "firmware_version": "v1.2.3",
+                            "firmware_hash": "g" * 64,
+                            "birth_cert_sig": "h" * 128,
+                            "provisioned_at": 1_772_755_500,
+                        },
+                    }
+                ],
             }
         ),
         encoding="utf-8",
@@ -124,8 +129,8 @@ def test_main_fails_when_provisioning_hex_is_malformed(
 
     rc = module.main(
         [
-            "--device-table",
-            str(device_table),
+            "--authoritative-input",
+            str(authoritative_input),
             "--site",
             "an-001",
             "--out",
@@ -136,7 +141,9 @@ def test_main_fails_when_provisioning_hex_is_malformed(
     assert rc == 2
 
 
-def test_main_fails_when_device_table_missing(tmp_path: Path, load_module) -> None:
+def test_main_fails_when_authoritative_input_missing(
+    tmp_path: Path, load_module
+) -> None:
     module = load_module(
         "provisioning_records_error_under_test",
         Path("scripts/gateway/provisioning_records.py"),
@@ -145,7 +152,7 @@ def test_main_fails_when_device_table_missing(tmp_path: Path, load_module) -> No
 
     rc = module.main(
         [
-            "--device-table",
+            "--authoritative-input",
             str(tmp_path / "missing.json"),
             "--site",
             "an-001",

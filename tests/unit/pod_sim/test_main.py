@@ -47,6 +47,7 @@ class TestMainFunction:
         self._require_pynacl()
         out_file = tmp_path / "frames.ndjson"
         dt_file = tmp_path / "device_table.json"
+        provisioning_input = tmp_path / "provisioning" / "authoritative-input.json"
         args = [
             "--device-id",
             "pod-002",
@@ -59,16 +60,44 @@ class TestMainFunction:
             str(out_file),
             "--device-table",
             str(dt_file),
+            "--provisioning-input",
+            str(provisioning_input),
         ]
         assert pod_sim.main(args) == 0
-        assert out_file.exists() and dt_file.exists()
+        assert out_file.exists() and dt_file.exists() and provisioning_input.exists()
         lines = out_file.read_text(encoding="utf-8").strip().split("\n")
         assert len(lines) == 2
         for line in lines:
             frame = json.loads(line)
             assert {"hdr", "nonce", "ct", "tag"}.issubset(frame)
         device_table = json.loads(dt_file.read_text(encoding="utf-8"))
-        assert device_table["2"]["provisioning"]["site_id"] == "an-001"
+        assert "provisioning" not in device_table["2"]
+        authoritative = json.loads(provisioning_input.read_text(encoding="utf-8"))
+        assert authoritative["records"][0]["provisioning"]["site_id"] == "an-001"
+
+    def test_main_framed_mode_requires_site_for_provisioning_input(
+        self, tmp_path, pod_sim
+    ):
+        self._require_pynacl()
+        out_file = tmp_path / "frames.ndjson"
+        dt_file = tmp_path / "device_table.json"
+        provisioning_input = tmp_path / "provisioning" / "authoritative-input.json"
+        args = [
+            "--device-id",
+            "pod-002",
+            "--count",
+            "1",
+            "--framed",
+            "--out",
+            str(out_file),
+            "--device-table",
+            str(dt_file),
+            "--provisioning-input",
+            str(provisioning_input),
+        ]
+
+        with pytest.raises(ValueError, match="requires a top-level site_id"):
+            pod_sim.main(args)
 
     def test_main_with_facts_out(self, pod_sim, facts_dir, tmp_path):
         self._require_pynacl()
