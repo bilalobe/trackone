@@ -1,13 +1,8 @@
 #!/usr/bin/env python3
-"""Tests for selecting the Rust acceleration module across layout variants.
+"""Tests for selecting the packaged Rust acceleration module.
 
-We support two layouts:
-- Packaged layout: `trackone_core` is a Python package and the native module is
-  `trackone_core._native`.
-- Legacy layout: `trackone_core` is itself the native extension module.
-
-The gateway scripts should prefer the native submodule when present, and
-otherwise use the legacy extension module.
+The supported layout is `trackone_core` as a Python package with the native
+module at `trackone_core._native`.
 """
 
 from __future__ import annotations
@@ -90,27 +85,3 @@ def test_packaged_layout_prefers_trackone_core_native_submodule(
 
     assert m._RUST_MERKLE is native.merkle
     assert m._RUST_LEDGER is native.ledger
-
-
-@pytest.mark.parametrize(
-    "script_mod",
-    ["scripts.gateway.merkle_batcher", "scripts.gateway.verify_cli"],
-)
-def test_legacy_layout_uses_trackone_core_extension_module_directly(
-    monkeypatch: pytest.MonkeyPatch, script_mod: str
-) -> None:
-    _ensure_fake_pynacl(monkeypatch)
-    _clear_modules("trackone_core")
-    _clear_modules("scripts.gateway")
-
-    legacy = types.ModuleType("trackone_core")
-    legacy.merkle = object()
-    legacy.ledger = object()
-    monkeypatch.setitem(sys.modules, "trackone_core", legacy)
-    monkeypatch.delitem(sys.modules, "trackone_core._native", raising=False)
-
-    m = importlib.import_module(script_mod)
-    m = importlib.reload(m)
-
-    assert m._RUST_MERKLE is legacy.merkle
-    assert m._RUST_LEDGER is legacy.ledger

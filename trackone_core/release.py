@@ -8,21 +8,28 @@ except ImportError:
     _native = None  # type: ignore[assignment]
 
 
-DEFAULT_COMMITMENT_PROFILE_ID = getattr(
-    _native,
+def _native_str(name: str, default: str) -> str:
+    value = getattr(_native, name, default)
+    return value if isinstance(value, str) else default
+
+
+DEFAULT_COMMITMENT_PROFILE_ID = _native_str(
     "DEFAULT_COMMITMENT_PROFILE_ID",
     "trackone-canonical-cbor-v1",
 )
 
 DISCLOSURE_CLASS_LABELS: dict[str, str] = {
-    getattr(_native, "DISCLOSURE_CLASS_A", "A"): getattr(
-        _native, "DISCLOSURE_CLASS_A_LABEL", "public-recompute"
+    _native_str("DISCLOSURE_CLASS_A", "A"): _native_str(
+        "DISCLOSURE_CLASS_A_LABEL",
+        "public-recompute",
     ),
-    getattr(_native, "DISCLOSURE_CLASS_B", "B"): getattr(
-        _native, "DISCLOSURE_CLASS_B_LABEL", "partner-audit"
+    _native_str("DISCLOSURE_CLASS_B", "B"): _native_str(
+        "DISCLOSURE_CLASS_B_LABEL",
+        "partner-audit",
     ),
-    getattr(_native, "DISCLOSURE_CLASS_C", "C"): getattr(
-        _native, "DISCLOSURE_CLASS_C_LABEL", "anchor-only-evidence"
+    _native_str("DISCLOSURE_CLASS_C", "C"): _native_str(
+        "DISCLOSURE_CLASS_C_LABEL",
+        "anchor-only-evidence",
     ),
 }
 

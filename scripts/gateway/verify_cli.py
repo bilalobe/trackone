@@ -87,12 +87,7 @@ try:  # pragma: no cover - optional acceleration
     import trackone_core
 
     native = getattr(trackone_core, "_native", None)
-    if native is not None:
-        rust_mod = native
-    elif not hasattr(trackone_core, "__path__"):
-        rust_mod = trackone_core
-    else:
-        rust_mod = None
+    rust_mod = native if native is not None else None
 
     if rust_mod is not None:
         _RUST_MERKLE = getattr(rust_mod, "merkle", None)
