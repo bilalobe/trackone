@@ -73,8 +73,15 @@ def rel(path: Path) -> str:
 
 
 def _artifact_ref(path: Path, *, root: Path) -> dict[str, str]:
+    try:
+        rel_path = str(path.relative_to(root))
+    except ValueError:
+        raise ValueError(
+            f"artifact path {path} is outside the pipeline root {root}; "
+            "use --tsa-out / --peer-dir paths that live under --out-dir"
+        ) from None
     return {
-        "path": str(path.relative_to(root)),
+        "path": rel_path,
         "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
     }
 
@@ -138,9 +145,9 @@ def artifact_manifest(
     tsa_artifacts: dict[str, Path] | None = None,
     peer_attest: Path | None = None,
     verifier_summary: dict[str, Any] | None = None,
-    sensorthings_projection: Path | None = None,
-    provisioning_input: Path | None = None,
-    provisioning_records: Path | None = None,
+    sensorthings_projection: Path,
+    provisioning_input: Path,
+    provisioning_records: Path,
     disclosure_class: str = "A",
     commitment_profile_id: str = DEFAULT_COMMITMENT_PROFILE_ID,
 ) -> Path:
@@ -169,18 +176,13 @@ def artifact_manifest(
         )
     if peer_attest:
         artifacts["peer_attest"] = _artifact_ref(peer_attest, root=out_dir)
-    if sensorthings_projection:
-        artifacts["sensorthings_projection"] = _artifact_ref(
-            sensorthings_projection, root=out_dir
-        )
-    if provisioning_input:
-        artifacts["provisioning_input"] = _artifact_ref(
-            provisioning_input, root=out_dir
-        )
-    if provisioning_records:
-        artifacts["provisioning_records"] = _artifact_ref(
-            provisioning_records, root=out_dir
-        )
+    artifacts["sensorthings_projection"] = _artifact_ref(
+        sensorthings_projection, root=out_dir
+    )
+    artifacts["provisioning_input"] = _artifact_ref(provisioning_input, root=out_dir)
+    artifacts["provisioning_records"] = _artifact_ref(
+        provisioning_records, root=out_dir
+    )
 
     verification_bundle: dict[str, Any] = {
         "disclosure_class": disclosure_class,

@@ -20,6 +20,20 @@ try:  # pragma: no cover - optional dependency in some environments
 except Exception:  # pragma: no cover - keep verifier importable without it
     jsonschema = None  # type: ignore[assignment]
 
+# Build a tuple of schema exception types only when jsonschema is available, to
+# avoid AttributeError when the module is absent but the except clause fires.
+_SCHEMA_EXCEPTIONS: tuple[type[BaseException], ...] = (
+    (jsonschema.ValidationError, jsonschema.SchemaError)
+    if jsonschema is not None
+    else ()
+)
+_MANIFEST_EXCEPTIONS: tuple[type[BaseException], ...] = (
+    OSError,
+    UnicodeDecodeError,
+    json.JSONDecodeError,
+    ValueError,
+) + _SCHEMA_EXCEPTIONS
+
 try:  # Support both package imports and direct script execution.
     from .anchoring_config import (
         STRICT,
@@ -908,14 +922,7 @@ def main(argv: list[str] | None = None) -> int:
                 disclosure_class=args.disclosure_class,
                 commitment_profile_id=args.commitment_profile_id,
             )
-        except (
-            OSError,
-            UnicodeDecodeError,
-            json.JSONDecodeError,
-            ValueError,
-            jsonschema.ValidationError,
-            jsonschema.SchemaError,
-        ) as exc:
+        except _MANIFEST_EXCEPTIONS as exc:
             print(f"ERROR: pipeline manifest validation failed: {exc}")
             _emit(summary, args.json)
             return EXIT_META_INVALID

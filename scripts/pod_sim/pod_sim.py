@@ -321,7 +321,11 @@ def ensure_authoritative_provisioning_record(
             ),
         }
         records.append(existing)
-        records.sort(key=lambda item: str(item.get("pod_id", "")))
+        records.sort(
+            key=lambda item: str(
+                item.get("pod_id", "") if isinstance(item, dict) else ""
+            )
+        )
         return
 
     if not isinstance(existing.get("deployment"), dict):
