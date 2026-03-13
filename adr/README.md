@@ -49,6 +49,7 @@ Each ADR captures context, the decision, consequences, and alternatives.
 - [ADR-042: Hardware Watchdog & Liveness-Registry Policy](ADR-042-hardware-watchdog-and-liveness-registry.md)
 - [ADR-043: Phased Bundle-Manifest Maturity for the I-D](ADR-043-phased-bundle-manifest-maturity-for-id.md)
 - [ADR-044: JSON Schema Modularity and Authoritative Contract Artifacts](ADR-044-json-schema-modularity-and-authoritative-contract-artifacts.md)
+- [ADR-045: Git-Signed Evidence Distribution Plane for Release and Small Authoritative Artifacts](ADR-045-git-signed-evidence-distribution-plane.md)
 
 ## Index Conventions
 
@@ -179,6 +180,12 @@ Entries list **Status** and **Summary**. Related references are grouped under **
 
   - **See also**: [ADR-014](ADR-014-stationary-ots-calendar.md), [ADR-020](ADR-020-stationary-ots-calendar-followup.md), [ADR-021](ADR-021-safety-net-ots-pipeline-verification.md), [ADR-024](ADR-024-anti-replay-and-ots-backed-ledger.md), [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md)
 
+- **[ADR-045](ADR-045-git-signed-evidence-distribution-plane.md): Git-signed evidence distribution plane for release and small authoritative artifacts**
+  **Status**: Accepted, Updated 2026-03-13
+  **Summary**: Allows Git to carry signed low-rate release/evidence sets and control artifacts as an optional distribution plane, while keeping OTS/TSA/peer proofs as the time/integrity authority, Buildx provenance as the OCI build authority, and detached verifier semantics independent from Git metadata.
+
+  - **See also**: [ADR-023](ADR-023-ots-vs-git-integrity.md), [ADR-035](ADR-035-workspace-versioning-and-release-visibility.md), [ADR-039](ADR-039-cbor-first-commitment-profile-and-artifact-authority.md), [ADR-041](ADR-041-verification-disclosure-bundles-and-privacy-tiers.md), [ADR-043](ADR-043-phased-bundle-manifest-maturity-for-id.md)
+
 ### Stationary Calendar & Trust Chain
 
 - **[ADR-014](ADR-014-stationary-ots-calendar.md): Stationary OpenTimestamps Calendar for Deterministic Anchoring**
@@ -247,8 +254,8 @@ Entries list **Status** and **Summary**. Related references are grouped under **
   - **See also**: [ADR-028](ADR-028-sensorthings-projection-mapping.md), [ADR-029](ADR-029-env-daily-summaries-and-usecases.md), [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md)
 
 - **[ADR-028](ADR-028-sensorthings-projection-mapping.md): Mapping TrackOne Canonical Facts to OGC SensorThings API**
-  **Status**: Accepted
-  **Summary**: Projection layer translating immutable canonical facts to OGC SensorThings Observations; maintains referential integrity and allows read-only queries without altering ledger.
+  **Status**: Accepted, Updated 2026-03-13
+  **Summary**: Projection layer translating immutable canonical facts to OGC SensorThings Observations; maintains referential integrity, keeps the projection read-only, and now treats the emitted projection bundle as a schema-backed derived artifact.
 
   - **See also**: [ADR-006](ADR-006-forward-only-schema-and-salt8.md), [ADR-018](ADR-018-cryptographic-randomness-and-nonce-policy.md), [ADR-024](ADR-024-anti-replay-and-ots-backed-ledger.md), [ADR-027](ADR-027-sensorthings-shtc3-representation.md), [ADR-029](ADR-029-env-daily-summaries-and-usecases.md), [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md)
 
@@ -293,12 +300,12 @@ Entries list **Status** and **Summary**. Related references are grouped under **
   **Summary**: Requires machine-readable canonical commitment vectors and mandatory Rust/Python parity checks in CI for commitment bytes and roots.
 
 - **[ADR-041](ADR-041-verification-disclosure-bundles-and-privacy-tiers.md): Verification disclosure bundles and privacy tiers**
-  **Status**: Accepted
-  **Summary**: Defines Tier A/B/C disclosure classes, minimum verification bundle requirements, and mandatory labeling of recomputation capability vs anchor-only evidence.
+  **Status**: Accepted, Updated 2026-03-13
+  **Summary**: Defines Tier A/B/C disclosure classes, minimum verification bundle requirements, and mandatory labeling of recomputation capability vs anchor-only evidence, with the manifest contract now explicit on the main pipeline/verifier path.
 
 - **[ADR-043](ADR-043-phased-bundle-manifest-maturity-for-id.md): Phased bundle-manifest maturity for the I-D**
-  **Status**: Accepted
-  **Summary**: Keeps the stronger I-D structure now, but phases standalone verification-manifest requirements so the draft stays truthful to the `0.1.0-alpha.7` implementation while preserving a path to stricter bundle contracts later.
+  **Status**: Accepted, Updated 2026-03-13
+  **Summary**: Keeps the stronger I-D structure now, records that Phase B manifest emission/validation is implemented on the main pipeline/verifier path, and preserves a path to stricter universal manifest enforcement later.
 
 ### Future Roadmap
 
