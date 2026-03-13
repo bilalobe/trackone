@@ -2,7 +2,7 @@
 
 **Status**: Accepted
 **Date**: 2026-03-01
-**Updated**: 2026-03-08
+**Updated**: 2026-03-13
 
 ## Related ADRs
 
@@ -19,24 +19,26 @@ ordering, bundle semantics, and a machine-readable verification manifest
 concept.
 
 That structure is correct in direction, but the current TrackOne
-implementation snapshot (`0.1.0-alpha.7`) does not yet provide first-class,
-end-to-end bundle packaging with a required emitted verification manifest for
-all disclosure classes.
+implementation snapshot has now crossed the original Phase B boundary on the
+main demo/verifier path, but manifest enforcement is not yet universal across
+every supported tooling path.
 
-At `alpha.7`, TrackOne does support:
+At the current `alpha.9` / `alpha.10` transition point, TrackOne does support:
 
 - authoritative CBOR fact and day artifacts;
 - OTS proof plus sidecar binding to the day artifact digest;
-- verifier recomputation from disclosed canonical artifacts; and
-- disclosure-tier language and conformance vectors in the draft.
+- verifier recomputation from disclosed canonical artifacts;
+- disclosure-tier language and conformance vectors in the draft;
+- emitted pipeline manifests carrying `disclosure_class`,
+  `commitment_profile_id`, artifact path+digest entries, and
+  `checks_executed` / `checks_skipped`; and
+- verifier-side manifest validation when that manifest is present.
 
-At `alpha.7`, TrackOne does not yet uniformly guarantee:
+TrackOne does not yet uniformly guarantee:
 
-- automatic emission of a standalone verification manifest for every bundle;
-- stable packaging of `disclosure_class`, `commitment_profile_id`,
-  `artifacts[]`, and `checks_executed` as a shipped bundle contract across
-  all tooling paths; and
-- a hard-failure policy for missing manifests in all CLI verification flows.
+- manifest emission for every possible bundle producer;
+- strict rejection of manifest-absent bundles in every CLI verification flow; and
+- universal contract parity across all non-demo packaging paths.
 
 If the I-D uses unconditional MUST-level language for those manifest
 capabilities now, it will overstate current implementation support and create
@@ -62,18 +64,19 @@ This structure is kept now because it expresses the correct long-term
 interoperability shape and avoids a weaker `-00` that would need avoidable
 restructuring in `-01`.
 
-### 2) Downtune manifest requirements at `alpha.7`
+### 2) Downtune manifest requirements until enforcement is universal
 
-Until first-class manifest tooling is implemented, the following posture
+Until manifest emission and enforcement are universal, the following posture
 applies:
 
 - For disclosure bundles in the I-D, a standalone verification manifest is
   **RECOMMENDED** / **SHOULD**, not unconditional **MUST**.
 - Bundle descriptions MAY refer to `commitment_profile_id`, but the draft
-  MUST NOT imply that every current bundle producer emits it as a required
-  top-level artifact today.
+  MUST distinguish between manifest-capable tooling paths and older/manual
+  paths that may still be manifest-absent.
 - Verifiers MAY infer disclosure-class capability from the available artifact
-  set when no explicit manifest is present.
+  set when no explicit manifest is present, but SHOULD prefer the explicit
+  manifest when available.
 - Verifier output SHOULD state which checks were executed versus skipped, even
   if the bundle did not contain a standalone manifest.
 
@@ -87,7 +90,7 @@ One exception remains:
 
 TrackOne adopts the following phases for bundle-manifest maturity.
 
-#### Phase A: `0.1.0-alpha.7` (current)
+#### Phase A: `0.1.0-alpha.7`
 
 - Keep the I-D structure.
 - Keep standalone manifests optional-but-recommended in the I-D.
@@ -97,7 +100,7 @@ TrackOne adopts the following phases for bundle-manifest maturity.
 
 #### Phase B: first manifest-capable tooling release
 
-The next implementation phase SHOULD add:
+This phase is now implemented on the main demo/verifier path:
 
 - a generated verification manifest artifact emitted by pipeline tooling;
 - explicit `disclosure_class`;
@@ -145,7 +148,7 @@ overstating implementation status.
 
 - Preserves the stronger `-00` document architecture without misrepresenting
   current tooling.
-- Aligns the I-D with the real `alpha.7` implementation boundary.
+- Aligns the I-D with the real `alpha.9` / `alpha.10` implementation boundary.
 - Creates a clean migration path from optional manifests to required
   manifests.
 - Reduces reviewer criticism that the draft overclaims packaging maturity.
@@ -169,10 +172,9 @@ overstating implementation status.
 
 ## Testing & Migration
 
-1. Keep the current I-D wording at SHOULD-level for standalone manifests where
-   tooling is not yet universal.
-1. Add manifest emission to pipeline tooling as a dedicated artifact.
-1. Add verifier support for explicit manifest parsing and legacy fallback.
+1. Keep SHOULD-level wording for standalone manifests where tooling is not yet universal.
+1. Keep manifest emission in the main pipeline as a dedicated artifact.
+1. Keep verifier support for explicit manifest parsing plus legacy fallback.
 1. Add tests for:
    - manifest-present Tier A bundles;
    - manifest-absent legacy bundles;
