@@ -237,12 +237,15 @@ anchor** used to:
 
 ### Stationary vs. placeholder behavior in verification
 
-`verify_cli` now treats OTS proofs as immutable sidecars:
+`verify_cli` now treats the `day/` directory as the immutable anchoring set for a
+given day:
 
 - The day record (`*.json`) and day blob (`*.cbor`) are hashed into a Merkle
   tree; only the blob affects the `day_root`.
-- OTS proofs live in separate `*.cbor.ots` files, with metadata in
-  `proofs/<day>.ots.meta.json` describing:
+- The OTS portion of that day evidence set is:
+  - `day/<day>.cbor.ots`
+  - `day/<day>.ots.meta.json`
+- `day/<day>.ots.meta.json` describes:
   - the artifact path (`artifact`),
   - its SHA-256 (`artifact_sha256`),
   - and the proof path (`ots_proof`).
@@ -252,9 +255,9 @@ anchor** used to:
   - passes `artifact_sha256` into `verify_ots` so that even stationary stubs
     must match the recorded artifact hash.
 
-This guarantees that mutating `.ots` files alone does not change `day_root`,
-while mutating `*.cbor` will break verification — exactly the "Mutable Proof
-Trap" we wanted to avoid.
+This guarantees that mutating the OTS portion of the day evidence set does not
+change `day_root`, while mutating `*.cbor` will break verification — exactly
+the "Mutable Proof Trap" we wanted to avoid.
 
 ## Troubleshooting
 
