@@ -15,10 +15,19 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Any, cast
 
-from trackone_core.release import (
-    DEFAULT_COMMITMENT_PROFILE_ID,
-    DISCLOSURE_CLASS_LABELS,
-)
+try:  # pragma: no cover - optional; may not be installed when run as a script
+    from trackone_core.release import (
+        DEFAULT_COMMITMENT_PROFILE_ID,
+        DISCLOSURE_CLASS_LABELS,
+    )
+except ImportError:  # pragma: no cover - fallback for direct script execution
+    # Keep these in sync with trackone_core/release.py.
+    DEFAULT_COMMITMENT_PROFILE_ID = "trackone-canonical-cbor-v1"
+    DISCLOSURE_CLASS_LABELS: dict[str, str] = {
+        "A": "public-recompute",
+        "B": "partner-audit",
+        "C": "anchor-only-evidence",
+    }
 
 try:  # pragma: no cover - optional dependency in some environments
     import jsonschema
