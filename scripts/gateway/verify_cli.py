@@ -22,7 +22,7 @@ try:  # pragma: no cover - optional; may not be installed when run as a script
     )
 except ImportError:  # pragma: no cover - fallback for direct script execution
     # Keep these in sync with trackone_core/release.py.
-    DEFAULT_COMMITMENT_PROFILE_ID = "trackone-canonical-cbor-v1"
+    DEFAULT_COMMITMENT_PROFILE_ID: str = "trackone-canonical-cbor-v1"
     DISCLOSURE_CLASS_LABELS: dict[str, str] = {
         "A": "public-recompute",
         "B": "partner-audit",
