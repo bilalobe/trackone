@@ -85,19 +85,15 @@ def _deployment_object(
     deployment_obj = deployment
 
     sensor_keys = deployment_obj.get("sensor_keys")
-    if not isinstance(sensor_keys, dict):
-        raise ProvisioningRecordsError(
-            f"record {pod_id} deployment missing sensor_keys"
-        )
-    clean_sensor_keys = {
-        str(k): str(v).strip()
-        for k, v in sensor_keys.items()
-        if isinstance(k, str) and isinstance(v, str) and v.strip()
-    }
-    if not clean_sensor_keys:
-        raise ProvisioningRecordsError(
-            f"record {pod_id} deployment sensor_keys must be non-empty"
-        )
+    clean_sensor_keys: dict[str, str] | None = None
+    if isinstance(sensor_keys, dict):
+        clean_sensor_keys = {
+            str(k): str(v).strip()
+            for k, v in sensor_keys.items()
+            if isinstance(k, str) and isinstance(v, str) and v.strip()
+        }
+        if not clean_sensor_keys:
+            clean_sensor_keys = None
 
     deployment_sensor_key = deployment_obj.get("deployment_sensor_key")
     if not isinstance(deployment_sensor_key, str) or not deployment_sensor_key.strip():
@@ -107,8 +103,9 @@ def _deployment_object(
 
     out: dict[str, Any] = {
         "deployment_sensor_key": deployment_sensor_key.strip(),
-        "sensor_keys": clean_sensor_keys,
     }
+    if clean_sensor_keys is not None:
+        out["sensor_keys"] = clean_sensor_keys
     sensors = deployment_obj.get("sensors")
     if isinstance(sensors, list | dict):
         out["sensors"] = sensors

@@ -76,13 +76,20 @@ def _copy_manifest_artifacts(
     if not isinstance(artifacts, dict):
         raise ValueError("pipeline manifest missing artifacts")
 
+    pipeline_dir_resolved = pipeline_dir.resolve()
     for artifact in artifacts.values():
         if not isinstance(artifact, dict):
             raise ValueError("pipeline manifest artifact must be an object")
         rel_path = artifact.get("path")
         if not isinstance(rel_path, str) or not rel_path:
             raise ValueError("pipeline manifest artifact missing path")
-        src = pipeline_dir / rel_path
+        src = (pipeline_dir / rel_path).resolve()
+        try:
+            src.relative_to(pipeline_dir_resolved)
+        except ValueError:
+            raise ValueError(
+                f"manifest artifact path escapes pipeline directory: {rel_path!r}"
+            ) from None
         if not src.exists():
             raise FileNotFoundError(f"manifest artifact missing on disk: {src}")
         _copy_file(src, dest_root / rel_path)

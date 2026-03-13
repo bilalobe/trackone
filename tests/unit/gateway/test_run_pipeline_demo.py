@@ -25,20 +25,20 @@ def test_artifact_manifest_emits_schema_valid_artifact(
     provisioning_dir.mkdir(parents=True)
     sensorthings_dir.mkdir(parents=True)
 
-    day_artifact = day_dir / "2026-03-13.cbor"
-    day_json = day_dir / "2026-03-13.json"
-    day_sha = day_dir / "2026-03-13.cbor.sha256"
-    day_ots = day_dir / "2026-03-13.cbor.ots"
-    block = blocks_dir / "2026-03-13-00.block.json"
+    day_artifact = day_dir / "2025-10-07.cbor"
+    day_json = day_dir / "2025-10-07.json"
+    day_sha = day_dir / "2025-10-07.cbor.sha256"
+    day_ots = day_dir / "2025-10-07.cbor.ots"
+    block = blocks_dir / "2025-10-07-00.block.json"
     frames_file = out_dir / "frames.ndjson"
     provisioning_input = provisioning_dir / "authoritative-input.json"
     provisioning_records = provisioning_dir / "records.json"
-    projection = sensorthings_dir / "2026-03-13.observations.json"
+    projection = sensorthings_dir / "2025-10-07.observations.json"
 
     day_artifact.write_bytes(b"day-bytes")
     day_json.write_text("{}", encoding="utf-8")
     day_sha.write_text(
-        f"{sha256(b'day-bytes').hexdigest()}  2026-03-13.cbor\n", encoding="utf-8"
+        f"{sha256(b'day-bytes').hexdigest()}  2025-10-07.cbor\n", encoding="utf-8"
     )
     day_ots.write_bytes(b"OTS_PROOF_PLACEHOLDER")
     block.write_text(
@@ -46,8 +46,8 @@ def test_artifact_manifest_emits_schema_valid_artifact(
             {
                 "version": 1,
                 "site_id": "an-001",
-                "day": "2026-03-13",
-                "batch_id": "an-001-2026-03-13-00",
+                "day": "2025-10-07",
+                "batch_id": "an-001-2025-10-07-00",
                 "merkle_root": "a" * 64,
                 "count": 0,
                 "leaf_hashes": [],
@@ -67,7 +67,7 @@ def test_artifact_manifest_emits_schema_valid_artifact(
     projection.write_text(
         json.dumps(
             {
-                "generated_at_utc": "2026-03-13T00:00:00Z",
+                "generated_at_utc": "2025-10-07T00:00:00Z",
                 "site_id": "an-001",
                 "projection_mode": "read_only_canonical_fact_json",
                 "things": [],
@@ -81,7 +81,7 @@ def test_artifact_manifest_emits_schema_valid_artifact(
 
     manifest_path = module.artifact_manifest(
         out_dir=out_dir,
-        date="2026-03-13",
+        date="2025-10-07",
         site="an-001",
         device_id="pod-003",
         frame_count=0,
