@@ -116,6 +116,34 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     merkle::register(m)?;
     ots::register(m)?;
 
+    m.add(
+        "DEFAULT_COMMITMENT_PROFILE_ID",
+        trackone_constants::COMMITMENT_PROFILE_ID_CANONICAL_CBOR_V1,
+    )?;
+    m.add(
+        "DISCLOSURE_CLASS_A",
+        trackone_constants::DISCLOSURE_CLASS_PUBLIC_RECOMPUTE,
+    )?;
+    m.add(
+        "DISCLOSURE_CLASS_B",
+        trackone_constants::DISCLOSURE_CLASS_PARTNER_AUDIT,
+    )?;
+    m.add(
+        "DISCLOSURE_CLASS_C",
+        trackone_constants::DISCLOSURE_CLASS_ANCHOR_ONLY,
+    )?;
+    m.add(
+        "DISCLOSURE_CLASS_A_LABEL",
+        trackone_constants::DISCLOSURE_CLASS_PUBLIC_RECOMPUTE_LABEL,
+    )?;
+    m.add(
+        "DISCLOSURE_CLASS_B_LABEL",
+        trackone_constants::DISCLOSURE_CLASS_PARTNER_AUDIT_LABEL,
+    )?;
+    m.add(
+        "DISCLOSURE_CLASS_C_LABEL",
+        trackone_constants::DISCLOSURE_CLASS_ANCHOR_ONLY_LABEL,
+    )?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     Ok(())
 }
