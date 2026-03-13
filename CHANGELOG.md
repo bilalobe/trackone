@@ -1,11 +1,31 @@
 # Changelog
 
-All notable changes to Track1 (Barnacle Sentinel) will be documented in this file.
+All notable changes to TrackOne will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+### Added
+- `toolset/unified/schemas/provisioning_input.schema.json` as the authoritative deployment/provisioning input contract for the demo and projection path.
+- `toolset/unified/schemas/pipeline_manifest.schema.json` as the locked machine-readable contract for emitted pipeline manifests.
+- `toolset/unified/schemas/sensorthings_projection.schema.json` as the locked read-only SensorThings projection artifact contract.
+- `scripts/evidence/export_release.py` to export a curated day-scoped evidence bundle and optionally commit/tag/bundle the result in a dedicated evidence repo.
+- `docs/evidence-bundle-roundtrip.md` documenting a real signed Git-bundle export/import verification round-trip, including detached verifier output.
+
+### Changed
+- The demo pipeline now separates runtime replay/key state from authoritative deployment/provisioning identity:
+  - `device_table.json` remains runtime state only;
+  - `provisioning/authoritative-input.json` carries deployment and provisioning metadata;
+  - `provisioning_records.py` now consumes that authoritative input instead of reconstructing records from `device_table.json`.
+- `run_pipeline_demo.py` now emits artifact digests for the locked manifest contract, and `verify_cli.py` validates `day/<date>.pipeline-manifest.json` when present.
+- The demo pipeline manifest is now publication-safe for evidence export: embedded verifier summaries no longer carry host-local artifact paths, and `clean_outputs()` removes `audit/` as workspace residue alongside other regenerated output directories.
+- The demo workspace now treats `day/` as the complete day evidence set / anchoring set:
+  - OTS metadata now lives under `day/` instead of a separate top-level `proofs/` directory;
+  - the sample manifest records `day_ots_meta`;
+  - detached bundle verification now runs against that joined layout.
+- `sensorthings_projection.py` now validates its emitted bundle against the checked-in projection schema before writing it.
 
 ## [0.1.0-alpha.9] - 2026-03-12
 
