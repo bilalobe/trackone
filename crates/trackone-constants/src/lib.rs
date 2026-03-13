@@ -18,8 +18,7 @@ pub const OTS_VERIFY_TIMEOUT_SECS: u64 = 30;
 pub const DEFAULT_WATCHDOG_MS: u32 = 1_000;
 
 /// Active commitment profile identifier for the alpha.10 release line.
-pub const COMMITMENT_PROFILE_ID_CANONICAL_CBOR_V1: &str =
-    "trackone-canonical-cbor-v1";
+pub const COMMITMENT_PROFILE_ID_CANONICAL_CBOR_V1: &str = "trackone-canonical-cbor-v1";
 
 /// Disclosure class for publicly recomputable verification bundles.
 pub const DISCLOSURE_CLASS_PUBLIC_RECOMPUTE: &str = "A";
