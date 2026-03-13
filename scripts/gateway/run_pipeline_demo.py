@@ -15,6 +15,8 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
+from trackone_core.release import DEFAULT_COMMITMENT_PROFILE_ID
+
 try:  # Support both package imports and direct script execution.
     from .anchoring_config import (
         STRICT,
@@ -47,8 +49,6 @@ DEFAULT_DEVICE_ID = "pod-003"
 DEFAULT_SITE = "an-001"
 DEFAULT_FRAME_COUNT = 7
 DEFAULT_FRAME_WINDOW = 64
-
-DEFAULT_COMMITMENT_PROFILE_ID = "trackone-canonical-cbor-v1"
 
 STATUS_VERIFIED = "verified"
 STATUS_FAILED = "failed"

@@ -15,6 +15,11 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Any, cast
 
+from trackone_core.release import (
+    DEFAULT_COMMITMENT_PROFILE_ID,
+    DISCLOSURE_CLASS_LABELS,
+)
+
 try:  # pragma: no cover - optional dependency in some environments
     import jsonschema
 except Exception:  # pragma: no cover - keep verifier importable without it
@@ -67,12 +72,6 @@ STATUS_MISSING = "missing"
 STATUS_PENDING = "pending"
 STATUS_SKIPPED = "skipped"
 OTS_VERIFY_TIMEOUT_SECS = 30.0
-DEFAULT_COMMITMENT_PROFILE_ID = "trackone-canonical-cbor-v1"
-DISCLOSURE_CLASS_LABELS: dict[str, str] = {
-    "A": "public-recompute",
-    "B": "partner-audit",
-    "C": "anchor-only-evidence",
-}
 CHECK_DAY_ARTIFACT = "day_artifact_validation"
 CHECK_FACT_RECOMPUTE = "fact_level_recompute"
 CHECK_MANIFEST = "pipeline_manifest_validation"
