@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/schemas/provisioning_input.schema.json",
+  "title": "Authoritative Provisioning Input Bundle",
+  "type": "object",
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "generated_at_utc": {
+      "$ref": "https://example.org/schemas/common.schema.json#/$defs/rfc3339_utc"
+    },
+    "site_id": {
+      "$ref": "https://example.org/schemas/common.schema.json#/$defs/site_id"
+    },
+    "records": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/authoritative_record"
+      }
+    }
+  },
+  "$defs": {
+    "authoritative_record": {
+      "type": "object",
+      "properties": {
+        "pod_id": {
+          "$ref": "https://example.org/schemas/common.schema.json#/$defs/pod_id_hex16"
+        },
+        "deployment": {
+          "$ref": "https://example.org/schemas/common.schema.json#/$defs/deployment_metadata"
+        },
+        "provisioning": {
+          "$ref": "https://example.org/schemas/common.schema.json#/$defs/provisioning_metadata"
+        }
+      },
+      "required": [
+        "pod_id",
+        "deployment",
+        "provisioning"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "version",
+    "site_id",
+    "records"
+  ],
+  "additionalProperties": false
+}

@@ -44,6 +44,10 @@
       "type": "string",
       "minLength": 1
     },
+    "trackone_entity_id": {
+      "type": "string",
+      "pattern": "^trackone:[a-z-]+:[0-9a-f]{64}$"
+    },
     "nullable_site_id": {
       "anyOf": [
         {
@@ -56,6 +60,23 @@
     },
     "integer_timestamp": {
       "type": "integer"
+    },
+    "artifact_ref": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "$ref": "#/$defs/hex64_lower"
+        }
+      },
+      "required": [
+        "path",
+        "sha256"
+      ],
+      "additionalProperties": false
     },
     "nullable_integer_timestamp": {
       "anyOf": [
@@ -103,6 +124,37 @@
       },
       "required": [
         "deployment_sensor_key"
+      ],
+      "additionalProperties": false
+    },
+    "provisioning_metadata": {
+      "type": "object",
+      "properties": {
+        "identity_pubkey": {
+          "$ref": "#/$defs/hex64_lower"
+        },
+        "firmware_version": {
+          "$ref": "#/$defs/firmware_version"
+        },
+        "firmware_hash": {
+          "$ref": "#/$defs/hex64_lower"
+        },
+        "birth_cert_sig": {
+          "$ref": "#/$defs/hex128_lower"
+        },
+        "provisioned_at": {
+          "$ref": "#/$defs/integer_timestamp"
+        },
+        "site_id": {
+          "$ref": "#/$defs/site_id"
+        }
+      },
+      "required": [
+        "identity_pubkey",
+        "firmware_version",
+        "firmware_hash",
+        "birth_cert_sig",
+        "provisioned_at"
       ],
       "additionalProperties": false
     },

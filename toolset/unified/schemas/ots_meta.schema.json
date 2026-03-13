@@ -5,11 +5,6 @@
   "type": "object",
   "description": "Sidecar metadata for an OpenTimestamps (OTS) proof anchoring a day-level artifact. This JSON is not part of the Merkle tree and MUST NOT be hashed into day_root.",
   "properties": {
-    "milestone": {
-      "type": "string",
-      "minLength": 1,
-      "description": "Project milestone label associated with this artifact (e.g., m4)."
-    },
     "day": {
       "$ref": "https://example.org/schemas/common.schema.json#/$defs/utc_date",
       "description": "UTC date (YYYY-MM-DD) of the anchored day artifact."
@@ -60,7 +55,6 @@
     }
   },
   "required": [
-    "milestone",
     "day",
     "artifact",
     "artifact_sha256",

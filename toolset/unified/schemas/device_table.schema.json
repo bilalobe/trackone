@@ -22,33 +22,6 @@
     }
   },
   "$defs": {
-    "provisioning_metadata": {
-      "type": "object",
-      "properties": {
-        "identity_pubkey": {
-          "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex64_lower"
-        },
-        "firmware_version": {
-          "$ref": "https://example.org/schemas/common.schema.json#/$defs/firmware_version"
-        },
-        "firmware_hash": {
-          "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex64_lower"
-        },
-        "birth_cert_sig": {
-          "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex128_lower"
-        },
-        "provisioned_at": {
-          "$ref": "https://example.org/schemas/common.schema.json#/$defs/integer_timestamp"
-        },
-        "site_id": {
-          "$ref": "https://example.org/schemas/common.schema.json#/$defs/site_id"
-        }
-      },
-      "required": [
-        "identity_pubkey"
-      ],
-      "additionalProperties": false
-    },
     "device_entry": {
       "type": "object",
       "properties": {
@@ -79,27 +52,13 @@
             "number"
           ]
         },
-        "site_id": {
-          "$ref": "https://example.org/schemas/common.schema.json#/$defs/site_id"
-        },
-        "sensor_keys": {
-          "$ref": "https://example.org/schemas/common.schema.json#/$defs/sensor_key_map"
-        },
-        "sensors": {
-          "anyOf": [
-            {
-              "type": "object"
-            },
-            {
-              "type": "array"
-            }
-          ]
-        },
         "deployment": {
-          "$ref": "https://example.org/schemas/common.schema.json#/$defs/deployment_metadata"
+          "type": "object",
+          "description": "Legacy deployment metadata tolerated in persisted device tables so old captures remain readable."
         },
         "provisioning": {
-          "$ref": "#/$defs/provisioning_metadata"
+          "type": "object",
+          "description": "Legacy provisioning metadata tolerated in persisted device tables so old captures remain readable."
         }
       },
       "required": [

@@ -1,0 +1,160 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/schemas/pipeline_manifest.schema.json",
+  "title": "Pipeline Manifest",
+  "type": "object",
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "date": {
+      "$ref": "https://example.org/schemas/common.schema.json#/$defs/utc_date"
+    },
+    "site": {
+      "$ref": "https://example.org/schemas/common.schema.json#/$defs/site_id"
+    },
+    "device_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "frame_count": {
+      "$ref": "https://example.org/schemas/common.schema.json#/$defs/non_negative_integer"
+    },
+    "facts_dir": {
+      "type": "string",
+      "minLength": 1
+    },
+    "frames_file": {
+      "type": "string",
+      "minLength": 1
+    },
+    "artifacts": {
+      "$ref": "#/$defs/artifacts"
+    },
+    "anchoring": {
+      "type": "object"
+    },
+    "verifier": {
+      "type": "object"
+    },
+    "verification_bundle": {
+      "$ref": "#/$defs/verification_bundle"
+    }
+  },
+  "$defs": {
+    "artifacts": {
+      "type": "object",
+      "properties": {
+        "block": {
+          "$ref": "https://example.org/schemas/common.schema.json#/$defs/artifact_ref"
+        },
+        "day_cbor": {
+          "$ref": "https://example.org/schemas/common.schema.json#/$defs/artifact_ref"
+        },
+        "day_json": {
+          "$ref": "https://example.org/schemas/common.schema.json#/$defs/artifact_ref"
+        },
+        "day_sha256": {
+          "$ref": "https://example.org/schemas/common.schema.json#/$defs/artifact_ref"
+        },
+        "day_ots": {
+          "$ref": "https://example.org/schemas/common.schema.json#/$defs/artifact_ref"
+        },
+        "day_ots_meta": {
+          "$ref": "https://example.org/schemas/common.schema.json#/$defs/artifact_ref"
+        },
+        "peer_attest": {
+          "$ref": "https://example.org/schemas/common.schema.json#/$defs/artifact_ref"
+        },
+        "provisioning_input": {
+          "$ref": "https://example.org/schemas/common.schema.json#/$defs/artifact_ref"
+        },
+        "provisioning_records": {
+          "$ref": "https://example.org/schemas/common.schema.json#/$defs/artifact_ref"
+        },
+        "sensorthings_projection": {
+          "$ref": "https://example.org/schemas/common.schema.json#/$defs/artifact_ref"
+        },
+        "tsa_info": {
+          "$ref": "https://example.org/schemas/common.schema.json#/$defs/artifact_ref"
+        },
+        "tsa_tsr": {
+          "$ref": "https://example.org/schemas/common.schema.json#/$defs/artifact_ref"
+        }
+      },
+      "required": [
+        "block",
+        "day_cbor",
+        "day_json",
+        "day_sha256",
+        "provisioning_input",
+        "provisioning_records",
+        "sensorthings_projection"
+      ],
+      "additionalProperties": false
+    },
+    "verification_bundle": {
+      "type": "object",
+      "properties": {
+        "disclosure_class": {
+          "enum": [
+            "A",
+            "B",
+            "C"
+          ]
+        },
+        "commitment_profile_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "checks_executed": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "checks_skipped": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "check": {
+                "type": "string",
+                "minLength": 1
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "check",
+              "reason"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "disclosure_class",
+        "commitment_profile_id",
+        "checks_executed",
+        "checks_skipped"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "version",
+    "date",
+    "site",
+    "device_id",
+    "frame_count",
+    "facts_dir",
+    "artifacts",
+    "anchoring",
+    "verification_bundle"
+  ],
+  "additionalProperties": false
+}
