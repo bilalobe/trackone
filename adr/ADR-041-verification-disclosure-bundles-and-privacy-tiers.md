@@ -2,7 +2,7 @@
 
 **Status**: Accepted
 **Date**: 2026-02-23
-**Updated**: 2026-03-08
+**Updated**: 2026-03-13
 
 ## Related ADRs
 
@@ -31,36 +31,29 @@ TrackOne defines three disclosure tiers:
 
 ### 2) Normative minimum for Tier A
 
-At the current `0.1.0-alpha.7` maturity level, a Tier A bundle MUST contain:
+At the current `0.1.0-alpha.10` implementation boundary, a Tier A bundle
+MUST contain:
 
 - canonical fact artifacts for the day, as defined by the active commitment profile;
 - day artifact, as defined by the active commitment profile;
 - authoritative block/day records;
 - OTS proof and OTS metadata sidecar;
-- sufficient information to identify the active commitment profile.
+- a standalone verification manifest carrying:
+  - `disclosure_class`;
+  - `commitment_profile_id`;
+  - artifact path plus digest entries; and
+  - machine-readable executed/skipped-check metadata.
 
-A standalone verification manifest (paths + digests) is RECOMMENDED and
-SHOULD be included when the producing tool emits one. Per ADR-043, this
-manifest requirement MAY be raised to MUST only after manifest emission and
-consumption are uniformly supported across the main tooling paths.
-
-During the ADR-039 dual-artifact migration window, Tier A verification MUST
-treat the following as equivalent only when the selected profile and artifact
-digests are bound unambiguously by a verification manifest or equivalent
-verifier input:
-
-- CBOR-first artifacts: `facts/*.cbor` and `day/YYYY-MM-DD.cbor`;
-- transitional artifacts: `facts/*.json` and `day/YYYY-MM-DD.bin` (canonical JSON bytes).
-
-Bundles using transitional artifacts MUST be labeled as
-"Tier A (transitional profile artifacts)" in verifier output. Once CBOR-first
-artifacts are the sole authoritative profile output, this transitional
-equivalence MUST be removed.
+The current tooling now emits and validates that manifest on the main
+pipeline/verifier path. Per ADR-043, the remaining transition question is not
+whether the manifest contract exists, but when strict verification should make
+manifest absence fatal across every supported tooling path.
 
 If any required Tier A recomputation element is missing, output MUST be
 labeled "not independently recomputable". If the standalone manifest is
-absent, output SHOULD be labeled "manifest-absent" or equivalent transitional
-wording rather than treated as a Tier A failure by default.
+absent on a manifest-capable tooling path, output SHOULD be labeled
+"manifest-absent" or equivalent transitional wording until strict manifest
+requirement is enabled consistently.
 
 ### 3) Normative minimum for Tier B
 
