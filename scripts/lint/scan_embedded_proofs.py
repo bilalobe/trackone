@@ -20,8 +20,8 @@ SUSPICIOUS_KEY_RE = re.compile(r"(^|_)ots(_|$)|(^|_)proof(_|$)", re.IGNORECASE)
 
 def iter_json_files(root: Path) -> Iterable[Path]:
     for path in root.rglob("*.json"):
-        # Allow OTS metadata sidecars under proofs/ by default.
-        if "proofs" in path.parts:
+        # Allow standalone OTS metadata sidecars by default.
+        if path.name.endswith(".ots.meta.json"):
             continue
         yield path
 
