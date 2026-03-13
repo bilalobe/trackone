@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-alpha.10] - 2026-03-13
+
+### Changed
+- `trackone-core::VERSION` now reports `0.1.0-alpha.10` to match the workspace release.
+- Re-exported the shared alpha.10 release-contract constants from `trackone-constants`, including the canonical `commitment_profile_id` and disclosure-class labels used by the manifest/verifier surface.
+
 ## [0.1.0-alpha.9] - 2026-03-12
 
 ### Changed

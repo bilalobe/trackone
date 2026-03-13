@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-alpha.10] - 2026-03-13
+
+### Added
+- Exported alpha.10 release-contract constants from the native extension root so Python callers can share the canonical `commitment_profile_id` and disclosure-class labels with the Rust workspace.
+
 ## [0.1.0-alpha.9] - 2026-03-12
 
 ### Notes

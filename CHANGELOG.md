@@ -7,12 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-alpha.10] - 2026-03-13
+
 ### Added
 - `toolset/unified/schemas/provisioning_input.schema.json` as the authoritative deployment/provisioning input contract for the demo and projection path.
 - `toolset/unified/schemas/pipeline_manifest.schema.json` as the locked machine-readable contract for emitted pipeline manifests.
 - `toolset/unified/schemas/sensorthings_projection.schema.json` as the locked read-only SensorThings projection artifact contract.
 - `scripts/evidence/export_release.py` to export a curated day-scoped evidence bundle and optionally commit/tag/bundle the result in a dedicated evidence repo.
 - `docs/evidence-bundle-roundtrip.md` documenting a real signed Git-bundle export/import verification round-trip, including detached verifier output.
+- Shared alpha.10 release constants in Rust/Python for `commitment_profile_id` and disclosure-class labels so the manifest/verifier contract is single-sourced across the native boundary.
 
 ### Changed
 - The demo pipeline now separates runtime replay/key state from authoritative deployment/provisioning identity:

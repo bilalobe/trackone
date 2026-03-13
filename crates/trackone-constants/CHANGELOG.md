@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-alpha.10] - 2026-03-13
+
+### Added
+- Shared alpha.10 release constants for the canonical `commitment_profile_id` and disclosure-class codes/labels used by manifest and verifier tooling.
+
 ## [0.1.0-alpha.9] - 2026-03-12
 
 ### Notes
