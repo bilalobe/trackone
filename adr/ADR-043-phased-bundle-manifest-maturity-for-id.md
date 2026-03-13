@@ -31,8 +31,7 @@ At the current `alpha.9` / `alpha.10` transition point, TrackOne does support:
 - disclosure-tier language and conformance vectors in the draft;
 - emitted pipeline manifests carrying `disclosure_class`,
   `commitment_profile_id`, artifact path+digest entries, and
-  `checks_executed` / `checks_skipped`; and
-- verifier-side manifest validation when that manifest is present.
+  `checks_executed` / `checks_skipped`.
 
 TrackOne does not yet uniformly guarantee:
 
@@ -90,7 +89,9 @@ One exception remains:
 
 TrackOne adopts the following phases for bundle-manifest maturity.
 
-#### Phase A: `0.1.0-alpha.7`
+#### Phase A (historical): `0.1.0-alpha.7` and earlier
+
+These guidelines applied before the first manifest-capable tooling release:
 
 - Keep the I-D structure.
 - Keep standalone manifests optional-but-recommended in the I-D.
@@ -98,7 +99,7 @@ TrackOne adopts the following phases for bundle-manifest maturity.
 - Continue allowing verification from canonical artifacts plus sidecar even
   when no standalone manifest is present.
 
-#### Phase B: first manifest-capable tooling release
+#### Phase B (current): `0.1.0-alpha.9` / `0.1.0-alpha.10`
 
 This phase is now implemented on the main demo/verifier path:
 
@@ -136,7 +137,7 @@ The I-D is allowed to describe the intended verification-bundle model, but it
 MUST distinguish between:
 
 - the structure the project is converging on; and
-- what the current shipped tooling guarantees at `alpha.7`.
+- what the current shipped tooling guarantees at `alpha.9` / `alpha.10`.
 
 Where there is a mismatch, the document MUST choose wording that is both
 truthful and forward-compatible, rather than weakening the architecture or
@@ -163,8 +164,8 @@ overstating implementation status.
 
 ## Alternatives Considered
 
-- **Make manifests unconditional MUST now**: rejected because it overstates
-  `alpha.7` support.
+- **Make manifests unconditional MUST now**: rejected because it overstated
+  implementation support before Phase B was complete.
 - **Remove bundle-manifest structure from the `-00` draft**: rejected because
   it weakens the draft and delays the correct interoperability shape.
 - **Keep the requirements vague**: rejected because vague wording recreates

@@ -50,17 +50,18 @@ The opportunity is therefore not to replace OTS or Buildx provenance with Git,
 but to use Git as a signed distribution and curation plane for a narrow class of
 small authoritative artifacts.
 
-The first pilot implementation now exists in-tree:
+The planned pilot implementation will follow this approach:
 
-- [scripts/evidence/export_release.py](../scripts/evidence/export_release.py)
-  exports a curated evidence bundle from a completed pipeline run;
+- a `scripts/evidence/export_release.py` script (planned) will export a
+  curated evidence bundle from a completed pipeline run;
 - exported bundles can be committed, tagged, and shipped as `git bundle`
   archives; and
 - detached verification still runs from the exported files themselves via
   `verify_cli --root <bundle-root> --facts <bundle-root>/facts`.
 
-That pilot is intentionally narrow. It proves that Git can improve distribution
-and operator signoff without being admitted into the verifier's trust contract.
+This pilot design is intentionally narrow. It proves that Git can improve
+distribution and operator signoff without being admitted into the verifier's
+trust contract.
 
 ## Decision
 
@@ -248,9 +249,9 @@ The operational gain is distribution effectiveness, not a new root of trust.
 1. Keep verifier and conformance logic independent of repository access.
 1. Prefer release/evidence manifests that carry artifact digests inside the
    signed Git-published set.
-1. The current pilot path is:
-   - export a curated day-scoped bundle with
-     [scripts/evidence/export_release.py](../scripts/evidence/export_release.py);
+1. The planned pilot path (once the export tooling is in-tree) is:
+   - export a curated day-scoped bundle with a `scripts/evidence/export_release.py`
+     script (to be added);
    - optionally commit/tag it in an evidence repository;
    - optionally create a `git bundle`; and
    - verify the imported bundle contents with

@@ -36,22 +36,27 @@ MUST contain:
 
 - canonical fact artifacts for the day, as defined by the active commitment profile;
 - day artifact, as defined by the active commitment profile;
-- authoritative block/day records;
-- OTS proof and OTS metadata sidecar;
-- a standalone verification manifest carrying:
-  - `disclosure_class`;
-  - `commitment_profile_id`;
-  - artifact path plus digest entries; and
-  - machine-readable executed/skipped-check metadata.
+- authoritative block/day records; and
+- OTS proof and OTS metadata sidecar.
 
-The current tooling now emits and validates that manifest on the main
-pipeline/verifier path. Per ADR-043, the remaining transition question is not
-whether the manifest contract exists, but when strict verification should make
-manifest absence fatal across every supported tooling path.
+A Tier A bundle SHOULD also include a standalone verification manifest
+carrying:
+
+- `disclosure_class`;
+- `commitment_profile_id`;
+- artifact path plus digest entries; and
+- machine-readable executed/skipped-check metadata.
+
+The current pipeline tooling emits that manifest on the main demo/pipeline
+path. Per ADR-043, the standalone manifest is RECOMMENDED but not yet
+universally enforced: manifest absence is not currently fatal across every
+supported tooling path. The remaining transition question is when strict
+verification should make manifest absence fatal on all tooling paths that
+are capable of emitting a manifest (per ADR-043 Phase B and beyond).
 
 If any required Tier A recomputation element is missing, output MUST be
 labeled "not independently recomputable". If the standalone manifest is
-absent on a manifest-capable tooling path, output SHOULD be labeled
+absent on a tooling path that supports manifest emission, output SHOULD be labeled
 "manifest-absent" or equivalent transitional wording until strict manifest
 requirement is enabled consistently.
 

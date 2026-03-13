@@ -1,0 +1,161 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/schemas/sensorthings_projection.schema.json",
+  "title": "SensorThings Projection Bundle",
+  "type": "object",
+  "description": "Read-only derived projection of TrackOne canonical facts into OGC SensorThings API entities. This artifact is regenerable from the canonical fact log and MUST NOT be used as a commitment-root input.",
+  "required": ["generated_at_utc", "site_id", "projection_mode", "things", "datastreams", "observed_properties", "observations"],
+  "additionalProperties": false,
+  "properties": {
+    "generated_at_utc": {
+      "$ref": "https://example.org/schemas/common.schema.json#/$defs/rfc3339_utc",
+      "description": "UTC timestamp at which this projection bundle was generated."
+    },
+    "site_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Identifier for the TrackOne site from which facts were projected."
+    },
+    "projection_mode": {
+      "type": "string",
+      "const": "read_only_canonical_fact_json",
+      "description": "Identifies this as a read-only projection artifact derived from canonical fact JSON files."
+    },
+    "things": {
+      "type": "array",
+      "description": "SensorThings Things derived from canonical Site/Asset/Pod/Device facts.",
+      "items": {
+        "$ref": "#/$defs/thing"
+      }
+    },
+    "datastreams": {
+      "type": "array",
+      "description": "SensorThings Datastreams linking a Thing, Sensor, and ObservedProperty.",
+      "items": {
+        "$ref": "#/$defs/datastream"
+      }
+    },
+    "observed_properties": {
+      "type": "array",
+      "description": "SensorThings ObservedProperties describing the phenomenon being measured.",
+      "items": {
+        "$ref": "#/$defs/observed_property"
+      }
+    },
+    "observations": {
+      "type": "array",
+      "description": "SensorThings Observations derived from canonical telemetry fact payloads.",
+      "items": {
+        "$ref": "#/$defs/observation"
+      }
+    }
+  },
+  "$defs": {
+    "entity_id": {
+      "type": "string",
+      "pattern": "^trackone:[a-z-]+:[0-9a-f]{64}$",
+      "description": "Stable deterministic entity identifier in the form trackone:<kind>:<sha256hex>."
+    },
+    "thing": {
+      "type": "object",
+      "required": ["id", "name"],
+      "additionalProperties": true,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/entity_id"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string"
+        },
+        "properties": {
+          "type": "object",
+          "description": "Arbitrary TrackOne-specific properties (pod_id, site_id, device model, etc.)."
+        }
+      }
+    },
+    "unit_of_measurement": {
+      "type": "object",
+      "required": ["symbol", "name"],
+      "additionalProperties": true,
+      "properties": {
+        "symbol": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      }
+    },
+    "observed_property": {
+      "type": "object",
+      "required": ["id", "key", "label", "unit_of_measurement"],
+      "additionalProperties": true,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/entity_id"
+        },
+        "key": {
+          "type": "string",
+          "minLength": 1
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "unit_of_measurement": {
+          "$ref": "#/$defs/unit_of_measurement"
+        }
+      }
+    },
+    "datastream": {
+      "type": "object",
+      "required": ["id", "thing_id", "observed_property_id", "sensor_id"],
+      "additionalProperties": true,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/entity_id"
+        },
+        "thing_id": {
+          "$ref": "#/$defs/entity_id"
+        },
+        "observed_property_id": {
+          "$ref": "#/$defs/entity_id"
+        },
+        "sensor_id": {
+          "$ref": "#/$defs/entity_id"
+        },
+        "name": {
+          "type": "string"
+        }
+      }
+    },
+    "observation": {
+      "type": "object",
+      "required": ["id", "datastream_id", "result", "result_time"],
+      "additionalProperties": true,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "datastream_id": {
+          "$ref": "#/$defs/entity_id"
+        },
+        "result": {
+          "description": "Observed scalar measurement value."
+        },
+        "result_time": {
+          "$ref": "https://example.org/schemas/common.schema.json#/$defs/rfc3339_utc"
+        },
+        "phenomenon_time": {
+          "type": "object",
+          "description": "Optional time interval or instant for the phenomenon."
+        }
+      }
+    }
+  }
+}
