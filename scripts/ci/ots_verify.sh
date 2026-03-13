@@ -21,21 +21,63 @@ OUTPUT_SUMMARY="${OUTPUT_SUMMARY:-$ROOT_DIR/ots_verify_summary.txt}"
 OUTPUT_JSON_SUMMARY="${OUTPUT_JSON_SUMMARY:-$ROOT_DIR/ots_verify_summary.json}"
 
 # Declare arrays and associative maps
-: "${block_hashes:=}"  # ensure variable exists even if declare fails under some shells
-declare -a heights
-declare -a block_hashes
+declare -a heights=()
+declare -a block_hashes=()
 declare -A file_stage
 declare -A file_next_trigger
+declare -A file_status
+
+classify_verify_failure_output() {
+  local output="$1"
+  if grep -Eq 'Could not connect to Bitcoin node|Cookie file unusable|rpcpassword not specified|Connection refused' <<<"$output"; then
+    echo "node_unavailable"
+  elif grep -Eq 'Timestamp not complete|Pending confirmation in Bitcoin blockchain' <<<"$output"; then
+    echo "pending"
+  else
+    echo "failed"
+  fi
+}
+
+record_verify_failure() {
+  local file="$1"
+  local reason="$2"
+  case "$reason" in
+    node_unavailable)
+      file_status["$file"]=node_unavailable
+      file_stage["$file"]=node_unavailable
+      file_next_trigger["$file"]=configure-bitcoin-node
+      ;;
+    pending)
+      file_status["$file"]=pending
+      ;;
+    *)
+      file_status["$file"]=failed
+      file_next_trigger["$file"]=inspect-proof
+      ;;
+  esac
+}
 
 mkdir -p "$DATADIR"
 
-if ! command -v bitcoind >/dev/null 2>&1; then
-  echo "bitcoind is not installed; cannot run trustless OTS verification. Skipping."
-  exit 0
-fi
-if ! command -v bitcoin-cli >/dev/null 2>&1; then
-  echo "bitcoin-cli is not installed; cannot query headers. Skipping."
-  exit 0
+if [ "$RUN_BITCOIND" = "1" ]; then
+  if ! command -v bitcoind >/dev/null 2>&1; then
+    echo "bitcoind is not installed; cannot run trustless OTS verification."
+    if [ "$STRICT_VERIFY" = "1" ]; then
+      echo "STRICT_VERIFY=1: failing because bitcoind is required."
+      exit 3
+    fi
+    echo "Non-strict mode: skipping trustless OTS verification."
+    exit 0
+  fi
+  if ! command -v bitcoin-cli >/dev/null 2>&1; then
+    echo "bitcoin-cli is not installed; cannot query headers."
+    if [ "$STRICT_VERIFY" = "1" ]; then
+      echo "STRICT_VERIFY=1: failing because bitcoin-cli is required."
+      exit 3
+    fi
+    echo "Non-strict mode: skipping trustless OTS verification."
+    exit 0
+  fi
 fi
 
 # Helper: upgrade all OTS files once (best-effort)
@@ -138,7 +180,7 @@ write_summary_file() {
       (IFS=,; echo "${urls[*]}")
       echo -n "block_hash_urls="
       hash_urls=()
-      if [ "$(array_len block_hashes)" -gt 0 ]; then
+      if [ ${#block_hashes[@]} -gt 0 ]; then
         for bh in "${block_hashes[@]}"; do
           hash_urls+=("$EXPLORER_HASH_BASE/$bh")
         done
@@ -187,7 +229,7 @@ write_json_summary_file() {
     fi
     echo '],'
     printf '  "block_hash_urls": ['
-    if [ "$(array_len block_hashes)" -gt 0 ]; then
+    if [ ${#block_hashes[@]} -gt 0 ]; then
       for i in "${!block_hashes[@]}"; do
         if [ "$i" -ne 0 ]; then printf ', '; fi
         printf '"%s/%s"' "$EXPLORER_HASH_BASE" "${block_hashes[$i]}"
@@ -273,20 +315,54 @@ fi
 
 if [ ${#heights[@]} -eq 0 ]; then
   echo "No BitcoinBlockHeaderAttestation heights found in .ots files."
+  shopt -s nullglob
+  ots_files=("$ROOT_DIR"/*.ots)
+  if [ ${#ots_files[@]} -eq 0 ]; then
+    echo "No .ots files found in $ROOT_DIR."
+    write_summary_file
+    write_json_summary_file
+    if [ "$STRICT_VERIFY" = "1" ]; then
+      echo "STRICT_VERIFY=1: failing because no OTS proofs were found."
+      exit 2
+    fi
+    exit 0
+  fi
+
+  if ! command -v ots >/dev/null 2>&1; then
+    echo "ots CLI is not installed; cannot verify proofs."
+    for f in "${ots_files[@]}"; do
+      file_status["$f"]=skipped_no_ots_cli
+    done
+    write_summary_file
+    write_json_summary_file
+    if [ "$STRICT_VERIFY" = "1" ]; then
+      echo "STRICT_VERIFY=1: failing because ots CLI is required."
+      exit 3
+    fi
+    echo "Non-strict mode: skipping proof verification without ots CLI."
+    exit 0
+  fi
+
   if command -v ots >/dev/null 2>&1; then
     # Try verify directly (may succeed if headers already cached or calendar proofs are complete)
-    verified=0; failed=0
-    declare -A file_status=()
-    shopt -s nullglob
+    verified=0; failed=0; node_unavailable_failures=0; hard_failures=0
     for f in "$ROOT_DIR"/*.ots; do
       [ -f "$f" ] || continue
-      if ots verify "$f"; then
+      verify_output=$(ots verify "$f" 2>&1) && verify_rc=0 || verify_rc=$?
+      if [ "$verify_rc" -eq 0 ]; then
         verified=$((verified+1))
         file_status["$f"]=verified
       else
         echo "ots verify failed for $f"
+        printf '%s\n' "$verify_output"
         failed=$((failed+1))
-        file_status["$f"]=pending
+        failure_reason=$(classify_verify_failure_output "$verify_output")
+        record_verify_failure "$f" "$failure_reason"
+        if [ "$failure_reason" = "node_unavailable" ]; then
+          node_unavailable_failures=$((node_unavailable_failures+1))
+        elif [ "$failure_reason" = "failed" ]; then
+          hard_failures=$((hard_failures+1))
+        fi
       fi
     done
     # Write summary (file + heights + urls)
@@ -305,9 +381,17 @@ if [ ${#heights[@]} -eq 0 ]; then
       if [ "$STRICT_VERIFY" = "1" ]; then
         exit 2
       else
-        echo "Non-strict mode: allowing verification failures (likely pending confirmations)."
+        if [ "$node_unavailable_failures" -gt 0 ] && [ "$hard_failures" -eq 0 ]; then
+          echo "Non-strict mode: allowing verification failures because no usable Bitcoin node was available."
+        else
+          echo "Non-strict mode: allowing verification failures (likely pending confirmations)."
+        fi
         exit 0
       fi
+    fi
+    if [ "$verified" -eq 0 ] && [ "$STRICT_VERIFY" = "1" ]; then
+      echo "STRICT_VERIFY=1: failing because no OTS proofs verified successfully."
+      exit 2
     fi
   fi
   exit 0
@@ -377,20 +461,27 @@ else
 fi
 
 # Run full verification
-verified=0; failed=0
-declare -A file_status=()
+verified=0; failed=0; node_unavailable_failures=0; hard_failures=0
 shopt -s nullglob
 for f in "$ROOT_DIR"/*.ots; do
   [ -f "$f" ] || continue
   echo "Verifying $f ..."
   if command -v ots >/dev/null 2>&1; then
-    if ots verify "$f"; then
+    verify_output=$(ots verify "$f" 2>&1) && verify_rc=0 || verify_rc=$?
+    if [ "$verify_rc" -eq 0 ]; then
       verified=$((verified+1))
       file_status["$f"]=verified
     else
       echo "ots verify failed for $f"
+      printf '%s\n' "$verify_output"
       failed=$((failed+1))
-      file_status["$f"]=pending
+      failure_reason=$(classify_verify_failure_output "$verify_output")
+      record_verify_failure "$f" "$failure_reason"
+      if [ "$failure_reason" = "node_unavailable" ]; then
+        node_unavailable_failures=$((node_unavailable_failures+1))
+      elif [ "$failure_reason" = "failed" ]; then
+        hard_failures=$((hard_failures+1))
+      fi
     fi
   else
     echo "Skipping ots verify for $f (ots not installed)."
@@ -409,16 +500,31 @@ if [ "$failed" -gt 0 ] && [ "$UPGRADE_ON_PENDING" = "1" ] && command -v ots >/de
   parse_heights
   compute_block_hashes_if_possible
   # re-verify only failed ones
-  failed=0; verified=0; declare -A file_status_new=()
+  failed=0; verified=0; node_unavailable_failures=0; hard_failures=0; declare -A file_status_new=()
   for f in "$ROOT_DIR"/*.ots; do
     [ -f "$f" ] || continue
     echo "Re-verifying $f ..."
-    if ots verify "$f"; then
+    verify_output=$(ots verify "$f" 2>&1) && verify_rc=0 || verify_rc=$?
+    if [ "$verify_rc" -eq 0 ]; then
       verified=$((verified+1))
       file_status_new["$f"]=verified
     else
       failed=$((failed+1))
-      file_status_new["$f"]=pending
+      printf '%s\n' "$verify_output"
+      failure_reason=$(classify_verify_failure_output "$verify_output")
+      case "$failure_reason" in
+        node_unavailable)
+          file_status_new["$f"]=node_unavailable
+          node_unavailable_failures=$((node_unavailable_failures+1))
+          ;;
+        pending)
+          file_status_new["$f"]=pending
+          ;;
+        *)
+          file_status_new["$f"]=failed
+          hard_failures=$((hard_failures+1))
+          ;;
+      esac
     fi
     # Refresh stage after verify attempt
     info_out=$(ots info "$f" 2>/dev/null || true)
@@ -446,7 +552,7 @@ if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
       for h in "${heights[@]}"; do
         echo "  - $EXPLORER_BASE/block-height/$h"
       done
-      if [ "$(array_len block_hashes)" -gt 0 ]; then
+      if [ ${#block_hashes[@]} -gt 0 ]; then
         echo "- Explorer block hash URLs:";
         for bh in "${block_hashes[@]}"; do
           echo "  - $EXPLORER_HASH_BASE/$bh"
@@ -461,7 +567,11 @@ if [ "$failed" -ne 0 ]; then
   if [ "$STRICT_VERIFY" = "1" ]; then
     exit 2
   else
-    echo "Non-strict mode: allowing verification failures (likely pending confirmations)."
+    if [ "$node_unavailable_failures" -gt 0 ] && [ "$hard_failures" -eq 0 ]; then
+      echo "Non-strict mode: allowing verification failures because no usable Bitcoin node was available."
+    else
+      echo "Non-strict mode: allowing verification failures (likely pending confirmations)."
+    fi
     exit 0
   fi
 fi
