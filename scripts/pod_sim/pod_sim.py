@@ -238,6 +238,31 @@ def save_device_table(path: Path | None, tbl: dict[str, dict[str, Any]]) -> None
     path.write_text(json.dumps(tbl, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def load_provisioning_input(path: Path | None) -> dict[str, Any]:
+    if not path or not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def save_provisioning_input(path: Path | None, bundle: dict[str, Any]) -> None:
+    if not path:
+        return
+    site_id = bundle.get("site_id")
+    if not isinstance(site_id, str) or not site_id:
+        raise ValueError(
+            "provisioning input requires a top-level site_id; rerun pod_sim with --site"
+        )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    bundle["generated_at_utc"] = datetime.now(UTC).isoformat()
+    path.write_text(
+        json.dumps(bundle, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+
+
 def ensure_device_entry(
     tbl: dict[str, dict[str, Any]], dev_id_u16: int, site_id: str | None = None
 ) -> dict[str, Any]:
@@ -263,17 +288,50 @@ def ensure_device_entry(
             "ck_up": b64(ck_up),
             "highest_fc_seen": -1,
         }
-    entry = tbl[key]
-    if not isinstance(entry.get("deployment"), dict):
-        entry["deployment"] = _demo_deployment_metadata()
-    if not isinstance(entry.get("provisioning"), dict):
-        master_seed = base64.b64decode(meta["master_seed"])
-        entry["provisioning"] = _demo_provisioning_metadata(
+    return tbl[key]
+
+
+def ensure_authoritative_provisioning_record(
+    bundle: dict[str, Any],
+    *,
+    dev_id_u16: int,
+    master_seed: bytes,
+    site_id: str | None = None,
+) -> None:
+    bundle.setdefault("version", 1)
+    if site_id and not isinstance(bundle.get("site_id"), str):
+        bundle["site_id"] = site_id
+    records = bundle.setdefault("records", [])
+    if not isinstance(records, list):
+        raise ValueError("authoritative provisioning input records must be a list")
+
+    pod_id = f"{dev_id_u16 & 0xFFFF:016x}"
+    existing = None
+    for record in records:
+        if isinstance(record, dict) and record.get("pod_id") == pod_id:
+            existing = record
+            break
+
+    if existing is None:
+        existing = {
+            "pod_id": pod_id,
+            "deployment": _demo_deployment_metadata(),
+            "provisioning": _demo_provisioning_metadata(
+                master_seed, dev_id_u16, site_id
+            ),
+        }
+        records.append(existing)
+        records.sort(key=lambda item: str(item.get("pod_id", "")))
+        return
+
+    if not isinstance(existing.get("deployment"), dict):
+        existing["deployment"] = _demo_deployment_metadata()
+    if not isinstance(existing.get("provisioning"), dict):
+        existing["provisioning"] = _demo_provisioning_metadata(
             master_seed, dev_id_u16, site_id
         )
-    elif site_id and not isinstance(entry["provisioning"].get("site_id"), str):
-        entry["provisioning"]["site_id"] = site_id
-    return entry
+    elif site_id and not isinstance(existing["provisioning"].get("site_id"), str):
+        existing["provisioning"]["site_id"] = site_id
 
 
 def build_nonce(salt8: bytes, fc64: int) -> bytes:
@@ -287,6 +345,7 @@ def emit_framed(
     counter: int,
     payload: dict[str, Any],
     device_table_path: Path | None,
+    provisioning_input_path: Path | None,
     site_id: str | None = None,
 ) -> dict[str, Any]:
     """
@@ -301,6 +360,22 @@ def emit_framed(
     # Device table / keys
     tbl = load_device_table(device_table_path) if device_table_path else {}
     entry = ensure_device_entry(tbl, dev_id_u16, site_id=site_id)
+    meta = tbl.get("_meta")
+    master_seed = (
+        base64.b64decode(meta["master_seed"])
+        if isinstance(meta, dict) and isinstance(meta.get("master_seed"), str)
+        else secrets.token_bytes(32)
+    )
+
+    if provisioning_input_path:
+        authoritative_input = load_provisioning_input(provisioning_input_path)
+        ensure_authoritative_provisioning_record(
+            authoritative_input,
+            dev_id_u16=dev_id_u16,
+            master_seed=master_seed,
+            site_id=site_id,
+        )
+        save_provisioning_input(provisioning_input_path, authoritative_input)
 
     # Retrieve salt8, ensuring it's exactly 8 bytes
     salt8_raw = entry.get("salt8")
@@ -389,6 +464,11 @@ def main(argv: list[str] | None = None) -> int:
         type=Path,
         help="Path to device table JSON (used to persist per-device salt and key)",
     )
+    p.add_argument(
+        "--provisioning-input",
+        type=Path,
+        help="Path to authoritative provisioning input JSON emitted alongside runtime state",
+    )
     args = p.parse_args(argv)
 
     out_fh = args.out.open("w", encoding="utf-8") if args.out else None
@@ -401,6 +481,7 @@ def main(argv: list[str] | None = None) -> int:
                     i,
                     fact["payload"],
                     args.device_table,
+                    args.provisioning_input,
                     site_id=args.site,
                 )
                 line = json.dumps(frame, separators=(",", ":"))
