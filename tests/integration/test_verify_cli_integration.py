@@ -132,7 +132,7 @@ def test_require_ots_rejects_placeholder(
     ]
     assert merkle_batcher.main(args) == 0
 
-    # Create placeholder proof and write ots_meta into workspace proofs/
+    # Create placeholder proof and write ots_meta into the workspace day/
     write_ots_placeholder(out_dir, "2025-10-07")
 
     verify_args = [
@@ -194,6 +194,61 @@ def test_require_ots_accepts_real_ots(
 
     rc = verify_cli.main(verify_args)
     assert rc == 0
+
+
+def test_ots_failure_still_reports_public_recompute_capability(
+    tmp_path: Path,
+    merkle_batcher,
+    verify_cli,
+    write_sample_facts_fixture,
+    sample_facts,
+    monkeypatch,
+    capsys,
+):
+    """Class A should still report public recompute when root/artifact checks passed."""
+    facts_dir = tmp_path / "facts"
+    out_dir = tmp_path / "out"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    write_sample_facts_fixture(facts_dir, sample_facts)
+
+    args = [
+        "--facts",
+        str(facts_dir),
+        "--out",
+        str(out_dir),
+        "--site",
+        "test-site",
+        "--date",
+        "2025-10-07",
+    ]
+    assert merkle_batcher.main(args) == 0
+
+    day_cbor = out_dir / "day" / "2025-10-07.cbor"
+    ots_path = day_cbor.with_suffix(day_cbor.suffix + ".ots")
+    ots_path.write_text("REAL_PROOF_BYTES\n", encoding="utf-8")
+
+    fake_ots = tmp_path / "ots"
+    fake_ots.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+    fake_ots.chmod(fake_ots.stat().st_mode | stat.S_IEXEC)
+    monkeypatch.setattr(shutil, "which", lambda _: str(fake_ots))
+
+    capsys.readouterr()
+    rc = verify_cli.main(
+        [
+            "--root",
+            str(out_dir),
+            "--facts",
+            str(facts_dir),
+            "--json",
+        ]
+    )
+    assert rc == verify_cli.EXIT_OTS_FAILED
+
+    parsed = json.loads(capsys.readouterr().out)
+    assert parsed["checks"]["artifact_valid"] is True
+    assert parsed["checks"]["root_match"] is True
+    assert parsed["verification"]["publicly_recomputable"] is True
 
 
 def test_require_ots_overrides_disabled_ots_config(
