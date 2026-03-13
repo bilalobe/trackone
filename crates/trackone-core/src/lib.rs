@@ -10,7 +10,7 @@
 #![cfg_attr(not(debug_assertions), deny(warnings))]
 
 /// Protocol version string
-pub const VERSION: &str = "0.1.0-alpha.9";
+pub const VERSION: &str = "0.1.0-alpha.10";
 
 /// Core shared types for frames, identifiers, and errors.
 pub mod types;
@@ -40,7 +40,12 @@ pub mod provisioning;
 #[cfg(feature = "std")]
 pub mod cbor;
 
-pub use trackone_constants::{AEAD_NONCE_LEN, AEAD_TAG_LEN, DEFAULT_WATCHDOG_MS, MAX_FACT_LEN};
+pub use trackone_constants::{
+    AEAD_NONCE_LEN, AEAD_TAG_LEN, COMMITMENT_PROFILE_ID_CANONICAL_CBOR_V1, DEFAULT_WATCHDOG_MS,
+    DISCLOSURE_CLASS_ANCHOR_ONLY, DISCLOSURE_CLASS_ANCHOR_ONLY_LABEL,
+    DISCLOSURE_CLASS_PARTNER_AUDIT, DISCLOSURE_CLASS_PARTNER_AUDIT_LABEL,
+    DISCLOSURE_CLASS_PUBLIC_RECOMPUTE, DISCLOSURE_CLASS_PUBLIC_RECOMPUTE_LABEL, MAX_FACT_LEN,
+};
 
 #[cfg(test)]
 mod tests {
@@ -48,7 +53,18 @@ mod tests {
 
     #[test]
     fn version_sanity() {
-        assert_eq!(VERSION, "0.1.0-alpha.9");
+        assert_eq!(VERSION, "0.1.0-alpha.10");
+    }
+
+    #[test]
+    fn release_contract_constants_are_reexported() {
+        assert_eq!(
+            COMMITMENT_PROFILE_ID_CANONICAL_CBOR_V1,
+            "trackone-canonical-cbor-v1"
+        );
+        assert_eq!(DISCLOSURE_CLASS_PUBLIC_RECOMPUTE, "A");
+        assert_eq!(DISCLOSURE_CLASS_PARTNER_AUDIT, "B");
+        assert_eq!(DISCLOSURE_CLASS_ANCHOR_ONLY, "C");
     }
 
     #[test]
