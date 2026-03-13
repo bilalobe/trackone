@@ -1,0 +1,158 @@
+\section{System Requirements}
+\label{sec:system-requirements}
+
+This section captures the functional requirements, non-functional requirements, and constraints for the Barnacle Pod gateway and ledger system.
+Each requirement is written in a verifiable form and avoids prescribing implementation details unless mandated by external constraints.
+
+\subsection{Functional Requirements}
+\label{subsec:functional-requirements}
+
+\begin{description}[style=nextline]
+  \item[FR-1 Ingest sensor frames] The system shall ingest radio frames from all configured sensors and associate each frame with a unique device identifier.
+
+  \item[FR-2 Anti-replay window] The system shall maintain, per device, a replay window over a frame counter, tracking recently seen counter-values to enforce replay policy.
+  Frames within a configured bidirectional sliding window that have not been seen before shall be accepted (including modest out-of-order delivery); duplicate or out-of-window frames shall be rejected.
+
+  \item[FR-3 Ledger writing] The system shall write accepted facts to a daily ledger file (\texttt{day.bin}) in a format suitable for Merkle tree construction and external verification.
+
+  \item[FR-4 Audit logging] The system shall emit audit logs for all received frames, including rejected, malformed, or replayed frames, to a separate audit channel (e.g., syslog or metrics).
+
+  \item[FR-5 Merkle batch generation] The system shall periodically batch ledger entries into a Merkle tree, producing a root hash and associated metadata for each day.
+
+  \item[FR-6 OTS stamping] The system shall produce an external timestamping (\ac{OTS}) proof for each daily Merkle root and store that proof alongside the corresponding ledger artifacts.
+
+  \item[FR-7 Verification tooling] The system shall provide a command-line tool that verifies a given \texttt{day.bin} and its associated \ac{OTS} proof, failing verification if any ledger entry has been modified or removed.
+
+  \item[FR-8 Configuration management] The system shall load device configuration (keys, salts, IDs) from a well-defined configuration file and shall fail safely if the configuration is missing or inconsistent.
+
+  \item[FR-9 Error handling] The system shall detect and report configuration, decryption, and I/O errors and shall not silently drop frames or modify ledger data without emitting an error.
+
+  \item[FR-10 Stationary calendar anchoring] The system SHALL support a stationary \ac{OTS} calendar for \ac{CI} and long-running deployments.
+  Every \texttt{day.bin} produced by the pipeline SHALL either: (a) get an \ac{OTS} proof within a bounded delay (e.g., 24~h), or (b) be explicitly marked as ``pending'' and retried until either success or operator intervention.
+
+  \item[FR-11 Anti-replay invariants] For each \texttt{(device\_id, frame\_counter)} pair, at most one Fact \ac{SHA}LL be accepted into the Merkle set for a given day.
+  Duplicate frames or out-of-window counters MUST be rejected by the Verifier and visible in audit logs but NOT present in \texttt{day.bin} or the day Merkle tree.
+
+  \item[FR-12 Cross-implementation equivalence] The Rust TrackOne-core implementation \ac{SHA}LL produce bit-for-bit identical results to the Python reference for: Fact serialization, Merkle root computation, and \ac{AEAD} encryption/decryption for a canonical golden corpus of test inputs.
+
+  \item[FR-13 Multi-ISA determinism] TrackOne-core SHALL produce identical Facts, Merkle roots, and \ac{AEAD} ciphertexts
+  across supported \ac{ISA} targets (e.g., ARM Cortex-M0+/M4, RISC-V softcores) for a shared golden corpus.
+
+  \item[FR-14 Deterministic commitment bytes] For each Fact written into \texttt{day.bin}, the system \ac{SHA}LL define a
+  deterministic commitment-byte encoding (TrackOne Canonical \ac{CBOR}) and \ac{SHA}LL test that the commitment bytes are
+  stable across code changes and platforms.
+  Commitment bytes MUST be treated as the input to Merkle hashing.
+
+  \item[FR-15 Deterministic time encoding] Facts SHALL store time fields as integer epoch seconds (\ac{UTC}).
+  Any export to external \ac{API}s (e.g., SensorThings) SHALL deterministically render these times as \ac{RFC}3339 \ac{UTC} strings.
+\end{description}
+
+\subsection{Non-Functional Requirements}
+\label{subsec:non-functional-requirements}
+
+\begin{description}[style=nextline]
+  \item[NFR-1 Integrity] The system shall guarantee that any modification of \texttt{day.bin} or its associated metadata after \ac{OTS} stamping is detectable by the verification tooling.
+
+  \item[NFR-2 Separation of concerns] The system shall maintain a clean separation between the ledger (truth) and audit logs (noise, attacks, malformed input).
+  No rejected or replayed frames shall appear in the ledger.
+
+  \item[NFR-3 Performance] The system shall be capable of processing at least $N$ frames per second (to be specified per deployment) on the target hardware while maintaining anti-replay and ledger invariants.
+
+  \item[NFR-4 Dependability] Under normal operating conditions (no disk failure, no configuration corruption), the system shall not lose accepted frames; any I/O failure shall be surfaced as an explicit error.
+
+  \item[NFR-5 Testability] Each requirement in this section shall be verifiable by at least one of: automated test, inspection, or analysis.
+  Vague requirements (e.g., ``fast'') shall be refined into measurable criteria.
+
+  \item[NFR-6 Maintainability] Architectural decisions (e.g., anti-replay policy, ledger vs.\ audit separation) shall be documented as Architecture Decision Records (\ac{ADR}s) and kept consistent with the implementation and tests.
+
+  \item[NFR-7 Anchoring resilience] The system SHOULD remain verifiable when public calendars are unavailable, by relying on a stationary calendar and later reconciliation proofs.
+
+  \item[NFR-8 Implementation consistency] Divergence between Python and Rust implementations MUST be detectable via automated tests in \ac{CI}, and \ac{SHA}LL fail the pipeline.
+\end{description}
+
+\subsection{Constraints}
+\label{subsec:constraints}
+
+\begin{description}[style=nextline]
+  \item[C-1 Platform] The gateway software shall run on a Linux-based system using Python as the primary implementation language (with Rust extensions for core logic).
+
+  \item[C-2 Cryptography] The system shall use approved cryptographic primitives and libraries as specified by project policy (XChaCha20-Poly1305, Ed25519, \ac{SHA}-256), and shall not implement bespoke cryptographic algorithms.
+
+  \item[C-3 Counter wrap-around] For the Barnacle Pod deployment profile, 32-bit frame counter wrap-around is considered out-of-policy due to its negligible probability within the system lifetime.
+  Any observed wrap-around shall be treated as a provisioning or firmware error.
+
+  \item[C-4 Storage format] Daily ledger files (\texttt{day.bin} and associated \ac{JSON}/metadata) shall be written in backward-compatible formats once deployed, or accompanied by a documented migration path.
+
+  \item[C-5 Logging and privacy] Audit logs shall not contain sensitive key material.
+  Device identifiers and counters may be logged; secret keys and seeds shall never be logged in plaintext.
+\end{description}
+
+\subsection{Project Scope and Roadmap}\label{subsec:project-scope-and-roadmap}
+TrackOne is explicitly framed as ``Track One of Three'': the core pipeline that provides ingestion, cryptographic integrity, deterministic batching, and public anchoring.
+It is an intentionally narrow, verifiability-first track whose deliverables are:
+\begin{itemize}[nosep]
+  \item A hardened ingestion pipeline (framed ND\ac{JSON} + \ac{AEAD} semantics) and replay protection;
+  \item Deterministic canonicalization and Merkle batching with day-chunked artifacts;
+  \item Public anchoring (OpenTimestamps) and verifier tooling that lets third parties recompute and attest daily roots;
+  \item Operational guidance and minimal hardware reference that satisfy the digital contract (frame shape, nonce construction, provisioning).
+\end{itemize}
+
+Features reserved for later tracks (Track Two / Three) include field-deployable control loops, sophisticated on-pod actuation safety interlocks, large-scale analytics and UI, and long-running automated key-rotation/\ac{PKI} operations.
+TrackOne is positioned as an \ac{MVP} that is ``production-informed'' but not yet a full safety-certified control system.
+
+\subsection{Heritage deployment tracks}\label{subsec:heritage-deployment-tracks}
+TrackOne is explicitly positioned as \textbf{Track One of Three}.
+Each track increases scope while preserving the verifiability guarantees:
+\begin{itemize}[nosep]
+  \item \textbf{Track One (this report):} Evidence pipeline for sensor pods---\ac{AEAD} framing, replay protection, canonical facts, Merkle batching, Bitcoin anchoring (\ac{OTS}), and independent verification tooling.
+  Hardware requirements stop at the digital contract (nonce construction, sealed facts).
+  \item \textbf{Track Two (SensorThings, LoRa, and Operational Intelligence):} Extension to \ac{OGC} SensorThings \ac{API}s (\ac{ADR}s 027--030), adaptive \ac{LoRa} uplink policies (\ac{ADR}-025), and \ac{GIS}-informed placement (\ac{ADR}-031).
+  This track introduces the stationary calendar service (\ac{ADR}-022) and the virtual fleet validation framework (\ac{ADR}-033).
+  \item \textbf{Track Three (Rust core, PQC, and Actuation Safety):} Rust first-class gateway crates (maturin exports) replace Python hot paths (\ac{ADR}-017, \ac{ADR}-019).
+  Post-quantum hybrid provisioning (\ac{ADR}-036), OTA firmware safety (\ac{ADR}-026), and signature roles (\ac{ADR}-037).
+  Embedded Rust firmware (STM32L0/L4, RISC-V) with adaptive sampling.
+\end{itemize}
+This scoping keeps requirements concrete and prevents speculative features from diluting the verifiability focus of Track One.
+
+\subsection{Irrigation-Specific Requirements}\label{subsec:irrigation-specific-requirements}
+To support \textbf{traceability} and operational safety in irrigation contexts, we add a small set of testable, measurable requirements that must be in scope for any deployment using TrackOne artifacts:
+For Moroccan water-domain deployments, these requirements must be considered alongside regulatory obligations under Loi36--15(Section~\ref{subsec:water-law}).
+
+\begin{description}[style=nextline]
+  \item[R-1 Maximum anchoring delay] For any given day, anchors (\ac{OTS} proofs) must be present within 72 hours of day end or the system must mark the day as ``pending anchor'' and notify operators.
+  \item[R-2 Maximum tolerable data loss] Daily fact loss must not exceed site-defined limits (default 0.5\%). Exceeding this triggers operator review.
+  \item[R-3 Sampling \& action separation] Control decisions that affect irrigation volumes MUST not be taken on facts that are older than $T$ hours (default: 24 h) without human confirmation.
+  \item[R-4 Update rollback] Any firmware update that modifies actuation logic must support a verified rollback mechanism and be staged to a small pilot group for at least 7 days before full rollout.
+  \item[R-5 Auditability] All critical operator actions (e.g., manual valve overrides, firmware promote) must be logged with operator identity, timestamp, and Merkle-anchored proof of the day's root that covers the action metadata.
+\end{description}
+
+\subsection{SensorThings and API Projection Requirements}\label{subsec:sensorthings-and-api-projection-requirements}
+TrackOne treats \ac{OGC} SensorThings-style \ac{API}s and MQTT bindings as \emph{projections} of the canonical Fact stream, not
+as authoritative storage.
+To keep the attack surface narrow while remaining standards-aligned, we require:
+
+\begin{description}[style=nextline]
+  \item[SA-1 Canonical-to-API mapping] All SensorThings ``Things'', ``Locations'', ``Datastreams'', and ``Observations''
+  exposed by the gateway \ac{SHA}LL be derived from immutable Facts (e.g., \texttt{EnvFact}) that are part of a Merkle
+  day-set.
+  No \ac{API}-only records may exist without a corresponding Fact.
+
+  \item[SA-2 Phenomenon vs.\ result time] The gateway \ac{SHA}LL map \texttt{EnvFact.phenomenon\_time\_start/end} to
+    \texttt{phenomenonTime} and \texttt{Fact.ingest\_time} to \texttt{resultTime} in SensorThings payloads.
+  Operator-facing \ac{API} timestamps (including SensorThings \ac{JSON}) \ac{SHA}LL be emitted as \ac{RFC}3339 strings in \ac{UTC}
+  (derived from the canonical epoch-second fields), to avoid timezone drift and ``local time'' ambiguity.
+
+  \item[SA-3 Stable type identity] The gateway \ac{SHA}LL map \texttt{EnvFact.sample\_type} to a stable ObservedProperty identity.
+    Any change to the semantic meaning of a \texttt{SampleType} (or its unit) MUST trigger a projection version bump.
+
+  \item[SA-4 API hardening] SensorThings REST and MQTT endpoints \ac{SHA}LL validate inputs against strict schemas, enforce
+  rate limits, and avoid exposing raw keys or internal identifiers. \ac{API} misuse \ac{SHA}LL not be able to inject or modify
+  ledger Facts; at most it can affect cached projections.
+
+  \item[SA-5 Read-only by default] Public SensorThings endpoints \ac{SHA}LL be read-only with respect to the core ledger.
+  Any write-capable \ac{API} (e.g., for site metadata) MUST be authenticated and kept off the critical ingest path.
+\end{description}
+
+\subsection{Calendar, Anti-Replay, and Implementation Requirements}
+\label{subsec:calendar-anti-replay-impl-reqs}
+This subsection groups rationale and test hooks for the anchoring, anti-replay, and determinism requirements (FR-10--FR-15, NFR-7--NFR-8) listed in Sections~\ref{subsec:functional-requirements} and~\ref{subsec:non-functional-requirements}.

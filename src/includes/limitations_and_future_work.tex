@@ -1,3 +1,6 @@
+\section{Limitations and Future Work}
+\label{sec:limitations-future-work}
+
 \subsection{Current Limitations}\label{subsec:current-limitations}
 
 \textbf{On-pod cryptography:} Current version uses gateway-based \ac{AEAD} encryption.
@@ -27,74 +30,21 @@ Concretely:
 \end{itemize}
 
 % --- New: Documentation & Traceability ---
-\subsection{Documentation and traceability}\label{subsec:documentation-and-traceability}
-For an end-of-year project intended to be deployed in challenging environments, documentation is not optional.
-The following artifacts are ``living'' and must be kept in sync with code and deployments:
+\subsection{Future work}\label{subsec:future-work}
+Near-term work stays within the Option A evidence pipeline:
 \begin{itemize}[nosep]
-  \item Requirements (including the irrigation-specific requirements added in this paper) with traced links to tests and \ac{ADR}s.
-  \item Architecture diagrams and deployment profiles (per-site) that document pod/gateway/backend interactions and escalation paths.
-  \item Test plans and runbooks covering on-pod diagnostics, failure-injection scenarios (link loss, clock drift, storage exhaustion), and recovery procedures.
-  \item Known limitations and mitigation checklists attached to each release (what an operator must not do with this release).
+  \item automate the \texttt{ots upgrade} lifecycle and make pending/anchored/upgraded proof states operator-visible;
+  \item harden multi-gateway replay-window synchronization and day-artifact replication;
+  \item complete on-pod key derivation and measured key-rotation workflows without weakening deterministic verification;
+  \item expand verification tooling to report cross-day continuity, backlog state, and operational audit gaps more directly.
 \end{itemize}
 
-These artifacts should be versioned alongside software releases and available to field operators and auditors.
-
-% --- New: Operational procedures (concise) ---
-\subsection{Operational procedures}\label{subsec:operational-procedures}
-Deploying TrackOne in irrigation contexts requires clear operational playbooks.
-Minimal recommended procedures:
-\begin{enumerate}[nosep]
-  \item Site bootstrap: verify provisioning (device table v1.0), perform a 72-hour pilot with local monitoring enabled, and confirm anchor delivery for two consecutive days before enabling any automatic actuation that affects irrigation.
-  \item Firmware update: stage updates to a pilot subset of devices for 7 days; monitor telemetry integrity and rollback on anomalous behavior.
-  \item Storage exhaustion: when on-device or gateway storage reaches 80\% capacity, system must stop non-critical writes and alert operators; at 95\% capacity it must trigger emergency archival and operator intervention.
-  \item Operator override logging: any manual override must create an auditable record that is included in the next day's Merkle root and proof, so that later audits can reconstruct operator interventions.
-\end{enumerate}
-
-\subsection{Ethical and regulatory considerations}\label{subsec:ethical-and-regulatory-considerations}
-
-\textbf{Fact confidentiality:} Telemetry payloads remain local (gateway storage).\ Only Merkle roots are public (Bitcoin blockchain via \ac{OTS}). Individual facts cannot be reconstructed from blockchain data.
-
-\textbf{Right to be forgotten (GDPR):} Local fact deletion is possible (gateway operator decision).\ However, Merkle root in Bitcoin blockchain is immutable.\ Heritage sites should assess \ac{GDPR} applicability before deployment.
-
-\textbf{Metadata leakage:} Frame timing and pod IDs are visible to \ac{LoRa} eavesdroppers.\ XChaCha20 encryption hides payload content but not traffic patterns.
-
-\textbf{Open standards and reuse:} Publishing a SensorThings-compatible \ac{API} means heritage authorities and researchers can consume TrackOne telemetry with off-the-shelf clients; \ac{GIS} and hydrology feeds can be joined without bespoke adapters.
-The canonical TrackOne facts and \ac{OTS}-anchored Merkle roots underpin that \ac{API}, so the public view is a projection over an immutable ledger rather than a mutable database without provenance.
-
-\subsection{Environmental Impact}\label{subsec:environmental-impact}
-
-\textbf{Battery disposal:} CR2032 lithium cells require proper recycling.\ Multi-year autonomy reduces disposal frequency vs.\ annually-replaced batteries.
-
-\textbf{Bitcoin energy consumption:} \ac{OTS} leverages existing Bitcoin infrastructure (no additional mining).\ Daily batching minimizes per-fact environmental impact (1 anchor amortized across 1000+ facts).
-
-\subsection{Heritage Site Stewardship}\label{subsec:heritage-site-stewardship}
-
-\textbf{Reversibility:} Adhesive pod mounts are non-invasive and removable without surface damage.\ Critical for heritage site preservation ethics.
-
-\textbf{Curator control:} Gateway operator decides what data to collect and publish (Merkle roots).\ Public verification enables accountability but respects site autonomy.
-
-\textbf{Long-term access:} Open-source design ensures data remains accessible even if TrackOne project discontinues.\ Bitcoin verification survives organizational changes.
-
-\subsection{Responsible Disclosure}\label{subsec:responsible-disclosure}
-
-\textbf{Security vulnerabilities:} All cryptographic designs documented in \ac{ADR}s. Independent security review encouraged (MIT license).\ No security-by-obscurity.
-
-\textbf{Test coverage:} ~85\% coverage with 181 tests provides confidence but not proof of correctness.
-
-\textbf{Known attack vectors:} Physical pod tampering, gateway compromise, replay attacks beyond window size.\ Documented in \ac{ADR}-002 threat model.
-
-\subsection{Stakeholder expectations and ethical scope management}\label{subsec:stakeholder-expectations-and-ethical-scope-management}
-Field stakeholders occasionally push comfort-zone technologies (e.g., generic image watermarking or steganography) even when they do not match the telemetry problem space.
-Heritage pods emit scalar facts; there are no images today.
-Implementing watermarking to appease expectations would misrepresent delivered functionality and divert scarce energy budget.
-Instead, the project documents alternative tracks (Option B QIM watermarking, Option C PyO3/Rust port) in \ac{ADR}s, clearly labeling them as future work contingent on hardware funding and bench instrumentation.
-
-Equipment discussions are treated transparently: new hardware (oscilloscope, FPGA stimulus%, bio-impedance rigs
-) must map to a concrete experiment plan tied to documented milestones.
-Until funding is committed, TrackOne prioritizes the achievable Option A pipeline and avoids promising features (``watermark'' keywords) that are not implemented.
-This preserves integrity of reporting and maintains trust with community partners who rely on verifiable telemetry rather than speculative features.
-
-\input{includes/internet_draft}
+Later-track work remains intentionally outside the current report spine:
+\begin{itemize}[nosep]
+  \item actuation safety cases, certification-oriented controls, and stronger hardware fault coverage;
+  \item broader deployment intelligence, including richer dashboards and site-specific planning automation;
+  \item optional protocol and publication work captured in the appendix material rather than the core evaluation narrative.
+\end{itemize}
 
 %\subsection{Physarum/Khettara metaphors: stewardship, resilience, and planning}
 %Design metaphors are not decoration; they shape operational choices. The \emph{Physarum} colony suggests distributed, self-healing sensing with tiny energy budgets; the \emph{khettara} evokes long-lived, low-maintenance infrastructure. TrackOne reflects both by:
