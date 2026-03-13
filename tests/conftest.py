@@ -11,7 +11,7 @@ This module provides:
 Note on test dates:
     Tests use a fixed reference date (2025-10-07) for reproducibility.
     This ensures deterministic behavior across test runs and matches
-    the date in proofs/ directory. Using a fixed past date prevents
+    the checked-in demo OTS metadata sidecar. Using a fixed past date prevents
     future date-related issues.
 """
 
