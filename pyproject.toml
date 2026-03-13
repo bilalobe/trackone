@@ -1,6 +1,6 @@
 [project]
 name = "trackone"
-version = "0.1.0a9"
+version = "0.1.0a10"
 description = "Ultra-Low-Power, Verifiable Telemetry (Barnacle Sentinel)"
 authors = [{ name = "BILAL", email = "elkhatabibilal@gmail.com" }]
 license = { text = "MIT" }
