@@ -15,7 +15,11 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
-from trackone_core.release import DEFAULT_COMMITMENT_PROFILE_ID
+try:  # pragma: no cover - optional; may not be installed when run as a script
+    from trackone_core.release import DEFAULT_COMMITMENT_PROFILE_ID
+except ImportError:  # pragma: no cover - fallback for direct script execution
+    # Keep this in sync with trackone_core/release.py.
+    DEFAULT_COMMITMENT_PROFILE_ID = "trackone-canonical-cbor-v1"
 
 try:  # Support both package imports and direct script execution.
     from .anchoring_config import (
