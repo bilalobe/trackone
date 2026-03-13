@@ -15,6 +15,11 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Any, cast
 
+try:  # pragma: no cover - optional dependency in some environments
+    import jsonschema
+except Exception:  # pragma: no cover - keep verifier importable without it
+    jsonschema = None  # type: ignore[assignment]
+
 try:  # Support both package imports and direct script execution.
     from .anchoring_config import (
         STRICT,
@@ -23,6 +28,7 @@ try:  # Support both package imports and direct script execution.
         load_anchoring_config,
     )
     from .canonical_cbor import canonicalize_obj_to_cbor
+    from .schema_validation import load_schema, validate_instance
 except ImportError:  # pragma: no cover - fallback when run as a script
     from anchoring_config import (  # type: ignore
         STRICT,
@@ -31,6 +37,7 @@ except ImportError:  # pragma: no cover - fallback when run as a script
         load_anchoring_config,
     )
     from canonical_cbor import canonicalize_obj_to_cbor  # type: ignore
+    from schema_validation import load_schema, validate_instance  # type: ignore
 
 EXIT_OTS_NOT_FOUND = 3
 EXIT_OTS_FAILED = 4
@@ -54,6 +61,7 @@ DISCLOSURE_CLASS_LABELS: dict[str, str] = {
 }
 CHECK_DAY_ARTIFACT = "day_artifact_validation"
 CHECK_FACT_RECOMPUTE = "fact_level_recompute"
+CHECK_MANIFEST = "pipeline_manifest_validation"
 CHECK_OTS = "ots_verification"
 CHECK_TSA = "tsa_verification"
 CHECK_PEERS = "peer_signature_verification"
@@ -570,7 +578,20 @@ def _record_skipped(summary: dict[str, Any], check: str, reason: str) -> None:
         checks.append({"check": check, "reason": reason})
 
 
+def _refresh_publicly_recomputable(summary: dict[str, Any]) -> None:
+    verification = summary.get("verification")
+    checks = summary.get("checks")
+    if not isinstance(verification, dict) or not isinstance(checks, dict):
+        return
+    verification["publicly_recomputable"] = (
+        verification.get("disclosure_class") == "A"
+        and checks.get("artifact_valid") is True
+        and checks.get("root_match") is True
+    )
+
+
 def _emit(summary: dict[str, Any], json_mode: bool) -> None:
+    _refresh_publicly_recomputable(summary)
     if json_mode:
         print(json.dumps(summary, indent=2, sort_keys=True))
         return
@@ -595,6 +616,115 @@ def _load_cfg(args: argparse.Namespace) -> AnchoringConfig:
         "peers_min_signatures": args.peers_min,
     }
     return load_anchoring_config(config_path=args.config, cli_overrides=cli_overrides)
+
+
+def _load_pipeline_manifest(manifest_path: Path) -> dict[str, Any] | None:
+    if not manifest_path.exists():
+        return None
+    data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError(f"pipeline manifest must be a JSON object: {manifest_path}")
+    schema = load_schema("pipeline_manifest")
+    if schema is not None:
+        validate_instance(data, schema)
+    return data
+
+
+def _manifest_artifact_path(root_dir: Path, artifact: dict[str, Any]) -> Path:
+    path = artifact.get("path")
+    if not isinstance(path, str) or not path:
+        raise ValueError("manifest artifact entry missing path")
+    resolved = (root_dir / path).resolve()
+    if root_dir.resolve() not in resolved.parents and resolved != root_dir.resolve():
+        raise ValueError(f"manifest artifact path escapes root: {path}")
+    return resolved
+
+
+def _resolve_meta_sidecar(root_dir: Path, day: str) -> tuple[Path, Path] | None:
+    candidates: list[tuple[Path, Path]] = [
+        (root_dir / "day" / f"{day}.ots.meta.json", root_dir),
+        (root_dir / "proofs" / f"{day}.ots.meta.json", root_dir),
+        (root_dir.parent / "proofs" / f"{day}.ots.meta.json", root_dir.parent),
+    ]
+    if root_dir.name == "site_demo" and root_dir.parent.name == "out":
+        repo_root = root_dir.parent.parent
+        candidates.append((repo_root / "proofs" / f"{day}.ots.meta.json", repo_root))
+
+    seen: set[Path] = set()
+    for meta_path, meta_root in candidates:
+        resolved = meta_path.resolve()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        if meta_path.exists():
+            return meta_path, meta_root
+
+    return None
+
+
+def _validate_pipeline_manifest(
+    manifest: dict[str, Any],
+    *,
+    root_dir: Path,
+    day: str,
+    block_path: Path,
+    day_artifact: Path,
+    ots_path: Path,
+    expected_site: str,
+    disclosure_class: str,
+    commitment_profile_id: str,
+) -> None:
+    if manifest.get("date") != day:
+        raise ValueError(
+            f"manifest date mismatch: expected {day}, got {manifest.get('date')}"
+        )
+    if manifest.get("site") != expected_site:
+        raise ValueError(
+            f"manifest site mismatch: expected {expected_site}, got {manifest.get('site')}"
+        )
+
+    verification_bundle = manifest.get("verification_bundle")
+    if not isinstance(verification_bundle, dict):
+        raise ValueError("manifest verification_bundle must be an object")
+    if verification_bundle.get("disclosure_class") != disclosure_class:
+        raise ValueError(
+            "manifest disclosure_class mismatch: "
+            f"expected {disclosure_class}, got {verification_bundle.get('disclosure_class')}"
+        )
+    if verification_bundle.get("commitment_profile_id") != commitment_profile_id:
+        raise ValueError(
+            "manifest commitment_profile_id mismatch: "
+            f"expected {commitment_profile_id}, got {verification_bundle.get('commitment_profile_id')}"
+        )
+
+    artifacts = manifest.get("artifacts")
+    if not isinstance(artifacts, dict):
+        raise ValueError("manifest artifacts must be an object")
+
+    expected_paths = {
+        "block": block_path.resolve(),
+        "day_cbor": day_artifact.resolve(),
+        "day_ots": ots_path.resolve(),
+    }
+    for name, artifact in artifacts.items():
+        if not isinstance(artifact, dict):
+            raise ValueError(f"manifest artifact must be an object: {name}")
+        resolved = _manifest_artifact_path(root_dir, artifact)
+        expected = expected_paths.get(name)
+        if expected is not None and resolved != expected:
+            raise ValueError(
+                f"manifest artifact path mismatch for {name}: expected {expected}, got {resolved}"
+            )
+        if not resolved.exists():
+            raise ValueError(f"manifest artifact missing on disk: {name} -> {resolved}")
+        declared_sha = artifact.get("sha256")
+        if not isinstance(declared_sha, str):
+            raise ValueError(f"manifest artifact missing sha256: {name}")
+        actual_sha = sha256(resolved.read_bytes()).hexdigest()
+        if actual_sha != declared_sha:
+            raise ValueError(
+                f"manifest artifact sha256 mismatch for {name}: expected {declared_sha}, got {actual_sha}"
+            )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -712,6 +842,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     day_artifact = day_dir / f"{day}.cbor"
+    manifest_path = day_dir / f"{day}.pipeline-manifest.json"
     legacy_day_artifact = day_dir / f"{day}.bin"
     if not day_artifact.exists() and legacy_day_artifact.exists():
         print(
@@ -738,6 +869,7 @@ def main(argv: list[str] | None = None) -> int:
             "block": str(block_path),
             "day_cbor": str(day_artifact),
             "day_ots": str(ots_path),
+            "pipeline_manifest": str(manifest_path),
         },
         "checks": {
             "root_match": None,
@@ -761,12 +893,39 @@ def main(argv: list[str] | None = None) -> int:
     }
     _record_executed(summary, CHECK_DAY_ARTIFACT)
 
+    if manifest_path.exists():
+        _record_executed(summary, CHECK_MANIFEST)
+        try:
+            manifest = _load_pipeline_manifest(manifest_path)
+            _validate_pipeline_manifest(
+                manifest or {},
+                root_dir=root_dir,
+                day=day,
+                block_path=block_path,
+                day_artifact=day_artifact,
+                ots_path=ots_path,
+                expected_site=str(block_header.get("site_id", "")),
+                disclosure_class=args.disclosure_class,
+                commitment_profile_id=args.commitment_profile_id,
+            )
+        except (
+            OSError,
+            UnicodeDecodeError,
+            json.JSONDecodeError,
+            ValueError,
+            jsonschema.ValidationError,
+            jsonschema.SchemaError,
+        ) as exc:
+            print(f"ERROR: pipeline manifest validation failed: {exc}")
+            _emit(summary, args.json)
+            return EXIT_META_INVALID
+
     # Optional OTS metadata sidecar checks
-    repo_root = root_dir.parent
-    meta_path = repo_root / "proofs" / f"{day}.ots.meta.json"
     meta: dict[str, Any] | None = None
-    if meta_path.exists():
-        meta_check = validate_meta_sidecar(meta_path, repo_root, day_artifact, ots_path)
+    meta_binding = _resolve_meta_sidecar(root_dir, day)
+    if meta_binding is not None:
+        meta_path, meta_root = meta_binding
+        meta_check = validate_meta_sidecar(meta_path, meta_root, day_artifact, ots_path)
         if not bool(getattr(meta_check, "ok", False)):
             reason = str(getattr(meta_check, "reason", "meta-invalid"))
             print(_meta_failure_message(reason, meta_path, day_artifact, ots_path))
@@ -1019,11 +1178,6 @@ def main(argv: list[str] | None = None) -> int:
 
     summary["overall"] = compute_overall_status(
         policy_mode=cfg.policy.mode, channels=summary["channels"]
-    )
-    summary["verification"]["publicly_recomputable"] = (
-        args.disclosure_class == "A"
-        and summary["checks"]["artifact_valid"] is True
-        and summary["checks"]["root_match"] is True
     )
     _emit(summary, args.json)
     return 0 if summary["overall"] == "success" else 1

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import shlex
@@ -30,8 +31,10 @@ except ImportError:  # pragma: no cover - fallback when run as a script
     )
 
 try:  # Support both package imports and direct script execution.
+    from .schema_validation import load_schema, validate_instance
     from .tsa_stamp import TsaStampError, tsa_stamp_day_blob
 except ImportError:  # pragma: no cover - fallback when run as a script
+    from schema_validation import load_schema, validate_instance  # type: ignore
     from tsa_stamp import (  # type: ignore
         TsaStampError,
         tsa_stamp_day_blob,
@@ -69,6 +72,13 @@ def rel(path: Path) -> str:
         return str(path)
 
 
+def _artifact_ref(path: Path, *, root: Path) -> dict[str, str]:
+    return {
+        "path": str(path.relative_to(root)),
+        "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+    }
+
+
 def run_cmd(label: str, cmd: Iterable[str], *, cwd: Path) -> None:
     printable = " ".join(shlex.quote(str(part)) for part in cmd)
     print(f"[pipeline] {label}\n[pipeline] -> {printable}")
@@ -82,7 +92,7 @@ def clean_outputs(out_dir: Path, frames_file: Path, *, keep_existing: bool) -> N
     for path in (frames_file, out_dir / "frames.ndjson"):
         if Path(path).is_file():
             Path(path).unlink()
-    for subdir in ("facts", "blocks", "day", "sensorthings", "provisioning"):
+    for subdir in ("facts", "blocks", "day", "sensorthings", "provisioning", "audit"):
         target = out_dir / subdir
         if target.exists():
             shutil.rmtree(target)
@@ -95,6 +105,23 @@ def ensure_dirs(*paths: Path) -> None:
 
 def _channel(enabled: bool, status: str, reason: str = "") -> dict[str, Any]:
     return {"enabled": enabled, "status": status, "reason": reason}
+
+
+def _portable_verifier_summary(summary: dict[str, Any]) -> dict[str, Any]:
+    portable: dict[str, Any] = {}
+    for key in (
+        "policy",
+        "verification",
+        "checks",
+        "checks_executed",
+        "checks_skipped",
+        "channels",
+        "overall",
+    ):
+        value = summary.get(key)
+        if value is not None:
+            portable[key] = json.loads(json.dumps(value))
+    return portable
 
 
 def artifact_manifest(
@@ -112,44 +139,70 @@ def artifact_manifest(
     peer_attest: Path | None = None,
     verifier_summary: dict[str, Any] | None = None,
     sensorthings_projection: Path | None = None,
+    provisioning_input: Path | None = None,
     provisioning_records: Path | None = None,
     disclosure_class: str = "A",
     commitment_profile_id: str = DEFAULT_COMMITMENT_PROFILE_ID,
 ) -> Path:
-    artifacts = {
-        "day_cbor": rel(day_artifact),
-        "day_json": rel(day_artifact.with_suffix(".json")),
-        "day_sha256": rel(day_artifact.with_suffix(".cbor.sha256")),
-        "day_ots": rel(Path(f"{day_artifact}.ots")),
-        "block": rel(out_dir / "blocks" / f"{date}-00.block.json"),
+    artifacts: dict[str, dict[str, str]] = {
+        "day_cbor": _artifact_ref(day_artifact, root=out_dir),
+        "day_json": _artifact_ref(day_artifact.with_suffix(".json"), root=out_dir),
+        "day_sha256": _artifact_ref(
+            day_artifact.with_suffix(".cbor.sha256"), root=out_dir
+        ),
+        "block": _artifact_ref(
+            out_dir / "blocks" / f"{date}-00.block.json", root=out_dir
+        ),
     }
+    day_ots = Path(f"{day_artifact}.ots")
+    if day_ots.exists():
+        artifacts["day_ots"] = _artifact_ref(day_ots, root=out_dir)
+    day_ots_meta = day_artifact.parent / f"{date}.ots.meta.json"
+    if day_ots_meta.exists():
+        artifacts["day_ots_meta"] = _artifact_ref(day_ots_meta, root=out_dir)
     if tsa_artifacts:
-        artifacts.update({name: rel(path) for name, path in tsa_artifacts.items()})
+        artifacts.update(
+            {
+                name: _artifact_ref(path, root=out_dir)
+                for name, path in tsa_artifacts.items()
+            }
+        )
     if peer_attest:
-        artifacts["peer_attest"] = rel(peer_attest)
+        artifacts["peer_attest"] = _artifact_ref(peer_attest, root=out_dir)
     if sensorthings_projection:
-        artifacts["sensorthings_projection"] = rel(sensorthings_projection)
+        artifacts["sensorthings_projection"] = _artifact_ref(
+            sensorthings_projection, root=out_dir
+        )
+    if provisioning_input:
+        artifacts["provisioning_input"] = _artifact_ref(
+            provisioning_input, root=out_dir
+        )
     if provisioning_records:
-        artifacts["provisioning_records"] = rel(provisioning_records)
+        artifacts["provisioning_records"] = _artifact_ref(
+            provisioning_records, root=out_dir
+        )
 
     verification_bundle: dict[str, Any] = {
         "disclosure_class": disclosure_class,
         "commitment_profile_id": commitment_profile_id,
+        "checks_executed": [],
+        "checks_skipped": [],
     }
 
     manifest: dict[str, Any] = {
+        "version": 1,
         "date": date,
         "site": site,
         "device_id": device_id,
         "frame_count": frame_count,
-        "frames_file": rel(frames_file),
-        "facts_dir": rel(facts_dir),
+        "frames_file": str(frames_file.relative_to(out_dir)),
+        "facts_dir": str(facts_dir.relative_to(out_dir)),
         "artifacts": artifacts,
         "anchoring": anchoring,
         "verification_bundle": verification_bundle,
     }
     if verifier_summary is not None:
-        manifest["verifier"] = verifier_summary
+        manifest["verifier"] = _portable_verifier_summary(verifier_summary)
         verification = verifier_summary.get("verification")
         if isinstance(verification, dict):
             cls = verification.get("disclosure_class")
@@ -166,6 +219,9 @@ def artifact_manifest(
         if isinstance(checks_skipped, list):
             verification_bundle["checks_skipped"] = checks_skipped
 
+    schema = load_schema("pipeline_manifest")
+    if schema is not None:
+        validate_instance(manifest, schema)
     manifest_path = day_artifact.parent / f"{date}.pipeline-manifest.json"
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     return manifest_path
@@ -455,6 +511,7 @@ def main() -> None:
     sensorthings_dir = out_dir / "sensorthings"
     sensorthings_projection = sensorthings_dir / f"{args.date}.observations.json"
     provisioning_dir = out_dir / "provisioning"
+    provisioning_input = provisioning_dir / "authoritative-input.json"
     provisioning_records = provisioning_dir / "records.json"
     tsa_out_dir = resolve_repo_path(args.tsa_out) or day_dir
     peer_dir = resolve_repo_path(args.peer_dir) or (day_dir / "peers")
@@ -495,6 +552,8 @@ def main() -> None:
             str(args.frame_count),
             "--device-table",
             str(device_table),
+            "--provisioning-input",
+            str(provisioning_input),
             "--out",
             str(frames_file),
         ],
@@ -523,8 +582,8 @@ def main() -> None:
         [
             sys.executable,
             str(gateway_dir / "provisioning_records.py"),
-            "--device-table",
-            str(device_table),
+            "--authoritative-input",
+            str(provisioning_input),
             "--site",
             args.site,
             "--out",
@@ -723,6 +782,7 @@ def main() -> None:
         day_cbor.with_suffix(".cbor.sha256"),
         provisioning_records,
         sensorthings_projection,
+        provisioning_input,
     ]
     if channels["ots"]["status"] in {STATUS_VERIFIED, STATUS_PENDING}:
         expected_artifacts.append(Path(f"{day_cbor}.ots"))
@@ -757,6 +817,7 @@ def main() -> None:
         peer_attest=peer_attest_path,
         verifier_summary=verifier_summary,
         sensorthings_projection=sensorthings_projection,
+        provisioning_input=provisioning_input,
         provisioning_records=provisioning_records,
         disclosure_class=args.disclosure_class,
         commitment_profile_id=args.commitment_profile_id,

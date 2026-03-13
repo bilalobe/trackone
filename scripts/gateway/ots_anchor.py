@@ -12,17 +12,16 @@ should be considered immutable once created.
 
 Files produced:
 - <day>.cbor.ots        (binary or placeholder proof)
-- proofs/<day>.ots.meta.json  (metadata sidecar with artifact path and SHA-256)
+- <artifact-dir>/<day>.ots.meta.json  (metadata sidecar with artifact path and SHA-256)
 
 The metadata format is defined by toolset/unified/schemas/ots_meta.schema.json
 and includes `artifact`, `artifact_sha256`, and `ots_proof` entries.
 
 Usage:
-    ots_anchor.ots_stamp(day_artifact_path, ots_path, proofs_dir=None)
+    ots_anchor.ots_stamp(day_artifact_path, ots_path, meta_dir=None)
 
-When called from a pipeline, pass `proofs_dir` pointing to the repository's
-`proofs/` directory (e.g., out_root.parent / 'proofs') so the sidecar is colocated
-with other evidence.
+When called from a pipeline, the default `meta_dir` is the day artifact
+directory itself, so `out/site_demo/` remains self-contained.
 """
 
 from __future__ import annotations
@@ -92,16 +91,19 @@ def _write_meta_for_day(
     day: str,
     day_bin_path: Path,
     ots_path: Path,
-    proofs_dir: Path,
-    milestone: str = "m4",
+    meta_dir: Path,
 ) -> Path:
-    """Create the ots_meta sidecar in `proofs_dir` for the provided day and return the path.
+    """Create the ots_meta sidecar in `meta_dir` for the provided day and return the path.
 
-    The `artifact` and `ots_proof` fields are stored as paths relative to the repo root
-    (i.e., relative to `proofs_dir.parent`).
+    For day-local metadata (`meta_dir.name == "day"`), the `artifact` and
+    `ots_proof` fields are stored relative to the parent bundle/workspace root
+    so they resolve cleanly from `out/site_demo/` or exported evidence bundle
+    roots. For other layouts, paths are relative to `meta_dir`.
     """
-    proofs_dir.mkdir(parents=True, exist_ok=True)
-    repo_root = proofs_dir.resolve().parent
+    meta_dir.mkdir(parents=True, exist_ok=True)
+    repo_root = (
+        meta_dir.resolve().parent if meta_dir.name == "day" else meta_dir.resolve()
+    )
 
     # Compute artifact sha256
     artifact_bytes = day_bin_path.read_bytes()
@@ -122,7 +124,6 @@ def _write_meta_for_day(
 
     # Build metadata object
     meta: dict[str, Any] = {
-        "milestone": milestone,
         "day": day,
         "artifact": artifact_field,
         "artifact_sha256": artifact_sha,
@@ -137,7 +138,7 @@ def _write_meta_for_day(
         "verified_at_utc": datetime.now(UTC).isoformat(),
     }
 
-    meta_path = proofs_dir / f"{day}.ots.meta.json"
+    meta_path = meta_dir / f"{day}.ots.meta.json"
     meta_path.write_text(
         json.dumps(meta, sort_keys=True, indent=2) + "\n", encoding="utf-8"
     )
@@ -147,16 +148,15 @@ def _write_meta_for_day(
 def ots_stamp(
     day_bin_path: Path,
     ots_path: Path,
-    proofs_dir: Path | None = None,
-    milestone: str = "m4",
+    meta_dir: Path | None = None,
 ) -> None:
     """Stamp the day artifact using OpenTimestamps CLI, or write a placeholder if not available.
 
     Contract:
     - Input: day_bin_path (Path to day artifact), ots_path (<artifact>.ots target path)
     - Behavior: attempt `ots stamp <bin>`; on any failure, write placeholder proof.
-    - Additionally: write a metadata sidecar to `proofs_dir` (if provided) or to the
-      repository's `proofs/` directory discovered from the day blob path.
+    - Additionally: write a metadata sidecar to `meta_dir` (if provided) or next
+      to the day artifact by default.
 
     When OTS_STATIONARY_STUB=1 is set in the environment, this function does not
     call the real `ots` binary. Instead, it writes a deterministic stub .ots file
@@ -164,10 +164,9 @@ def ots_stamp(
     """
     # Stationary stub mode: never call the real ots client.
     if os.environ.get("OTS_STATIONARY_STUB") == "1":
-        if proofs_dir is None:
-            repo_root = _find_repo_root(day_bin_path)
-            proofs_dir = repo_root / "proofs"
-        proofs_dir.mkdir(parents=True, exist_ok=True)
+        if meta_dir is None:
+            meta_dir = day_bin_path.parent
+        meta_dir.mkdir(parents=True, exist_ok=True)
 
         # Use hex ASCII for the stationary stub so it is human-readable and
         # verifiable against the artifact_sha256 stored in the sidecar.
@@ -175,9 +174,7 @@ def ots_stamp(
         payload = f"STATIONARY-OTS:{artifact_sha}\n".encode()
         ots_path.write_bytes(payload)
 
-        _write_meta_for_day(
-            day_bin_path.stem, day_bin_path, ots_path, proofs_dir, milestone
-        )
+        _write_meta_for_day(day_bin_path.stem, day_bin_path, ots_path, meta_dir)
         print(f"[stationary] Wrote OTS stub + meta for {day_bin_path.stem}")
         return
 
@@ -200,17 +197,13 @@ def ots_stamp(
         # Command not found, permission issue, etc. → fallback placeholder
         ots_path.write_text(OTS_PROOF_PLACEHOLDER, encoding="utf-8")
 
-    # Determine where to write meta: prefer provided proofs_dir; else locate repo root from day_bin
-    if proofs_dir is None:
-        repo_root = _find_repo_root(day_bin_path)
-        proofs_dir = repo_root / "proofs"
+    if meta_dir is None:
+        meta_dir = day_bin_path.parent
 
     # Write sidecar meta file
     day_label = day_bin_path.stem
     try:
-        meta_path = _write_meta_for_day(
-            day_label, day_bin_path, ots_path, proofs_dir, milestone
-        )
+        meta_path = _write_meta_for_day(day_label, day_bin_path, ots_path, meta_dir)
         print(f"Wrote OTS meta: {meta_path}")
     except OSError as exc:  # pragma: no cover - defensive
         print(f"[WARN] Failed to write OTS meta sidecar: {exc}")
@@ -226,25 +219,23 @@ def main(argv: list[str] | None = None) -> int:
         help="Path to day/YYYY-MM-DD.cbor artifact (or legacy day blob)",
     )
     p.add_argument(
-        "--proofs",
+        "--meta-dir",
         type=Path,
         default=None,
-        help="Optional directory to write proofs meta files (defaults to repo_root/proofs)",
+        help="Optional directory to write OTS metadata sidecars (defaults to the artifact directory)",
     )
     p.add_argument(
-        "--milestone",
-        type=str,
-        default="m5",
-        help="Milestone label recorded in the meta sidecar",
+        "--proofs",
+        dest="meta_dir",
+        type=Path,
+        help=argparse.SUPPRESS,
     )
     args = p.parse_args(argv)
 
     day_bin_path = args.day_bin
     ots_path = day_bin_path.with_suffix(day_bin_path.suffix + ".ots")
-    proofs_dir = args.proofs
-    if proofs_dir is not None:
-        proofs_dir = proofs_dir
-    ots_stamp(day_bin_path, ots_path, proofs_dir=proofs_dir, milestone=args.milestone)
+    meta_dir = args.meta_dir
+    ots_stamp(day_bin_path, ots_path, meta_dir=meta_dir)
     return 0
 
 

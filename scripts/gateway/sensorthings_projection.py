@@ -630,6 +630,7 @@ def write_bundle(
         site_id=site_id,
         provisioning_records=load_provisioning_records(provisioning_records_path),
     )
+    _validate_against_schema(bundle, "sensorthings_projection")
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(
         json.dumps(bundle, indent=2, sort_keys=True) + "\n", encoding="utf-8"
