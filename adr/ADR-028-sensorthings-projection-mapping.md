@@ -2,6 +2,7 @@
 
 **Status**: Accepted
 **Date**: 2025-12-15
+**Updated**: 2026-03-13
 
 ## Related ADRs
 
@@ -39,6 +40,9 @@ We need a precise mapping between TrackOne’s facts and SensorThings entities.
   - Recomputed from the fact log given a stable mapping.
   - Regenerated for replay / verification (see ADR-021).
 - No “write-only” SensorThings state is allowed. Any state that cannot be reconstructed from facts is disallowed.
+- The emitted projection artifact is schema-backed and versioned separately from the authoritative commitment artifacts:
+  - the checked-in JSON contract is `toolset/unified/schemas/sensorthings_projection.schema.json`;
+  - it remains a derived artifact, not a commitment-root input.
 
 ### 2. Entity Mapping Overview
 
@@ -143,6 +147,7 @@ This ensures:
   - Implement stable ID mapping policy from canonical identifiers to SensorThings entity IDs.
   - Support generation of:
     - `Thing`, `Location`, `Sensor`, `ObservedProperty`, `Datastream`, `Observation` with correct relationships.
+  - Keep the emitted projection bundle schema-validated so read-only consumers get a locked contract.
   - Enforce read-only or write-through behavior for API mutations, with preference for read-only in the initial implementation.
 - Documentation:
   - Document the canonical \<-> SensorThings mapping and ID scheme to support debugging and reproducibility.
