@@ -50,6 +50,7 @@ Each ADR captures context, the decision, consequences, and alternatives.
 - [ADR-043: Phased Bundle-Manifest Maturity for the I-D](ADR-043-phased-bundle-manifest-maturity-for-id.md)
 - [ADR-044: JSON Schema Modularity and Authoritative Contract Artifacts](ADR-044-json-schema-modularity-and-authoritative-contract-artifacts.md)
 - [ADR-045: Git-Signed Evidence Distribution Plane for Release and Small Authoritative Artifacts](ADR-045-git-signed-evidence-distribution-plane.md)
+- [ADR-046: Sealed Trust-Root Boundary and Deferring a Dedicated `trackone-seal` Crate](ADR-046-sealed-trust-root-boundary-and-deferring-trackone-seal.md)
 
 ## Index Conventions
 
@@ -185,6 +186,12 @@ Entries list **Status** and **Summary**. Related references are grouped under **
   **Summary**: Allows Git to carry signed low-rate release/evidence sets and control artifacts as an optional distribution plane, while keeping OTS/TSA/peer proofs as the time/integrity authority, Buildx provenance as the OCI build authority, and detached verifier semantics independent from Git metadata.
 
   - **See also**: [ADR-023](ADR-023-ots-vs-git-integrity.md), [ADR-035](ADR-035-workspace-versioning-and-release-visibility.md), [ADR-039](ADR-039-cbor-first-commitment-profile-and-artifact-authority.md), [ADR-041](ADR-041-verification-disclosure-bundles-and-privacy-tiers.md), [ADR-043](ADR-043-phased-bundle-manifest-maturity-for-id.md)
+
+- **[ADR-046](ADR-046-sealed-trust-root-boundary-and-deferring-trackone-seal.md): Sealed trust-root boundary and deferring a dedicated `trackone-seal` crate**
+  **Status**: Accepted
+  **Summary**: Defines the sealed trust-root boundary around mutable input state, verifier-visible binding, and publication gating; keeps deterministic seal primitives in `trackone-ledger`, keeps workflow policy in Python, and explicitly defers a separate `trackone-seal` crate until sealed-state artifacts become a stable reusable domain.
+
+  - **See also**: [ADR-017](ADR-017-rust-core-and-pyo3-integration.md), [ADR-037](ADR-037-signature-roles-and-verification-boundaries.md), [ADR-039](ADR-039-cbor-first-commitment-profile-and-artifact-authority.md), [ADR-041](ADR-041-verification-disclosure-bundles-and-privacy-tiers.md), [ADR-043](ADR-043-phased-bundle-manifest-maturity-for-id.md), [ADR-045](ADR-045-git-signed-evidence-distribution-plane.md)
 
 ### Stationary Calendar & Trust Chain
 
