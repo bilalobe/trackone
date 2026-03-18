@@ -70,7 +70,7 @@ jobs:
         run: tox -e wheel-resolve
 
       - name: Upload wheel artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: wheel-resolve-${{ github.run_id }}
           path: target/wheels/*.whl

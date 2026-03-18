@@ -73,7 +73,7 @@ jobs:
         run: cargo package --workspace --locked
 
       - name: Upload crate packages
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: crates-packages
           path: target/package/*.crate
@@ -166,7 +166,7 @@ jobs:
           tox -e ${{ matrix.toxenv }}
 
       - name: Upload coverage artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-${{ matrix.toxenv }}
           path: coverage.xml
@@ -266,7 +266,7 @@ jobs:
           python -c "import trackone_core; print('trackone_core', trackone_core.__version__)"
 
       - name: Upload wheel artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: wheel-py314
           path: target/wheels/*.whl
