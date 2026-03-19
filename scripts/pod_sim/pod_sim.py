@@ -38,25 +38,29 @@ import json
 import secrets
 import struct
 import time
+from collections.abc import Callable
 from datetime import UTC, datetime
 from importlib import import_module
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
-try:
-    from scripts.gateway.input_integrity import (
-        write_sha256_sidecar,  # type: ignore[import-untyped]
-    )
-except ImportError:  # pragma: no cover - fallback for direct execution edge cases
-    GW_DIR = Path(__file__).parent.parent / "gateway"
-    ii_spec = importlib.util.spec_from_file_location(
-        "input_integrity", str(GW_DIR / "input_integrity.py")
-    )
-    if not ii_spec or not ii_spec.loader:
-        raise ImportError("input_integrity spec not found") from None
-    input_integrity = importlib.util.module_from_spec(ii_spec)
-    ii_spec.loader.exec_module(input_integrity)
-    write_sha256_sidecar = input_integrity.write_sha256_sidecar
+
+def _load_write_sha256_sidecar() -> Callable[[Path], Path]:
+    try:
+        input_integrity = importlib.import_module("scripts.gateway.input_integrity")
+    except ImportError:  # pragma: no cover - fallback for direct execution edge cases
+        gw_dir = Path(__file__).parent.parent / "gateway"
+        ii_spec = importlib.util.spec_from_file_location(
+            "input_integrity", str(gw_dir / "input_integrity.py")
+        )
+        if not ii_spec or not ii_spec.loader:
+            raise ImportError("input_integrity spec not found") from None
+        input_integrity = importlib.util.module_from_spec(ii_spec)
+        ii_spec.loader.exec_module(input_integrity)
+    return cast(Callable[[Path], Path], input_integrity.write_sha256_sidecar)
+
+
+write_sha256_sidecar = _load_write_sha256_sidecar()
 
 # Local crypto helpers (HKDF)
 try:
