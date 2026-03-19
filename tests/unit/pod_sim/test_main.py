@@ -65,6 +65,8 @@ class TestMainFunction:
         ]
         assert pod_sim.main(args) == 0
         assert out_file.exists() and dt_file.exists() and provisioning_input.exists()
+        assert (tmp_path / "device_table.json.sha256").exists()
+        assert (tmp_path / "provisioning" / "authoritative-input.json.sha256").exists()
         lines = out_file.read_text(encoding="utf-8").strip().split("\n")
         assert len(lines) == 2
         for line in lines:
