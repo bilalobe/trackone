@@ -44,7 +44,9 @@ from pathlib import Path
 from typing import Any
 
 try:
-    from scripts.gateway.input_integrity import write_sha256_sidecar
+    from scripts.gateway.input_integrity import (
+        write_sha256_sidecar,  # type: ignore[import-untyped]
+    )
 except ImportError:  # pragma: no cover - fallback for direct execution edge cases
     GW_DIR = Path(__file__).parent.parent / "gateway"
     ii_spec = importlib.util.spec_from_file_location(
