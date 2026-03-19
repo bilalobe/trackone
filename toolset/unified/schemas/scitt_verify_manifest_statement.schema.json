@@ -1,0 +1,154 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/schemas/scitt_verify_manifest_statement.schema.json",
+  "title": "TrackOne SCITT Verify Manifest Statement",
+  "type": "object",
+  "properties": {
+    "statement_kind": {
+      "const": "trackone.verify-manifest.v1"
+    },
+    "subject": {
+      "type": "string",
+      "pattern": "^urn:trackone:site:[^:]+:day:\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "site": {
+      "$ref": "https://example.org/schemas/common.schema.json#/$defs/site_id"
+    },
+    "day": {
+      "$ref": "https://example.org/schemas/common.schema.json#/$defs/utc_date"
+    },
+    "issuer": {
+      "type": "string",
+      "minLength": 1
+    },
+    "verified_at": {
+      "$ref": "https://example.org/schemas/common.schema.json#/$defs/rfc3339_utc"
+    },
+    "artifacts": {
+      "$ref": "#/$defs/verify_statement_artifacts"
+    },
+    "trackone": {
+      "$ref": "#/$defs/trackone_verify_statement"
+    }
+  },
+  "$defs": {
+    "channel_status": {
+      "enum": [
+        "verified",
+        "pending",
+        "missing",
+        "failed",
+        "skipped"
+      ]
+    },
+    "verify_statement_artifacts": {
+      "type": "object",
+      "properties": {
+        "verify_manifest": {
+          "$ref": "https://example.org/schemas/common.schema.json#/$defs/artifact_ref"
+        },
+        "day_cbor": {
+          "$ref": "https://example.org/schemas/common.schema.json#/$defs/artifact_ref"
+        },
+        "block": {
+          "$ref": "https://example.org/schemas/common.schema.json#/$defs/artifact_ref"
+        }
+      },
+      "required": [
+        "verify_manifest",
+        "day_cbor",
+        "block"
+      ],
+      "additionalProperties": false
+    },
+    "local_verification_gate": {
+      "type": "object",
+      "properties": {
+        "manifest_validated": {
+          "type": "boolean"
+        },
+        "batch_metadata_validated": {
+          "type": "boolean"
+        },
+        "artifact_valid": {
+          "type": "boolean"
+        },
+        "meta_valid": {
+          "type": "boolean"
+        },
+        "fact_root_match": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "manifest_validated",
+        "batch_metadata_validated",
+        "artifact_valid",
+        "meta_valid",
+        "fact_root_match"
+      ],
+      "additionalProperties": false
+    },
+    "trackone_verify_statement": {
+      "type": "object",
+      "properties": {
+        "commitment_profile_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "disclosure_class": {
+          "enum": [
+            "A",
+            "B",
+            "C"
+          ]
+        },
+        "day_root": {
+          "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex64_lower"
+        },
+        "local_verification_gate": {
+          "$ref": "#/$defs/local_verification_gate"
+        },
+        "channels": {
+          "type": "object",
+          "properties": {
+            "ots": {
+              "$ref": "#/$defs/channel_status"
+            },
+            "tsa": {
+              "$ref": "#/$defs/channel_status"
+            },
+            "peers": {
+              "$ref": "#/$defs/channel_status"
+            }
+          },
+          "required": [
+            "ots",
+            "tsa",
+            "peers"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "commitment_profile_id",
+        "disclosure_class",
+        "day_root",
+        "local_verification_gate",
+        "channels"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "statement_kind",
+    "subject",
+    "site",
+    "day",
+    "issuer",
+    "verified_at",
+    "artifacts",
+    "trackone"
+  ],
+  "additionalProperties": false
+}

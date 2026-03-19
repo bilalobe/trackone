@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/schemas/scitt_evidence_bundle_statement.schema.json",
+  "title": "TrackOne SCITT Evidence Bundle Statement",
+  "type": "object",
+  "properties": {
+    "statement_kind": {
+      "const": "trackone.evidence-bundle.v1"
+    },
+    "subject": {
+      "type": "string",
+      "pattern": "^urn:trackone:site:[^:]+:day:\\d{4}-\\d{2}-\\d{2}:bundle$"
+    },
+    "site": {
+      "$ref": "https://example.org/schemas/common.schema.json#/$defs/site_id"
+    },
+    "day": {
+      "$ref": "https://example.org/schemas/common.schema.json#/$defs/utc_date"
+    },
+    "issuer": {
+      "type": "string",
+      "minLength": 1
+    },
+    "published_at": {
+      "$ref": "https://example.org/schemas/common.schema.json#/$defs/rfc3339_utc"
+    },
+    "bundle": {
+      "$ref": "#/$defs/bundle_ref"
+    },
+    "evidence_root": {
+      "$ref": "#/$defs/evidence_root"
+    },
+    "trackone": {
+      "$ref": "#/$defs/trackone_bundle_statement"
+    }
+  },
+  "$defs": {
+    "bundle_ref": {
+      "type": "object",
+      "properties": {
+        "media_type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex64_lower"
+        }
+      },
+      "required": [
+        "media_type",
+        "path",
+        "sha256"
+      ],
+      "additionalProperties": false
+    },
+    "evidence_root": {
+      "type": "object",
+      "properties": {
+        "verify_manifest_sha256": {
+          "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex64_lower"
+        },
+        "day_cbor_sha256": {
+          "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex64_lower"
+        },
+        "day_root": {
+          "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex64_lower"
+        }
+      },
+      "required": [
+        "verify_manifest_sha256",
+        "day_cbor_sha256",
+        "day_root"
+      ],
+      "additionalProperties": false
+    },
+    "trackone_bundle_statement": {
+      "type": "object",
+      "properties": {
+        "commitment_profile_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "disclosure_class": {
+          "enum": [
+            "A",
+            "B",
+            "C"
+          ]
+        },
+        "local_verification_gate": {
+          "const": "passed-before-export"
+        }
+      },
+      "required": [
+        "commitment_profile_id",
+        "disclosure_class",
+        "local_verification_gate"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "statement_kind",
+    "subject",
+    "site",
+    "day",
+    "issuer",
+    "published_at",
+    "bundle",
+    "evidence_root",
+    "trackone"
+  ],
+  "additionalProperties": false
+}
