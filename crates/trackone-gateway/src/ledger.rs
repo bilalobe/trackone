@@ -28,6 +28,16 @@ fn canonicalize_json_to_cbor_bytes<'py>(
     Ok(PyBytes::new(py, &out))
 }
 
+#[pyfunction]
+fn sha256_hex(input: &Bound<'_, PyBytes>) -> PyResult<String> {
+    Ok(trackone_ledger::sha256_hex(input.as_bytes()))
+}
+
+#[pyfunction]
+fn normalize_hex64(value: String) -> PyResult<String> {
+    trackone_ledger::normalize_hex64(&value).map_err(to_py_err)
+}
+
 /// Build a v1 block header and day record, returning canonical JSON bytes.
 ///
 /// Returns `(block_header_json_bytes, day_bin_bytes)`.
@@ -99,6 +109,8 @@ pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
     let sub = PyModule::new(parent.py(), "ledger")?;
     sub.add_function(wrap_pyfunction!(canonicalize_json_bytes, &sub)?)?;
     sub.add_function(wrap_pyfunction!(canonicalize_json_to_cbor_bytes, &sub)?)?;
+    sub.add_function(wrap_pyfunction!(sha256_hex, &sub)?)?;
+    sub.add_function(wrap_pyfunction!(normalize_hex64, &sub)?)?;
     sub.add_function(wrap_pyfunction!(build_day_v1_single_batch, &sub)?)?;
     sub.add_function(wrap_pyfunction!(build_day_v1_single_batch_cbor, &sub)?)?;
     parent.add_submodule(&sub)?;
