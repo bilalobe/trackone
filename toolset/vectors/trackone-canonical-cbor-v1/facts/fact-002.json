@@ -1,0 +1,11 @@
+{
+  "fc": 2,
+  "ingest_time": "2025-10-07T00:05:01Z",
+  "kind": "env.sample",
+  "payload": {
+    "humidity_pct": 46,
+    "temperature_c": 1.5
+  },
+  "pod_id": "pod-001",
+  "pod_time": "2025-10-07T00:05:00Z"
+}
