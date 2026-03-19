@@ -1,0 +1,38 @@
+{
+  "batch_id": "an-001-2025-10-07-00",
+  "block_header_path": "block-header.json",
+  "commitment_profile_id": "trackone-canonical-cbor-v1",
+  "date": "2025-10-07",
+  "day_cbor_sha256": "5bfc50a7dcab7b7908ff9740b5759abb8eac0bdae58147b41eb6b7c3a9fb7209",
+  "day_record_cbor_path": "day-record.cbor",
+  "day_record_json_path": "day-record.json",
+  "facts": [
+    {
+      "cbor_path": "facts/fact-001.cbor",
+      "cbor_sha256": "57dfb9693e09132384b45d84c174dc1816e7d54e5aeb42a484fc5c0118fea049",
+      "json_path": "facts/fact-001.json",
+      "name": "fact-001"
+    },
+    {
+      "cbor_path": "facts/fact-002.cbor",
+      "cbor_sha256": "168abce8b01931ed3e59aaf380cdf0a0706fa6c31c08dab65285b20a28842b8a",
+      "json_path": "facts/fact-002.json",
+      "name": "fact-002"
+    },
+    {
+      "cbor_path": "facts/fact-003.cbor",
+      "cbor_sha256": "97358f1da38b74190dc6c033494bbc739c75e2ad427eb1fe4fd211332c6b207e",
+      "json_path": "facts/fact-003.json",
+      "name": "fact-003"
+    }
+  ],
+  "leaf_hashes": [
+    "168abce8b01931ed3e59aaf380cdf0a0706fa6c31c08dab65285b20a28842b8a",
+    "57dfb9693e09132384b45d84c174dc1816e7d54e5aeb42a484fc5c0118fea049",
+    "97358f1da38b74190dc6c033494bbc739c75e2ad427eb1fe4fd211332c6b207e"
+  ],
+  "merkle_root": "95f6c013cc5bc306a3b5bbb2484078b5491e36a8b0f4b32aab85d211ee562853",
+  "prev_day_root": "0000000000000000000000000000000000000000000000000000000000000000",
+  "site_id": "an-001",
+  "version": 1
+}
