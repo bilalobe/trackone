@@ -198,28 +198,49 @@ def prev_day_root_or_zero(
     or
       prev_day_root_or_zero(out_dir, site, day)
 
-    The `site` argument is currently unused but accepted for backward/forward compatibility.
+    When `site` is provided, only prior day records for that site are eligible
+    to satisfy the chain linkage.
     """
-    # Determine day parameter depending on call style
-    day_val = site_or_day if day is None else day
+    # Determine parameters depending on call style.
+    site_val: str | None
+    day_val: str
+    if day is None:
+        site_val = None
+        day_val = site_or_day
+    else:
+        site_val = site_or_day
+        day_val = day
 
-    # naive previous day lookup by file presence; adjust if you want true calendar math
-    # Here we scan the day/ directory for the latest *.json older than 'day'
+    # Scan day/ for the latest prior JSON record older than `day_val`. When
+    # site linkage is requested, skip unrelated sites but fail closed if the
+    # selected same-site record is unreadable or malformed.
     day_dir = out_dir / "day"
     if not day_dir.exists():
         return "00" * 32
-    candidates = sorted(p for p in day_dir.glob("*.json") if p.name < f"{day_val}.json")
+    candidates = sorted(
+        (p for p in day_dir.glob("*.json") if p.name < f"{day_val}.json"),
+        reverse=True,
+    )
     if not candidates:
         return "00" * 32
-    try:
-        prev_any = json.loads(candidates[-1].read_text(encoding="utf-8"))
-        if isinstance(prev_any, dict):
-            val = prev_any.get("day_root")
-            if isinstance(val, str):
-                return val
+    for candidate in candidates:
+        try:
+            prev_any = json.loads(candidate.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            return "00" * 32
+        if not isinstance(prev_any, dict):
+            return "00" * 32
+        if site_val is not None:
+            candidate_site = prev_any.get("site_id")
+            if not isinstance(candidate_site, str):
+                return "00" * 32
+            if candidate_site != site_val:
+                continue
+        val = prev_any.get("day_root")
+        if isinstance(val, str):
+            return val
         return "00" * 32
-    except (json.JSONDecodeError, OSError):
-        return "00" * 32
+    return "00" * 32
 
 
 def main(argv: list[str] | None = None) -> int:
