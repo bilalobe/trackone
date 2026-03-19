@@ -34,10 +34,15 @@ from typing import Any, TextIO
 
 try:  # Support both package imports and direct script execution.
     from .canonical_cbor import canonicalize_obj_to_cbor
+    from .input_integrity import require_sha256_sidecar, write_sha256_sidecar
     from .schema_validation import load_schema, load_schema_from_path, validate_instance
     from .schema_validation import schema_path as _schema_path
 except ImportError:  # pragma: no cover - fallback when run as a script
     from canonical_cbor import canonicalize_obj_to_cbor  # type: ignore
+    from input_integrity import (  # type: ignore
+        require_sha256_sidecar,
+        write_sha256_sidecar,
+    )
     from schema_validation import (  # type: ignore
         load_schema,
         load_schema_from_path,
@@ -196,9 +201,9 @@ def validate_fact(obj: dict[str, Any], schema: dict[str, Any] | None) -> None:
     try:
         validate_instance(obj, schema)
     except jsonschema.ValidationError as e:
-        print(f"[WARN] Fact validation failure: {e}", file=sys.stderr)
+        raise ValueError(f"Fact validation failure: {e}") from e
     except jsonschema.SchemaError as e:
-        print(f"[WARN] Fact schema error: {e}", file=sys.stderr)
+        raise ValueError(f"Fact schema error: {e}") from e
 
 
 # --- Device table helpers ---
@@ -208,6 +213,7 @@ def load_device_table(path: Path) -> dict[str, dict[str, Any]]:
     """Load device table from disk, or return empty dict."""
     if not path or not path.exists():
         return {}
+    require_sha256_sidecar(path, label="device_table")
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError, UnicodeDecodeError):
@@ -253,6 +259,7 @@ def save_device_table(path: Path | None, tbl: dict[str, Any]) -> None:
         return
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(tbl, indent=2) + "\n", encoding="utf-8")
+    write_sha256_sidecar(path)
 
 
 # --- TLV helpers (mirror pod_sim) ---
@@ -624,15 +631,6 @@ def process(argv: list[str] | None = None) -> int:
         return 1
     except (OSError, json.JSONDecodeError, ValueError, TypeError) as e:
         print(f"[ERROR] processing failure: {e}", file=sys.stderr)
-        # Ensure callers always receive a clear PyNaCl hint on failure. Some
-        # tests simulate missing PyNaCl by wiping sys.modules, but our
-        # environment may still have it installed. Emitting this guidance keeps
-        # behavior deterministic and user friendly when anything goes wrong.
-        if "PyNaCl is required" not in str(e):
-            print(
-                "PyNaCl is required for framed AEAD verification paths. Install with: pip install PyNaCl",
-                file=sys.stderr,
-            )
         return 1
     finally:
         if frames_fh is not sys.stdin:
