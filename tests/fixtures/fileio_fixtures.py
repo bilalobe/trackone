@@ -13,8 +13,10 @@ import pytest
 
 try:
     from scripts.gateway.canonical_cbor import canonicalize_obj_to_cbor
+    from scripts.gateway.input_integrity import write_sha256_sidecar
 except ImportError:  # pragma: no cover - fallback for direct test module execution
     from canonical_cbor import canonicalize_obj_to_cbor  # type: ignore
+    from input_integrity import write_sha256_sidecar  # type: ignore
 
 
 @pytest.fixture
@@ -83,6 +85,7 @@ def write_device_table():
         p = Path(path)
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(json.dumps(data, indent=indent), encoding="utf-8")
+        write_sha256_sidecar(p)
 
     return _write
 
