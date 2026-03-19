@@ -1,3 +1,5 @@
+#![no_std]
+
 /// Canonical maximum serialized length for a `Fact` in bytes.
 ///
 /// This is a workspace-level policy knob. Consumers should not hardcode
