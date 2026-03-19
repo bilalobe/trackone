@@ -15,6 +15,8 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Any, cast
 
+from trackone_core.ledger import normalize_hex64, sha256_hex
+
 try:  # pragma: no cover - optional; may not be installed when run as a script
     from trackone_core.release import (
         DEFAULT_COMMITMENT_PROFILE_ID,
@@ -57,6 +59,7 @@ try:  # Support both package imports and direct script execution.
     )
     from .canonical_cbor import canonicalize_obj_to_cbor
     from .schema_validation import load_schema, validate_instance
+    from .verification_manifest import manifest_candidates
 except ImportError:  # pragma: no cover - fallback when run as a script
     from anchoring_config import (  # type: ignore
         STRICT,
@@ -66,6 +69,7 @@ except ImportError:  # pragma: no cover - fallback when run as a script
     )
     from canonical_cbor import canonicalize_obj_to_cbor  # type: ignore
     from schema_validation import load_schema, validate_instance  # type: ignore
+    from verification_manifest import manifest_candidates  # type: ignore
 
 EXIT_OTS_NOT_FOUND = 3
 EXIT_OTS_FAILED = 4
@@ -83,7 +87,8 @@ STATUS_SKIPPED = "skipped"
 OTS_VERIFY_TIMEOUT_SECS = 30.0
 CHECK_DAY_ARTIFACT = "day_artifact_validation"
 CHECK_FACT_RECOMPUTE = "fact_level_recompute"
-CHECK_MANIFEST = "pipeline_manifest_validation"
+CHECK_MANIFEST = "verification_manifest_validation"
+CHECK_BATCH_METADATA = "batch_metadata_validation"
 CHECK_OTS = "ots_verification"
 CHECK_TSA = "tsa_verification"
 CHECK_PEERS = "peer_signature_verification"
@@ -124,8 +129,8 @@ def merkle_root(leaves: Iterable[bytes]) -> str:
                 file=sys.stderr,
             )
     if not leaves_list:
-        return sha256(b"").hexdigest()
-    leaf_hashes = [sha256(leaf).hexdigest() for leaf in leaves_list]
+        return cast(str, sha256_hex(b""))
+    leaf_hashes = [sha256_hex(leaf) for leaf in leaves_list]
     leaf_hashes_sorted = sorted(leaf_hashes)
     layer = [bytes.fromhex(hx) for hx in leaf_hashes_sorted]
     while len(layer) > 1:
@@ -186,9 +191,11 @@ def _verify_ots_python(
                         status_name=STATUS_FAILED,
                         reason="stationary-stub-invalid",
                     )
-                stub_hex = parts[1].strip().splitlines()[0].decode("ascii").lower()
+                stub_hex = normalize_hex64(
+                    parts[1].strip().splitlines()[0].decode("ascii")
+                )
                 if expected_artifact_sha:
-                    if stub_hex == expected_artifact_sha.strip().lower():
+                    if stub_hex == normalize_hex64(expected_artifact_sha.strip()):
                         return _PythonOtsVerifyResult(
                             ok=True,
                             status_name=STATUS_VERIFIED,
@@ -201,7 +208,7 @@ def _verify_ots_python(
                     )
                 artifact_candidate = ots_path.with_suffix("")
                 if artifact_candidate.exists():
-                    actual_sha = sha256(artifact_candidate.read_bytes()).hexdigest()
+                    actual_sha = sha256_hex(artifact_candidate.read_bytes())
                     if actual_sha == stub_hex:
                         return _PythonOtsVerifyResult(
                             ok=True,
@@ -218,7 +225,7 @@ def _verify_ots_python(
                     status_name=STATUS_FAILED,
                     reason="stationary-stub-artifact-missing",
                 )
-            except (OSError, UnicodeDecodeError):
+            except (OSError, UnicodeDecodeError, ValueError):
                 return _PythonOtsVerifyResult(
                     ok=False,
                     status_name=STATUS_FAILED,
@@ -378,9 +385,16 @@ def _validate_meta_sidecar_python(
         or not isinstance(meta_day, str)
         or not meta_day
         or not isinstance(expected_sha, str)
-        or len(expected_sha) != 64
         or not isinstance(meta_ots_rel, str)
     ):
+        return _PythonOtsVerifyResult(
+            ok=False,
+            status_name=STATUS_FAILED,
+            reason="meta-missing-fields",
+        )
+    try:
+        expected_sha = normalize_hex64(expected_sha)
+    except ValueError:
         return _PythonOtsVerifyResult(
             ok=False,
             status_name=STATUS_FAILED,
@@ -409,8 +423,8 @@ def _validate_meta_sidecar_python(
             reason="meta-artifact-missing",
         )
 
-    actual_sha = sha256(day_artifact.read_bytes()).hexdigest()
-    if actual_sha != expected_sha.lower():
+    actual_sha = sha256_hex(day_artifact.read_bytes())
+    if actual_sha != expected_sha:
         return _PythonOtsVerifyResult(
             ok=False,
             status_name=STATUS_FAILED,
@@ -505,10 +519,10 @@ def verify_tsa(tsr_path: Path, day_artifact: Path) -> bool:
             return False
         try:
             meta = json.loads(tsr_json.read_text(encoding="utf-8"))
-            day_hash = sha256(day_artifact.read_bytes()).hexdigest()
-            imprint = meta.get("message_imprint", "").replace(":", "").lower()
+            day_hash = sha256_hex(day_artifact.read_bytes())
+            imprint = normalize_hex64(meta.get("message_imprint", "").replace(":", ""))
             return imprint == day_hash  # type: ignore
-        except (json.JSONDecodeError, OSError):
+        except (json.JSONDecodeError, OSError, ValueError):
             return False
 
     try:
@@ -587,6 +601,9 @@ def _record_executed(summary: dict[str, Any], check: str) -> None:
     checks = summary.setdefault("checks_executed", [])
     if isinstance(checks, list):
         checks.append(check)
+    scope = summary.setdefault("verification_scope_exercised", [])
+    if isinstance(scope, list) and check not in scope:
+        scope.append(check)
 
 
 def _record_skipped(summary: dict[str, Any], check: str, reason: str) -> None:
@@ -615,10 +632,14 @@ def _emit(summary: dict[str, Any], json_mode: bool) -> None:
     verification = summary.get("verification", {})
     disclosure = verification.get("disclosure_class", "A")
     public_claim = verification.get("publicly_recomputable", False)
+    manifest = summary.get("manifest", {})
+    manifest_status = manifest.get("status", "missing")
+    manifest_source = manifest.get("source") or "n/a"
     print(
         f"Policy={summary['policy']['mode']} Disclosure={disclosure} "
         f"Overall={summary['overall']} RootMatch={summary['checks']['root_match']} "
-        f"PubliclyRecomputable={public_claim}"
+        f"PubliclyRecomputable={public_claim} "
+        f"Manifest={manifest_status}:{manifest_source}"
     )
     for name in ("ots", "tsa", "peers"):
         item = summary["channels"][name]
@@ -635,13 +656,17 @@ def _load_cfg(args: argparse.Namespace) -> AnchoringConfig:
     return load_anchoring_config(config_path=args.config, cli_overrides=cli_overrides)
 
 
-def _load_pipeline_manifest(manifest_path: Path) -> dict[str, Any] | None:
+def _load_verification_manifest(
+    manifest_path: Path, *, schema_name: str
+) -> dict[str, Any] | None:
     if not manifest_path.exists():
         return None
     data = json.loads(manifest_path.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
-        raise ValueError(f"pipeline manifest must be a JSON object: {manifest_path}")
-    schema = load_schema("pipeline_manifest")
+        raise ValueError(
+            f"verification manifest must be a JSON object: {manifest_path}"
+        )
+    schema = load_schema(schema_name)
     if schema is not None:
         validate_instance(data, schema)
     return data
@@ -679,7 +704,7 @@ def _resolve_meta_sidecar(root_dir: Path, day: str) -> tuple[Path, Path] | None:
     return None
 
 
-def _validate_pipeline_manifest(
+def _validate_verification_manifest(
     manifest: dict[str, Any],
     *,
     root_dir: Path,
@@ -737,7 +762,8 @@ def _validate_pipeline_manifest(
         declared_sha = artifact.get("sha256")
         if not isinstance(declared_sha, str):
             raise ValueError(f"manifest artifact missing sha256: {name}")
-        actual_sha = sha256(resolved.read_bytes()).hexdigest()
+        declared_sha = normalize_hex64(declared_sha)
+        actual_sha = sha256_hex(resolved.read_bytes())
         if actual_sha != declared_sha:
             raise ValueError(
                 f"manifest artifact sha256 mismatch for {name}: expected {declared_sha}, got {actual_sha}"
@@ -859,7 +885,9 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     day_artifact = day_dir / f"{day}.cbor"
-    manifest_path = day_dir / f"{day}.pipeline-manifest.json"
+    _manifest_label, manifest_path, manifest_schema = manifest_candidates(day_dir, day)[
+        0
+    ]
     legacy_day_artifact = day_dir / f"{day}.bin"
     if not day_artifact.exists() and legacy_day_artifact.exists():
         print(
@@ -870,7 +898,12 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     ots_path = day_artifact.with_suffix(day_artifact.suffix + ".ots")
     recorded_root = block_header.get("merkle_root")
-    if not isinstance(recorded_root, str) or len(recorded_root) != 64:
+    if not isinstance(recorded_root, str):
+        print(f"ERROR: Invalid or missing 'merkle_root' in block header: {block_path}")
+        return 1
+    try:
+        recorded_root = normalize_hex64(recorded_root)
+    except ValueError:
         print(f"ERROR: Invalid or missing 'merkle_root' in block header: {block_path}")
         return 1
 
@@ -882,17 +915,23 @@ def main(argv: list[str] | None = None) -> int:
             "commitment_profile_id": args.commitment_profile_id,
             "publicly_recomputable": False,
         },
+        "manifest": {
+            "status": "missing",
+            "source": None,
+            "schema": manifest_schema,
+        },
         "artifacts": {
             "block": str(block_path),
             "day_cbor": str(day_artifact),
             "day_ots": str(ots_path),
-            "pipeline_manifest": str(manifest_path),
+            "verification_manifest": str(manifest_path),
         },
         "checks": {
             "root_match": None,
             "artifact_valid": False,
             "meta_valid": True,
         },
+        "verification_scope_exercised": [],
         "checks_executed": [],
         "checks_skipped": [],
         "channels": {
@@ -912,9 +951,12 @@ def main(argv: list[str] | None = None) -> int:
 
     if manifest_path.exists():
         _record_executed(summary, CHECK_MANIFEST)
+        _record_executed(summary, CHECK_BATCH_METADATA)
         try:
-            manifest = _load_pipeline_manifest(manifest_path)
-            _validate_pipeline_manifest(
+            manifest = _load_verification_manifest(
+                manifest_path, schema_name=manifest_schema
+            )
+            _validate_verification_manifest(
                 manifest or {},
                 root_dir=root_dir,
                 day=day,
@@ -926,9 +968,17 @@ def main(argv: list[str] | None = None) -> int:
                 commitment_profile_id=args.commitment_profile_id,
             )
         except _MANIFEST_EXCEPTIONS as exc:
-            print(f"ERROR: pipeline manifest validation failed: {exc}")
+            print(f"ERROR: verification manifest validation failed: {exc}")
             _emit(summary, args.json)
             return EXIT_META_INVALID
+        summary["manifest"] = {
+            "status": "present",
+            "source": manifest_path.name,
+            "schema": manifest_schema,
+        }
+    else:
+        _record_skipped(summary, CHECK_MANIFEST, "manifest-absent")
+        _record_skipped(summary, CHECK_BATCH_METADATA, "manifest-absent")
 
     # Optional OTS metadata sidecar checks
     meta: dict[str, Any] | None = None
