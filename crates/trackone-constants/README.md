@@ -1,24 +1,48 @@
 # trackone-constants
 
-**Component** providing shared configuration constants for the TrackOne Rust workspace.
+`trackone-constants` is the smallest crate in the TrackOne workspace: a
+dependency-free `no_std` home for shared policy constants.
 
-## Purpose
+## What belongs here
 
-`trackone-constants` holds workspace-wide constants that represent protocol and sizing policy decisions, such as:
+This crate is for constants that need to stay aligned across:
 
-- `MAX_FACT_LEN` — canonical maximum serialized length (bytes) of a `Fact` when encoded with postcard.
-- `AEAD_NONCE_LEN` — canonical AEAD nonce length (bytes), currently 24 for XChaCha20-Poly1305.
-- `AEAD_TAG_LEN` — canonical AEAD tag length (bytes), 16 for Poly1305.
+- `trackone-core`
+- `trackone-ledger`
+- `trackone-gateway`
+- `trackone-pod-fw`
 
-This crate exists so multiple crates (`trackone-core`, `trackone-gateway`, firmware crates) can share the same knobs without diverging magic numbers.
+Current examples include:
 
-## C4: Responsibilities and Dependencies
+- sizing and framing limits such as `MAX_FACT_LEN`
+- AEAD layout constants such as `AEAD_NONCE_LEN` and `AEAD_TAG_LEN`
+- verifier/runtime defaults such as `OTS_VERIFY_TIMEOUT_SECS`
+- release/profile labels such as `COMMITMENT_PROFILE_ID_CANONICAL_CBOR_V1`
+- disclosure-class identifiers and labels
 
-- **Depends on**: none (intentionally minimal).
-- **Used by**:
-  - `trackone-core` (re-exports `MAX_FACT_LEN`).
-  - Any other crate that needs to respect the same policy knobs.
+## What does not belong here
 
-## Policy Notes
+Do not put logic, parsing, allocation-heavy helpers, or `std`-dependent
+utilities in this crate. If a value needs behavior around it, that behavior
+belongs in the crate that owns the domain.
 
-- Constants in this crate are **policy**, not protocol physics. For example, `MAX_FACT_LEN` is chosen based on current payload shapes and can be increased in future versions.
+## Why it is `no_std`
+
+This crate is intentionally `no_std` so embedded consumers can reuse the same
+workspace constants without accidentally pulling `std` into firmware-oriented
+paths.
+
+## Typical consumers
+
+- [`trackone-core`](../trackone-core/README.md) re-exports the core protocol
+  constants
+- [`trackone-gateway`](../trackone-gateway/README.md) uses shared release and
+  verifier constants at the Python/native boundary
+- [`trackone-pod-fw`](../trackone-pod-fw/README.md) uses the same sizing and
+  protocol policy as host-side code
+
+## Check
+
+```bash
+cargo test -p trackone-constants
+```

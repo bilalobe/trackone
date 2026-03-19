@@ -1,59 +1,60 @@
 # trackone-gateway
 
-# Overview
+`trackone-gateway` is the Rust crate that exposes TrackOne’s native host-side
+surface to Python through PyO3. It is the bridge between Python orchestration
+and Rust-owned deterministic protocol/ledger behavior.
 
-`trackone-gateway` is the Rust cdylib that provides a Python extension exposing gateway-side operations.
+## Responsibilities
 
-## Purpose
+This crate is responsible for:
 
-- Bind `trackone-core` to Python via PyO3.
-- Offer gateway-specific helpers (batching, Merkle root computation, anchoring integrations).
-- Ship a Python wheel via `maturin` for use in downstream Python tooling.
+- exporting native modules under the `trackone_core` Python package
+- exposing selected helpers from `trackone-core` and `trackone-ledger`
+- keeping Python-facing behavior aligned with Rust-owned commitment and digest
+  contracts
 
-## Python API
+Current Python-facing modules include:
 
-The extension module is imported as `trackone_core` (see `pyproject.toml`).
+- `trackone_core.ledger`
+  - canonical JSON-to-CBOR helpers
+  - day/block artifact helpers
+  - `sha256_hex`
+  - `normalize_hex64`
+- `trackone_core.merkle`
+  - Merkle root and leaf-hash helpers
+- `trackone_core.ots`
+  - OTS proof hashing and verification helpers
+- release/disclosure constants re-exported from workspace crates
 
-Currently exposed:
+## What this crate is not
 
-- `Gateway` / `GatewayBatch` for simple frame batching + Merkle root computation (ADR-003 policy).
-- `trackone_core.merkle.merkle_root_bytes(...)` and `trackone_core.merkle.merkle_root_hex(...)`.
-- `trackone_core.merkle.merkle_root_hex_and_leaf_hashes(...)` for batching parity with the Python reference pipeline.
-- Ledger helpers (ADR-003):
-  - `trackone_core.ledger.canonicalize_json_bytes(...)`
-  - `trackone_core.ledger.build_day_v1_single_batch(...)` (canonical block header + `day.bin` bytes)
-- OTS boundary helpers:
-  - `trackone_core.ots.hash_for_ots(...)`
-  - `trackone_core.ots.verify_ots_proof(...)`
-  - `trackone_core.ots.validate_meta_sidecar(...)`
-  - `trackone_core.ots.OtsStatus` and `trackone_core.ots.OtsVerifyResult`
-- `PyRadio` adapter for delegating frame I/O to Python implementations (`send_frame`, optional `receive_frame`).
+This crate does not own the full gateway workflow.
 
-## Responsibilities and dependencies
+It should not absorb:
 
-- Responsibilities:
-  - Provide a stable, documented Python API that delegates heavy work to `trackone-core` and `trackone-ledger`.
-  - Wrap host-only operations requiring `std`.
-- Dependencies:
-  - `trackone-core` with the `gateway` feature enabled.
-  - `trackone-ledger` for canonicalization + ADR-003 Merkle policy helpers.
-  - `pyo3` for Python bindings.
-- Consumers:
-  - Python pipeline scripts and CI jobs.
+- Python pipeline orchestration
+- manifest assembly
+- export/publication policy
+- general CLI behavior
 
-## Architecture diagram
+Those remain in the Python scripts. This crate exists to keep the native
+contract small, deterministic, and reusable.
 
-```mermaid
-C4Context
-    title trackone-gateway - Context
-    Person(p1, "Operator", "Uses Python CLI and scripts to manage gateway operations")
-    System(system, "Python Pipeline", "Existing Python pipeline that orchestrates ingestion and verification")
-    Container(c1, "trackone-gateway (cdylib)", "Rust CDYLIB built with maturin", "Provides PyO3 bindings and gateway operations")
-    Container(c2, "trackone-core", "Rust crate", "Core protocol, serialization, crypto abstractions")
-    Container(c3, "trackone-ledger", "Rust crate", "Canonical JSON + Merkle batching helpers (ADR-003)")
+## Key dependencies
 
-    Rel(p1, system, "interacts with")
-    Rel(system, c1, "loads/uses via Python import")
-    Rel(c1, c2, "calls into")
-    Rel(c1, c3, "calls into")
+- [`trackone-core`](../trackone-core/README.md) for protocol and type surfaces
+- [`trackone-ledger`](../trackone-ledger/README.md) for commitment, Merkle, and
+  digest logic
+- `pyo3` for Python bindings
+
+## Local build
+
+```bash
+uv run maturin develop --manifest-path crates/trackone-gateway/Cargo.toml
+```
+
+## Check
+
+```bash
+cargo test -p trackone-gateway
 ```

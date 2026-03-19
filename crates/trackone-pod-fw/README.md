@@ -1,57 +1,54 @@
 # trackone-pod-fw
 
-**Component** representing pod firmware logic within the TrackOne system.
+`trackone-pod-fw` is the firmware-oriented helper crate for TrackOne pods. It
+provides small, `no_std`-friendly building blocks for constructing facts,
+generating nonces, emitting encrypted frames, and handling basic runtime support
+concerns such as low-power waiting and watchdog coordination.
 
-# Overview
+## Responsibilities
 
-`trackone-pod-fw` is a crate intended for pod/firmware logic. It provides the glue that collects sensor data, constructs `Fact` structures, and emits encrypted frames.
+This crate currently provides:
 
-Additional firmware-side notes and patterns are documented in the broader [TrackOne firmware documentation](../../docs/pod-fw.md).
-
-## Purpose
-
-- Construct `Fact` values from sensor inputs.
-- Encrypt facts using an AEAD implementation that satisfies the core AEAD traits.
-- Emit encrypted frames to the transport layer (radio).
-
-## Included utilities
-
-- `Pod` helper to construct + encrypt facts into `EncryptedFrame<N>` using `trackone-core::frame`.
-- `CounterNonce24` nonce generator (24-byte) suitable for embedded use (ADR-018).
-- `hal` module with small hardware abstraction traits (GPIO, clocks, buses, RNG, power) and optional mocks (`mock`, `mock-log` features).
-- `power` helpers: `idle_wait`, `enter_low_power`, and `EventWaiter`.
-- `stress` helpers: stack-guard paint/scan utilities for high-water mark checks.
-- `watchdog` helpers (feature `wdg`) for quorum-based hardware watchdog feeding and local reset-count persistence.
+- `Pod` for constructing and emitting framed telemetry from payloads
+- `CounterNonce24` for deterministic 24-byte nonce generation
+- small HAL-facing traits and optional mock implementations
+- low-power helpers such as `idle_wait` and `enter_low_power`
+- stress utilities such as stack-guard paint/scan
+- watchdog/liveness helpers behind the `wdg` feature
 
 ## Feature model
 
-- `default` enables only `std` for local development and host-side testing.
-- `wdg` enables the watchdog/liveness-registry helpers.
-- `mock-hal` enables host-side mock HAL implementations for tests and local bring-up.
-- `mock-log` adds `println!` tracing to the mock HALs.
-- `production` implies `wdg` and is intended for embedded/production builds; use it with defaults disabled, e.g. `--no-default-features --features production`, to build without `mock-hal`/`mock-log`.
+- `std`
+  Enabled by default for host-side development and tests.
+- `wdg`
+  Enables watchdog/liveness-registry helpers.
+- `mock-hal`
+  Enables host-side mock HAL implementations.
+- `mock-log`
+  Adds `std`-backed logging to the mock HAL path.
+- `production`
+  Intended for embedded builds; implies `wdg` and rejects mock HAL usage.
 
-## Responsibilities and dependencies
+For embedded builds, disable default features:
 
-- Responsibilities:
-  - Keep runtime code small and `no_std`-friendly.
-- Dependencies:
-  - `trackone-core` with `default-features = false` (no `std`, no `dummy-aead`).
-  - Platform-specific HALs / radio stacks (not included in this workspace yet).
-- Consumers:
-  - Firmware binary crates or board support packages.
+```bash
+cargo build -p trackone-pod-fw --no-default-features --features production
+```
 
-## Architecture diagram
+## Boundary with other crates
 
-```mermaid
-C4Context
-    title trackone-pod-fw - Context
-    Person(dev, "Firmware Developer", "Builds and tests firmware locally")
-    Container(pod, "trackone-pod-fw", "Rust crate", "Pod firmware logic (no_std)")
-    Container(core, "trackone-core", "Rust crate", "Shared protocol/crypto primitives")
-    Container(constants, "trackone-constants", "Rust crate", "Workspace constants (MAX_FACT_LEN)")
+- [`trackone-core`](../trackone-core/README.md) owns the shared protocol model,
+  bounded types, and crypto-facing traits
+- this crate owns firmware-side runtime helpers built on that model
+- board-specific integration belongs in board/application crates such as
+  [`trackone-pod-esp32`](../trackone-pod-esp32/README.md)
 
-    Rel(dev, pod, "develops/builds")
-    Rel(pod, core, "depends on (default-features = false)")
-    Rel(pod, constants, "reads")
+## Notes
+
+- Additional firmware notes live in [`docs/pod-fw.md`](../../docs/pod-fw.md).
+
+## Check
+
+```bash
+cargo test -p trackone-pod-fw
 ```

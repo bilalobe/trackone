@@ -1,57 +1,52 @@
 # trackone-core
 
-[![Version](https://img.shields.io/badge/version-0.1.0--alpha.10-orange)](CHANGELOG.md)
-[![Status](https://img.shields.io/badge/status-alpha-yellow)](CHANGELOG.md)
+`trackone-core` is the shared protocol crate for TrackOne. It owns the bounded
+types, frame model, AEAD-facing traits, provisioning records, and deterministic
+encoding surfaces that both host and firmware code depend on.
 
-# Overview
+## Responsibilities
 
-`trackone-core` is the shared Rust crate containing the protocol model, serialization, cryptographic abstractions, and provisioning records used by both gateway and firmware components.
+This crate owns:
 
-
-## Purpose
-
-- Define core data types (`PodId`, `FrameCounter`, `Fact`, `FactPayload`, `EncryptedFrame`, `EnvFact`)
-- Provide AEAD traits and key types for pluggable crypto implementations
-- Provide framing helpers: `make_fact`, `encrypt_fact`, and `decrypt_fact` (postcard + AEAD)
-- Re-export workspace policy constants (`MAX_FACT_LEN`, `AEAD_NONCE_LEN`, `AEAD_TAG_LEN`) from `trackone-constants`
-- Provide low-level Merkle helpers under an opt-in feature (for ADR-003 ledger policy, see `crates/trackone-ledger`)
-- Provide provisioning records (`ProvisioningRecord`, `PolicyUpdate`) for device identity and chain of trust
-- Provide deterministic CBOR encoding for cryptographic commitments
-
-## Responsibilities and dependencies
-
-- Responsibilities:
-  - Authoritative implementation of protocol types and framing logic
-  - Provisioning records for device identity and chain of trust
-  - Deterministic CBOR encoding for cryptographic commitments
-  - No-std-first design with an opt-in `std` feature for host/gateway builds
-- Dependencies:
-  - `trackone-constants`, `heapless`, `postcard`, `serde`, `serde_repr`, `serde-big-array`, `zeroize`
-  - Optional: `sha2` (behind `gateway`), `ciborium` (behind `std`)
-- Consumers:
-  - `trackone-gateway` (host bindings and Python extension)
-  - `trackone-pod-fw` (firmware builds)
+- core identifiers and bounded types such as `PodId`, `FrameCounter`, and fact
+  payload shapes
+- framed telemetry data structures and helpers
+- AEAD traits and crypto-adjacent type contracts
+- provisioning-record types used to represent device identity and deployment
+  state
+- deterministic CBOR encoding support used by the commitment path
+- re-export of shared policy constants from
+  [`trackone-constants`](../trackone-constants/README.md)
 
 ## Feature model
 
-- `std` — opt-in standard library support (enables CBOR module and `ciborium` dependency)
-- `gateway` — host-specific helpers that require `std` and `sha2` (low-level Merkle tree support)
-- `dummy-aead` — a small test-only AEAD implementation intended for local development and testing. **Production builds should not enable this.**
-- `production` — strict build profile that refuses to compile with `dummy-aead` enabled (compile-time safety check)
+- `std`
+  Host-side support. This enables the `std`-backed CBOR surface and other
+  host-friendly helpers.
+- `gateway`
+  Host-specific helpers used by the gateway/native boundary.
+- `dummy-aead`
+  Test/development-only AEAD implementation. Do not use for production builds.
+- `production`
+  Stricter build profile that refuses `dummy-aead`.
 
-## Architecture diagram
+The crate remains `no_std`-capable when `std` is disabled.
 
-```mermaid
-C4Context
-    title trackone-core - Context
-    System_Ext(python, "Python Pipeline", "Existing Python pipeline")
-    Container(core, "trackone-core", "Rust crate", "Core protocol/crypto primitives")
-    Container(constants, "trackone-constants", "Rust crate", "Workspace constants (MAX_FACT_LEN)")
-    Container(gateway, "trackone-gateway", "Rust cdylib", "PyO3 gateway extension")
-    Container(pod, "trackone-pod-fw", "Rust crate", "Pod firmware (no_std)")
+## Boundary with other crates
 
-    Rel(python, gateway, "imports and calls")
-    Rel(gateway, core, "uses")
-    Rel(pod, core, "links against (no_std)")
-    Rel(core, constants, "reads")
+- [`trackone-ledger`](../trackone-ledger/README.md) owns commitment-specific
+  artifact construction, Merkle policy, and digest helpers.
+- [`trackone-gateway`](../trackone-gateway/README.md) exposes selected core and
+  ledger functionality to Python via PyO3.
+- [`trackone-pod-fw`](../trackone-pod-fw/README.md) builds firmware-side
+  runtime helpers on top of the core protocol model.
+
+`trackone-core` should stay focused on shared protocol semantics. If logic is
+only about verifier/export commitment artifacts, it probably belongs in
+`trackone-ledger` instead.
+
+## Typical use
+
+```bash
+cargo test -p trackone-core
 ```
