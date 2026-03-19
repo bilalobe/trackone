@@ -6,6 +6,7 @@ The repository combines:
 
 - Python tooling for gateway, verification, and demo/pipeline flows
 - Rust workspace crates for shared protocol, ledger, gateway bindings, and pod firmware helpers
+- Machine-readable contract artifacts, conformance vectors, and example statements under `toolset/`
 - Helm packaging for Kubernetes deployment
 - Release automation for crates, wheels, and chart artifacts
 
@@ -47,6 +48,7 @@ At a high level, the repo covers:
 ├── trackone_core/           # Python package surface for native bindings
 ├── scripts/                 # Gateway/demo/verification tooling
 ├── tests/                   # Python test suites
+├── toolset/                 # Schemas, CDDL, vectors, and example statement payloads
 ├── deploy/helm/trackone/    # Helm chart
 ├── docs/                    # Project documentation
 ├── adr/                     # Architecture Decision Records
@@ -63,6 +65,13 @@ At a high level, the repo covers:
 - `trackone-ledger` — canonicalization and deterministic ledger/commitment helpers
 - `trackone-gateway` — PyO3-backed Rust gateway crate exposed to Python
 - `trackone-pod-fw` — firmware-side helpers for pod integration
+
+Current seal/keylock-boundary note:
+
+- `trackone-ledger` presently also carries the low-level digest / `hex64`
+  primitives used by the trust-root sealing path; this is intentionally **not**
+  a separate `trackone-seal` crate yet. See
+  [`ADR-046`](adr/ADR-046-sealed-trust-root-boundary-and-deferring-trackone-seal.md).
 
 ### Python/tooling side
 
@@ -84,7 +93,8 @@ This project uses **uv** for Python environment and dependency management.
 uv sync
 ```
 
-If you want the broader local developer toolset:
+The root `dev` dependency group is included by default for local `uv sync`.
+If you also want the broader CI/test/security tool surface:
 
 ```bash
 uv sync --extra ci --extra test --extra security
@@ -197,14 +207,14 @@ Outputs live under `out/site_demo/` by default:
 - `day/YYYY-MM-DD.cbor` — the authoritative day blob
 - `day/YYYY-MM-DD.cbor.ots` — the OpenTimestamps proof for the day blob
 - `day/YYYY-MM-DD.ots.meta.json` — day-local OTS metadata bound to the artifact/proof pair
-- `day/YYYY-MM-DD.pipeline-manifest.json` — portable manifest with relative artifact refs and digests
+- `day/YYYY-MM-DD.verify.json` — verifier-facing manifest with relative artifact refs and digests
 - `provisioning/authoritative-input.json` — authoritative deployment/provisioning input for the run
 - `provisioning/records.json` — canonical provisioning-record bundle used for projection context
 - `sensorthings/YYYY-MM-DD.observations.json` — read-only SensorThings-style projection artifact
 
 For a Git-published evidence set, keep:
 
-- `facts/`, `blocks/`, `day/`, `provisioning/authoritative-input.json`, `provisioning/records.json`, `sensorthings/`, and the pipeline manifest
+- `facts/`, `blocks/`, `day/`, `provisioning/authoritative-input.json`, `provisioning/records.json`, `sensorthings/`, and the verification manifest
 - `frames.ndjson` only when raw framed input disclosure is intended for that bundle
 
 Do not publish workspace/runtime residue:
@@ -212,7 +222,7 @@ Do not publish workspace/runtime residue:
 - `device_table.json` — runtime replay/key state only
 - `audit/` — local rejection diagnostics
 
-The pipeline manifest is publication-safe: it carries relative artifact refs plus digests and does not embed host-local verifier paths.
+The verification manifest is publication-safe: it carries relative artifact refs plus digests and does not embed host-local verifier paths.
 
 Git-publishable evidence bundles can be exported with:
 
@@ -222,47 +232,39 @@ Machine-readable contract split:
 
 - JSON projection and operational artifact contracts live under `toolset/unified/schemas/` as JSON Schema.
 - The authoritative CBOR commitment family is described separately in `toolset/unified/cddl/commitment-artifacts-v1.cddl`.
+- SCITT statement payload shapes and examples live under:
+  - `toolset/unified/schemas/scitt_*.schema.json`
+  - `toolset/unified/cddl/scitt-statements-v1.cddl`
+  - `toolset/unified/examples/scitt_*.json`
+- The published canonical CBOR commitment corpus lives under `toolset/vectors/trackone-canonical-cbor-v1/` and is used by Rust/Python parity tests.
 
-## Alpha.10 boundary
+## Current release line
 
-`0.1.0-alpha.10` is the current release.
+The latest tagged release is `0.1.0-alpha.10`.
+The current `main` branch is ahead of that tag and already carries the next hardening/conformance work recorded under `Unreleased` in [`CHANGELOG.md`](CHANGELOG.md).
 
-- Done in `alpha.10`:
+- `alpha.10` established the current public spine:
 
-  - Workspace and internal crates bumped to alpha.10
-  - Python package version aligned to `0.1.0a10`
-  - Helm chart deployment defaults and image tags aligned to alpha.10
-  - The demo/device state split is now live:
-    - `device_table.json` now carries only runtime replay/key state
-    - authoritative deployment/provisioning input is emitted separately as `provisioning/authoritative-input.json`
-  - The pipeline manifest contract is now live:
-    - `day/<date>.pipeline-manifest.json` is schema-backed and carries locked `disclosure_class`, `commitment_profile_id`, artifact path+digest entries, and executed/skipped checks
-    - `verify_cli.py` validates that manifest when present
-  - `sensorthings/<date>.observations.json` is now schema-backed as a read-only derived artifact
-  - Rust and Python now share release-contract constants for `commitment_profile_id` and disclosure classes via the native boundary
+  - verifier-facing `day/<date>.verify.json`
+  - separate authoritative provisioning input under `provisioning/authoritative-input.json`
+  - schema-backed read-only SensorThings projection artifacts
+  - shared Rust/Python release constants for `commitment_profile_id` and disclosure classes
 
-- Carried over from `alpha.8`:
+- `main` currently adds:
 
-  - Read-only SensorThings projection remains outside the trust root
-  - Projection requires provisioning-backed sensor identity instead of projection-time fallback
-  - Demo pipeline emits a canonical `provisioning/records.json` artifact for projection input
+  - published canonical CBOR commitment vectors and parity gates
+  - native `sha256_hex` / `hex64` helpers on the Python/Rust boundary
+  - manifest-backed local verification gates before export/publication
+  - SCITT statement payload contracts and examples
+  - sealed trust-root boundary documentation in [`ADR-046`](adr/ADR-046-sealed-trust-root-boundary-and-deferring-trackone-seal.md)
 
-- Still partial in `alpha.10`:
-
-  - Live Python gateway uses canonical top-level fact emission
-  - Provisioning records are still derived from a dedicated authoritative input bundle generated by the demo path rather than a separately managed deployment control-plane artifact
-  - `verify_cli.py` is less sensitive to optional peer-verification imports, but demo/frame-ingest path still expects `PyNaCl`
-
-- Deferred past the current `alpha.10` slice:
-
-  - End-to-end `trackone-core::Fact` / `EnvFact` convergence in the live gateway path
-  - Provisioning/deployment identity managed as an external authoritative source rather than demo-generated input
-  - Broader ADR parity coverage for SensorThings time/identity semantics
+For release-level detail, use [`CHANGELOG.md`](CHANGELOG.md) rather than this README.
 
 ## Documentation
 
 - `adr/` — architecture decisions and protocol boundaries
 - `docs/` — supporting docs and operational notes
+- `docs/evidence-bundle-roundtrip.md` — detached export/import verification flow
 - Per-crate `README.md` files under `crates/` — crate-local purpose and usage
 - `CHANGELOG.md` — workspace-level release notes
 
