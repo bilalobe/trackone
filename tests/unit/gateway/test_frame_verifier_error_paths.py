@@ -43,6 +43,17 @@ class TestFrameVerifierErrorPaths:
 
         with patch.object(
             Path, "read_text", side_effect=PermissionError("Access denied")
-        ):
-            with pytest.raises(PermissionError, match="Access denied"):
-                frame_verifier.load_schema_from_path(schema_path)
+        ), pytest.raises(PermissionError, match="Access denied"):
+            frame_verifier.load_schema_from_path(schema_path)
+
+    def test_validate_fact_raises_on_schema_violation(self) -> None:
+        if not frame_verifier.JSONSCHEMA_AVAILABLE or frame_verifier.jsonschema is None:
+            pytest.skip("jsonschema not installed")
+
+        schema = {
+            "type": "object",
+            "required": ["pod_id"],
+            "properties": {"pod_id": {"type": "string"}},
+        }
+        with pytest.raises(ValueError, match="Fact validation failure"):
+            frame_verifier.validate_fact({"fc": 1}, schema)

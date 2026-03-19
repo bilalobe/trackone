@@ -3,6 +3,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+from scripts.gateway.input_integrity import write_sha256_sidecar
+
 
 def test_frame_to_fact_emits_canonical_fields_only(load_module) -> None:
     frame_verifier = load_module(
@@ -52,13 +54,18 @@ def test_frame_verifier_process_reports_missing_pynacl(
     import contextlib
     import io
 
-    for key in list(sys.modules):
-        if key == "nacl" or key.startswith("nacl."):
-            monkeypatch.delitem(sys.modules, key, raising=False)
-
     frame_verifier = load_module(
         "frame_verifier_process_without_pynacl_under_test",
         Path("scripts/gateway/frame_verifier.py"),
+    )
+    monkeypatch.setattr(
+        frame_verifier,
+        "_load_nacl_modules",
+        lambda: (_ for _ in ()).throw(
+            RuntimeError(
+                "PyNaCl is required for framed AEAD verification paths. Install with: pip install PyNaCl"
+            )
+        ),
     )
 
     frames = tmp_path / "frames.ndjson"
@@ -66,6 +73,7 @@ def test_frame_verifier_process_reports_missing_pynacl(
     facts = tmp_path / "facts"
     device_table = tmp_path / "device_table.json"
     device_table.write_text("{}", encoding="utf-8")
+    write_sha256_sidecar(device_table)
 
     stderr = io.StringIO()
     with contextlib.redirect_stderr(stderr):

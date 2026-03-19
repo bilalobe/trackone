@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import math
+
+import pytest
+
 from scripts.gateway.canonical_cbor import canonicalize_obj_to_cbor
 
 
@@ -11,3 +15,21 @@ def test_text_map_keys_sorted_by_len_then_bytes():
     encoded = canonicalize_obj_to_cbor(obj)
     expected = bytes([0xA2, 0x61, ord("b"), 0x02, 0x62, ord("a"), ord("a"), 0x01])
     assert encoded == expected
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (1.0, bytes([0xF9, 0x3C, 0x00])),
+        (1.5, bytes([0xF9, 0x3E, 0x00])),
+        (100000.0, bytes([0xFA, 0x47, 0xC3, 0x50, 0x00])),
+    ],
+)
+def test_floats_use_preferred_width(value: float, expected: bytes):
+    assert canonicalize_obj_to_cbor(value) == expected
+
+
+@pytest.mark.parametrize("value", [math.nan, math.inf, -math.inf])
+def test_non_finite_floats_are_rejected(value: float):
+    with pytest.raises(ValueError, match="non-finite float not allowed"):
+        canonicalize_obj_to_cbor(value)

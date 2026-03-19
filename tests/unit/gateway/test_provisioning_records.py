@@ -3,6 +3,13 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from scripts.gateway.input_integrity import write_sha256_sidecar
+
+
+def _write_authoritative_input(path: Path, payload: dict[str, object]) -> None:
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    write_sha256_sidecar(path)
+
 
 def test_main_writes_canonical_bundle(tmp_path: Path, load_module) -> None:
     module = load_module(
@@ -10,30 +17,28 @@ def test_main_writes_canonical_bundle(tmp_path: Path, load_module) -> None:
         Path("scripts/gateway/provisioning_records.py"),
     )
     authoritative_input = tmp_path / "provisioning-input.json"
-    authoritative_input.write_text(
-        json.dumps(
-            {
-                "version": 1,
-                "site_id": "an-001",
-                "records": [
-                    {
-                        "pod_id": "0000000000000003",
-                        "deployment": {
-                            "deployment_sensor_key": "shtc3-ambient",
-                            "sensor_keys": {"temperature_air": "shtc3-ambient"},
-                        },
-                        "provisioning": {
-                            "identity_pubkey": "a" * 64,
-                            "firmware_version": "v1.2.3",
-                            "firmware_hash": "b" * 64,
-                            "birth_cert_sig": "c" * 128,
-                            "provisioned_at": 1_772_755_500,
-                        },
-                    }
-                ],
-            }
-        ),
-        encoding="utf-8",
+    _write_authoritative_input(
+        authoritative_input,
+        {
+            "version": 1,
+            "site_id": "an-001",
+            "records": [
+                {
+                    "pod_id": "0000000000000003",
+                    "deployment": {
+                        "deployment_sensor_key": "shtc3-ambient",
+                        "sensor_keys": {"temperature_air": "shtc3-ambient"},
+                    },
+                    "provisioning": {
+                        "identity_pubkey": "a" * 64,
+                        "firmware_version": "v1.2.3",
+                        "firmware_hash": "b" * 64,
+                        "birth_cert_sig": "c" * 128,
+                        "provisioned_at": 1_772_755_500,
+                    },
+                }
+            ],
+        },
     )
     out_path = tmp_path / "provisioning" / "records.json"
 
@@ -66,15 +71,13 @@ def test_main_fails_when_input_lacks_authoritative_metadata(
         Path("scripts/gateway/provisioning_records.py"),
     )
     authoritative_input = tmp_path / "provisioning-input.json"
-    authoritative_input.write_text(
-        json.dumps(
-            {
-                "version": 1,
-                "site_id": "an-001",
-                "records": [{"pod_id": "0000000000000003"}],
-            }
-        ),
-        encoding="utf-8",
+    _write_authoritative_input(
+        authoritative_input,
+        {
+            "version": 1,
+            "site_id": "an-001",
+            "records": [{"pod_id": "0000000000000003"}],
+        },
     )
     out_path = tmp_path / "provisioning" / "records.json"
 
@@ -100,30 +103,28 @@ def test_main_fails_when_provisioning_hex_is_malformed(
         Path("scripts/gateway/provisioning_records.py"),
     )
     authoritative_input = tmp_path / "provisioning-input.json"
-    authoritative_input.write_text(
-        json.dumps(
-            {
-                "version": 1,
-                "site_id": "an-001",
-                "records": [
-                    {
-                        "pod_id": "0000000000000003",
-                        "deployment": {
-                            "deployment_sensor_key": "shtc3-ambient",
-                            "sensor_keys": {"temperature_air": "shtc3-ambient"},
-                        },
-                        "provisioning": {
-                            "identity_pubkey": "z" * 64,
-                            "firmware_version": "v1.2.3",
-                            "firmware_hash": "g" * 64,
-                            "birth_cert_sig": "h" * 128,
-                            "provisioned_at": 1_772_755_500,
-                        },
-                    }
-                ],
-            }
-        ),
-        encoding="utf-8",
+    _write_authoritative_input(
+        authoritative_input,
+        {
+            "version": 1,
+            "site_id": "an-001",
+            "records": [
+                {
+                    "pod_id": "0000000000000003",
+                    "deployment": {
+                        "deployment_sensor_key": "shtc3-ambient",
+                        "sensor_keys": {"temperature_air": "shtc3-ambient"},
+                    },
+                    "provisioning": {
+                        "identity_pubkey": "z" * 64,
+                        "firmware_version": "v1.2.3",
+                        "firmware_hash": "g" * 64,
+                        "birth_cert_sig": "h" * 128,
+                        "provisioned_at": 1_772_755_500,
+                    },
+                }
+            ],
+        },
     )
     out_path = tmp_path / "provisioning" / "records.json"
 
@@ -160,4 +161,32 @@ def test_main_fails_when_authoritative_input_missing(
             str(out_path),
         ]
     )
+    assert rc == 2
+
+
+def test_main_fails_when_authoritative_input_sha256_sidecar_missing(
+    tmp_path: Path, load_module
+) -> None:
+    module = load_module(
+        "provisioning_records_missing_sha_under_test",
+        Path("scripts/gateway/provisioning_records.py"),
+    )
+    authoritative_input = tmp_path / "provisioning-input.json"
+    authoritative_input.write_text(
+        json.dumps({"version": 1, "site_id": "an-001", "records": []}),
+        encoding="utf-8",
+    )
+    out_path = tmp_path / "provisioning" / "records.json"
+
+    rc = module.main(
+        [
+            "--authoritative-input",
+            str(authoritative_input),
+            "--site",
+            "an-001",
+            "--out",
+            str(out_path),
+        ]
+    )
+
     assert rc == 2
