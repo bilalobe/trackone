@@ -1,0 +1,39 @@
+{
+  "statement_kind": "trackone.verify-manifest.v1",
+  "subject": "urn:trackone:site:an-001:day:2025-10-07",
+  "site": "an-001",
+  "day": "2025-10-07",
+  "issuer": "https://trackone.example/issuers/ops",
+  "verified_at": "2026-03-15T10:42:00Z",
+  "artifacts": {
+    "verify_manifest": {
+      "path": "day/2025-10-07.verify.json",
+      "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    "day_cbor": {
+      "path": "day/2025-10-07.cbor",
+      "sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "block": {
+      "path": "blocks/2025-10-07-00.block.json",
+      "sha256": "3333333333333333333333333333333333333333333333333333333333333333"
+    }
+  },
+  "trackone": {
+    "commitment_profile_id": "trackone-canonical-cbor-v1",
+    "disclosure_class": "A",
+    "day_root": "4444444444444444444444444444444444444444444444444444444444444444",
+    "local_verification_gate": {
+      "manifest_validated": true,
+      "batch_metadata_validated": true,
+      "artifact_valid": true,
+      "meta_valid": true,
+      "fact_root_match": true
+    },
+    "channels": {
+      "ots": "pending",
+      "tsa": "skipped",
+      "peers": "skipped"
+    }
+  }
+}

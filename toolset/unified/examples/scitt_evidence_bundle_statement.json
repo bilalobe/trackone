@@ -1,0 +1,23 @@
+{
+  "statement_kind": "trackone.evidence-bundle.v1",
+  "subject": "urn:trackone:site:an-001:day:2025-10-07:bundle",
+  "site": "an-001",
+  "day": "2025-10-07",
+  "issuer": "https://trackone.example/issuers/publisher",
+  "published_at": "2026-03-15T10:55:00Z",
+  "bundle": {
+    "media_type": "application/vnd.git.bundle",
+    "path": "trackone-evidence.bundle",
+    "sha256": "5555555555555555555555555555555555555555555555555555555555555555"
+  },
+  "evidence_root": {
+    "verify_manifest_sha256": "6666666666666666666666666666666666666666666666666666666666666666",
+    "day_cbor_sha256": "7777777777777777777777777777777777777777777777777777777777777777",
+    "day_root": "8888888888888888888888888888888888888888888888888888888888888888"
+  },
+  "trackone": {
+    "commitment_profile_id": "trackone-canonical-cbor-v1",
+    "disclosure_class": "A",
+    "local_verification_gate": "passed-before-export"
+  }
+}
