@@ -1,0 +1,11 @@
+{
+  "fc": 3,
+  "ingest_time": "2025-10-07T00:10:01Z",
+  "kind": "power.sample",
+  "payload": {
+    "battery_mv": 3300,
+    "energy_uj": 100000.0
+  },
+  "pod_id": "pod-001",
+  "pod_time": "2025-10-07T00:10:00Z"
+}
