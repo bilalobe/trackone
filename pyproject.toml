@@ -59,18 +59,6 @@ anchoring = [
     "requests>=2.32.3",
 ]
 
-# Full developer convenience set (union)
-# Keep this broad for local setup, but CI should prefer the focused extras above.
-# NOTE: Extras can't reference other extras in standard packaging metadata, so keep
-# this list minimal and avoid duplicating pinned tool versions from other groups.
-# Recommended for contributors instead:
-#   pip install -e ".[lint,type,security,test,anchoring]"
-# or install only what you need.
-dev = [
-    "uv==0.10.9",
-    "time-machine>=3.1.0",
-]
-
 ci = [
     "tox>=4.0",
     "tox-uv>=1.16.0",
@@ -109,6 +97,16 @@ include = [
 exclude = [
     "trackone_core/**/__pycache__",
     "trackone_core/**/*.pyc",
+]
+
+[tool.uv]
+# Local-only developer tools that should not be published as package extras.
+# Keep high-churn tooling such as uv here so wheel/package metadata stays clean
+# and Dependabot does not open manifest-only PRs that require a separate lock
+# refresh to become mergeable.
+dev-dependencies = [
+    "uv==0.10.9",
+    "time-machine>=3.1.0",
 ]
 
 # Pytest configuration
