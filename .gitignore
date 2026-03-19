@@ -44,6 +44,9 @@ htmlcov/
 out/
 !out/site_demo/day/*.ots
 facts/
+!toolset/vectors/trackone-canonical-cbor-v1/facts/
+!toolset/vectors/trackone-canonical-cbor-v1/facts/*.json
+!toolset/vectors/trackone-canonical-cbor-v1/facts/*.cbor
 frames.ndjson
 device_table.json
 *.bin
