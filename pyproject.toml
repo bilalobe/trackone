@@ -64,6 +64,12 @@ ci = [
     "tox-uv>=1.16.0",
 ]
 
+[dependency-groups]
+dev = [
+    "uv==0.10.9",
+    "time-machine>=3.1.0",
+]
+
 [project.urls]
 Homepage = "https://github.com/bilalobe/trackone"
 Repository = "https://github.com/bilalobe/trackone"
@@ -97,16 +103,6 @@ include = [
 exclude = [
     "trackone_core/**/__pycache__",
     "trackone_core/**/*.pyc",
-]
-
-[tool.uv]
-# Local-only developer tools that should not be published as package extras.
-# Keep high-churn tooling such as uv here so wheel/package metadata stays clean
-# and Dependabot does not open manifest-only PRs that require a separate lock
-# refresh to become mergeable.
-dev-dependencies = [
-    "uv==0.10.9",
-    "time-machine>=3.1.0",
 ]
 
 # Pytest configuration
