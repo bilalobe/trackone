@@ -4,22 +4,29 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
+import io
 import json
+import os
 import shutil
 import subprocess
 import sys
-from hashlib import sha256
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from scripts.gateway import verify_cli as verify_cli_module  # noqa: E402
 from scripts.gateway.schema_validation import (  # noqa: E402
     load_schema,
     validate_instance,
 )
+from scripts.gateway.verification_gate import local_verification_failure  # noqa: E402
+from scripts.gateway.verification_manifest import verify_manifest_path  # noqa: E402
+from trackone_core.ledger import sha256_hex  # noqa: E402
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -37,7 +44,7 @@ def _write_json(path: Path, data: dict[str, Any]) -> None:
 def _artifact_ref(path: Path, *, root: Path) -> dict[str, str]:
     return {
         "path": str(path.relative_to(root)),
-        "sha256": sha256(path.read_bytes()).hexdigest(),
+        "sha256": sha256_hex(path.read_bytes()),
     }
 
 
@@ -74,15 +81,15 @@ def _copy_manifest_artifacts(
 ) -> None:
     artifacts = manifest.get("artifacts")
     if not isinstance(artifacts, dict):
-        raise ValueError("pipeline manifest missing artifacts")
+        raise ValueError("verification manifest missing artifacts")
 
     pipeline_dir_resolved = pipeline_dir.resolve()
     for artifact in artifacts.values():
         if not isinstance(artifact, dict):
-            raise ValueError("pipeline manifest artifact must be an object")
+            raise ValueError("verification manifest artifact must be an object")
         rel_path = artifact.get("path")
         if not isinstance(rel_path, str) or not rel_path:
-            raise ValueError("pipeline manifest artifact missing path")
+            raise ValueError("verification manifest artifact missing path")
         src = (pipeline_dir / rel_path).resolve()
         try:
             src.relative_to(pipeline_dir_resolved)
@@ -121,6 +128,7 @@ def _rewrite_exported_manifest(
     day: str,
     include_frames: bool,
     meta_path: Path,
+    verifier_summary: dict[str, Any],
 ) -> None:
     manifest = _read_json(manifest_path)
 
@@ -131,11 +139,136 @@ def _rewrite_exported_manifest(
     if not isinstance(artifacts, dict):
         raise ValueError("exported manifest missing artifacts")
     artifacts["day_ots_meta"] = _artifact_ref(meta_path, root=dest_root)
+    manifest["verifier"] = _portable_verifier_summary(verifier_summary)
 
-    schema = load_schema("pipeline_manifest")
+    verification_bundle = manifest.get("verification_bundle")
+    if not isinstance(verification_bundle, dict):
+        raise ValueError("exported manifest missing verification_bundle")
+    verification = verifier_summary.get("verification")
+    if isinstance(verification, dict):
+        disclosure_class = verification.get("disclosure_class")
+        commitment_profile_id = verification.get("commitment_profile_id")
+        if isinstance(disclosure_class, str):
+            verification_bundle["disclosure_class"] = disclosure_class
+        if isinstance(commitment_profile_id, str):
+            verification_bundle["commitment_profile_id"] = commitment_profile_id
+    checks_executed = verifier_summary.get("checks_executed")
+    checks_skipped = verifier_summary.get("checks_skipped")
+    if isinstance(checks_executed, list):
+        verification_bundle["checks_executed"] = checks_executed
+    if isinstance(checks_skipped, list):
+        verification_bundle["checks_skipped"] = checks_skipped
+
+    schema = load_schema("verify_manifest")
     if schema is not None:
         validate_instance(manifest, schema)
     _write_json(manifest_path, manifest)
+
+
+def _portable_verifier_summary(summary: dict[str, Any]) -> dict[str, Any]:
+    portable: dict[str, Any] = {}
+    for key in (
+        "policy",
+        "verification",
+        "checks",
+        "verification_scope_exercised",
+        "checks_executed",
+        "checks_skipped",
+        "channels",
+        "manifest",
+        "overall",
+    ):
+        value = summary.get(key)
+        if value is not None:
+            portable[key] = json.loads(json.dumps(value))
+    return portable
+
+
+def _require_fresh_verification(
+    pipeline_dir: Path,
+    manifest: dict[str, Any],
+) -> dict[str, Any]:
+    facts_dir = manifest.get("facts_dir")
+    if not isinstance(facts_dir, str) or not facts_dir:
+        raise ValueError("verification manifest missing facts_dir")
+
+    verification_bundle = manifest.get("verification_bundle")
+    if not isinstance(verification_bundle, dict):
+        raise ValueError("verification manifest missing verification_bundle")
+    disclosure_class = verification_bundle.get("disclosure_class")
+    commitment_profile_id = verification_bundle.get("commitment_profile_id")
+    if not isinstance(disclosure_class, str) or not disclosure_class:
+        raise ValueError("verification manifest missing disclosure_class")
+    if not isinstance(commitment_profile_id, str) or not commitment_profile_id:
+        raise ValueError("verification manifest missing commitment_profile_id")
+
+    anchoring = manifest.get("anchoring")
+    policy_mode: str | None = None
+    env_overrides: dict[str, str] = {}
+    if isinstance(anchoring, dict):
+        policy = anchoring.get("policy")
+        if isinstance(policy, dict):
+            mode = policy.get("mode")
+            if isinstance(mode, str) and mode:
+                policy_mode = mode
+        channels = anchoring.get("channels")
+        if isinstance(channels, dict):
+            for name, env_name in (
+                ("ots", "ANCHOR_OTS_ENABLED"),
+                ("tsa", "ANCHOR_TSA_ENABLED"),
+                ("peers", "ANCHOR_PEERS_ENABLED"),
+            ):
+                channel = channels.get(name)
+                if isinstance(channel, dict):
+                    enabled = channel.get("enabled")
+                    if isinstance(enabled, bool):
+                        env_overrides[env_name] = "1" if enabled else "0"
+
+    verify_args = [
+        "--root",
+        str(pipeline_dir),
+        "--facts",
+        str(pipeline_dir / facts_dir),
+        "--json",
+        "--disclosure-class",
+        disclosure_class,
+        "--commitment-profile-id",
+        commitment_profile_id,
+    ]
+    if policy_mode:
+        verify_args.extend(["--policy-mode", policy_mode])
+
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+    with patch.dict(os.environ, env_overrides, clear=False), contextlib.redirect_stdout(
+        stdout
+    ), contextlib.redirect_stderr(stderr):
+        rc = verify_cli_module.main(verify_args)
+    err_text = stderr.getvalue().strip()
+    if err_text:
+        print(err_text, file=sys.stderr)
+
+    out_text = stdout.getvalue().strip()
+    if not out_text:
+        raise ValueError(
+            "fresh verification failed; refusing to export unverified evidence"
+        )
+    try:
+        summary = json.loads(out_text)
+    except json.JSONDecodeError as exc:
+        if rc != 0:
+            raise ValueError(
+                "fresh verification failed; refusing to export unverified evidence"
+            ) from exc
+        raise ValueError(f"verify_cli emitted invalid JSON summary: {exc}") from exc
+    if not isinstance(summary, dict):
+        raise ValueError("verify_cli summary must be a JSON object")
+    local_failure = local_verification_failure(summary)
+    if local_failure is not None:
+        raise ValueError(
+            "fresh verification failed; refusing to export unverified evidence"
+        )
+    return summary
 
 
 def _update_index(
@@ -196,20 +329,23 @@ def export_release(
     include_frames: bool = False,
     tag_name: str | None = None,
 ) -> Path:
-    manifest_path = pipeline_dir / "day" / f"{day}.pipeline-manifest.json"
+    manifest_path = verify_manifest_path(pipeline_dir / "day", day)
     manifest = _read_json(manifest_path)
     if manifest.get("site") != site:
         raise ValueError(
-            f"pipeline manifest site mismatch: expected {site}, got {manifest.get('site')}"
+            "verification manifest site mismatch: "
+            f"expected {site}, got {manifest.get('site')}"
         )
     if manifest.get("date") != day:
         raise ValueError(
-            f"pipeline manifest date mismatch: expected {day}, got {manifest.get('date')}"
+            "verification manifest date mismatch: "
+            f"expected {day}, got {manifest.get('date')}"
         )
 
     facts_dir = manifest.get("facts_dir")
     if not isinstance(facts_dir, str) or not facts_dir:
-        raise ValueError("pipeline manifest missing facts_dir")
+        raise ValueError("verification manifest missing facts_dir")
+    verifier_summary = _require_fresh_verification(pipeline_dir, manifest)
 
     dest_root = evidence_repo / "site" / site / "day" / day
     if dest_root.exists():
@@ -218,13 +354,15 @@ def export_release(
 
     _copy_dir(pipeline_dir / facts_dir, dest_root / "facts")
     _copy_manifest_artifacts(pipeline_dir, dest_root, manifest)
-    exported_manifest = dest_root / "day" / f"{day}.pipeline-manifest.json"
+    exported_manifest = verify_manifest_path(dest_root / "day", day)
     _copy_file(manifest_path, exported_manifest)
 
     if include_frames:
         frames_file = manifest.get("frames_file")
         if not isinstance(frames_file, str) or not frames_file:
-            raise ValueError("pipeline manifest missing frames_file for frame export")
+            raise ValueError(
+                "verification manifest missing frames_file for frame export"
+            )
         _copy_file(pipeline_dir / frames_file, dest_root / "frames.ndjson")
 
     source_meta = _find_meta_sidecar(pipeline_dir, day)
@@ -236,6 +374,7 @@ def export_release(
         day=day,
         include_frames=include_frames,
         meta_path=exported_meta,
+        verifier_summary=verifier_summary,
     )
     _update_index(
         evidence_repo,
