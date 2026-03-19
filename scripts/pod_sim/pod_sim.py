@@ -43,6 +43,19 @@ from importlib import import_module
 from pathlib import Path
 from typing import Any
 
+try:
+    from scripts.gateway.input_integrity import write_sha256_sidecar
+except ImportError:  # pragma: no cover - fallback for direct execution edge cases
+    GW_DIR = Path(__file__).parent.parent / "gateway"
+    ii_spec = importlib.util.spec_from_file_location(
+        "input_integrity", str(GW_DIR / "input_integrity.py")
+    )
+    if not ii_spec or not ii_spec.loader:
+        raise ImportError("input_integrity spec not found") from None
+    input_integrity = importlib.util.module_from_spec(ii_spec)
+    ii_spec.loader.exec_module(input_integrity)
+    write_sha256_sidecar = input_integrity.write_sha256_sidecar
+
 # Local crypto helpers (HKDF)
 try:
     # Prefer importing from gateway utils to avoid duplication
@@ -236,6 +249,7 @@ def save_device_table(path: Path | None, tbl: dict[str, dict[str, Any]]) -> None
         return
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(tbl, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    write_sha256_sidecar(path)
 
 
 def load_provisioning_input(path: Path | None) -> dict[str, Any]:
@@ -261,6 +275,7 @@ def save_provisioning_input(path: Path | None, bundle: dict[str, Any]) -> None:
     path.write_text(
         json.dumps(bundle, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
+    write_sha256_sidecar(path)
 
 
 def ensure_device_entry(
