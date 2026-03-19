@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import json
-from hashlib import sha256
 from pathlib import Path
+
+from trackone_core.ledger import sha256_hex
 
 
 def test_artifact_manifest_emits_schema_valid_artifact(
@@ -38,7 +39,7 @@ def test_artifact_manifest_emits_schema_valid_artifact(
     day_artifact.write_bytes(b"day-bytes")
     day_json.write_text("{}", encoding="utf-8")
     day_sha.write_text(
-        f"{sha256(b'day-bytes').hexdigest()}  2025-10-07.cbor\n", encoding="utf-8"
+        f"{sha256_hex(b'day-bytes')}  2025-10-07.cbor\n", encoding="utf-8"
     )
     day_ots.write_bytes(b"OTS_PROOF_PLACEHOLDER")
     block.write_text(
@@ -107,6 +108,7 @@ def test_artifact_manifest_emits_schema_valid_artifact(
     )
 
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest_path.name == "2025-10-07.verify.json"
     assert manifest["version"] == 1
     assert manifest["artifacts"]["provisioning_input"]["path"] == (
         "provisioning/authoritative-input.json"
