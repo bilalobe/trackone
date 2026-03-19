@@ -51,7 +51,18 @@ def main(argv: list[str] | None = None) -> int:
                 "--json",
             ]
         )
-    summary = json.loads(buf.getvalue())
+    raw_output = buf.getvalue()
+    try:
+        summary = json.loads(raw_output)
+    except json.JSONDecodeError:
+        stripped_output = raw_output.strip()
+        parts = [
+            "verify_cli did not produce valid JSON on stdout",
+            f"exit code: {rc}",
+        ]
+        if stripped_output:
+            parts += ["stdout:", stripped_output]
+        raise SystemExit("\n".join(parts)) from None
     manifest_summary = summary.get("manifest", {})
     if manifest_summary.get("status") != "present":
         raise SystemExit("verify_cli did not report a present verification manifest")

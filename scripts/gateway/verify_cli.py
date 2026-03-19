@@ -969,6 +969,12 @@ def main(argv: list[str] | None = None) -> int:
             )
         except _MANIFEST_EXCEPTIONS as exc:
             print(f"ERROR: verification manifest validation failed: {exc}")
+            summary["checks"]["meta_valid"] = False
+            summary["manifest"] = {
+                "status": "invalid",
+                "source": manifest_path.name,
+                "schema": manifest_schema,
+            }
             _emit(summary, args.json)
             return EXIT_META_INVALID
         summary["manifest"] = {

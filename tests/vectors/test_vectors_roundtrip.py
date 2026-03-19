@@ -23,7 +23,29 @@ def _load_json(path: Path) -> dict:
     return data
 
 
+def _corpus_is_complete(manifest_path: Path) -> bool:
+    """Return True only if the manifest and every file it references are present."""
+    if not manifest_path.exists():
+        return False
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return False
+    base = manifest_path.parent
+    for fact in manifest.get("facts", []):
+        if not (base / fact["json_path"]).exists():
+            return False
+        if not (base / fact["cbor_path"]).exists():
+            return False
+    for key in ("day_record_json_path", "day_record_cbor_path"):
+        if key in manifest and not (base / manifest[key]).exists():
+            return False
+    return True
+
+
 def test_python_reproduces_published_commitment_vectors() -> None:
+    if not _corpus_is_complete(VECTOR_DIR / "manifest.json"):
+        pytest.skip("vector corpus is incomplete – run gen_commitment_vectors.py to populate")
     manifest = _load_json(VECTOR_DIR / "manifest.json")
     leaves: list[bytes] = []
 
@@ -47,6 +69,8 @@ def test_python_reproduces_published_commitment_vectors() -> None:
 
 
 def test_native_extension_reproduces_published_commitment_vectors() -> None:
+    if not _corpus_is_complete(VECTOR_DIR / "manifest.json"):
+        pytest.skip("vector corpus is incomplete – run gen_commitment_vectors.py to populate")
     trackone_core = pytest.importorskip("trackone_core")
     native = getattr(trackone_core, "_native", None)
     if native is None:
