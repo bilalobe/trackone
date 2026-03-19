@@ -1487,10 +1487,6 @@ ci = [
     { name = "tox" },
     { name = "tox-uv" },
 ]
-dev = [
-    { name = "time-machine" },
-    { name = "uv" },
-]
 lint = [
     { name = "black" },
     { name = "mdformat" },
@@ -1519,6 +1515,12 @@ type = [
     { name = "types-requests" },
 ]
 
+[package.dev-dependencies]
+dev = [
+    { name = "time-machine" },
+    { name = "uv" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "bandit", marker = "extra == 'security'", specifier = ">=1.9.2" },
@@ -1541,14 +1543,18 @@ requires-dist = [
     { name = "requests", marker = "extra == 'anchoring'", specifier = ">=2.32.3" },
     { name = "requests", marker = "extra == 'type'", specifier = ">=2.32.3" },
     { name = "ruff", marker = "extra == 'lint'", specifier = ">=0.14.13" },
-    { name = "time-machine", marker = "extra == 'dev'", specifier = ">=3.1.0" },
     { name = "tox", marker = "extra == 'ci'", specifier = ">=4.0" },
     { name = "tox-uv", marker = "extra == 'ci'", specifier = ">=1.16.0" },
     { name = "types-jsonschema", marker = "extra == 'type'" },
     { name = "types-requests", marker = "extra == 'type'" },
-    { name = "uv", marker = "extra == 'dev'", specifier = "==0.10.9" },
 ]
-provides-extras = ["test", "lint", "type", "security", "anchoring", "dev", "ci"]
+provides-extras = ["test", "lint", "type", "security", "anchoring", "ci"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "time-machine", specifier = ">=3.1.0" },
+    { name = "uv", specifier = "==0.10.9" },
+]
 
 [[package]]
 name = "types-jsonschema"
