@@ -13,7 +13,7 @@ COUNT ?= 10
 OUT_DIR ?= out/site_demo
 
 # Targets
-.PHONY: help install run test test-verbose test-cov clean tag lint format lint-fix dev-setup gen-vectors sec-scan bench build-native e2e pipeline-quick sha-verify ots-verify-strict test-one export-requirements
+.PHONY: help install run test test-verbose test-cov clean tag lint format lint-fix dev-setup gen-vectors gen-commitment-vectors vectors sec-scan bench build-native e2e pipeline-quick sha-verify ots-verify-strict test-one export-requirements
 
 help: ## Show this help message
 	@echo "Track1 Make Targets:"
@@ -39,6 +39,13 @@ gen-vectors: ## Generate deterministic AEAD test vectors
 	@echo "[make] Generating deterministic AEAD vectors..."
 	python scripts/dev/gen_aead_vector.py
 	@echo "[make] ✓ Vectors generated"
+
+gen-commitment-vectors: ## Generate canonical CBOR commitment vectors
+	@echo "[make] Generating canonical commitment vectors..."
+	python scripts/dev/gen_commitment_vectors.py
+	@echo "[make] ✓ Commitment vectors generated"
+
+vectors: gen-vectors gen-commitment-vectors ## Regenerate all published vectors
 
 test: ## Run all tests with pytest
 	@echo "[make] Running tests..."
