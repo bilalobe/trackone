@@ -16,6 +16,7 @@ from pathlib import Path
 import pytest
 
 from scripts.gateway.canonical_cbor import canonicalize_obj_to_cbor
+from scripts.gateway.input_integrity import write_sha256_sidecar
 
 
 @pytest.fixture
@@ -185,6 +186,7 @@ def test_pipeline_rejects_duplicates_on_disk(
         },
     }
     dev_table_path.write_text(json.dumps(device_table) + "\n", encoding="utf-8")
+    write_sha256_sidecar(dev_table_path)
 
     facts_dir = tmp_path / "facts"
     frames_file = tmp_path / "frames.ndjson"

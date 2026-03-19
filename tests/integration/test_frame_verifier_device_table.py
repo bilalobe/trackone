@@ -6,6 +6,8 @@ import json
 
 import pytest
 
+from scripts.gateway.input_integrity import write_sha256_sidecar
+
 
 def test_load_device_table_version_mismatch(
     tmp_path, frame_verifier, write_device_table
@@ -67,11 +69,20 @@ def test_load_device_table_tolerates_legacy_deployment_and_provisioning(
         ),
         encoding="utf-8",
     )
+    write_sha256_sidecar(dt_path)
 
     loaded = frame_verifier.load_device_table(dt_path)
     assert loaded["3"]["highest_fc_seen"] == 10
     assert loaded["3"]["deployment"]["deployment_sensor_key"] == "legacy"
     assert loaded["3"]["provisioning"]["site_id"] == "an-001"
+
+
+def test_load_device_table_requires_sha256_sidecar(tmp_path, frame_verifier) -> None:
+    dt_path = tmp_path / "device_table.json"
+    dt_path.write_text(json.dumps({"_meta": {"version": "1.0"}}), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="SHA-256 sidecar missing"):
+        frame_verifier.load_device_table(dt_path)
 
 
 def test_parse_frame_error_cases(frame_verifier):
@@ -112,6 +123,7 @@ def test_aead_decrypt_success_and_failures(tmp_path, frame_verifier, pod_sim):
     # Prepare a device table path for pod_sim to populate
     dt_path = tmp_path / "device_table.json"
     dt_path.write_text("{}", encoding="utf-8")
+    write_sha256_sidecar(dt_path)
 
     # Emit a framed record using pod_sim.emit_framed which also persists device table
     frame = pod_sim.emit_framed(
@@ -155,7 +167,10 @@ def test_prev_day_root_or_zero(tmp_path, merkle_batcher):
     # Create previous day json with day_root
     day_dir.mkdir(parents=True, exist_ok=True)
     prev = day_dir / "2025-10-06.json"
-    prev.write_text(json.dumps({"day_root": "aa" * 32}), encoding="utf-8")
+    prev.write_text(
+        json.dumps({"site_id": "an-001", "day_root": "aa" * 32}),
+        encoding="utf-8",
+    )
 
     val2 = merkle_batcher.prev_day_root_or_zero(out_dir, "an-001", "2025-10-07")
     assert val2 == "aa" * 32
@@ -166,3 +181,21 @@ def test_prev_day_root_or_zero(tmp_path, merkle_batcher):
     bad.write_text("not-json", encoding="utf-8")
     val3 = merkle_batcher.prev_day_root_or_zero(out_dir, "an-001", "2025-10-08")
     assert val3 == "00" * 32
+
+
+def test_prev_day_root_or_zero_ignores_other_sites(tmp_path, merkle_batcher):
+    out_dir = tmp_path / "out"
+    day_dir = out_dir / "day"
+    day_dir.mkdir(parents=True, exist_ok=True)
+
+    (day_dir / "2025-10-06.json").write_text(
+        json.dumps({"site_id": "an-001", "day_root": "aa" * 32}),
+        encoding="utf-8",
+    )
+    (day_dir / "2025-10-07.json").write_text(
+        json.dumps({"site_id": "bn-002", "day_root": "bb" * 32}),
+        encoding="utf-8",
+    )
+
+    val = merkle_batcher.prev_day_root_or_zero(out_dir, "an-001", "2025-10-08")
+    assert val == "aa" * 32
