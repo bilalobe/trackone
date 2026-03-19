@@ -34,8 +34,8 @@ fn sha256_hex(input: &Bound<'_, PyBytes>) -> PyResult<String> {
 }
 
 #[pyfunction]
-fn normalize_hex64(value: String) -> PyResult<String> {
-    trackone_ledger::normalize_hex64(&value).map_err(to_py_err)
+fn normalize_hex64(value: &str) -> PyResult<String> {
+    trackone_ledger::normalize_hex64(value).map_err(to_py_err)
 }
 
 /// Build a v1 block header and day record, returning canonical JSON bytes.

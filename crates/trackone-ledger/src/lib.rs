@@ -11,6 +11,7 @@ pub mod merkle;
 pub mod types;
 
 /// Ledger-level errors.
+#[non_exhaustive]
 #[derive(Debug)]
 pub enum Error {
     Json(serde_json::Error),
