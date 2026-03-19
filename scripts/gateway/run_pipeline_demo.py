@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 import shlex
@@ -14,6 +13,8 @@ import sys
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
+
+from trackone_core.ledger import sha256_hex
 
 try:  # pragma: no cover - optional; may not be installed when run as a script
     from trackone_core.release import DEFAULT_COMMITMENT_PROFILE_ID
@@ -39,12 +40,16 @@ except ImportError:  # pragma: no cover - fallback when run as a script
 try:  # Support both package imports and direct script execution.
     from .schema_validation import load_schema, validate_instance
     from .tsa_stamp import TsaStampError, tsa_stamp_day_blob
+    from .verification_gate import local_verification_failure
+    from .verification_manifest import verify_manifest_path
 except ImportError:  # pragma: no cover - fallback when run as a script
     from schema_validation import load_schema, validate_instance  # type: ignore
     from tsa_stamp import (  # type: ignore
         TsaStampError,
         tsa_stamp_day_blob,
     )
+    from verification_gate import local_verification_failure  # type: ignore
+    from verification_manifest import verify_manifest_path  # type: ignore
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_OUT_DIR = "out/site_demo"
@@ -86,7 +91,7 @@ def _artifact_ref(path: Path, *, root: Path) -> dict[str, str]:
         ) from None
     return {
         "path": rel_path,
-        "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+        "sha256": sha256_hex(path.read_bytes()),
     }
 
 
@@ -225,12 +230,13 @@ def artifact_manifest(
         if isinstance(checks_skipped, list):
             verification_bundle["checks_skipped"] = checks_skipped
 
-    schema = load_schema("pipeline_manifest")
-    if schema is not None:
-        validate_instance(manifest, schema)
-    manifest_path = day_artifact.parent / f"{date}.pipeline-manifest.json"
-    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
-    return manifest_path
+    verify_schema = load_schema("verify_manifest")
+    if verify_schema is not None:
+        validate_instance(manifest, verify_schema)
+    verify_path = verify_manifest_path(day_artifact.parent, date)
+    payload = json.dumps(manifest, indent=2) + "\n"
+    verify_path.write_text(payload, encoding="utf-8")
+    return verify_path
 
 
 def parse_args() -> argparse.Namespace:
@@ -273,19 +279,9 @@ def parse_args() -> argparse.Namespace:
         help="Retain existing artifacts instead of cleaning the out directory.",
     )
     parser.add_argument(
-        "--skip-verify-cli",
-        action="store_true",
-        help="Skip verify_cli. Useful when only artifacts are required.",
-    )
-    parser.add_argument(
         "--skip-validate",
         action="store_true",
         help="Skip schema validation in merkle_batcher.",
-    )
-    parser.add_argument(
-        "--fail-on-verify",
-        action="store_true",
-        help="Treat verify_cli failures as fatal (default: warn only).",
     )
     parser.add_argument(
         "--skip-ots",
@@ -752,36 +748,6 @@ def main() -> None:
                     f"[pipeline] WARN: peer attestation failed ({exc})", file=sys.stderr
                 )
 
-    verifier_summary: dict[str, Any] | None = None
-    verify_rc = 0
-    if not args.skip_verify_cli:
-        verify_rc, verifier_summary = _run_verify_cli(
-            gateway_dir=gateway_dir,
-            root=out_dir,
-            facts_dir=facts_dir,
-            cfg=cfg,
-            skip_ots=args.skip_ots,
-            skip_tsa=args.skip_tsa,
-            skip_peers=args.skip_peers,
-            disclosure_class=args.disclosure_class,
-            commitment_profile_id=args.commitment_profile_id,
-        )
-        if verify_rc != 0:
-            if args.fail_on_verify:
-                raise RuntimeError(f"verify_cli failed with exit code {verify_rc}")
-            print(
-                f"[pipeline] WARN: verify_cli exited with code {verify_rc}",
-                file=sys.stderr,
-            )
-
-        if verifier_summary is not None:
-            channels_val = verifier_summary.get("channels")
-            if isinstance(channels_val, dict):
-                for name in ("ots", "tsa", "peers"):
-                    item = channels_val.get(name)
-                    if isinstance(item, dict):
-                        channels[name] = dict(item)
-
     expected_artifacts = [
         day_cbor,
         day_cbor.with_suffix(".json"),
@@ -808,7 +774,71 @@ def main() -> None:
         "channels": channels,
         "overall": overall,
     }
+    verifier_summary: dict[str, Any] | None = None
 
+    manifest_path = artifact_manifest(
+        args.date,
+        args.site,
+        args.device_id,
+        args.frame_count,
+        frames_file,
+        facts_dir,
+        day_cbor,
+        out_dir,
+        anchoring=anchoring_summary,
+        tsa_artifacts=tsa_artifacts,
+        peer_attest=peer_attest_path,
+        verifier_summary=verifier_summary,
+        sensorthings_projection=sensorthings_projection,
+        provisioning_input=provisioning_input,
+        provisioning_records=provisioning_records,
+        disclosure_class=args.disclosure_class,
+        commitment_profile_id=args.commitment_profile_id,
+    )
+
+    verify_rc, verifier_summary = _run_verify_cli(
+        gateway_dir=gateway_dir,
+        root=out_dir,
+        facts_dir=facts_dir,
+        cfg=cfg,
+        skip_ots=args.skip_ots,
+        skip_tsa=args.skip_tsa,
+        skip_peers=args.skip_peers,
+        disclosure_class=args.disclosure_class,
+        commitment_profile_id=args.commitment_profile_id,
+    )
+    if verify_rc != 0:
+        local_failure = local_verification_failure(verifier_summary)
+        if local_failure is not None:
+            raise RuntimeError(
+                f"verify_cli failed local verification gate: {local_failure}"
+            )
+        print(
+            f"[pipeline] WARN: verify_cli exited with code {verify_rc} "
+            "(local integrity checks passed; anchoring remains policy-driven)",
+            file=sys.stderr,
+        )
+    if verifier_summary is None:
+        raise RuntimeError("verify_cli did not emit a machine-readable summary")
+    local_failure = local_verification_failure(verifier_summary)
+    if local_failure is not None:
+        raise RuntimeError(
+            f"verify_cli failed local verification gate: {local_failure}"
+        )
+
+    channels_val = verifier_summary.get("channels")
+    if isinstance(channels_val, dict):
+        for name in ("ots", "tsa", "peers"):
+            item = channels_val.get(name)
+            if isinstance(item, dict):
+                channels[name] = dict(item)
+
+    overall = compute_overall_status(policy_mode=cfg.policy.mode, channels=channels)
+    anchoring_summary = {
+        "policy": {"mode": cfg.policy.mode},
+        "channels": channels,
+        "overall": overall,
+    }
     manifest_path = artifact_manifest(
         args.date,
         args.site,
