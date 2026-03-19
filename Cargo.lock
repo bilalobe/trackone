@@ -1185,11 +1185,11 @@ dependencies = [
 
 [[package]]
 name = "trackone-constants"
-version = "0.1.0-alpha.10"
+version = "0.1.0-alpha.11"
 
 [[package]]
 name = "trackone-core"
-version = "0.1.0-alpha.10"
+version = "0.1.0-alpha.11"
 dependencies = [
  "ciborium",
  "heapless",
@@ -1206,7 +1206,7 @@ dependencies = [
 
 [[package]]
 name = "trackone-gateway"
-version = "0.1.0-alpha.10"
+version = "0.1.0-alpha.11"
 dependencies = [
  "pyo3",
  "serde_json",
@@ -1218,7 +1218,7 @@ dependencies = [
 
 [[package]]
 name = "trackone-ledger"
-version = "0.1.0-alpha.10"
+version = "0.1.0-alpha.11"
 dependencies = [
  "cddl",
  "serde",
@@ -1228,7 +1228,7 @@ dependencies = [
 
 [[package]]
 name = "trackone-pod-fw"
-version = "0.1.0-alpha.10"
+version = "0.1.0-alpha.11"
 dependencies = [
  "trackone-core",
 ]

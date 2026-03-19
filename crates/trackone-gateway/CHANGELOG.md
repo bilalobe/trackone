@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-alpha.11] - 2026-03-19
+
+### Added
+- Exposed native `sha256_hex` and `normalize_hex64` helpers through the `trackone_core.ledger` PyO3 surface so the alpha.11 manifest/integrity paths can share one digest and `hex64` contract.
+
 ## [0.1.0-alpha.10] - 2026-03-13
 
 ### Added

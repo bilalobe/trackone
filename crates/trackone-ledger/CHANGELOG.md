@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-alpha.11] - 2026-03-19
+
+### Added
+- Native `sha256_hex` and `normalize_hex64` helpers as the shared lowercase SHA-256 / `hex64` contract for alpha.11 manifest, integrity, and vector paths.
+
 ## [0.1.0-alpha.10] - 2026-03-13
 
 ### Notes

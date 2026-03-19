@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-alpha.11] - 2026-03-19
+
+### Changed
+- The `size_probe` example now supports both `std` host builds and `no_std` firmware-style entrypoints without colliding with `std`'s panic handler during local and CI test builds.
+
 ## [0.1.0-alpha.10] - 2026-03-13
 
 ### Notes

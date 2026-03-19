@@ -240,21 +240,18 @@ Machine-readable contract split:
 
 ## Current release line
 
-The latest tagged release is `0.1.0-alpha.10`.
-The current `main` branch is ahead of that tag and already carries the next hardening/conformance work recorded under `Unreleased` in [`CHANGELOG.md`](CHANGELOG.md).
+The latest tagged release is `0.1.0-alpha.11`.
+The current `main` branch is the start of the next cycle; release-detail for `alpha.11` lives in [`CHANGELOG.md`](CHANGELOG.md), and `Unreleased` now tracks follow-on work after that cut.
 
-- `alpha.10` established the current public spine:
+- `alpha.11` hardens the current public spine:
 
   - verifier-facing `day/<date>.verify.json`
+  - published canonical CBOR commitment vectors and Rust/Python parity gates
+  - native `sha256_hex` / `hex64` helpers on the Python/Rust boundary
+  - manifest-backed local verification gates before export/publication
   - separate authoritative provisioning input under `provisioning/authoritative-input.json`
   - schema-backed read-only SensorThings projection artifacts
   - shared Rust/Python release constants for `commitment_profile_id` and disclosure classes
-
-- `main` currently adds:
-
-  - published canonical CBOR commitment vectors and parity gates
-  - native `sha256_hex` / `hex64` helpers on the Python/Rust boundary
-  - manifest-backed local verification gates before export/publication
   - SCITT statement payload contracts and examples
   - sealed trust-root boundary documentation in [`ADR-046`](adr/ADR-046-sealed-trust-root-boundary-and-deferring-trackone-seal.md)
 

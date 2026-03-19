@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-alpha.11] - 2026-03-19
+
+### Added
+- `toolset/unified/schemas/verify_manifest.schema.json` as the verifier-facing day-bundle contract for `day/<date>.verify.json`.
+- `scripts/gateway/check_verify_manifest.py` as a fail-fast assertion surface for the demo/CI path.
+- `scripts/dev/gen_commitment_vectors.py` plus the published corpus under `toolset/vectors/trackone-canonical-cbor-v1/`.
+- Corpus-backed Python and Rust parity tests for the published canonical CBOR commitment vectors.
+- `ADR-046` to record the sealed trust-root boundary, the current primitive-vs-orchestration split, and the explicit decision to defer a dedicated `trackone-seal` crate.
+- TrackOne SCITT statement payload contracts and examples:
+  - `toolset/unified/schemas/scitt_verify_manifest_statement.schema.json`
+  - `toolset/unified/schemas/scitt_evidence_bundle_statement.schema.json`
+  - `toolset/unified/cddl/scitt-statements-v1.cddl`
+  - `toolset/unified/examples/scitt_verify_manifest_statement.json`
+  - `toolset/unified/examples/scitt_evidence_bundle_statement.json`
+  - `docs/scitt-trackone-statement-profile.md`
+
+### Changed
+
+- The alpha.11 verification-manifest / input-integrity / export / vector paths now use native `trackone_core.ledger` helpers for SHA-256 hex generation and `hex64` normalization, instead of scattered Python regex and `.hexdigest()` assumptions.
+- The demo pipeline now treats manifest-backed local verification as mandatory: `run_pipeline_demo.py` fails on local integrity-gate failures, while `warn` mode still tolerates incomplete external anchoring channels.
+- `frame_verifier.py` now fails closed on fact-schema violations instead of warning and writing the invalid fact anyway.
+- `frame_verifier.py` and `provisioning_records.py` now require detached SHA-256 sidecars for `device_table.json` and `provisioning/authoritative-input.json`, and `pod_sim.py` refreshes those sidecars whenever it writes the trust-root inputs.
+- `verify_cli.py` now consumes the verifier-facing manifest, reports manifest presence or absence explicitly in JSON output, and exposes `verification_manifest_validation` plus `batch_metadata_validation` as distinct executed/skipped checks.
+- `tox -e pipeline` now fails if the verifier-facing manifest is missing, schema-invalid, or not consumed by `verify_cli`.
+- Evidence export now preserves the verifier-facing manifest name, reruns a fresh `verify_cli` pass before copying any artifacts, and refuses to publish bundles whose current pipeline state no longer passes the local verification gate.
+- Preferred-width CBOR float behavior is now explicitly gated in Python and Rust, including non-finite float rejection.
+- Day chaining lookup in `merkle_batcher.py` now honors the requested `site_id` instead of linking to the most recent prior day record globally, and the integration tests now cover cross-site ignore behavior plus same-site fixture requirements.
+
 ## [0.1.0-alpha.10] - 2026-03-13
 
 ### Added
