@@ -35,13 +35,34 @@ fn vector_root() -> PathBuf {
         .join("../../toolset/vectors/trackone-canonical-cbor-v1")
 }
 
+/// Returns `true` when the canonical-CBOR vector corpus is present on disk.
+fn vector_corpus_present() -> bool {
+    vector_root().join("manifest.json").exists()
+}
+
 fn hex_sha256(bytes: &[u8]) -> String {
     let digest = Sha256::digest(bytes);
     trackone_ledger::hex_lower(digest.as_ref())
 }
 
+/// Verify that the Rust implementation reproduces the published canonical-CBOR
+/// commitment vectors exactly.
+///
+/// The vector corpus lives under `toolset/vectors/trackone-canonical-cbor-v1/`
+/// in the monorepo root.  That directory is **not** packaged with the published
+/// crate, so this test is marked `#[ignore]` to prevent failures in downstream
+/// environments.  Run it explicitly from the workspace root:
+///
+/// ```text
+/// cargo test -p trackone-ledger -- --ignored rust_reproduces_published_commitment_vectors
+/// ```
 #[test]
+#[ignore = "requires the monorepo's toolset/vectors corpus – run with --ignored"]
 fn rust_reproduces_published_commitment_vectors() {
+    if !vector_corpus_present() {
+        eprintln!("skipping: vector corpus not present at {:?}", vector_root());
+        return;
+    }
     let root = vector_root();
     let manifest: Manifest =
         serde_json::from_slice(&fs::read(root.join("manifest.json")).unwrap()).unwrap();
