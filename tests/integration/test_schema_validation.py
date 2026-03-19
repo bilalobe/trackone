@@ -100,3 +100,35 @@ class TestSchemaValidation:
         validate_against_schema(
             attestation, schemas["peer_attest"], "Valid peer attestation"
         )
+
+    def test_scitt_statement_examples_match_schema(self):
+        schemas = load_all_schemas()
+        if (
+            "scitt_verify_manifest_statement" not in schemas
+            or "scitt_evidence_bundle_statement" not in schemas
+        ):
+            pytest.skip("SCITT statement schemas not available")
+
+        repo_root = Path(__file__).resolve().parents[2]
+        examples_dir = repo_root / "toolset" / "unified" / "examples"
+        verify_example = json.loads(
+            (examples_dir / "scitt_verify_manifest_statement.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        bundle_example = json.loads(
+            (examples_dir / "scitt_evidence_bundle_statement.json").read_text(
+                encoding="utf-8"
+            )
+        )
+
+        validate_against_schema(
+            verify_example,
+            schemas["scitt_verify_manifest_statement"],
+            "SCITT verify-manifest statement example",
+        )
+        validate_against_schema(
+            bundle_example,
+            schemas["scitt_evidence_bundle_statement"],
+            "SCITT evidence-bundle statement example",
+        )

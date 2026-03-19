@@ -4,6 +4,8 @@ import json
 import subprocess
 from pathlib import Path
 
+import pytest
+
 
 def _write_projection(path: Path, *, site_id: str, day: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -148,7 +150,7 @@ def test_export_release_supports_detached_bundle_verification(
     )
 
     exported_root = evidence_repo / "site" / site / "day" / day
-    exported_manifest = exported_root / "day" / f"{day}.pipeline-manifest.json"
+    exported_manifest = exported_root / "day" / f"{day}.verify.json"
     exported_meta = exported_root / "day" / f"{day}.ots.meta.json"
     assert exported_root.exists()
     assert exported_meta.exists()
@@ -270,10 +272,107 @@ def test_export_release_can_include_frames(
     )
 
     exported_root = evidence_repo / "site" / site / "day" / day
-    exported_manifest = exported_root / "day" / f"{day}.pipeline-manifest.json"
+    exported_manifest = exported_root / "day" / f"{day}.verify.json"
     assert (exported_root / "frames.ndjson").exists()
     manifest = json.loads(exported_manifest.read_text(encoding="utf-8"))
     assert manifest["frames_file"] == "frames.ndjson"
+
+
+def test_export_release_refuses_pipeline_state_that_fails_fresh_verification(
+    tmp_path: Path,
+    merkle_batcher,
+    write_sample_facts_fixture,
+    sample_facts,
+    write_ots_placeholder,
+    load_module,
+) -> None:
+    day = "2025-10-07"
+    site = "test-site"
+    out_dir = tmp_path / "out"
+    facts_dir = out_dir / "facts"
+    provisioning_dir = out_dir / "provisioning"
+    projection_dir = out_dir / "sensorthings"
+    evidence_repo = tmp_path / "trackone-evidence"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    write_sample_facts_fixture(facts_dir, sample_facts)
+    assert (
+        merkle_batcher.main(
+            [
+                "--facts",
+                str(facts_dir),
+                "--out",
+                str(out_dir),
+                "--site",
+                site,
+                "--date",
+                day,
+            ]
+        )
+        == 0
+    )
+
+    frames_file = out_dir / "frames.ndjson"
+    frames_file.write_text("{}\n", encoding="utf-8")
+    write_ots_placeholder(out_dir, day)
+
+    provisioning_input = provisioning_dir / "authoritative-input.json"
+    provisioning_records = provisioning_dir / "records.json"
+    _write_provisioning(provisioning_input, site_id=site)
+    _write_provisioning(provisioning_records, site_id=site)
+    projection = projection_dir / f"{day}.observations.json"
+    _write_projection(projection, site_id=site, day=day)
+
+    runner = load_module(
+        "run_pipeline_demo_evidence_export_refusal_under_test",
+        Path("scripts/gateway/run_pipeline_demo.py"),
+    )
+    day_artifact = out_dir / "day" / f"{day}.cbor"
+    runner.artifact_manifest(
+        out_dir=out_dir,
+        date=day,
+        site=site,
+        device_id="pod-003",
+        frame_count=len(sample_facts),
+        frames_file=frames_file,
+        facts_dir=facts_dir,
+        day_artifact=day_artifact,
+        anchoring={"ots": {"status": "verified", "reason": "placeholder"}},
+        provisioning_input=provisioning_input,
+        provisioning_records=provisioning_records,
+        sensorthings_projection=projection,
+        verifier_summary={
+            "checks_executed": ["day_artifact_validation", "ots_verification"],
+            "checks_skipped": [],
+            "artifacts": {
+                "block": str(out_dir / "blocks" / f"{day}-00.block.json"),
+                "day_cbor": str(day_artifact),
+            },
+        },
+    )
+
+    block_path = out_dir / "blocks" / f"{day}-00.block.json"
+    block = json.loads(block_path.read_text(encoding="utf-8"))
+    block["merkle_root"] = "f" * 64
+    block_path.write_text(json.dumps(block), encoding="utf-8")
+
+    exporter = load_module(
+        "evidence_export_release_refusal_under_test",
+        Path("scripts/evidence/export_release.py"),
+    )
+    with pytest.raises(ValueError, match="fresh verification failed"):
+        exporter.main(
+            [
+                "--pipeline-dir",
+                str(out_dir),
+                "--evidence-repo",
+                str(evidence_repo),
+                "--site",
+                site,
+                "--day",
+                day,
+            ]
+        )
 
 
 def test_export_release_tags_and_bundles_current_export_without_git_commit_flag(
