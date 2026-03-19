@@ -9,6 +9,7 @@ from typing import Any
 import pytest
 
 from scripts.gateway import frame_verifier as fv
+from scripts.gateway.input_integrity import write_sha256_sidecar
 
 
 def _mk_device_table(tmp_path: Path) -> Path:
@@ -26,6 +27,7 @@ def _mk_device_table(tmp_path: Path) -> Path:
     }
     p = tmp_path / "device_table.json"
     p.write_text(json.dumps(tbl, indent=2), encoding="utf-8")
+    write_sha256_sidecar(p)
     return p
 
 
