@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import shlex
@@ -89,9 +90,12 @@ def _artifact_ref(path: Path, *, root: Path) -> dict[str, str]:
             f"artifact path {path} is outside the pipeline root {root}; "
             "use --tsa-out / --peer-dir paths that live under --out-dir"
         ) from None
+    digest = sha256_hex(path.read_bytes())
+    if not isinstance(digest, str):
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
     return {
         "path": rel_path,
-        "sha256": sha256_hex(path.read_bytes()),
+        "sha256": digest,
     }
 
 
