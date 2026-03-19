@@ -38,3 +38,23 @@ def test_merkle_smoke() -> None:
 
     assert isinstance(got, str)
     assert len(got) == 64
+
+
+def test_ledger_digest_and_hex_helpers_smoke() -> None:
+    try:
+        import trackone_core
+    except ImportError:
+        if _require_native():
+            raise
+        pytest.skip("trackone_core not importable")
+
+    try:
+        digest = trackone_core.ledger.sha256_hex(b"abc")
+        normalized = trackone_core.ledger.normalize_hex64("A" * 64)
+    except ImportError:
+        if _require_native():
+            raise
+        pytest.skip("native extension not available")
+
+    assert digest == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+    assert normalized == "a" * 64
