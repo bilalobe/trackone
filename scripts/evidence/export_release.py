@@ -240,9 +240,11 @@ def _require_fresh_verification(
 
     stdout = io.StringIO()
     stderr = io.StringIO()
-    with patch.dict(os.environ, env_overrides, clear=False), contextlib.redirect_stdout(
-        stdout
-    ), contextlib.redirect_stderr(stderr):
+    with (
+        patch.dict(os.environ, env_overrides, clear=False),
+        contextlib.redirect_stdout(stdout),
+        contextlib.redirect_stderr(stderr),
+    ):
         rc = verify_cli_module.main(verify_args)
     err_text = stderr.getvalue().strip()
     if err_text:
