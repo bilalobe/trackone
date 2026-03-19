@@ -12,8 +12,10 @@ from pathlib import Path
 from typing import Any
 
 try:  # Support both package imports and direct script execution.
+    from .input_integrity import require_sha256_sidecar
     from .schema_validation import load_schema, validate_instance
 except ImportError:  # pragma: no cover - fallback when run as a script
+    from input_integrity import require_sha256_sidecar  # type: ignore
     from schema_validation import load_schema, validate_instance  # type: ignore
 
 jsonschema: Any | None
@@ -53,6 +55,10 @@ def load_authoritative_input(path: Path) -> dict[str, Any]:
         raise ProvisioningRecordsError(
             f"authoritative provisioning input not found: {path}"
         )
+    try:
+        require_sha256_sidecar(path, label="authoritative provisioning input")
+    except ValueError as exc:
+        raise ProvisioningRecordsError(str(exc)) from exc
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError, UnicodeDecodeError) as exc:
