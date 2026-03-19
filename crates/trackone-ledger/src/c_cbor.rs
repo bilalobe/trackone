@@ -272,6 +272,19 @@ mod tests {
     }
 
     #[test]
+    fn cbor_rejects_non_finite_float() {
+        let mut buf = Vec::new();
+        assert!(matches!(
+            cbor_float(&mut buf, f64::NAN),
+            Err(Error::NonFiniteFloat)
+        ));
+        assert!(matches!(
+            cbor_float(&mut buf, f64::INFINITY),
+            Err(Error::NonFiniteFloat)
+        ));
+    }
+
+    #[test]
     fn cbor_text_map_keys_are_sorted_by_len_then_bytes() {
         let v = json!({
             "aa": 1,
