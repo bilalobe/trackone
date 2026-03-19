@@ -1,0 +1,69 @@
+; TrackOne SCITT statement payloads and header profile notes.
+; This file models the JSON payload carried inside a SCITT Signed Statement.
+; The SCITT envelope itself is COSE_Sign1. Protected headers are expected to
+; carry alg, content type, and CWT claims for iss/sub. Receipts are attached by
+; the transparency service in unprotected header label 394.
+
+trackone-verify-manifest-statement = {
+  "statement_kind" => "trackone.verify-manifest.v1",
+  "subject" => tstr,
+  "site" => tstr,
+  "day" => tstr,
+  "issuer" => tstr,
+  "verified_at" => tstr,
+  "artifacts" => {
+    "verify_manifest" => artifact-ref,
+    "day_cbor" => artifact-ref,
+    "block" => artifact-ref
+  },
+  "trackone" => {
+    "commitment_profile_id" => tstr,
+    "disclosure_class" => "A" / "B" / "C",
+    "day_root" => hex64,
+    "local_verification_gate" => {
+      "manifest_validated" => bool,
+      "batch_metadata_validated" => bool,
+      "artifact_valid" => bool,
+      "meta_valid" => bool,
+      "fact_root_match" => bool
+    },
+    "channels" => {
+      "ots" => channel-status,
+      "tsa" => channel-status,
+      "peers" => channel-status
+    }
+  }
+}
+
+trackone-evidence-bundle-statement = {
+  "statement_kind" => "trackone.evidence-bundle.v1",
+  "subject" => tstr,
+  "site" => tstr,
+  "day" => tstr,
+  "issuer" => tstr,
+  "published_at" => tstr,
+  "bundle" => {
+    "media_type" => tstr,
+    "path" => tstr,
+    "sha256" => hex64
+  },
+  "evidence_root" => {
+    "verify_manifest_sha256" => hex64,
+    "day_cbor_sha256" => hex64,
+    "day_root" => hex64
+  },
+  "trackone" => {
+    "commitment_profile_id" => tstr,
+    "disclosure_class" => "A" / "B" / "C",
+    "local_verification_gate" => "passed-before-export"
+  }
+}
+
+artifact-ref = {
+  "path" => tstr,
+  "sha256" => hex64
+}
+
+channel-status = "verified" / "pending" / "missing" / "failed" / "skipped"
+
+hex64 = text .regexp "[0-9a-f]{64}"
