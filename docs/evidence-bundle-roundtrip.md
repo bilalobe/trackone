@@ -148,7 +148,7 @@ Verifier JSON summary:
     "block": ".../blocks/2025-10-07-00.block.json",
     "day_cbor": ".../day/2025-10-07.cbor",
     "day_ots": ".../day/2025-10-07.cbor.ots",
-    "pipeline_manifest": ".../day/2025-10-07.pipeline-manifest.json"
+    "verification_manifest": ".../day/2025-10-07.verify.json"
   },
   "channels": {
     "ots": {
@@ -174,7 +174,8 @@ Verifier JSON summary:
   },
   "checks_executed": [
     "day_artifact_validation",
-    "pipeline_manifest_validation",
+    "verification_manifest_validation",
+    "batch_metadata_validation",
     "fact_level_recompute",
     "ots_verification"
   ],
@@ -182,6 +183,11 @@ Verifier JSON summary:
   "overall": "failed",
   "policy": {
     "mode": "warn"
+  },
+  "manifest": {
+    "schema": "verify_manifest",
+    "source": "2025-10-07.verify.json",
+    "status": "present"
   },
   "verification": {
     "commitment_profile_id": "trackone-canonical-cbor-v1",
@@ -202,7 +208,7 @@ site/an-001/day/2025-10-07/
   day/2025-10-07.cbor.sha256
   day/2025-10-07.json
   day/2025-10-07.ots.meta.json
-  day/2025-10-07.pipeline-manifest.json
+  day/2025-10-07.verify.json
   facts/
   provisioning/
   sensorthings/
