@@ -1,6 +1,13 @@
-//! Provisioning records for TrackOne device identity and chain of trust.
+//! Provisioning and admission input records that enter the TrackOne evidence
+//! path.
 //!
-//! These types support ADR-019 (Pod Provisioning) and ADR-034 (Serialization Strategy).
+//! These types support ADR-019 (Pod Provisioning) and ADR-034
+//! (Serialization Strategy).
+//!
+//! Boundary note: these records model external lifecycle/control-plane inputs
+//! consumed by TrackOne once telemetry is admitted. They do not make
+//! `trackone-core` the owner of onboarding, PKI issuance, or fleet lifecycle
+//! workflow.
 
 use crate::types::DeviceId;
 use serde::{Deserialize, Serialize};
