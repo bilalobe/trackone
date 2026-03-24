@@ -186,6 +186,14 @@ The critical guardrails are:
     stewardship and audit without depending on a single database instance.
 \end{itemize}
 
+\paragraph{Bridge to security and governance alignment}
+These projection rules also support later security and governance controls. By keeping the ledger as the canonical
+source, constraining the SensorThings view to deterministic read-only derivation, and preserving explicit validation and
+anchoring boundaries, TrackOne makes externally exposed telemetry easier to audit, reproduce, and govern. In that sense,
+the business rules in this chapter provide technical preconditions for the \ac{NIST} C\ac{SF}~2.0-oriented discussion in
+Section~\ref{subsec:nist-csf-2.0-alignment-for-the-khettara-pilot}: they do not by themselves satisfy organizational
+controls, but they do make those controls more credible and easier to evidence.
+
 % TODO [BR-3]: Add a paragraph connecting the projection to regulatory context (Loi 36-15):
 %   "Because the SensorThings projection is deterministically derived from the tamper-evident
 %    ledger, data shared with regulatory bodies (e.g., ABH Guir-Ziz-Rhéris under Loi 36-15)
