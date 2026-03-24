@@ -35,6 +35,18 @@ This split is intentional and matches
 deterministic seal primitives live here, but the seal/publication workflow is
 not a separate crate yet.
 
+## Boundary watchlist
+
+Keep this crate clear of:
+
+- manifest assembly workflow
+- publication/export policy
+- fleet lifecycle semantics
+- onboarding or credential-management logic
+
+If a behavior depends on operator workflow or deployment policy rather than
+deterministic artifact rules, it probably does not belong here.
+
 ## Conformance role
 
 The published vector corpus under

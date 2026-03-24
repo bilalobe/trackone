@@ -12,8 +12,8 @@ This crate owns:
   payload shapes
 - framed telemetry data structures and helpers
 - AEAD traits and crypto-adjacent type contracts
-- provisioning-record types used to represent device identity and deployment
-  state
+- provisioning/admission input types used to carry external lifecycle state
+  into the TrackOne evidence path
 - deterministic CBOR encoding support used by the commitment path
 - re-export of shared policy constants from
   [`trackone-constants`](../trackone-constants/README.md)
@@ -44,6 +44,19 @@ The crate remains `no_std`-capable when `std` is disabled.
 `trackone-core` should stay focused on shared protocol semantics. If logic is
 only about verifier/export commitment artifacts, it probably belongs in
 `trackone-ledger` instead.
+
+## Boundary watchlist
+
+Keep this crate clear of:
+
+- onboarding protocol logic
+- PKI issuance, revocation, or registrar workflow
+- fleet lifecycle state machines
+- update orchestration policy
+
+Provisioning-related types are acceptable here only as shared input shapes at
+the admitted-telemetry boundary, not as ownership of the lifecycle plane
+itself.
 
 ## Typical use
 

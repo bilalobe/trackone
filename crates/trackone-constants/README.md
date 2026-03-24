@@ -26,6 +26,10 @@ Do not put logic, parsing, allocation-heavy helpers, or `std`-dependent
 utilities in this crate. If a value needs behavior around it, that behavior
 belongs in the crate that owns the domain.
 
+Do not turn this crate into a dumping ground for lifecycle-plane enums,
+inventory state labels, or workflow-only flags just because multiple crates can
+see them.
+
 ## Why it is `no_std`
 
 This crate is intentionally `no_std` so embedded consumers can reuse the same

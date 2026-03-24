@@ -12,6 +12,8 @@ This crate is responsible for:
 - exposing selected helpers from `trackone-core` and `trackone-ledger`
 - keeping Python-facing behavior aligned with Rust-owned commitment and digest
   contracts
+- consuming external lifecycle/admission results only where they are needed to
+  preserve deterministic gateway behavior
 
 Current Python-facing modules include:
 
@@ -39,6 +41,19 @@ It should not absorb:
 
 Those remain in the Python scripts. This crate exists to keep the native
 contract small, deterministic, and reusable.
+
+## Boundary watchlist
+
+Keep this crate clear of:
+
+- inventory and ownership registry behavior
+- onboarding and first-admission workflow
+- policy engines for fleet allow/deny/quarantine state
+- release/export choreography that is not needed for native deterministic
+  helpers
+
+This crate should expose reusable native helpers to Python, not become a host
+control plane.
 
 ## Key dependencies
 

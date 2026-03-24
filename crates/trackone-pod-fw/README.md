@@ -47,6 +47,18 @@ cargo build -p trackone-pod-fw --no-default-features --features production
 
 - Additional firmware notes live in [`docs/pod-fw.md`](../../docs/pod-fw.md).
 
+## Boundary watchlist
+
+Keep this crate clear of:
+
+- fleet inventory and onboarding workflow
+- gateway-side admission policy
+- update orchestration services
+- verifier or publication semantics
+
+This crate should stay focused on pod-side runtime behavior and emission
+discipline.
+
 ## Check
 
 ```bash
