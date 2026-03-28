@@ -45,7 +45,7 @@ type = [
     "mypy>=1.19.1",
     "types-jsonschema",
     "types-requests",
-    "requests>=2.32.3",
+    "requests>=2.33.0",
 ]
 
 # Security tooling
@@ -56,7 +56,7 @@ security = [
 
 # Runtime deps for optional anchoring / HTTP interactions
 anchoring = [
-    "requests>=2.32.3",
+    "requests>=2.33.0",
 ]
 
 ci = [
