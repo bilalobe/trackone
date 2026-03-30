@@ -79,6 +79,28 @@ Current seal/keylock-boundary note:
 - `scripts/` — gateway, verification, and demo pipeline scripts
 - `tests/` — unit, integration, and end-to-end validation
 
+Current `trackone_core` surface labels:
+
+- `stable`: `trackone_core.ledger`, `trackone_core.merkle`, `trackone_core.release`
+- `provisional`: `trackone_core.crypto`, `trackone_core.ots`, top-level `Gateway`, `GatewayBatch`
+- `experimental`: `trackone_core.radio`, top-level `PyRadio`
+- `internal`: `trackone_core._native`
+
+Current `scripts.gateway` surface labels:
+
+- `stable`: `frame_verifier`, `merkle_batcher`, `verification_manifest`, `verify_cli`
+- `provisional`: `canonical_cbor`, `input_integrity`, `ots_anchor`, `provisioning_records`, `sensorthings_projection`, `verification_gate`
+- `experimental`: `peer_attestation`, `tsa_stamp`
+- `internal`: config/schema/TSA helper modules and consistency-check helpers
+
+Current `scripts.evidence` surface labels:
+
+- `provisional`: `export_release`
+
+Current `scripts.pod_sim` surface labels:
+
+- `experimental`: `pod_sim`, `parity_check`
+
 ### Deployment side
 
 - `deploy/helm/trackone/` — Helm chart for published-artifact deployments and optional local overrides
@@ -128,6 +150,33 @@ cargo test -p trackone-pod-fw
 ```bash
 uv run maturin develop --manifest-path crates/trackone-gateway/Cargo.toml
 ```
+
+### Supported root workflows
+
+The supported local path for the current evidence spine is:
+
+```bash
+# One-time environment setup
+just setup-dev
+
+# Build/update the native extension
+just native-dev
+
+# Generate the default demo evidence set
+just demo
+
+# Re-run verification against the default output
+just verify
+
+# Run the benchmark suite
+just bench
+```
+
+Notes:
+
+- `just demo` writes to `out/site_demo` by default; override with `just demo out_dir=out/other_demo`.
+- `just verify` defaults to `out/site_demo`; override with `just verify out_dir=out/other_demo`.
+- `just bench` runs the existing `tox -e bench` pytest-benchmark suite.
 
 ### Run project-wide quality checks
 
@@ -190,7 +239,7 @@ For detailed chart configuration and deployment options, see [`deploy/helm/track
 
 ## How it works (pipeline)
 
-End-to-end (see `scripts/gateway/run_pipeline.sh`):
+End-to-end (see `scripts/gateway/run_pipeline_demo.py`):
 
 1. Pod simulator emits framed telemetry (`pod_sim.py --framed`).
 1. Gateway verifies frames, enforces replay window, emits canonical facts (`frame_verifier.py`).
@@ -226,7 +275,7 @@ The verification manifest is publication-safe: it carries relative artifact refs
 
 Git-publishable evidence bundles can be exported with:
 
-- `scripts/evidence/export_release.py` — copies the curated evidence subset into a day-scoped bundle layout and can optionally commit, tag, and bundle the result in a dedicated evidence repo.
+- `scripts/evidence/export_release.py` — verifier-gated evidence export that copies the curated evidence subset into a day-scoped bundle layout and can optionally commit, tag, and bundle the result in a dedicated evidence repo.
 
 Machine-readable contract split:
 
@@ -241,9 +290,9 @@ Machine-readable contract split:
 ## Current release line
 
 The latest tagged release is `0.1.0-alpha.11`.
-The current `main` branch is the start of the next cycle; release-detail for `alpha.11` lives in [`CHANGELOG.md`](CHANGELOG.md), and `Unreleased` now tracks follow-on work after that cut.
+The current `main` branch is tracking `alpha.12` consolidation work; release detail for `alpha.11` lives in [`CHANGELOG.md`](CHANGELOG.md), and `Unreleased` tracks the planned `alpha.12` changes.
 
-- `alpha.11` hardens the current public spine:
+- `alpha.11` hardened the current public spine:
 
   - verifier-facing `day/<date>.verify.json`
   - published canonical CBOR commitment vectors and Rust/Python parity gates
@@ -267,13 +316,14 @@ For release-level detail, use [`CHANGELOG.md`](CHANGELOG.md) rather than this RE
 
 ## Configuration knobs
 
-Most demo defaults are set in `scripts/gateway/run_pipeline.sh` and the `Makefile`:
+Most demo defaults are set in `scripts/gateway/run_pipeline_demo.py`, and the
+supported root workflow is exposed through the `justfile`.
 
-- `SITE` (default: `an-001`)
-- `DATE` (default: `2025-10-07`)
-- `DEVICE` (default: `pod-003`)
-- `COUNT` (default: `10`) — frames to emit
-- `OUT_DIR` (default: `out/site_demo`)
+- `PIPELINE_SITE` / `--site` (default: `an-001`)
+- `PIPELINE_DATE` / `--date` (default: `2025-10-07`)
+- `PIPELINE_DEVICE_ID` / `--device-id` (default: `pod-003`)
+- `PIPELINE_FRAME_COUNT` / `--frame-count` (default: `7`)
+- `PIPELINE_OUT_DIR` / `--out-dir` (default: `out/site_demo`)
 
 You can also pass CLI flags to individual scripts (see `--help` on each):
 
@@ -325,7 +375,7 @@ In day-to-day development and CI, you do not need to configure anything: tests r
 
 ## Testing
 
-We use pytest and tox:
+We use pytest, tox, and `just`:
 
 ```bash
 # Fast local run
@@ -343,6 +393,9 @@ tox -e type
 
 # End-to-end tests
 tox -e e2e
+
+# Supported corpus-backed benchmark run
+just bench
 ```
 
 Real OTS integration tests require `RUN_REAL_OTS=1` and an `ots` binary in PATH:
@@ -351,7 +404,7 @@ Real OTS integration tests require `RUN_REAL_OTS=1` and an `ots` binary in PATH:
 RUN_REAL_OTS=1 tox -e slow
 ```
 
-## Makefile shortcuts
+## Legacy Makefile shortcuts
 
 Useful targets (run `make help` for the full list):
 
@@ -363,6 +416,10 @@ Useful targets (run `make help` for the full list):
 - `make tox-readme` — format/validate README and ADR index
 - `make tox-security` — Bandit and pip-audit
 - `make bench` — run pytest-benchmark suite
+
+The supported root workflow for local demo/verify/benchmark paths is now the
+`justfile`; keep using the Makefile for older compatibility flows and targeted
+tox wrappers.
 
 ## Security notes
 

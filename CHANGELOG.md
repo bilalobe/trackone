@@ -5,7 +5,23 @@ All notable changes to TrackOne will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.1.0-alpha.12] - 2026-03-30
+
+### Added
+- Supported root workflow commands for the current local/demo and verification path.
+- Benchmark entrypoints and documentation for corpus-backed speed/reliability checks against the published canonical CBOR commitment vectors.
+- Minimal operator-facing docs for the supported local flow and benchmark flow.
+
+### Changed
+- The root task surface, README, and roadmap now point to one supported happy path for local demo and verification runs.
+- Packaging and local bring-up ergonomics were tightened, so the current evidence/verification spine is easier to install, run, and verify without changing its contract.
+- Rust/Python parity and reliability checks are easier to run against the published canonical CBOR corpus.
+- Crate-level hardening in the existing workspace was limited to parity, diagnostics, seam cleanup, and packaging alignment; no new crate boundaries or protocol surfaces were introduced.
+
+### Fixed
+- Root-workflow friction and documentation drift between task runner, README, and release expectations.
+- Packaging and verification-path issues that made the supported local flow harder to run repeatably.
+- Benchmark/parity harness issues that interfered with repeatable corpus-backed measurements.
 
 ## [0.1.0-alpha.11] - 2026-03-19
 

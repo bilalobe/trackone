@@ -19,7 +19,7 @@ pub const OTS_VERIFY_TIMEOUT_SECS: u64 = 30;
 /// Default pod watchdog timeout in milliseconds.
 pub const DEFAULT_WATCHDOG_MS: u32 = 1_000;
 
-/// Active commitment profile identifier for the alpha.11 release line.
+/// Active commitment profile identifier for the alpha.12 release line.
 pub const COMMITMENT_PROFILE_ID_CANONICAL_CBOR_V1: &str = "trackone-canonical-cbor-v1";
 
 /// Disclosure class for publicly recomputable verification bundles.
@@ -45,7 +45,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn alpha11_release_constants_match_manifest_contract() {
+    fn alpha12_release_constants_match_manifest_contract() {
         assert_eq!(
             COMMITMENT_PROFILE_ID_CANONICAL_CBOR_V1,
             "trackone-canonical-cbor-v1"
