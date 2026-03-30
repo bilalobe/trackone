@@ -168,15 +168,19 @@ just demo
 # Re-run verification against the default output
 just verify
 
-# Run the benchmark suite
+# Run the Python benchmark suite
 just bench
+
+# Run the Rust-only serialization benchmarks
+just bench-rust
 ```
 
 Notes:
 
 - `just demo` writes to `out/site_demo` by default; override with `just demo out_dir=out/other_demo`.
 - `just verify` defaults to `out/site_demo`; override with `just verify out_dir=out/other_demo`.
-- `just bench` runs the existing `tox -e bench` pytest-benchmark suite.
+- `just bench` runs the Python (`tox -e bench`) pytest-benchmark suite.
+- `just bench-rust` runs the Rust-only serialization benchmarks via `cargo bench`.
 
 ### Run project-wide quality checks
 
