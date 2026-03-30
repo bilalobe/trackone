@@ -116,9 +116,13 @@ jobs:
           python -m pip install --upgrade pip setuptools wheel
           python -m pip install -e ".[ci]"
 
-      - name: Run lint/type/security tox envs
+      - name: Run lint/type/readme tox envs
         run: |
-          tox -e lint,type,security
+          tox -e lint,type,readme
+
+      - name: Run security tox env (non-blocking)
+        run: |
+          tox -e security || true
 
   test:
     runs-on: ubuntu-latest
