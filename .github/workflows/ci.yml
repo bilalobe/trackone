@@ -121,8 +121,9 @@ jobs:
           tox -e lint,type,readme
 
       - name: Run security tox env (non-blocking)
+        continue-on-error: true
         run: |
-          tox -e security || true
+          tox -e security
 
   test:
     runs-on: ubuntu-latest

@@ -64,6 +64,11 @@ ci = [
     "tox-uv>=1.16.0",
 ]
 
+# Pre-commit hook runner
+precommit = [
+    "pre-commit>=4.0",
+]
+
 [dependency-groups]
 dev = [
     "uv==0.10.9",
