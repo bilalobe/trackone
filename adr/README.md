@@ -51,6 +51,7 @@ Each ADR captures context, the decision, consequences, and alternatives.
 - [ADR-044: JSON Schema Modularity and Authoritative Contract Artifacts](ADR-044-json-schema-modularity-and-authoritative-contract-artifacts.md)
 - [ADR-045: Git-Signed Evidence Distribution Plane for Release and Small Authoritative Artifacts](ADR-045-git-signed-evidence-distribution-plane.md)
 - [ADR-046: Sealed Trust-Root Boundary and Deferring a Dedicated `trackone-seal` Crate](ADR-046-sealed-trust-root-boundary-and-deferring-trackone-seal.md)
+- [ADR-047: TrackOne as the Evidence Plane Within a Broader Device Lifecycle System](ADR-047-trackone-evidence-plane-within-device-lifecycle.md)
 
 ## Index Conventions
 
