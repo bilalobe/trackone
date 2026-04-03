@@ -37,12 +37,17 @@ import importlib.util
 import json
 import secrets
 import struct
+import sys
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime
 from importlib import import_module
 from pathlib import Path
 from typing import Any, cast
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
 
 def _load_write_sha256_sidecar() -> Callable[[Path], Path]:
