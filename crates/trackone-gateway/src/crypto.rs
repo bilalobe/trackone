@@ -30,6 +30,7 @@ enum RejectReason {
     MissingFrameFields,
     InvalidHdr,
     InvalidHdrTypes,
+    InvalidFrameTypes,
     InvalidBase64,
     UnknownDevice,
     MissingSalt8,
@@ -37,6 +38,7 @@ enum RejectReason {
     CkUpLength,
     NonceLength,
     TagLength,
+    EmptyCiphertext,
     CiphertextTooLarge,
     NonceSaltMismatch,
     NonceFcMismatch,
@@ -49,6 +51,7 @@ impl RejectReason {
             Self::MissingFrameFields => "missing_frame_fields",
             Self::InvalidHdr => "invalid_hdr",
             Self::InvalidHdrTypes => "invalid_hdr_types",
+            Self::InvalidFrameTypes => "invalid_frame_types",
             Self::InvalidBase64 => "invalid_base64",
             Self::UnknownDevice => "unknown_device",
             Self::MissingSalt8 => "missing_salt8",
@@ -56,6 +59,7 @@ impl RejectReason {
             Self::CkUpLength => "ck_up_length",
             Self::NonceLength => "nonce_length",
             Self::TagLength => "tag_length",
+            Self::EmptyCiphertext => "empty_ciphertext",
             Self::CiphertextTooLarge => "ciphertext_too_large",
             Self::NonceSaltMismatch => "nonce_salt_mismatch",
             Self::NonceFcMismatch => "nonce_fc_mismatch",
@@ -135,19 +139,19 @@ fn extract_frame_fields(frame: &Bound<'_, PyAny>) -> Result<FrameFields, RejectR
             frame_dict,
             "nonce",
             RejectReason::MissingFrameFields,
-            RejectReason::InvalidHdrTypes,
+            RejectReason::InvalidFrameTypes,
         )?,
         ct_b64: extract_string(
             frame_dict,
             "ct",
             RejectReason::MissingFrameFields,
-            RejectReason::InvalidHdrTypes,
+            RejectReason::InvalidFrameTypes,
         )?,
         tag_b64: extract_string(
             frame_dict,
             "tag",
             RejectReason::MissingFrameFields,
-            RejectReason::InvalidHdrTypes,
+            RejectReason::InvalidFrameTypes,
         )?,
     })
 }
@@ -245,7 +249,10 @@ fn validate_and_decrypt_impl(
     if ck_up.len() != 32 {
         return Err(RejectReason::CkUpLength);
     }
-    if ct.is_empty() || ct.len() > MAX_FRAME_CIPHERTEXT_BYTES {
+    if ct.is_empty() {
+        return Err(RejectReason::EmptyCiphertext);
+    }
+    if ct.len() > MAX_FRAME_CIPHERTEXT_BYTES {
         return Err(RejectReason::CiphertextTooLarge);
     }
     if nonce[..8] != salt8[..] {
@@ -407,6 +414,14 @@ mod tests {
     }
 
     #[test]
+    fn validate_and_decrypt_rejects_empty_ciphertext() {
+        let (mut frame, device, _expected) = sample_frame_and_device();
+        frame.ct_b64 = encode_b64(&[]);
+        let err = validate_and_decrypt_impl(&frame, &device).unwrap_err();
+        assert_eq!(err, RejectReason::EmptyCiphertext);
+    }
+
+    #[test]
     fn validate_and_decrypt_rejects_bad_salt_prefix() {
         let (frame, mut device, _expected) = sample_frame_and_device();
         device.salt8_b64 = encode_b64(b"salt9999");
@@ -423,5 +438,24 @@ mod tests {
         frame.ct_b64 = encode_b64(&tampered);
         let err = validate_and_decrypt_impl(&frame, &device).unwrap_err();
         assert_eq!(err, RejectReason::DecryptFailed);
+    }
+
+    #[test]
+    fn extract_frame_fields_rejects_non_string_frame_fields() {
+        Python::attach(|py| {
+            let frame = PyDict::new(py);
+            let hdr = PyDict::new(py);
+            hdr.set_item("dev_id", 1).expect("dev_id");
+            hdr.set_item("msg_type", 1).expect("msg_type");
+            hdr.set_item("fc", 3).expect("fc");
+            hdr.set_item("flags", 0).expect("flags");
+            frame.set_item("hdr", hdr).expect("hdr");
+            frame.set_item("nonce", 123).expect("nonce");
+            frame.set_item("ct", "AQI=").expect("ct");
+            frame.set_item("tag", "AQI=").expect("tag");
+
+            let err = extract_frame_fields(frame.as_any()).unwrap_err();
+            assert_eq!(err, RejectReason::InvalidFrameTypes);
+        });
     }
 }
