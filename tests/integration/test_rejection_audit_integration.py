@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+from base64 import b64decode, b64encode
 
 
 def _read_rejections(audit_dir):
@@ -65,9 +66,62 @@ def test_decrypt_rejection_writes_structured_record(
     records = _read_rejections(temp_dirs["root"] / "audit")
     assert len(records) == 1
     assert records[0]["source"] == "decrypt"
-    assert records[0]["reason"] == "decrypt_failed"
+    assert records[0]["reason"] == "unknown_device"
     assert records[0]["device_id"] == "pod-999"
     assert records[0]["fc"] == 0
+
+
+def test_nonce_fc_mismatch_writes_specific_rejection_reason(
+    temp_dirs, write_frames, write_frame_json, frame_verifier
+) -> None:
+    temp_dirs["root"].mkdir(parents=True, exist_ok=True)
+    write_frames("pod-024", 1, temp_dirs["frames"], temp_dirs["device_table"])
+
+    frame = json.loads(temp_dirs["frames"].read_text(encoding="utf-8").strip())
+    nonce = b64decode(frame["nonce"])
+    frame["nonce"] = b64encode(nonce[:8] + (99).to_bytes(8, "big") + nonce[16:]).decode(
+        "ascii"
+    )
+    write_frame_json(temp_dirs["frames"], frame)
+
+    args = [
+        "--in",
+        str(temp_dirs["frames"]),
+        "--out-facts",
+        str(temp_dirs["facts"]),
+        "--device-table",
+        str(temp_dirs["device_table"]),
+    ]
+
+    assert frame_verifier.process(args) == 0
+    assert not list(temp_dirs["facts"].glob("*.json"))
+
+    records = _read_rejections(temp_dirs["root"] / "audit")
+    assert len(records) == 1
+    assert records[0]["source"] == "decrypt"
+    assert records[0]["reason"] == "nonce_fc_mismatch"
+    assert records[0]["device_id"] == "pod-024"
+
+
+def test_dry_run_is_side_effect_free(temp_dirs, write_frames, frame_verifier) -> None:
+    temp_dirs["root"].mkdir(parents=True, exist_ok=True)
+    write_frames("pod-025", 2, temp_dirs["frames"], temp_dirs["device_table"])
+    before_device_table = temp_dirs["device_table"].read_text(encoding="utf-8")
+
+    args = [
+        "--in",
+        str(temp_dirs["frames"]),
+        "--out-facts",
+        str(temp_dirs["facts"]),
+        "--device-table",
+        str(temp_dirs["device_table"]),
+        "--dry-run",
+    ]
+
+    assert frame_verifier.process(args) == 0
+    assert not temp_dirs["facts"].exists()
+    assert not (temp_dirs["root"] / "audit").exists()
+    assert temp_dirs["device_table"].read_text(encoding="utf-8") == before_device_table
 
 
 def test_multiple_process_runs_append_to_same_daily_audit_log(
