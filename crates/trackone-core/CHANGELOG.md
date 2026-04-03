@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-alpha.13] - 2026-04-03
+
 ### Changed
 - Renamed the shared lifecycle-adjacent module from `provisioning` to `identity_input` so the crate surface reads as imported identity/admission context at the admitted-telemetry boundary, not as a TrackOne-owned lifecycle subsystem.
 - Removed the dead `PolicyUpdate` type and its canonical CBOR encoding so `trackone-core` no longer advertises a latent control-plane policy contract.

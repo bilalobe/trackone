@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-alpha.13] - 2026-04-03
+
 ### Added
 - Native framed-ingest validation and AEAD decryption through `trackone_core.crypto`, so the gateway verifier no longer depends on direct PyNaCl calls for the authoritative ingest path.
 
