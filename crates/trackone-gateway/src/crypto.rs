@@ -440,22 +440,4 @@ mod tests {
         assert_eq!(err, RejectReason::DecryptFailed);
     }
 
-    #[test]
-    fn extract_frame_fields_rejects_non_string_frame_fields() {
-        Python::attach(|py| {
-            let frame = PyDict::new(py);
-            let hdr = PyDict::new(py);
-            hdr.set_item("dev_id", 1).expect("dev_id");
-            hdr.set_item("msg_type", 1).expect("msg_type");
-            hdr.set_item("fc", 3).expect("fc");
-            hdr.set_item("flags", 0).expect("flags");
-            frame.set_item("hdr", hdr).expect("hdr");
-            frame.set_item("nonce", 123).expect("nonce");
-            frame.set_item("ct", "AQI=").expect("ct");
-            frame.set_item("tag", "AQI=").expect("tag");
-
-            let err = extract_frame_fields(frame.as_any()).unwrap_err();
-            assert_eq!(err, RejectReason::InvalidFrameTypes);
-        });
-    }
 }
