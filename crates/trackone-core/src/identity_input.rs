@@ -1,5 +1,5 @@
-//! Provisioning and admission input records that enter the TrackOne evidence
-//! path.
+//! Imported identity and admission input records that enter the TrackOne
+//! evidence path.
 //!
 //! These types support ADR-019 (Pod Provisioning) and ADR-034
 //! (Serialization Strategy).
@@ -13,10 +13,10 @@ use crate::types::DeviceId;
 use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;
 
-/// Provisioning record establishing device identity and chain of trust.
+/// Provisioning record carried into the evidence path as external identity context.
 ///
-/// This record is created during device manufacturing/provisioning and contains
-/// the device's cryptographic identity and firmware attestation.
+/// This record is created outside TrackOne during manufacturing/provisioning
+/// and contains the device's cryptographic identity and firmware attestation.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ProvisioningRecord {
     /// Unique device identifier (8 bytes)
@@ -43,28 +43,6 @@ pub struct ProvisioningRecord {
     pub site_id: Option<heapless::String<32>>,
 }
 
-/// Policy update message for runtime configuration changes.
-///
-/// These are signed messages that update device operational parameters.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct PolicyUpdate {
-    /// Target device (None = broadcast to all devices)
-    pub target_device: Option<DeviceId>,
-
-    /// Uplink cadence in seconds (e.g., 21600 = 4 uplinks/day)
-    pub uplink_cadence_secs: Option<u32>,
-
-    /// RX window duration in milliseconds
-    pub rx_window_ms: Option<u32>,
-
-    /// Unix timestamp when this policy becomes effective
-    pub effective_at: i64,
-
-    /// Ed25519 signature from policy authority
-    #[serde(with = "BigArray")]
-    pub signature: [u8; 64],
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -88,22 +66,5 @@ mod tests {
         let decoded: ProvisioningRecord = postcard::from_bytes(bytes).expect("deserialize");
 
         assert_eq!(record, decoded);
-    }
-
-    #[test]
-    fn policy_update_roundtrip() {
-        let policy = PolicyUpdate {
-            target_device: Some(PodId::from(7u32)),
-            uplink_cadence_secs: Some(21600),
-            rx_window_ms: Some(500),
-            effective_at: 1_700_000_000,
-            signature: [0xFF; 64],
-        };
-
-        let mut buf = [0u8; 256];
-        let bytes = postcard::to_slice(&policy, &mut buf).expect("serialize");
-        let decoded: PolicyUpdate = postcard::from_bytes(bytes).expect("deserialize");
-
-        assert_eq!(policy, decoded);
     }
 }
