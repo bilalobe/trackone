@@ -142,6 +142,28 @@ class TestTamper:
         assert rc == 0
         assert not list(temp_dirs["facts"].glob("*.json"))
 
+    def test_oversized_ciphertext_rejected(
+        self, temp_dirs, write_frames, frame_verifier, write_frame_json
+    ):
+        """Frames with oversized ciphertext should be rejected before decrypt."""
+        temp_dirs["root"].mkdir(parents=True, exist_ok=True)
+        write_frames("pod-016", 1, temp_dirs["frames"], temp_dirs["device_table"])
+
+        f = json.loads(temp_dirs["frames"].read_text().strip())
+        f["ct"] = b64encode(b"\x00" * (frame_verifier.MAX_CIPHERTEXT_BYTES + 1)).decode(
+            "ascii"
+        )
+        write_frame_json(temp_dirs["frames"], f)
+
+        rc = verify_frames(
+            temp_dirs["frames"],
+            temp_dirs["facts"],
+            temp_dirs["device_table"],
+            frame_verifier,
+        )
+        assert rc == 0
+        assert not list(temp_dirs["facts"].glob("*.json"))
+
 
 class TestFrameStructure:
     """Test frame structure validation and resilience."""
