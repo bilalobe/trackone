@@ -21,8 +21,6 @@ References:
 from __future__ import annotations
 
 import argparse
-import base64
-import binascii
 import importlib
 import json
 import sys
@@ -31,6 +29,10 @@ from datetime import UTC, datetime
 from hashlib import sha256
 from pathlib import Path
 from typing import Any, TextIO
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
 try:  # Support both package imports and direct script execution.
     from .canonical_cbor import canonicalize_obj_to_cbor
@@ -53,7 +55,10 @@ except ImportError:  # pragma: no cover - fallback when run as a script
 # Constants for maintainability
 DEFAULT_REPLAY_WINDOW = 64
 MAX_FRAME_COUNTER = 2**32 - 1
+MAX_NDJSON_LINE_BYTES = 4096
+MAX_CIPHERTEXT_BYTES = 256
 HEADER_FIELDS = {"dev_id", "msg_type", "fc", "flags"}
+FRAME_FIELDS = {"hdr", "nonce", "ct", "tag"}
 
 # Optional jsonschema: mypy will warn if stubs are missing; detect availability
 jsonschema: Any | None
@@ -93,15 +98,17 @@ def _emit_rejection(out_fh: TextIO, record: RejectionRecord) -> None:
     out_fh.flush()
 
 
-def _load_nacl_modules() -> tuple[Any, Any]:
+def _is_json_int(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def _load_native_crypto() -> Any:
     try:
-        return importlib.import_module("nacl.bindings"), importlib.import_module(
-            "nacl.exceptions"
-        )
+        return importlib.import_module("trackone_core.crypto")
     except ImportError as exc:
         raise RuntimeError(
-            "PyNaCl is required for framed AEAD verification paths. "
-            "Install with: pip install PyNaCl"
+            "trackone_core native crypto helper is required for framed AEAD "
+            "verification paths. Build/install the native extension or run via tox."
         ) from exc
 
 
@@ -295,6 +302,10 @@ def parse_frame(line: str) -> tuple[dict[str, Any] | None, str]:
     Returns:
         (frame_dict | None, error_message)
     """
+    line_bytes = len(line.rstrip("\r\n").encode("utf-8"))
+    if line_bytes > MAX_NDJSON_LINE_BYTES:
+        return None, "line_too_long"
+
     try:
         frame = json.loads(line)
     except json.JSONDecodeError:
@@ -304,25 +315,39 @@ def parse_frame(line: str) -> tuple[dict[str, Any] | None, str]:
     if not isinstance(frame, dict):
         return None, "not_dict"
 
-    if "hdr" not in frame:
-        return None, "missing_hdr"
+    frame_keys = set(frame.keys())
+    if not FRAME_FIELDS.issubset(frame_keys):
+        return None, "missing_frame_fields"
+    if frame_keys != FRAME_FIELDS:
+        return None, "unexpected_frame_fields"
 
     hdr = frame["hdr"]
     if not isinstance(hdr, dict):
         return None, "invalid_hdr"
 
+    if (
+        not isinstance(frame["nonce"], str)
+        or not isinstance(frame["ct"], str)
+        or not isinstance(frame["tag"], str)
+    ):
+        return None, "invalid_frame_types"
+
     # Check required header fields
-    if not HEADER_FIELDS.issubset(hdr.keys()):
+    hdr_keys = set(hdr.keys())
+    if not HEADER_FIELDS.issubset(hdr_keys):
         return None, "missing_hdr_fields"
+    if hdr_keys != HEADER_FIELDS:
+        return None, "unexpected_hdr_fields"
 
     # Validate field types
-    try:
-        dev_id = int(hdr["dev_id"])
-        msg_type = int(hdr["msg_type"])
-        fc = int(hdr["fc"])
-        flags = int(hdr["flags"])
-    except (ValueError, TypeError):
+    if not all(
+        _is_json_int(hdr[name]) for name in ("dev_id", "msg_type", "fc", "flags")
+    ):
         return None, "invalid_hdr_types"
+    dev_id = hdr["dev_id"]
+    msg_type = hdr["msg_type"]
+    fc = hdr["fc"]
+    flags = hdr["flags"]
 
     # Validate ranges
     if not (0 <= dev_id <= 65535):
@@ -337,57 +362,56 @@ def parse_frame(line: str) -> tuple[dict[str, Any] | None, str]:
     return frame, ""
 
 
+def _validate_and_decrypt_framed(
+    frame: dict[str, Any], device_table: dict[str, dict[str, Any]]
+) -> tuple[dict[str, Any] | None, str]:
+    if "ct" not in frame or "nonce" not in frame or "hdr" not in frame:
+        return None, "missing_frame_fields"
+
+    hdr = frame["hdr"]
+    if not isinstance(hdr, dict):
+        return None, "invalid_hdr"
+
+    try:
+        dev_id_u16 = int(hdr["dev_id"]) & 0xFFFF
+    except (ValueError, TypeError):
+        return None, "invalid_hdr_types"
+
+    dev_entry = device_table.get(str(dev_id_u16))
+    if not dev_entry:
+        return None, "unknown_device"
+
+    try:
+        native_crypto = _load_native_crypto()
+        payload, reason = native_crypto.validate_and_decrypt_framed(frame, dev_entry)
+    except RuntimeError:
+        raise
+    except Exception as exc:
+        raise RuntimeError(
+            "trackone_core native crypto helper failed during framed verification"
+        ) from exc
+
+    if payload is None:
+        return None, reason or "decrypt_failed"
+    if not isinstance(payload, dict):
+        return None, "decrypt_failed"
+    return payload, ""
+
+
 def aead_decrypt(
     frame: dict[str, Any], device_table: dict[str, dict[str, Any]]
 ) -> dict[str, Any] | None:
     """
-    AEAD decryption using XChaCha20-Poly1305 (192-bit nonce only).
-
-    Uses device_table[dev_id] to fetch ck_up. Nonce is provided in-frame.
+    Decrypt a framed payload using the native TrackOne crypto helper.
 
     Returns:
         payload dict or None on failure
     """
     try:
-        bindings, nacl_exceptions = _load_nacl_modules()
+        payload, _reason = _validate_and_decrypt_framed(frame, device_table)
     except RuntimeError:
         return None
-
-    try:
-        if "ct" not in frame or "nonce" not in frame or "hdr" not in frame:
-            return None
-        hdr = frame["hdr"]
-        dev_id_u16 = int(hdr["dev_id"]) & 0xFFFF
-        msg_type = int(hdr["msg_type"]) & 0xFF
-        dev_entry = device_table.get(str(dev_id_u16))
-        if not dev_entry:
-            return None  # unknown device / missing key
-        ck_up_b = base64.b64decode(dev_entry.get("ck_up", ""))
-        if len(ck_up_b) != 32:
-            return None
-        nonce = base64.b64decode(frame["nonce"])
-        ct = base64.b64decode(frame["ct"])
-        tag = base64.b64decode(frame.get("tag", ""))
-
-        # Enforce 24-byte nonce only (ADR-006: forward-only, XChaCha only)
-        if len(nonce) != 24:
-            return None
-        if len(tag) != 16:
-            return None
-
-        aad = dev_id_u16.to_bytes(2, "big") + msg_type.to_bytes(1, "big")
-
-        # XChaCha20-Poly1305 (IETF) only
-        pt = bindings.crypto_aead_xchacha20poly1305_ietf_decrypt(
-            ct + tag, aad, nonce, ck_up_b
-        )
-
-        payload = decode_tlv(pt)
-        if isinstance(payload, dict):
-            return payload
-        return None
-    except (ValueError, binascii.Error, TypeError, nacl_exceptions.CryptoError):
-        return None
+    return payload
 
 
 def frame_to_fact(frame: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
@@ -464,14 +488,13 @@ def process(argv: list[str] | None = None) -> int:
         default=None,
         help="Output directory for structured rejection audit logs",
     )
+    p.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Parse, replay-check, decrypt, and validate without writing facts, audit logs, or device-table updates",
+    )
 
     args = p.parse_args(argv)
-
-    try:
-        _load_nacl_modules()
-    except RuntimeError as exc:
-        print(f"[ERROR] {exc}", file=sys.stderr)
-        return 1
 
     # Open input (file or stdin)
     frames_fh = (
@@ -479,29 +502,25 @@ def process(argv: list[str] | None = None) -> int:
     )
     device_table_existed = args.device_table.exists()
 
-    # Create output directory
-    args.out_facts.mkdir(parents=True, exist_ok=True)
+    if not args.dry_run:
+        args.out_facts.mkdir(parents=True, exist_ok=True)
 
-    audit_dir = (
-        args.out_audit
-        if args.out_audit is not None
-        else args.out_facts.parent / "audit"
-    )
-    audit_path = audit_dir / f"rejections-{_audit_day_label()}.ndjson"
     audit_fh: TextIO | None = None
-    try:
-        audit_dir.mkdir(parents=True, exist_ok=True)
-        audit_fh = audit_path.open("a", encoding="utf-8")
-    except OSError as e:
-        if frames_fh is not sys.stdin:
-            frames_fh.close()
-        print(f"[ERROR] processing failure: {e}", file=sys.stderr)
-        return 1
-
-    if audit_fh is None:
-        raise RuntimeError(
-            "audit_fh is unexpectedly None after attempting to open audit file"
+    if not args.dry_run:
+        audit_dir = (
+            args.out_audit
+            if args.out_audit is not None
+            else args.out_facts.parent / "audit"
         )
+        audit_path = audit_dir / f"rejections-{_audit_day_label()}.ndjson"
+        try:
+            audit_dir.mkdir(parents=True, exist_ok=True)
+            audit_fh = audit_path.open("a", encoding="utf-8")
+        except OSError as e:
+            if frames_fh is not sys.stdin:
+                frames_fh.close()
+            print(f"[ERROR] processing failure: {e}", file=sys.stderr)
+            return 1
 
     try:
         # Load device table and schema
@@ -518,8 +537,8 @@ def process(argv: list[str] | None = None) -> int:
         rejected = 0
 
         for _line_num, raw_line in enumerate(frames_fh, start=1):
-            line = raw_line.strip()
-            if not line:
+            line = raw_line.rstrip("\r\n")
+            if not line.strip():
                 continue
 
             total += 1
@@ -529,17 +548,18 @@ def process(argv: list[str] | None = None) -> int:
             if frame is None:
                 rejected += 1
                 print(f"[WARN] {err}", file=sys.stderr)
-                _emit_rejection(
-                    audit_fh,
-                    RejectionRecord(
-                        device_id="",
-                        fc=None,
-                        reason=err,
-                        observed_at_utc=datetime.now(UTC).isoformat(),
-                        frame_sha256=_hash_rejected_line(raw_line),
-                        source="parse",
-                    ),
-                )
+                if audit_fh is not None:
+                    _emit_rejection(
+                        audit_fh,
+                        RejectionRecord(
+                            device_id="",
+                            fc=None,
+                            reason=err,
+                            observed_at_utc=datetime.now(UTC).isoformat(),
+                            frame_sha256=_hash_rejected_line(raw_line),
+                            source="parse",
+                        ),
+                    )
                 continue
 
             hdr = frame["hdr"]
@@ -553,37 +573,47 @@ def process(argv: list[str] | None = None) -> int:
                 print(
                     f"[WARN] Rejected {dev_id_str} fc={fc}: {reason}", file=sys.stderr
                 )
-                _emit_rejection(
-                    audit_fh,
-                    RejectionRecord(
-                        device_id=dev_id_str,
-                        fc=fc,
-                        reason=reason,
-                        observed_at_utc=datetime.now(UTC).isoformat(),
-                        frame_sha256=_hash_rejected_line(raw_line),
-                        source="replay",
-                    ),
-                )
+                if audit_fh is not None:
+                    _emit_rejection(
+                        audit_fh,
+                        RejectionRecord(
+                            device_id=dev_id_str,
+                            fc=fc,
+                            reason=reason,
+                            observed_at_utc=datetime.now(UTC).isoformat(),
+                            frame_sha256=_hash_rejected_line(raw_line),
+                            source="replay",
+                        ),
+                    )
                 continue
 
-            # AEAD decrypt
-            payload = aead_decrypt(frame, device_table)
+            # Validate crypto materials and AEAD decrypt
+            try:
+                payload, decrypt_reason = _validate_and_decrypt_framed(
+                    frame, device_table
+                )
+            except RuntimeError as exc:
+                print(f"[ERROR] {exc}", file=sys.stderr)
+                return 1
+
             if payload is None:
                 rejected += 1
                 print(
-                    f"[WARN] Decrypt failed for {dev_id_str} fc={fc}", file=sys.stderr
+                    f"[WARN] Rejected {dev_id_str} fc={fc}: {decrypt_reason}",
+                    file=sys.stderr,
                 )
-                _emit_rejection(
-                    audit_fh,
-                    RejectionRecord(
-                        device_id=dev_id_str,
-                        fc=fc,
-                        reason="decrypt_failed",
-                        observed_at_utc=datetime.now(UTC).isoformat(),
-                        frame_sha256=_hash_rejected_line(raw_line),
-                        source="decrypt",
-                    ),
-                )
+                if audit_fh is not None:
+                    _emit_rejection(
+                        audit_fh,
+                        RejectionRecord(
+                            device_id=dev_id_str,
+                            fc=fc,
+                            reason=decrypt_reason,
+                            observed_at_utc=datetime.now(UTC).isoformat(),
+                            frame_sha256=_hash_rejected_line(raw_line),
+                            source="decrypt",
+                        ),
+                    )
                 continue
 
             # Convert to fact
@@ -593,33 +623,39 @@ def process(argv: list[str] | None = None) -> int:
             validate_fact(fact, fact_schema)
 
             # Write authoritative CBOR fact + JSON projection.
-            fact_file_stem = args.out_facts / f"{dev_id_str}-{fc:08d}"
-            fact_file_cbor = fact_file_stem.with_suffix(".cbor")
-            fact_file_json = fact_file_stem.with_suffix(".json")
-            fact_file_cbor.write_bytes(canonicalize_obj_to_cbor(fact))
-            with fact_file_json.open("w", encoding="utf-8") as out_fh:
-                json.dump(fact, out_fh, indent=2, sort_keys=True)
+            if not args.dry_run:
+                fact_file_stem = args.out_facts / f"{dev_id_str}-{fc:08d}"
+                fact_file_cbor = fact_file_stem.with_suffix(".cbor")
+                fact_file_json = fact_file_stem.with_suffix(".json")
+                fact_file_cbor.write_bytes(canonicalize_obj_to_cbor(fact))
+                with fact_file_json.open("w", encoding="utf-8") as out_fh:
+                    json.dump(fact, out_fh, indent=2, sort_keys=True)
 
-            # Update device table for persistence (non-secret runtime state)
-            dev_key = str(hdr["dev_id"])
-            entry = device_table.get(dev_key, {})
-            entry["highest_fc_seen"] = max(int(entry.get("highest_fc_seen", -1)), fc)
-            entry["last_seen"] = datetime.now(UTC).isoformat()
-            entry["msg_type"] = hdr["msg_type"]
-            entry["flags"] = hdr["flags"]
-            device_table[dev_key] = entry
+                # Update device table for persistence (non-secret runtime state)
+                dev_key = str(hdr["dev_id"])
+                entry = device_table.get(dev_key, {})
+                entry["highest_fc_seen"] = max(
+                    int(entry.get("highest_fc_seen", -1)), fc
+                )
+                entry["last_seen"] = datetime.now(UTC).isoformat()
+                entry["msg_type"] = hdr["msg_type"]
+                entry["flags"] = hdr["flags"]
+                device_table[dev_key] = entry
 
             accepted += 1
 
         # Avoid creating a brand-new empty device table when nothing was accepted.
-        if device_table or device_table_existed:
+        if not args.dry_run and (device_table or device_table_existed):
             save_device_table(args.device_table, device_table)
 
         # Cross-check accepted count from disk to guard against counter drift
-        try:
-            accepted_files = len(list(args.out_facts.glob("*.cbor")))
-        except OSError:
+        if args.dry_run:
             accepted_files = accepted
+        else:
+            try:
+                accepted_files = len(list(args.out_facts.glob("*.cbor")))
+            except OSError:
+                accepted_files = accepted
 
         print(
             f"[frame_verifier] total={total} accepted={accepted_files} rejected={rejected} window={args.window}"
