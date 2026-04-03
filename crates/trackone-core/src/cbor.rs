@@ -27,7 +27,7 @@
 #[cfg(feature = "std")]
 use std::vec::Vec;
 
-use crate::provisioning::{PolicyUpdate, ProvisioningRecord};
+use crate::identity_input::ProvisioningRecord;
 use crate::types::{EnvFact, Fact, FactPayload};
 
 /// Encodes a value to CBOR.
@@ -140,7 +140,6 @@ fn cbor_array_len(buf: &mut Vec<u8>, n: usize) {
 
 // Schema versions for forward compatibility
 const SCHEMA_VERSION_PROVISIONING_RECORD: u64 = 1;
-const SCHEMA_VERSION_POLICY_UPDATE: u64 = 1;
 const SCHEMA_VERSION_ENV_FACT: u64 = 1;
 const SCHEMA_VERSION_FACT: u64 = 1;
 
@@ -174,43 +173,6 @@ impl CanonicalCbor for ProvisioningRecord {
             Some(s) => cbor_text(&mut buf, s),
             None => cbor_null(&mut buf),
         }
-
-        buf
-    }
-}
-
-#[cfg(feature = "std")]
-impl CanonicalCbor for PolicyUpdate {
-    fn to_canonical_cbor_vec(&self) -> Vec<u8> {
-        // Array encoding (positional), schema v1:
-        // [0] schema_version (uint)
-        // [1] target_device (bstr|null)
-        // [2] uplink_cadence_secs (uint|null)
-        // [3] rx_window_ms (uint|null)
-        // [4] effective_at (i64)
-        // [5] signature (bstr, 64)
-        let mut buf = Vec::new();
-        cbor_array_len(&mut buf, 6);
-
-        cbor_uint(&mut buf, SCHEMA_VERSION_POLICY_UPDATE);
-
-        match &self.target_device {
-            Some(d) => cbor_bytes(&mut buf, &d.0),
-            None => cbor_null(&mut buf),
-        }
-
-        match self.uplink_cadence_secs {
-            Some(v) => cbor_uint(&mut buf, v as u64),
-            None => cbor_null(&mut buf),
-        }
-
-        match self.rx_window_ms {
-            Some(v) => cbor_uint(&mut buf, v as u64),
-            None => cbor_null(&mut buf),
-        }
-
-        cbor_i64(&mut buf, self.effective_at);
-        cbor_bytes(&mut buf, &self.signature);
 
         buf
     }
