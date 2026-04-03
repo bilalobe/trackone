@@ -9,6 +9,20 @@ from pathlib import Path
 from typing import Any
 
 SCHEMA_DIR = Path(__file__).parent.parent.parent / "toolset" / "unified" / "schemas"
+SCHEMA_VALIDATION_SKIP_REASON = "dependency-unavailable-jsonschema"
+
+try:
+    import jsonschema as _jsonschema
+
+    JSONSCHEMA_AVAILABLE = True
+    SCHEMA_VALIDATION_EXCEPTIONS: tuple[type[BaseException], ...] = (
+        _jsonschema.ValidationError,
+        _jsonschema.SchemaError,
+    )
+except ImportError:
+    _jsonschema = None  # type: ignore[assignment]
+    JSONSCHEMA_AVAILABLE = False
+    SCHEMA_VALIDATION_EXCEPTIONS = ()
 
 
 def schema_path(name: str) -> Path:
@@ -70,17 +84,37 @@ def schema_registry() -> Any:
     return registry
 
 
-def validate_instance(instance: Any, schema: dict[str, Any]) -> None:
-    import jsonschema
+def schema_validation_available() -> bool:
+    return JSONSCHEMA_AVAILABLE and _jsonschema is not None
 
-    validator_cls = jsonschema.validators.validator_for(schema)
+
+def require_schema_validation(context: str = "schema validation") -> None:
+    if schema_validation_available():
+        return
+    raise RuntimeError(
+        f"jsonschema is required for {context}. "
+        "Install trackone[validation] or trackone[test]."
+    )
+
+
+def validate_instance(instance: Any, schema: dict[str, Any]) -> None:
+    require_schema_validation("JSON Schema validation")
+    assert _jsonschema is not None
+    validator_cls = _jsonschema.validators.validator_for(schema)
     validator_cls.check_schema(schema)
     validator = validator_cls(schema, registry=schema_registry())
     validator.validate(instance)
 
 
-def validate_schema_document(schema: dict[str, Any]) -> None:
-    import jsonschema
+def validate_instance_if_available(instance: Any, schema: dict[str, Any]) -> bool:
+    if not schema_validation_available():
+        return False
+    validate_instance(instance, schema)
+    return True
 
-    validator_cls = jsonschema.validators.validator_for(schema)
+
+def validate_schema_document(schema: dict[str, Any]) -> None:
+    require_schema_validation("schema document validation")
+    assert _jsonschema is not None
+    validator_cls = _jsonschema.validators.validator_for(schema)
     validator_cls.check_schema(schema)
