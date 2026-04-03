@@ -6,6 +6,7 @@ import secrets
 from pathlib import Path
 from typing import Any
 
+import nacl.bindings
 import pytest
 
 from scripts.gateway import frame_verifier as fv
@@ -36,7 +37,7 @@ def _encrypt_payload(
 ) -> tuple[str, str, str]:
     aad = (dev_id & 0xFFFF).to_bytes(2, "big") + (msg_type & 0xFF).to_bytes(1, "big")
     nonce = secrets.token_bytes(24)
-    ct_tag = fv.nacl.bindings.crypto_aead_xchacha20poly1305_ietf_encrypt(
+    ct_tag = nacl.bindings.crypto_aead_xchacha20poly1305_ietf_encrypt(
         payload, aad, nonce, ck
     )
     ct, tag = ct_tag[:-16], ct_tag[-16:]
