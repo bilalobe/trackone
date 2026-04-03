@@ -1,8 +1,8 @@
 # trackone-core
 
 `trackone-core` is the shared protocol crate for TrackOne. It owns the bounded
-types, frame model, AEAD-facing traits, provisioning records, and deterministic
-encoding surfaces that both host and firmware code depend on.
+types, frame model, AEAD-facing traits, imported identity-input records, and
+deterministic encoding surfaces that both host and firmware code depend on.
 
 ## Responsibilities
 
@@ -12,8 +12,8 @@ This crate owns:
   payload shapes
 - framed telemetry data structures and helpers
 - AEAD traits and crypto-adjacent type contracts
-- provisioning/admission input types used to carry external lifecycle state
-  into the TrackOne evidence path
+- identity/admission input types used to carry external lifecycle state into
+  the TrackOne evidence path
 - deterministic CBOR encoding support used by the commitment path
 - re-export of shared policy constants from
   [`trackone-constants`](../trackone-constants/README.md)
@@ -54,9 +54,8 @@ Keep this crate clear of:
 - fleet lifecycle state machines
 - update orchestration policy
 
-Provisioning-related types are acceptable here only as shared input shapes at
-the admitted-telemetry boundary, not as ownership of the lifecycle plane
-itself.
+Identity-context types are acceptable here only as shared input shapes at the
+admitted-telemetry boundary, not as ownership of the lifecycle plane itself.
 
 ## Typical use
 
