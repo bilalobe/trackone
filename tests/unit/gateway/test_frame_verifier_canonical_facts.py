@@ -48,7 +48,7 @@ def test_frame_verifier_imports_without_pynacl(monkeypatch, load_module) -> None
     assert frame_verifier.aead_decrypt({}, {}) is None
 
 
-def test_frame_verifier_process_reports_missing_pynacl(
+def test_frame_verifier_process_reports_missing_native_crypto(
     monkeypatch, load_module, tmp_path
 ) -> None:
     import contextlib
@@ -60,19 +60,25 @@ def test_frame_verifier_process_reports_missing_pynacl(
     )
     monkeypatch.setattr(
         frame_verifier,
-        "_load_nacl_modules",
+        "_load_native_crypto",
         lambda: (_ for _ in ()).throw(
             RuntimeError(
-                "PyNaCl is required for framed AEAD verification paths. Install with: pip install PyNaCl"
+                "trackone_core native crypto helper is required for framed AEAD verification paths. Build/install the native extension or run via tox."
             )
         ),
     )
 
     frames = tmp_path / "frames.ndjson"
-    frames.write_text("", encoding="utf-8")
+    frames.write_text(
+        '{"hdr":{"dev_id":1,"msg_type":1,"fc":0,"flags":0},"nonce":"c3Nzc3Nzc3MAAAAAAAAAAFJSUlJSUlJS","ct":"AA==","tag":"AAAAAAAAAAAAAAAAAAAAAA=="}\n',
+        encoding="utf-8",
+    )
     facts = tmp_path / "facts"
     device_table = tmp_path / "device_table.json"
-    device_table.write_text("{}", encoding="utf-8")
+    device_table.write_text(
+        '{"_meta":{"version":"1.0","master_seed":"bW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW0="},"1":{"salt8":"c3Nzc3Nzc3M=","ck_up":"a2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2s="}}',
+        encoding="utf-8",
+    )
     write_sha256_sidecar(device_table)
 
     stderr = io.StringIO()
@@ -89,4 +95,4 @@ def test_frame_verifier_process_reports_missing_pynacl(
         )
 
     assert rc == 1
-    assert "PyNaCl is required" in stderr.getvalue()
+    assert "trackone_core native crypto helper is required" in stderr.getvalue()
