@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Native `trackone_core.crypto.validate_and_decrypt_framed(...)` helper for framed-ingest material validation, nonce-policy enforcement, XChaCha20-Poly1305 decryption, and TLV payload decoding.
+
+### Changed
+- The Python gateway verifier now relies on the native crypto surface for authoritative framed decrypt/validation instead of direct PyNaCl calls.
+
 ## [0.1.0-alpha.12] - 2026-03-30
 
 ### Notes
