@@ -1,10 +1,16 @@
 #!/usr/bin/env python3
+# ruff: noqa: E402
 """Helpers for tamper-evident local input files."""
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 from typing import cast
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
 from trackone_core.ledger import normalize_hex64, sha256_hex
 
