@@ -31,8 +31,8 @@ pub mod frame;
 #[cfg(feature = "gateway")]
 pub mod merkle;
 
-/// Provisioning records and CBOR serialization (ADR-019, ADR-034).
-pub mod provisioning;
+/// External identity/admission input records and CBOR serialization (ADR-019, ADR-034).
+pub mod identity_input;
 
 /// Canonical CBOR encoding for deterministic hashing/commitments (ADR-034).
 ///
