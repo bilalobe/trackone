@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Renamed the shared lifecycle-adjacent module from `provisioning` to `identity_input` so the crate surface reads as imported identity/admission context at the admitted-telemetry boundary, not as a TrackOne-owned lifecycle subsystem.
+- Removed the dead `PolicyUpdate` type and its canonical CBOR encoding so `trackone-core` no longer advertises a latent control-plane policy contract.
+
 ## [0.1.0-alpha.12] - 2026-03-30
 
 ### Changed
@@ -67,7 +71,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.0-alpha.2] - 2026-01-21
 
 ### Added
-- **Provisioning module** (`src/provisioning.rs`): `ProvisioningRecord` and `PolicyUpdate` for device identity and chain of trust (ADR-019, ADR-034)
+- **Identity-input module** (`src/identity_input.rs`): `ProvisioningRecord` for device identity and chain-of-trust input (ADR-019, ADR-034)
 - **Deterministic CBOR commitments** (`src/cbor.rs`): TrackOne CBOR profile for stable cryptographic commitments
   - Array-based positional encoding with embedded schema version (v1)
   - Integer discriminants for `FactPayload` variants
@@ -97,7 +101,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added reproducible size comparisons between Postcard, TrackOne CBOR, and JSON.
   - Example results for `0.1.0-alpha.2` \(measured on Linux, Rust \`1.xx\`, \`--release\`, features: \`...\`\):
     - `ProvisioningRecord`: 177 B \(Postcard\) vs 185 B \(CBOR\) vs 633 B \(JSON\)
-    - `PolicyUpdate`: 85 B \(Postcard\) vs 88 B \(CBOR\) vs 378 B \(JSON\)
     - `EnvFact` \(embedded in `Fact`\): 55 B \(Postcard\) vs 60 B \(CBOR\) vs 296 B \(JSON\)
 
 ## [0.1.0-alpha.1] - 2025-12-20
