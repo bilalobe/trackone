@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- `jsonschema` remains optional for low-stakes runtime checks, but verifier/export schema-gated contracts are now exercised in a dedicated tox/CI `schema` lane tied to the `validation` dependency extra.
+
 ## [0.1.0-alpha.13] - 2026-04-03
 
 ### Added
