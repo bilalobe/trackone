@@ -31,25 +31,6 @@ except ImportError:  # pragma: no cover - fallback for direct script execution
         "C": "anchor-only-evidence",
     }
 
-try:  # pragma: no cover - optional dependency in some environments
-    import jsonschema
-except Exception:  # pragma: no cover - keep verifier importable without it
-    jsonschema = None  # type: ignore[assignment]
-
-# Build a tuple of schema exception types only when jsonschema is available, to
-# avoid AttributeError when the module is absent but the except clause fires.
-_SCHEMA_EXCEPTIONS: tuple[type[BaseException], ...] = (
-    (jsonschema.ValidationError, jsonschema.SchemaError)
-    if jsonschema is not None
-    else ()
-)
-_MANIFEST_EXCEPTIONS: tuple[type[BaseException], ...] = (
-    OSError,
-    UnicodeDecodeError,
-    json.JSONDecodeError,
-    ValueError,
-) + _SCHEMA_EXCEPTIONS
-
 try:  # Support both package imports and direct script execution.
     from .anchoring_config import (
         STRICT,
@@ -58,7 +39,12 @@ try:  # Support both package imports and direct script execution.
         load_anchoring_config,
     )
     from .canonical_cbor import canonicalize_obj_to_cbor
-    from .schema_validation import load_schema, validate_instance
+    from .schema_validation import (
+        SCHEMA_VALIDATION_EXCEPTIONS,
+        load_schema,
+        require_schema_validation,
+        validate_instance,
+    )
     from .verification_manifest import manifest_candidates
 except ImportError:  # pragma: no cover - fallback when run as a script
     from anchoring_config import (  # type: ignore
@@ -68,8 +54,21 @@ except ImportError:  # pragma: no cover - fallback when run as a script
         load_anchoring_config,
     )
     from canonical_cbor import canonicalize_obj_to_cbor  # type: ignore
-    from schema_validation import load_schema, validate_instance  # type: ignore
+    from schema_validation import (  # type: ignore
+        SCHEMA_VALIDATION_EXCEPTIONS,
+        load_schema,
+        require_schema_validation,
+        validate_instance,
+    )
     from verification_manifest import manifest_candidates  # type: ignore
+
+_MANIFEST_EXCEPTIONS: tuple[type[BaseException], ...] = (
+    OSError,
+    UnicodeDecodeError,
+    json.JSONDecodeError,
+    ValueError,
+    RuntimeError,
+) + SCHEMA_VALIDATION_EXCEPTIONS
 
 EXIT_OTS_NOT_FOUND = 3
 EXIT_OTS_FAILED = 4
@@ -668,6 +667,7 @@ def _load_verification_manifest(
         )
     schema = load_schema(schema_name)
     if schema is not None:
+        require_schema_validation("verification manifest validation")
         validate_instance(data, schema)
     return data
 

@@ -11,11 +11,19 @@ from pathlib import Path
 
 try:  # Support both package imports and direct script execution.
     from . import verify_cli
-    from .schema_validation import load_schema, validate_instance
+    from .schema_validation import (
+        load_schema,
+        require_schema_validation,
+        validate_instance,
+    )
     from .verification_manifest import verify_manifest_path
 except ImportError:  # pragma: no cover - fallback when run as a script
     import verify_cli  # type: ignore
-    from schema_validation import load_schema, validate_instance  # type: ignore
+    from schema_validation import (  # type: ignore
+        load_schema,
+        require_schema_validation,
+        validate_instance,
+    )
     from verification_manifest import verify_manifest_path  # type: ignore
 
 
@@ -38,6 +46,7 @@ def main(argv: list[str] | None = None) -> int:
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     schema = load_schema("verify_manifest")
     if schema is not None:
+        require_schema_validation("verification manifest checks")
         validate_instance(manifest, schema)
 
     buf = io.StringIO()

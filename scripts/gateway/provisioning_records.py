@@ -13,19 +13,20 @@ from typing import Any
 
 try:  # Support both package imports and direct script execution.
     from .input_integrity import require_sha256_sidecar
-    from .schema_validation import load_schema, validate_instance
+    from .schema_validation import (
+        SCHEMA_VALIDATION_EXCEPTIONS,
+        load_schema,
+        schema_validation_available,
+        validate_instance_if_available,
+    )
 except ImportError:  # pragma: no cover - fallback when run as a script
     from input_integrity import require_sha256_sidecar  # type: ignore
-    from schema_validation import load_schema, validate_instance  # type: ignore
-
-jsonschema: Any | None
-try:
-    import jsonschema
-
-    JSONSCHEMA_AVAILABLE = True
-except ImportError:
-    jsonschema = None
-    JSONSCHEMA_AVAILABLE = False
+    from schema_validation import (  # type: ignore
+        SCHEMA_VALIDATION_EXCEPTIONS,
+        load_schema,
+        schema_validation_available,
+        validate_instance_if_available,
+    )
 
 
 class ProvisioningRecordsError(ValueError):
@@ -37,17 +38,20 @@ _HEX_128_RE = re.compile(r"^[0-9a-fA-F]{128}$")
 
 
 def _validate_against_schema(payload: dict[str, Any], schema_name: str) -> None:
-    if not JSONSCHEMA_AVAILABLE or jsonschema is None:
-        return
     schema = load_schema(schema_name)
     if schema is None:
         return
     try:
-        validate_instance(payload, schema)
-    except (jsonschema.ValidationError, jsonschema.SchemaError) as exc:
+        validated = validate_instance_if_available(payload, schema)
+    except SCHEMA_VALIDATION_EXCEPTIONS as exc:
         raise ProvisioningRecordsError(
             f"{schema_name}.schema.json validation failed: {exc}"
         ) from exc
+    if not validated and not schema_validation_available():
+        print(
+            f"[WARN] jsonschema unavailable; {schema_name}.schema.json validation skipped.",
+            file=sys.stderr,
+        )
 
 
 def load_authoritative_input(path: Path) -> dict[str, Any]:

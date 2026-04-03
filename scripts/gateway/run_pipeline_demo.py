@@ -39,12 +39,20 @@ except ImportError:  # pragma: no cover - fallback when run as a script
     )
 
 try:  # Support both package imports and direct script execution.
-    from .schema_validation import load_schema, validate_instance
+    from .schema_validation import (
+        load_schema,
+        require_schema_validation,
+        validate_instance,
+    )
     from .tsa_stamp import TsaStampError, tsa_stamp_day_blob
     from .verification_gate import local_verification_failure
     from .verification_manifest import verify_manifest_path
 except ImportError:  # pragma: no cover - fallback when run as a script
-    from schema_validation import load_schema, validate_instance  # type: ignore
+    from schema_validation import (  # type: ignore
+        load_schema,
+        require_schema_validation,
+        validate_instance,
+    )
     from tsa_stamp import (  # type: ignore
         TsaStampError,
         tsa_stamp_day_blob,
@@ -236,6 +244,7 @@ def artifact_manifest(
 
     verify_schema = load_schema("verify_manifest")
     if verify_schema is not None:
+        require_schema_validation("pipeline verification-manifest validation")
         validate_instance(manifest, verify_schema)
     verify_path = verify_manifest_path(day_artifact.parent, date)
     payload = json.dumps(manifest, indent=2) + "\n"

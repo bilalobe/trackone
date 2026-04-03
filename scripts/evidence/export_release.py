@@ -22,6 +22,7 @@ if str(REPO_ROOT) not in sys.path:
 from scripts.gateway import verify_cli as verify_cli_module  # noqa: E402
 from scripts.gateway.schema_validation import (  # noqa: E402
     load_schema,
+    require_schema_validation,
     validate_instance,
 )
 from scripts.gateway.verification_gate import local_verification_failure  # noqa: E402
@@ -117,6 +118,7 @@ def _rewrite_meta_sidecar(
 
     schema = load_schema("ots_meta")
     if schema is not None:
+        require_schema_validation("OTS metadata validation")
         validate_instance(meta, schema)
     return dest_meta
 
@@ -161,6 +163,7 @@ def _rewrite_exported_manifest(
 
     schema = load_schema("verify_manifest")
     if schema is not None:
+        require_schema_validation("verification manifest export validation")
         validate_instance(manifest, schema)
     _write_json(manifest_path, manifest)
 
