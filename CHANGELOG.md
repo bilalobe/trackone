@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Native framed-ingest validation and AEAD decryption through `trackone_core.crypto`, so the gateway verifier no longer depends on direct PyNaCl calls for the authoritative ingest path.
+
+### Changed
+- `frame_verifier.py` now performs stricter framed-input validation, enforces nonce/material checks through the native helper, and supports a side-effect-free `--dry-run` mode for replay/audit workflows.
+- The shared core vocabulary now treats imported pod identity metadata as `identity_input` rather than a TrackOne-owned provisioning/control-plane surface, and the dead `PolicyUpdate` type was removed.
+
 ## [0.1.0-alpha.12] - 2026-03-30
 
 ### Added
@@ -269,7 +276,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `trackone-core` protocol hardening and schema evolution (see `crates/trackone-core/CHANGELOG.md` for full details):
   - **BREAKING**: `PodId` expanded from `u32` to `[u8; 8]` (with `From<u32>` for backward compatibility)
   - **BREAKING**: `FactPayload` restructured; `Fact` gained time semantics fields
-  - Added provisioning module for device identity and chain of trust
+  - Added identity-input module for device identity and chain-of-trust input
   - Added deterministic CBOR encoding for cryptographic commitments
   - Added environmental sensing types aligned with OGC SensorThings
   - Added serialization benchmarks and production safety checks
