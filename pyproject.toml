@@ -8,7 +8,6 @@ readme = "README.md"
 requires-python = ">=3.12,<4.0"
 dependencies = [
     "pynacl==1.6.2",
-    "jsonschema>=4.26.0",
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -21,6 +20,7 @@ classifiers = [
 # Testing dependencies (pytest + property testing)
 test = [
     "hypothesis>=6.150.0",
+    "jsonschema>=4.26.0",
     "opentimestamps-client>=0.7.2",
     "pytest>=9.0.2",
     "pytest-benchmark>=5.2.3",
@@ -57,6 +57,10 @@ security = [
 # Runtime deps for optional anchoring / HTTP interactions
 anchoring = [
     "requests>=2.33.0",
+]
+
+validation = [
+    "jsonschema>=4.26.0",
 ]
 
 ci = [

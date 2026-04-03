@@ -1518,7 +1518,6 @@ name = "trackone"
 version = "0.1.0a13"
 source = { editable = "." }
 dependencies = [
-    { name = "jsonschema" },
     { name = "pynacl" },
 ]
 
@@ -1546,6 +1545,7 @@ security = [
 ]
 test = [
     { name = "hypothesis" },
+    { name = "jsonschema" },
     { name = "opentimestamps-client" },
     { name = "pytest" },
     { name = "pytest-benchmark" },
@@ -1560,6 +1560,9 @@ type = [
     { name = "types-jsonschema" },
     { name = "types-requests" },
 ]
+validation = [
+    { name = "jsonschema" },
+]
 
 [package.dev-dependencies]
 dev = [
@@ -1572,7 +1575,8 @@ requires-dist = [
     { name = "bandit", marker = "extra == 'security'", specifier = ">=1.9.2" },
     { name = "black", marker = "extra == 'lint'", specifier = ">=26.1.0" },
     { name = "hypothesis", marker = "extra == 'test'", specifier = ">=6.150.0" },
-    { name = "jsonschema", specifier = ">=4.26.0" },
+    { name = "jsonschema", marker = "extra == 'test'", specifier = ">=4.26.0" },
+    { name = "jsonschema", marker = "extra == 'validation'", specifier = ">=4.26.0" },
     { name = "mdformat", marker = "extra == 'lint'", specifier = "==1.0.0" },
     { name = "mdformat-gfm", marker = "extra == 'lint'", specifier = "==1.0.0" },
     { name = "mdformat-ruff", marker = "extra == 'lint'", specifier = "==0.1.3" },
@@ -1595,7 +1599,7 @@ requires-dist = [
     { name = "types-jsonschema", marker = "extra == 'type'" },
     { name = "types-requests", marker = "extra == 'type'" },
 ]
-provides-extras = ["test", "lint", "type", "security", "anchoring", "ci", "precommit"]
+provides-extras = ["test", "lint", "type", "security", "anchoring", "validation", "ci", "precommit"]
 
 [package.metadata.requires-dev]
 dev = [
