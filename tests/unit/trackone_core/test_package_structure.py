@@ -157,6 +157,22 @@ class TestShimSubmodules:
         result = m.some_fn()
         assert result == "sentinel-value"
 
+    def test_crypto_shim_exposes_validate_and_decrypt_framed(
+        self, mock_native: MagicMock
+    ) -> None:
+        """The crypto shim should expose the native framed-ingest helper."""
+        import importlib
+
+        sentinel = MagicMock(return_value=({"counter": 1}, None))
+        mock_native.crypto.validate_and_decrypt_framed = sentinel
+
+        crypto = importlib.import_module("trackone_core.crypto")
+        payload, reason = crypto.validate_and_decrypt_framed({}, {})
+
+        assert payload == {"counter": 1}
+        assert reason is None
+        sentinel.assert_called_once()
+
 
 # ---------------------------------------------------------------------------
 # Radio shim
