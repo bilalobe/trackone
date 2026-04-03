@@ -94,22 +94,73 @@ def test_parse_frame_error_cases(frame_verifier):
     frame, err = frame_verifier.parse_frame('"a string"')
     assert frame is None and err == "not_dict"
 
-    # missing hdr
+    # missing frame fields
     frame, err = frame_verifier.parse_frame(json.dumps({"foo": "bar"}))
-    assert frame is None and err == "missing_hdr"
+    assert frame is None and err == "missing_frame_fields"
 
     # hdr not dict
-    frame, err = frame_verifier.parse_frame(json.dumps({"hdr": "nope"}))
+    frame, err = frame_verifier.parse_frame(
+        json.dumps({"hdr": "nope", "nonce": "", "ct": "", "tag": ""})
+    )
     assert frame is None and err == "invalid_hdr"
 
     # missing header fields
-    frame, err = frame_verifier.parse_frame(json.dumps({"hdr": {"dev_id": 1}}))
+    frame, err = frame_verifier.parse_frame(
+        json.dumps({"hdr": {"dev_id": 1}, "nonce": "", "ct": "", "tag": ""})
+    )
     assert frame is None and err == "missing_hdr_fields"
 
     # invalid header types
-    bad = {"hdr": {"dev_id": "x", "msg_type": 1, "fc": 1, "flags": 0}}
+    bad = {
+        "hdr": {"dev_id": "x", "msg_type": 1, "fc": 1, "flags": 0},
+        "nonce": "",
+        "ct": "",
+        "tag": "",
+    }
     frame, err = frame_verifier.parse_frame(json.dumps(bad))
     assert frame is None and err == "invalid_hdr_types"
+
+    # unexpected top-level fields
+    extra = {
+        "hdr": {"dev_id": 1, "msg_type": 1, "fc": 1, "flags": 0},
+        "nonce": "",
+        "ct": "",
+        "tag": "",
+        "extra": True,
+    }
+    frame, err = frame_verifier.parse_frame(json.dumps(extra))
+    assert frame is None and err == "unexpected_frame_fields"
+
+    # unexpected header fields
+    extra_hdr = {
+        "hdr": {"dev_id": 1, "msg_type": 1, "fc": 1, "flags": 0, "extra": 2},
+        "nonce": "",
+        "ct": "",
+        "tag": "",
+    }
+    frame, err = frame_verifier.parse_frame(json.dumps(extra_hdr))
+    assert frame is None and err == "unexpected_hdr_fields"
+
+    # stringified integers are not accepted
+    as_strings = {
+        "hdr": {"dev_id": "1", "msg_type": 1, "fc": 1, "flags": 0},
+        "nonce": "",
+        "ct": "",
+        "tag": "",
+    }
+    frame, err = frame_verifier.parse_frame(json.dumps(as_strings))
+    assert frame is None and err == "invalid_hdr_types"
+
+    # line-length guard triggers before JSON parse
+    long_nonce = "A" * (frame_verifier.MAX_NDJSON_LINE_BYTES + 1)
+    too_long = {
+        "hdr": {"dev_id": 1, "msg_type": 1, "fc": 1, "flags": 0},
+        "nonce": long_nonce,
+        "ct": "",
+        "tag": "",
+    }
+    frame, err = frame_verifier.parse_frame(json.dumps(too_long))
+    assert frame is None and err == "line_too_long"
 
 
 def test_aead_decrypt_success_and_failures(tmp_path, frame_verifier, pod_sim):
