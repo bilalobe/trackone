@@ -439,5 +439,4 @@ mod tests {
         let err = validate_and_decrypt_impl(&frame, &device).unwrap_err();
         assert_eq!(err, RejectReason::DecryptFailed);
     }
-
 }
