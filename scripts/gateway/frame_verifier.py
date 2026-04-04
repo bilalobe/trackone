@@ -37,7 +37,15 @@ if str(_REPO_ROOT) not in sys.path:
 try:  # Support both package imports and direct script execution.
     from .canonical_cbor import canonicalize_obj_to_cbor
     from .input_integrity import require_sha256_sidecar, write_sha256_sidecar
-    from .schema_validation import load_schema, load_schema_from_path, validate_instance
+    from .schema_validation import (
+        JSONSCHEMA_AVAILABLE,
+        SCHEMA_VALIDATION_EXCEPTIONS,
+        load_schema,
+        load_schema_from_path,
+        schema_validation_available,
+        validate_instance,
+        validate_instance_if_available,
+    )
     from .schema_validation import schema_path as _schema_path
 except ImportError:  # pragma: no cover - fallback when run as a script
     from canonical_cbor import canonicalize_obj_to_cbor  # type: ignore
@@ -46,9 +54,13 @@ except ImportError:  # pragma: no cover - fallback when run as a script
         write_sha256_sidecar,
     )
     from schema_validation import (  # type: ignore
+        JSONSCHEMA_AVAILABLE,
+        SCHEMA_VALIDATION_EXCEPTIONS,
         load_schema,
         load_schema_from_path,
+        schema_validation_available,
         validate_instance,
+        validate_instance_if_available,
     )
     from schema_validation import schema_path as _schema_path  # type: ignore
 
@@ -60,17 +72,9 @@ MAX_CIPHERTEXT_BYTES = 256
 HEADER_FIELDS = {"dev_id", "msg_type", "fc", "flags"}
 FRAME_FIELDS = {"hdr", "nonce", "ct", "tag"}
 
-# Optional jsonschema: mypy will warn if stubs are missing; detect availability
-jsonschema: Any | None
-try:
-    import jsonschema
-
-    JSONSCHEMA_AVAILABLE = True
-except ImportError:
-    jsonschema = None
-    JSONSCHEMA_AVAILABLE = False
-
-# jsonschema remains Any | None for proper type checking after import guard
+jsonschema: Any | None = None
+if JSONSCHEMA_AVAILABLE:  # pragma: no branch - import only when installed
+    jsonschema = importlib.import_module("jsonschema")
 
 
 @dataclass(slots=True, frozen=True)
@@ -198,19 +202,22 @@ def load_fact_schema() -> dict[str, Any] | None:
             f"(expected at '{expected_path}'); schema validation will be disabled.",
             file=sys.stderr,
         )
+    elif not schema_validation_available():
+        print(
+            "[WARN] jsonschema unavailable; fact schema validation will be skipped.",
+            file=sys.stderr,
+        )
     return schema
 
 
 def validate_fact(obj: dict[str, Any], schema: dict[str, Any] | None) -> None:
     """Validate fact against schema if available."""
-    if not (schema and JSONSCHEMA_AVAILABLE and jsonschema is not None):
+    if not schema:
         return
     try:
-        validate_instance(obj, schema)
-    except jsonschema.ValidationError as e:
+        validate_instance_if_available(obj, schema)
+    except SCHEMA_VALIDATION_EXCEPTIONS as e:
         raise ValueError(f"Fact validation failure: {e}") from e
-    except jsonschema.SchemaError as e:
-        raise ValueError(f"Fact schema error: {e}") from e
 
 
 # --- Device table helpers ---
@@ -238,17 +245,22 @@ def load_device_table(path: Path) -> dict[str, dict[str, Any]]:
         raise ValueError(f"Unsupported device table version: {version!r}")
 
     # Optional schema validation (tiny schema)
-    if JSONSCHEMA_AVAILABLE and jsonschema is not None:
+    if schema_validation_available():
         schema = load_schema("device_table")
         if schema:
             try:
                 validate_instance(data, schema)
-            except (jsonschema.ValidationError, jsonschema.SchemaError) as e:
+            except SCHEMA_VALIDATION_EXCEPTIONS as e:
                 print(
                     f"[ERROR] Device table schema validation failed: {e}",
                     file=sys.stderr,
                 )
                 raise
+    elif load_schema("device_table") is not None:
+        print(
+            "[WARN] jsonschema unavailable; device_table schema validation will be skipped.",
+            file=sys.stderr,
+        )
 
     # Normalize to typed shape: dict[str, dict[str, Any]]
     out: dict[str, dict[str, Any]] = {}
@@ -665,7 +677,7 @@ def process(argv: list[str] | None = None) -> int:
     except KeyboardInterrupt:
         print("\n[INFO] Interrupted by user", file=sys.stderr)
         return 1
-    except (OSError, json.JSONDecodeError, ValueError, TypeError) as e:
+    except (OSError, json.JSONDecodeError, ValueError, TypeError, RuntimeError) as e:
         print(f"[ERROR] processing failure: {e}", file=sys.stderr)
         return 1
     finally:

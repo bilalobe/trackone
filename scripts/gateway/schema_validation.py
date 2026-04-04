@@ -9,20 +9,21 @@ from pathlib import Path
 from typing import Any
 
 SCHEMA_DIR = Path(__file__).parent.parent.parent / "toolset" / "unified" / "schemas"
-SCHEMA_VALIDATION_SKIP_REASON = "dependency-unavailable-jsonschema"
+SCHEMA_VALIDATION_IMPORT_EXCEPTION: Exception | None = None
+SCHEMA_VALIDATION_EXCEPTIONS: tuple[type[BaseException], ...] = ()
 
 try:
     import jsonschema as _jsonschema
 
     JSONSCHEMA_AVAILABLE = True
-    SCHEMA_VALIDATION_EXCEPTIONS: tuple[type[BaseException], ...] = (
+    SCHEMA_VALIDATION_EXCEPTIONS = (
         _jsonschema.ValidationError,
         _jsonschema.SchemaError,
     )
-except ImportError:
+except Exception as exc:
     _jsonschema = None  # type: ignore[assignment]
     JSONSCHEMA_AVAILABLE = False
-    SCHEMA_VALIDATION_EXCEPTIONS = ()
+    SCHEMA_VALIDATION_IMPORT_EXCEPTION = exc
 
 
 def schema_path(name: str) -> Path:

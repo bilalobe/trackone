@@ -7,10 +7,35 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import os
+import subprocess
+import sys
+from pathlib import Path
 
 
 class TestVerifyCliEdgeCases:
     """Test edge cases in verify_cli."""
+
+    def test_verify_cli_direct_script_mode_imports_schema_validation_helpers(self):
+        repo_root = Path(__file__).resolve().parents[3]
+        pythonpath = os.pathsep.join(
+            [
+                str(repo_root),
+                os.environ.get("PYTHONPATH", ""),
+            ]
+        ).rstrip(os.pathsep)
+        result = subprocess.run(
+            [sys.executable, "scripts/gateway/verify_cli.py", "--help"],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            check=False,
+            env={**os.environ, "PYTHONPATH": pythonpath},
+        )
+
+        assert result.returncode == 0
+        assert "usage:" in result.stdout.lower()
+        assert "NameError" not in result.stderr
 
     def test_verify_nonexistent_root_dir(self, tmp_path, verify_cli, facts_dir):
         """Nonexistent root directory should be handled."""

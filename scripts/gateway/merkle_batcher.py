@@ -44,19 +44,18 @@ from typing import Any, cast
 
 try:  # Support both package imports and direct script execution.
     from .canonical_cbor import canonicalize_obj_to_cbor
-    from .schema_validation import load_schema, validate_instance
+    from .schema_validation import (
+        SCHEMA_VALIDATION_EXCEPTIONS,
+        load_schema,
+        validate_instance_if_available,
+    )
 except ImportError:  # pragma: no cover - fallback when run as a script
     from canonical_cbor import canonicalize_obj_to_cbor  # type: ignore
-    from schema_validation import load_schema, validate_instance  # type: ignore
-
-jsonschema: Any | None
-try:
-    import jsonschema
-
-    JSONSCHEMA_AVAILABLE = True
-except ImportError:
-    jsonschema = None
-    JSONSCHEMA_AVAILABLE = False
+    from schema_validation import (  # type: ignore
+        SCHEMA_VALIDATION_EXCEPTIONS,
+        load_schema,
+        validate_instance_if_available,
+    )
 
 DATE_RX = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
@@ -150,12 +149,18 @@ def validate_against_schema(
     obj: dict[str, Any], schema: dict[str, Any], label: str
 ) -> None:
     """Validate obj against schema; print warning if validation fails."""
-    if not JSONSCHEMA_AVAILABLE or jsonschema is None:
+    if not schema:
         return
     try:
-        validate_instance(obj, schema)
+        validated = validate_instance_if_available(obj, schema)
+        if not validated:
+            print(
+                f"[WARN] jsonschema unavailable; {label} schema validation skipped.",
+                file=sys.stderr,
+            )
+            return
         print(f"[OK] {label} validated against schema.", file=sys.stderr)
-    except (jsonschema.ValidationError, jsonschema.SchemaError) as e:
+    except SCHEMA_VALIDATION_EXCEPTIONS as e:
         print(f"[WARN] {label} schema validation failure: {e}", file=sys.stderr)
 
 
