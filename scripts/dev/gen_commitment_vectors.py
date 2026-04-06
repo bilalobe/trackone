@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.gateway.canonical_cbor import canonicalize_obj_to_cbor  # noqa: E402
+from scripts.gateway.canonical_cbor import canonicalize_obj_to_cbor_native  # noqa: E402
 from scripts.gateway.merkle_batcher import merkle_root_from_leaves  # noqa: E402
 from trackone_core.ledger import sha256_hex  # noqa: E402
 
@@ -68,7 +68,7 @@ def main() -> int:
         stem = f"fact-{index:03d}"
         json_path = FACTS_DIR / f"{stem}.json"
         cbor_path = FACTS_DIR / f"{stem}.cbor"
-        cbor_bytes = canonicalize_obj_to_cbor(fact)
+        cbor_bytes = canonicalize_obj_to_cbor_native(fact)
         leaves.append(cbor_bytes)
         _write_json(json_path, fact)
         cbor_path.write_bytes(cbor_bytes)
@@ -99,7 +99,7 @@ def main() -> int:
         "batches": [block_header],
         "day_root": merkle_root,
     }
-    day_cbor = canonicalize_obj_to_cbor(day_record)
+    day_cbor = canonicalize_obj_to_cbor_native(day_record)
 
     _write_json(OUT_DIR / "block-header.json", block_header)
     _write_json(OUT_DIR / "day-record.json", day_record)
