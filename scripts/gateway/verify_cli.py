@@ -11,7 +11,6 @@ import subprocess  # nosec B404
 import sys
 from collections.abc import Iterable
 from dataclasses import dataclass
-from hashlib import sha256
 from pathlib import Path
 from typing import Any, cast
 
@@ -38,7 +37,6 @@ try:  # Support both package imports and direct script execution.
         compute_overall_status,
         load_anchoring_config,
     )
-    from .canonical_cbor import canonicalize_obj_to_cbor
     from .schema_validation import (
         SCHEMA_VALIDATION_EXCEPTIONS,
         load_schema,
@@ -53,7 +51,6 @@ except ImportError:  # pragma: no cover - fallback when run as a script
         compute_overall_status,
         load_anchoring_config,
     )
-    from canonical_cbor import canonicalize_obj_to_cbor  # type: ignore
     from schema_validation import (  # type: ignore
         SCHEMA_VALIDATION_EXCEPTIONS,
         load_schema,
@@ -115,31 +112,22 @@ except Exception:  # pragma: no cover - extension not built/installed or init fa
 
 def merkle_root(leaves: Iterable[bytes]) -> str:
     leaves_list = list(leaves)
-    if _RUST_MERKLE is not None:
-        try:  # pragma: no cover - exercised when Rust extension is available
-            root_hex, _leaf_hashes = cast(
-                tuple[str, list[str]],
-                _RUST_MERKLE.merkle_root_hex_and_leaf_hashes(leaves_list),
-            )
-            return root_hex
-        except (ImportError, RuntimeError, TypeError, ValueError) as e:
-            print(
-                f"[WARN] Rust merkle failed, falling back to Python: {e}",
-                file=sys.stderr,
-            )
-    if not leaves_list:
-        return cast(str, sha256_hex(b""))
-    leaf_hashes = [sha256_hex(leaf) for leaf in leaves_list]
-    leaf_hashes_sorted = sorted(leaf_hashes)
-    layer = [bytes.fromhex(hx) for hx in leaf_hashes_sorted]
-    while len(layer) > 1:
-        nxt = []
-        for i in range(0, len(layer), 2):
-            a = layer[i]
-            b = layer[i + 1] if i + 1 < len(layer) else layer[i]
-            nxt.append(sha256(a + b).digest())
-        layer = nxt
-    return layer[0].hex()
+    if _RUST_MERKLE is None:
+        raise RuntimeError(
+            "trackone_core native merkle helper is required for authoritative "
+            "verification paths. Build/install the native extension or run via tox."
+        )
+    try:  # pragma: no cover - exercised when Rust extension is available
+        root_hex, _leaf_hashes = cast(
+            tuple[str, list[str]],
+            _RUST_MERKLE.merkle_root_hex_and_leaf_hashes(leaves_list),
+        )
+        return root_hex
+    except (ImportError, RuntimeError, TypeError, ValueError) as exc:
+        raise RuntimeError(
+            "trackone_core native merkle helper failed during authoritative "
+            "verification"
+        ) from exc
 
 
 @dataclass(slots=True, frozen=True)
@@ -1037,19 +1025,15 @@ def main(argv: list[str] | None = None) -> int:
 
         try:
             day_json_bytes = day_json_path.read_bytes()
-            canon: bytes | None = None
-            if _RUST_LEDGER is not None and hasattr(
+            if _RUST_LEDGER is None or not hasattr(
                 _RUST_LEDGER, "canonicalize_json_to_cbor_bytes"
             ):
-                try:  # pragma: no cover - exercised when Rust extension is available
-                    canon = bytes(
-                        _RUST_LEDGER.canonicalize_json_to_cbor_bytes(day_json_bytes)
-                    )
-                except (RuntimeError, TypeError, ValueError):
-                    canon = None
-            if canon is None:
-                canon = canonicalize_obj_to_cbor(day_record)
-        except (OSError, TypeError, ValueError) as exc:
+                raise RuntimeError(
+                    "trackone_core native ledger helper is required for authoritative "
+                    "verification paths. Build/install the native extension or run via tox."
+                )
+            canon = bytes(_RUST_LEDGER.canonicalize_json_to_cbor_bytes(day_json_bytes))
+        except (OSError, RuntimeError, TypeError, ValueError) as exc:
             print(
                 f"ERROR: Failed to canonicalize day projection {day_json_path} into "
                 f"CBOR commitment bytes: {exc}"
@@ -1114,7 +1098,13 @@ def main(argv: list[str] | None = None) -> int:
                 _emit(summary, args.json)
                 return 1
 
-        recomputed_root = merkle_root(leaves)
+        try:
+            recomputed_root = merkle_root(leaves)
+        except RuntimeError as exc:
+            print(f"ERROR: Failed to recompute authoritative Merkle root: {exc}")
+            summary["checks"]["root_match"] = False
+            _emit(summary, args.json)
+            return 1
         if recomputed_root != recorded_root:
             print(
                 f"ERROR: Merkle root mismatch. Computed: {recomputed_root}, Recorded: {recorded_root}"

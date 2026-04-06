@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
-"""Deterministic CBOR commitment helpers (ADR-039)."""
+"""Reference/test-only CBOR commitment helpers plus native bridge utilities."""
 
 from __future__ import annotations
 
 import json
 import math
 import struct
-from typing import Any
+from collections.abc import Callable
+from typing import Any, cast
 
 _RUST_CANONICALIZE_JSON_TO_CBOR = None
-try:  # pragma: no cover - optional acceleration
+try:  # pragma: no cover - optional native bridge
     import trackone_core
 
     native = getattr(trackone_core, "_native", None)
@@ -21,6 +22,16 @@ try:  # pragma: no cover - optional acceleration
             )
 except Exception:  # pragma: no cover - extension optional
     _RUST_CANONICALIZE_JSON_TO_CBOR = None
+
+
+def _require_native_canonicalizer() -> Callable[[bytes], Any]:
+    rust_fn = _RUST_CANONICALIZE_JSON_TO_CBOR
+    if rust_fn is None:
+        raise RuntimeError(
+            "trackone_core native ledger helper is required for authoritative "
+            "commitment paths. Build/install the native extension or run via tox."
+        )
+    return cast(Callable[[bytes], Any], rust_fn)
 
 
 def _major_u64(buf: bytearray, major: int, n: int) -> None:
@@ -131,14 +142,18 @@ def _encode_obj(buf: bytearray, obj: Any) -> None:
 
 
 def canonicalize_obj_to_cbor(obj: Any) -> bytes:
-    """Encode JSON-like object into deterministic CBOR commitment bytes."""
+    """Encode JSON-like object using the Python reference CBOR policy."""
     buf = bytearray()
     _encode_obj(buf, obj)
     return bytes(buf)
 
 
 def canonicalize_json_bytes_to_cbor(input_bytes: bytes) -> bytes:
-    """Parse JSON bytes and return deterministic CBOR commitment bytes."""
+    """Parse JSON bytes and return deterministic CBOR commitment bytes.
+
+    This helper prefers the native implementation when available, but remains a
+    reference/test-oriented compatibility surface.
+    """
     rust_fn = _RUST_CANONICALIZE_JSON_TO_CBOR
     if rust_fn is not None:
         try:
@@ -146,3 +161,29 @@ def canonicalize_json_bytes_to_cbor(input_bytes: bytes) -> bytes:
         except Exception:
             pass
     return canonicalize_obj_to_cbor(json.loads(input_bytes))
+
+
+def canonicalize_json_bytes_to_cbor_native(input_bytes: bytes) -> bytes:
+    """Canonicalize JSON bytes through the native ledger boundary only."""
+    rust_fn = _require_native_canonicalizer()
+    try:
+        return bytes(rust_fn(input_bytes))
+    except Exception as exc:  # pragma: no cover - native path exercised in tox
+        raise RuntimeError(
+            "trackone_core native ledger helper failed during authoritative CBOR generation"
+        ) from exc
+
+
+def canonicalize_obj_to_cbor_native(obj: Any) -> bytes:
+    """Canonicalize a JSON-like object through the native ledger boundary only."""
+    try:
+        input_bytes = json.dumps(
+            obj,
+            separators=(",", ":"),
+            allow_nan=False,
+        ).encode("utf-8")
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"failed to serialize object for native CBOR canonicalization: {exc}"
+        ) from exc
+    return canonicalize_json_bytes_to_cbor_native(input_bytes)

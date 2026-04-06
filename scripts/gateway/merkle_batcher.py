@@ -43,14 +43,12 @@ from pathlib import Path
 from typing import Any, cast
 
 try:  # Support both package imports and direct script execution.
-    from .canonical_cbor import canonicalize_obj_to_cbor
     from .schema_validation import (
         SCHEMA_VALIDATION_EXCEPTIONS,
         load_schema,
         validate_instance_if_available,
     )
 except ImportError:  # pragma: no cover - fallback when run as a script
-    from canonical_cbor import canonicalize_obj_to_cbor  # type: ignore
     from schema_validation import (  # type: ignore
         SCHEMA_VALIDATION_EXCEPTIONS,
         load_schema,
@@ -59,10 +57,10 @@ except ImportError:  # pragma: no cover - fallback when run as a script
 
 DATE_RX = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
-# Optional Rust extension (`trackone_core`) for single-sourced ledger policy (ADR-003).
+# Native Rust extension (`trackone_core`) for authoritative ledger policy.
 _RUST_MERKLE: Any | None = None
 _RUST_LEDGER: Any | None = None
-try:  # pragma: no cover - optional acceleration
+try:  # pragma: no cover - native extension resolution
     import trackone_core
 
     # Supported layout: a Python package `trackone_core/` with native extension
@@ -77,6 +75,24 @@ except Exception:  # pragma: no cover - extension not built/installed or init fa
     trackone_core = None  # type: ignore[assignment]
     _RUST_MERKLE = None
     _RUST_LEDGER = None
+
+
+def _require_native_merkle() -> Any:
+    if _RUST_MERKLE is None:
+        raise RuntimeError(
+            "trackone_core native merkle helper is required for authoritative "
+            "commitment paths. Build/install the native extension or run via tox."
+        )
+    return _RUST_MERKLE
+
+
+def _require_native_ledger() -> Any:
+    if _RUST_LEDGER is None:
+        raise RuntimeError(
+            "trackone_core native ledger helper is required for authoritative "
+            "commitment paths. Build/install the native extension or run via tox."
+        )
+    return _RUST_LEDGER
 
 
 def canonical_json(obj: Any) -> bytes:
@@ -105,34 +121,17 @@ def _h(x: bytes) -> bytes:
 
 def merkle_root_from_leaves(leaves: list[bytes]) -> tuple[str, list[str]]:
     """Return (root_hex, leaf_hexes) for canonicalized leaves."""
-    if _RUST_MERKLE is not None:
-        try:  # pragma: no cover - exercised when Rust extension is available
-            return cast(
-                tuple[str, list[str]],
-                _RUST_MERKLE.merkle_root_hex_and_leaf_hashes(leaves),
-            )
-        except (ImportError, RuntimeError, TypeError, ValueError) as e:
-            print(
-                f"[WARN] Rust merkle failed, falling back to Python: {e}",
-                file=sys.stderr,
-            )
-            # Fall back to the reference Python implementation.
-            pass
-    if not leaves:
-        empty = sha256(b"").hexdigest()
-        return empty, []
-    leaf_hashes = [sha256(leaf).hexdigest() for leaf in leaves]
-    # Deterministic: sort by hash, not filename
-    leaf_hashes_sorted = sorted(leaf_hashes)
-    layer = [bytes.fromhex(hx) for hx in leaf_hashes_sorted]
-    while len(layer) > 1:
-        nxt: list[bytes] = []
-        for i in range(0, len(layer), 2):
-            a = layer[i]
-            b = layer[i + 1] if i + 1 < len(layer) else layer[i]
-            nxt.append(_h(a + b))
-        layer = nxt
-    return layer[0].hex(), leaf_hashes_sorted
+    native_merkle = _require_native_merkle()
+    try:  # pragma: no cover - exercised when Rust extension is available
+        return cast(
+            tuple[str, list[str]],
+            native_merkle.merkle_root_hex_and_leaf_hashes(leaves),
+        )
+    except (ImportError, RuntimeError, TypeError, ValueError) as exc:
+        raise RuntimeError(
+            "trackone_core native merkle helper failed during authoritative "
+            "Merkle computation"
+        ) from exc
 
 
 def load_schemas() -> dict[str, Any]:
@@ -286,77 +285,37 @@ def main(argv: list[str] | None = None) -> int:
     batch_id = f"{args.site}-{args.date}-00"
     prev_root = prev_day_root_or_zero(args.out, args.site, args.date)
 
-    # Prefer single-sourced stamping via Rust ledger helpers when available.
     header_dict: dict[str, Any] | None = None
     header_json_bytes: bytes | None = None
     day_record: dict[str, Any] | None = None
     day_blob: bytes | None = None
     root_hex: str | None = None
-    leaf_hashes: list[str] | None = None
 
-    if _RUST_LEDGER is not None:
-        try:  # pragma: no cover - exercised when Rust extension is available
-            if hasattr(_RUST_LEDGER, "build_day_v1_single_batch_cbor"):
-                (
-                    header_json_bytes,
-                    day_blob,
-                    day_json_bytes,
-                ) = _RUST_LEDGER.build_day_v1_single_batch_cbor(
-                    args.site, args.date, prev_root, batch_id, leaves
-                )
-                header_dict = json.loads(header_json_bytes)
-                day_record = json.loads(day_json_bytes)
-            else:
-                (
-                    header_json_bytes,
-                    day_json_bytes,
-                ) = _RUST_LEDGER.build_day_v1_single_batch(
-                    args.site, args.date, prev_root, batch_id, leaves
-                )
-                header_dict = json.loads(header_json_bytes)
-                day_record = json.loads(day_json_bytes)
-                day_blob = canonicalize_obj_to_cbor(day_record)
-            root_hex = header_dict.get("merkle_root")
-            leaf_hashes = header_dict.get("leaf_hashes")
-        except (
-            RuntimeError,
-            TypeError,
-            ValueError,
-            json.JSONDecodeError,
-            UnicodeDecodeError,
-        ) as e:
-            print(
-                f"[WARN] Rust ledger failed, falling back to Python: {e}",
-                file=sys.stderr,
+    try:  # pragma: no cover - exercised when Rust extension is available
+        native_ledger = _require_native_ledger()
+        if not hasattr(native_ledger, "build_day_v1_single_batch_cbor"):
+            raise RuntimeError(
+                "trackone_core native ledger helper is missing build_day_v1_single_batch_cbor"
             )
-            header_dict = None
-            header_json_bytes = None
-            day_record = None
-            day_blob = None
-            root_hex = None
-            leaf_hashes = None
-
-    if header_dict is None or day_record is None or day_blob is None:
-        root_hex, leaf_hashes = merkle_root_from_leaves(leaves)
-        header = BlockHeader(
-            version=1,
-            site_id=args.site,
-            day=args.date,
-            batch_id=batch_id,
-            merkle_root=root_hex,
-            count=len(leaf_hashes),
-            leaf_hashes=leaf_hashes,
+        (
+            header_json_bytes,
+            day_blob,
+            day_json_bytes,
+        ) = native_ledger.build_day_v1_single_batch_cbor(
+            args.site, args.date, prev_root, batch_id, leaves
         )
-        header_dict = header.to_dict()
-        day_record = {
-            "version": 1,
-            "site_id": args.site,
-            "date": args.date,
-            "prev_day_root": prev_root,
-            "batches": [header_dict],
-            "day_root": root_hex,
-        }
-        day_blob = canonicalize_obj_to_cbor(day_record)
+        header_dict = json.loads(header_json_bytes)
+        day_record = json.loads(day_json_bytes)
+        root_hex = header_dict.get("merkle_root")
+    except (
+        RuntimeError,
+        TypeError,
+        ValueError,
+        json.JSONDecodeError,
+        UnicodeDecodeError,
+    ) as exc:
+        print(f"[ERROR] {exc}", file=sys.stderr)
+        return 1
 
     # Type narrowing: after the fallback block, these must be non-None
     assert header_dict is not None

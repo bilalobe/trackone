@@ -35,7 +35,7 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 try:  # Support both package imports and direct script execution.
-    from .canonical_cbor import canonicalize_obj_to_cbor
+    from .canonical_cbor import canonicalize_obj_to_cbor_native
     from .input_integrity import require_sha256_sidecar, write_sha256_sidecar
     from .schema_validation import (
         JSONSCHEMA_AVAILABLE,
@@ -48,7 +48,7 @@ try:  # Support both package imports and direct script execution.
     )
     from .schema_validation import schema_path as _schema_path
 except ImportError:  # pragma: no cover - fallback when run as a script
-    from canonical_cbor import canonicalize_obj_to_cbor  # type: ignore
+    from canonical_cbor import canonicalize_obj_to_cbor_native  # type: ignore
     from input_integrity import (  # type: ignore
         require_sha256_sidecar,
         write_sha256_sidecar,
@@ -639,7 +639,7 @@ def process(argv: list[str] | None = None) -> int:
                 fact_file_stem = args.out_facts / f"{dev_id_str}-{fc:08d}"
                 fact_file_cbor = fact_file_stem.with_suffix(".cbor")
                 fact_file_json = fact_file_stem.with_suffix(".json")
-                fact_file_cbor.write_bytes(canonicalize_obj_to_cbor(fact))
+                fact_file_cbor.write_bytes(canonicalize_obj_to_cbor_native(fact))
                 with fact_file_json.open("w", encoding="utf-8") as out_fh:
                     json.dump(fact, out_fh, indent=2, sort_keys=True)
 
