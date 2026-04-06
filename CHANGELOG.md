@@ -7,7 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- `jsonschema` remains optional for low-stakes runtime checks, but verifier/export schema-gated contracts are now exercised in a dedicated tox/CI `schema` lane tied to the `validation` dependency extra.
+- Authoritative fact and day-artifact CBOR generation now go through native `trackone_core.ledger` helpers in normal runs, and commitment-capable workflows fail closed if the native ledger surface is unavailable or errors.
+- Native Merkle recomputation is now required for normal gateway batching and verifier recompute paths; Python Merkle fallback is no longer used as runtime authority.
+- Python CBOR and Merkle implementations remain in-tree only as explicit reference/parity fixtures, so corpus parity proves the Rust commitment path instead of substituting for it.
+- `jsonschema` is no longer a mandatory base runtime dependency. Gateway and verifier runtime flows now skip schema validation explicitly when the library is unavailable, while validation-oriented tooling continues to require it and fails clearly when absent.
 
 ## [0.1.0-alpha.13] - 2026-04-03
 
