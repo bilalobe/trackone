@@ -4,6 +4,8 @@ Merkle root edge case tests (moved from test_edge_cases.py)
 """
 from __future__ import annotations
 
+import pytest
+
 
 class TestMerkleRootEdgeCases:
     """Test Merkle root computation edge cases."""
@@ -46,3 +48,10 @@ class TestMerkleRootEdgeCases:
         assert isinstance(root, str)
         assert len(root) == 64
         assert len(hashes) == 5
+
+    def test_merkle_root_requires_native_merkle(self, monkeypatch, merkle_batcher):
+        monkeypatch.setattr(merkle_batcher, "_RUST_MERKLE", None)
+        with pytest.raises(
+            RuntimeError, match="trackone_core native merkle helper is required"
+        ):
+            merkle_batcher.merkle_root_from_leaves([b"leaf"])

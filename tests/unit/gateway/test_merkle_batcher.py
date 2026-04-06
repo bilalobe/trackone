@@ -4,6 +4,8 @@ Edge cases for merkle_batcher (moved from test_edge_cases.py)
 """
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 
 import pytest
@@ -138,3 +140,42 @@ class TestMerkleBatcherEdgeCases:
 
         result = merkle_batcher.main(args)
         assert result == 0
+
+    def test_batcher_requires_native_ledger(
+        self, monkeypatch, tmp_path, facts_dir, merkle_batcher
+    ):
+        out_dir = tmp_path / "out"
+        out_dir.mkdir()
+
+        fact_obj = {
+            "pod_id": "0000000000000001",
+            "fc": 1,
+            "ingest_time": 1759831200,
+            "ingest_time_rfc3339_utc": "2025-10-07T10:00:00Z",
+            "pod_time": None,
+            "kind": "Custom",
+            "payload": {},
+        }
+        fact_stem = facts_dir / "fact"
+        fact_stem.with_suffix(".cbor").write_bytes(canonicalize_obj_to_cbor(fact_obj))
+        fact_stem.with_suffix(".json").write_text(json.dumps(fact_obj))
+
+        monkeypatch.setattr(merkle_batcher, "_RUST_LEDGER", None)
+
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            result = merkle_batcher.main(
+                [
+                    "--facts",
+                    str(facts_dir),
+                    "--out",
+                    str(out_dir),
+                    "--site",
+                    "test",
+                    "--date",
+                    "2025-10-07",
+                ]
+            )
+
+        assert result == 1
+        assert "trackone_core native ledger helper is required" in stderr.getvalue()

@@ -96,3 +96,58 @@ def test_frame_verifier_process_reports_missing_native_crypto(
 
     assert rc == 1
     assert "trackone_core native crypto helper is required" in stderr.getvalue()
+
+
+def test_frame_verifier_process_reports_missing_native_ledger(
+    monkeypatch, load_module, tmp_path
+) -> None:
+    import contextlib
+    import io
+
+    frame_verifier = load_module(
+        "frame_verifier_process_without_native_ledger_under_test",
+        Path("scripts/gateway/frame_verifier.py"),
+    )
+    monkeypatch.setattr(
+        frame_verifier,
+        "_validate_and_decrypt_framed",
+        lambda _frame, _device_table: ({"counter": 1, "temp_c": 23.5}, ""),
+    )
+    monkeypatch.setattr(
+        frame_verifier,
+        "canonicalize_obj_to_cbor_native",
+        lambda _obj: (_ for _ in ()).throw(
+            RuntimeError(
+                "trackone_core native ledger helper is required for authoritative commitment paths. Build/install the native extension or run via tox."
+            )
+        ),
+    )
+
+    frames = tmp_path / "frames.ndjson"
+    frames.write_text(
+        '{"hdr":{"dev_id":1,"msg_type":1,"fc":0,"flags":0},"nonce":"c3Nzc3Nzc3MAAAAAAAAAAFJSUlJSUlJS","ct":"AA==","tag":"AAAAAAAAAAAAAAAAAAAAAA=="}\n',
+        encoding="utf-8",
+    )
+    facts = tmp_path / "facts"
+    device_table = tmp_path / "device_table.json"
+    device_table.write_text(
+        '{"_meta":{"version":"1.0","master_seed":"bW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW0="}}',
+        encoding="utf-8",
+    )
+    write_sha256_sidecar(device_table)
+
+    stderr = io.StringIO()
+    with contextlib.redirect_stderr(stderr):
+        rc = frame_verifier.process(
+            [
+                "--in",
+                str(frames),
+                "--out-facts",
+                str(facts),
+                "--device-table",
+                str(device_table),
+            ]
+        )
+
+    assert rc == 1
+    assert "trackone_core native ledger helper is required" in stderr.getvalue()
