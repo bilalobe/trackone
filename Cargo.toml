@@ -18,7 +18,7 @@ authors = ["BILAL <elkhatabibilal@gmail.com>"]
 repository = "https://github.com/bilalobe/trackone"
 
 [workspace.dependencies]
-   pyo3 = { version = "0.28.2", features = ["extension-module", "abi3-py312"] }
+   pyo3 = { version = "0.28.3", features = ["extension-module", "abi3-py312"] }
 
    # Common third-party deps (centralize versions)
    serde = { version = "1.0.228", default-features = false, features = ["derive"] }
