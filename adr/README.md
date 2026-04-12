@@ -52,6 +52,7 @@ Each ADR captures context, the decision, consequences, and alternatives.
 - [ADR-045: Git-Signed Evidence Distribution Plane for Release and Small Authoritative Artifacts](ADR-045-git-signed-evidence-distribution-plane.md)
 - [ADR-046: Sealed Trust-Root Boundary and Deferring a Dedicated `trackone-seal` Crate](ADR-046-sealed-trust-root-boundary-and-deferring-trackone-seal.md)
 - [ADR-047: TrackOne as the Evidence Plane Within a Broader Device Lifecycle System](ADR-047-trackone-evidence-plane-within-device-lifecycle.md)
+- [ADR-048: Separate SCITT Publication Profile from the Base Telemetry-Ledger Draft](ADR-048-separate-scitt-publication-profile.md)
 
 ## Index Conventions
 
@@ -199,6 +200,12 @@ Entries list **Status** and **Summary**. Related references are grouped under **
   **Summary**: Defines TrackOne's scope as the evidence plane: it owns gateway validation, anti-replay, canonical record admission, deterministic batching, artifact hashing/anchoring, and verifier-facing disclosure. It explicitly does not own manufacturer identity, network onboarding, fleet inventory, operational PKI, or firmware orchestration; those belong to an adjacent lifecycle/control plane. The handoff boundary is a known pod identity, successful domain admission, and accepted telemetry under the active gateway transport contract.
 
   - **See also**: [ADR-024](ADR-024-anti-replay-and-ots-backed-ledger.md), [ADR-032](ADR-032-informational-rfc-verifiable-telemetry-ledger.md), [ADR-037](ADR-037-signature-roles-and-verification-boundaries.md), [ADR-039](ADR-039-cbor-first-commitment-profile-and-artifact-authority.md), [ADR-041](ADR-041-verification-disclosure-bundles-and-privacy-tiers.md), [ADR-046](ADR-046-sealed-trust-root-boundary-and-deferring-trackone-seal.md)
+
+- **[ADR-048](ADR-048-separate-scitt-publication-profile.md): Separate SCITT publication profile from the base telemetry-ledger draft**
+  **Status**: Accepted
+  **Summary**: Keeps SCITT publication semantics out of the base telemetry-ledger draft. The base draft remains the source of truth for authoritative artifacts, commitment semantics, disclosure classes, and verifier scope; any later SCITT publication behavior should live in a separate companion profile and must not replace local TrackOne verification.
+
+  - **See also**: [ADR-032](ADR-032-informational-rfc-verifiable-telemetry-ledger.md), [ADR-041](ADR-041-verification-disclosure-bundles-and-privacy-tiers.md), [ADR-043](ADR-043-phased-bundle-manifest-maturity-for-id.md), [ADR-045](ADR-045-git-signed-evidence-distribution-plane.md), [ADR-047](ADR-047-trackone-evidence-plane-within-device-lifecycle.md)
 
 ### Stationary Calendar & Trust Chain
 
