@@ -293,11 +293,10 @@ Machine-readable contract split:
 
 ## Current release line
 
-The latest tagged release is `0.1.0-alpha.13`.
-The current `main` branch is tracking `alpha.13` consolidation work; release detail for `alpha.13` lives in [`CHANGELOG.md`](CHANGELOG.md), and `Unreleased` tracks the planned `alpha.14` changes.
+The latest tagged release is `0.1.0-alpha.14`.
+The current `main` branch is tracking `alpha.14` consolidation work; release detail for `alpha.14` lives in [`CHANGELOG.md`](CHANGELOG.md), and `Unreleased` tracks the next release work.
 
-- `alpha.13` hardened the current public spine:
-
+- `alpha.14` hardened the current public spine:
   - verifier-facing `day/<date>.verify.json`
   - published canonical CBOR commitment vectors and Rust/Python parity gates
   - native `sha256_hex` / `hex64` helpers on the Python/Rust boundary

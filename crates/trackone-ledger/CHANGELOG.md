@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-alpha.14] - 2026-04-13
+
+### Notes
+- No crate-specific API changes landed in this release; `trackone-ledger` remains aligned with the workspace `0.1.0-alpha.14` release line.
+
 ## [0.1.0-alpha.13] - 2026-04-03
 
 ### Notes

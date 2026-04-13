@@ -1294,11 +1294,11 @@ dependencies = [
 
 [[package]]
 name = "trackone-constants"
-version = "0.1.0-alpha.13"
+version = "0.1.0-alpha.14"
 
 [[package]]
 name = "trackone-core"
-version = "0.1.0-alpha.13"
+version = "0.1.0-alpha.14"
 dependencies = [
  "ciborium",
  "heapless",
@@ -1315,7 +1315,7 @@ dependencies = [
 
 [[package]]
 name = "trackone-gateway"
-version = "0.1.0-alpha.13"
+version = "0.1.0-alpha.14"
 dependencies = [
  "base64",
  "chacha20poly1305",
@@ -1329,7 +1329,7 @@ dependencies = [
 
 [[package]]
 name = "trackone-ledger"
-version = "0.1.0-alpha.13"
+version = "0.1.0-alpha.14"
 dependencies = [
  "cddl",
  "serde",
@@ -1339,7 +1339,7 @@ dependencies = [
 
 [[package]]
 name = "trackone-pod-fw"
-version = "0.1.0-alpha.13"
+version = "0.1.0-alpha.14"
 dependencies = [
  "trackone-core",
 ]

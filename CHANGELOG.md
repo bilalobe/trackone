@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-alpha.14] - 2026-04-13
+
+### Changed
 - Authoritative fact and day-artifact CBOR generation now go through native `trackone_core.ledger` helpers in normal runs, and commitment-capable workflows fail closed if the native ledger surface is unavailable or errors.
 - Native Merkle recomputation is now required for normal gateway batching and verifier recompute paths; Python Merkle fallback is no longer used as runtime authority.
 - Python CBOR and Merkle implementations remain in-tree only as explicit reference/parity fixtures, so corpus parity proves the Rust commitment path instead of substituting for it.

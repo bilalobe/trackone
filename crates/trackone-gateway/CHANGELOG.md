@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-alpha.14] - 2026-04-13
+
+### Changed
 - Native `trackone_core.ledger` and `trackone_core.merkle` helpers are now required for commitment-critical normal runs, so authoritative fact/day CBOR generation and Merkle recomputation fail closed instead of falling back to Python runtime authority.
 - Python CBOR and Merkle implementations are retained only as explicit reference/parity helpers; the normal gateway and verifier paths now treat the native extension as the authoritative commitment boundary.
 
