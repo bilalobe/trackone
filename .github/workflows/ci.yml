@@ -224,6 +224,9 @@ jobs:
         with:
           python-version: '3.14'
 
+      - name: Set up Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
       - name: Cache cargo (registry/git/target)
         uses: actions/cache@v5
         with:
@@ -259,16 +262,40 @@ jobs:
           import os
           import subprocess
           import sys
+          import tempfile
+          import textwrap
 
           wheels = sorted(glob.glob("target/wheels/trackone-*.whl"))
           if not wheels:
               raise SystemExit("No wheel found under target/wheels")
 
           preferred = next((w for w in wheels if "manylinux" in os.path.basename(w)), wheels[-1])
+          wheel_name = os.path.basename(preferred)
+          if "cp312-abi3" not in wheel_name:
+              raise SystemExit(f"Expected cp312-abi3 wheel tag, got: {wheel_name}")
+
           print(f"Installing wheel: {preferred}")
           subprocess.check_call([sys.executable, "-m", "pip", "install", preferred])
+
+          tempdir = tempfile.mkdtemp(prefix="trackone-wheel-smoke-")
+          snippet = textwrap.dedent(
+              """
+              from pathlib import Path
+              import os
+              import trackone_core
+              import trackone_core._native as native
+
+              source = (Path(os.environ["GITHUB_WORKSPACE"]) / "trackone_core").resolve()
+              package_path = Path(trackone_core.__file__).resolve()
+              native_path = Path(native.__file__).resolve()
+              assert not package_path.is_relative_to(source), "trackone_core imported from checkout instead of wheel"
+              assert not native_path.is_relative_to(source), "trackone_core._native imported from checkout instead of wheel"
+              print("trackone_core", trackone_core.__version__, package_path)
+              print("trackone_core._native", native.__version__, native_path)
+              """
+          )
+          subprocess.check_call([sys.executable, "-c", snippet], cwd=tempdir)
           PY
-          python -c "import trackone_core; print('trackone_core', trackone_core.__version__)"
 
       - name: Upload wheel artifact
         uses: actions/upload-artifact@v7
@@ -281,14 +308,18 @@ jobs:
   test-wheel:
     runs-on: ubuntu-latest
     needs: build-wheel
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.12', '3.13', '3.14']
     steps:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Set up Python 3.14
+      - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v6
         with:
-          python-version: '3.14'
+          python-version: ${{ matrix.python-version }}
 
       - name: Download wheel artifact
         uses: actions/download-artifact@v8
