@@ -149,7 +149,7 @@ python_functions = ["test_*"]
 # Coverage configuration
 [tool.coverage.run]
 branch = true
-source = ["scripts"]
+source = ["scripts", "trackone_core"]
 omit = [
     "tests/*",
     "scripts/dev/*",
@@ -181,6 +181,7 @@ exclude_lines = [
 directory = "htmlcov"
 
 [tool.coverage.xml]
+# tox envs override this with per-env filenames to avoid collisions under `tox -p`
 output = "coverage.xml"
 
 # Black configuration for Track1 project
@@ -250,7 +251,7 @@ indent-style = "space"
 line-ending = "auto"
 
 [tool.ruff.lint.isort]
-known-first-party = ["scripts"]
+known-first-party = ["scripts", "trackone_core"]
 
 # Mypy configuration (tighter checks)
 [tool.mypy]

@@ -145,12 +145,12 @@ tag: ## Create and push git tag: make tag TAG=vX.Y.Z
 lint: ## Run basic Python linting (if ruff/black available)
 	@echo "[make] Running linting..."
 	@if command -v ruff >/dev/null 2>&1; then \
-		ruff check scripts/; \
+		ruff check scripts/ trackone_core/; \
 	else \
 		echo "[make] ruff not installed, skipping. Install with: pip install ruff"; \
 	fi
 	@if command -v black >/dev/null 2>&1; then \
-		black --check scripts/; \
+		black --check scripts/ trackone_core/; \
 	else \
 		echo "[make] black not installed, skipping. Install with: pip install black"; \
 	fi
@@ -158,7 +158,7 @@ lint: ## Run basic Python linting (if ruff/black available)
 format: ## Auto-format code with black
 	@echo "[make] Auto-formatting code..."
 	@if command -v black >/dev/null 2>&1; then \
-		black scripts/; \
+		black scripts/ trackone_core/; \
 	else \
 		echo "[ERROR] black not installed. Install with: pip install black"; \
 		exit 1; \
@@ -168,15 +168,15 @@ format: ## Auto-format code with black
 lint-fix: ## Run ruff with auto-fix
 	@echo "[make] Running ruff with auto-fix..."
 	@if command -v ruff >/dev/null 2>&1; then \
-		ruff check scripts/ --fix; \
+		ruff check scripts/ trackone_core/ --fix; \
 		echo "[make] ✓ Linting issues fixed"; \
 	else \
 		echo "[ERROR] ruff not installed. Install with: pip install ruff"; \
 		exit 1; \
 	fi
 
-check: ## Run linting, typing, and README checks (tox)
-	tox -e lint,type,readme
+check: ## Run repo policy, linting, typing, README, and schema checks (tox)
+	tox -e precommit,lint,type,readme,schema
 	@echo "[make] ✓ All checks passed"
 
 ci: ## Run full CI checks locally (tox)
