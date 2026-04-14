@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+from typing import Any
+
+_native: Any | None
+
 try:
     from . import _native as _native
 except ImportError:
-    _native = None  # type: ignore[assignment]
+    _native = None
 
 
 def _native_str(name: str, default: str) -> str:

@@ -6,13 +6,17 @@ submodule, so this shim forwards attribute access to `trackone_core._native`.
 
 from __future__ import annotations
 
+from typing import Any
+
+_radio: Any | None
+
 try:
     from . import _native as _radio
 except ImportError:
-    _radio = None  # type: ignore[assignment]
+    _radio = None
 
 
-def __getattr__(name: str):  # noqa: ANN201
+def __getattr__(name: str) -> Any:
     if _radio is None:
         raise ImportError("Native extension not available")
     return getattr(_radio, name)

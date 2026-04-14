@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 try:
-    from ._native import ledger as _ledger
+    from ._native import ledger as _ledger_impl
 except ImportError as exc:
-    _ledger = None  # type: ignore[assignment]
-    _native_import_error = exc
+    _ledger: Any | None = None
+    _native_import_error: ImportError | None = exc
 else:
+    _ledger = _ledger_impl
     _native_import_error = None
 
 
-def __getattr__(name: str):  # noqa: ANN201
+def __getattr__(name: str) -> Any:
     if _ledger is None:
         raise ImportError(
             "Native extension not available "
