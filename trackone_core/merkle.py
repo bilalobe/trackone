@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 try:
-    from ._native import merkle as _merkle
+    from ._native import merkle as _merkle_impl
 except ImportError:
-    _merkle = None  # type: ignore[assignment]
+    _merkle: Any | None = None
+else:
+    _merkle = _merkle_impl
 
 
-def __getattr__(name: str):  # noqa: ANN201
+def __getattr__(name: str) -> Any:
     if _merkle is None:
         raise ImportError("Native extension not available")
     return getattr(_merkle, name)

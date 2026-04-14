@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 try:
-    from ._native import ots as _ots
+    from ._native import ots as _ots_impl
 except ImportError:
-    _ots = None  # type: ignore[assignment]
+    _ots: Any | None = None
+else:
+    _ots = _ots_impl
 
 if _ots is not None:
     if hasattr(_ots, "OtsStatus"):
@@ -14,7 +18,7 @@ if _ots is not None:
         OtsVerifyResult = _ots.OtsVerifyResult
 
 
-def __getattr__(name: str):  # noqa: ANN201
+def __getattr__(name: str) -> Any:
     if _ots is None:
         raise ImportError("Native extension not available")
     return getattr(_ots, name)

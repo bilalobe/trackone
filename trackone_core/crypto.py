@@ -6,13 +6,17 @@ This shim provides the public import path ``trackone_core.crypto``.
 
 from __future__ import annotations
 
+from typing import Any
+
 try:
-    from ._native import crypto as _crypto
+    from ._native import crypto as _crypto_impl
 except ImportError:
-    _crypto = None  # type: ignore[assignment]
+    _crypto: Any | None = None
+else:
+    _crypto = _crypto_impl
 
 
-def __getattr__(name: str):  # noqa: ANN201
+def __getattr__(name: str) -> Any:
     if _crypto is None:
         raise ImportError("Native extension not available")
     return getattr(_crypto, name)
