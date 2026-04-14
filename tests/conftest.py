@@ -29,10 +29,22 @@ from typing import Any
 
 import pytest
 
+
+def _env_flag(key: str, default: bool = False) -> bool:
+    value = os.environ.get(key, "").lower()
+    if value in {"1", "true", "yes"}:
+        return True
+    if value in {"0", "false", "no"}:
+        return False
+    return default
+
+
+_WHEEL_ONLY = _env_flag("TRACKONE_WHEEL_ONLY", False)
+
 # Ensure repo root is on sys.path so `import scripts.*` works when running tests
 # directly from a checkout (pytest doesn't always add CWD under strict config).
 _REPO_ROOT = Path(__file__).resolve().parents[1]
-if str(_REPO_ROOT) not in sys.path:
+if not _WHEEL_ONLY and str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 # Import common fixtures from the fixtures package so pytest registers them.
@@ -51,32 +63,35 @@ _fixture_modules = [
 
 # Import fixture modules from the canonical `tests.fixtures` package only.
 _fixtures_pkg = "tests.fixtures"
-for _mod in _fixture_modules:
-    full = f"{_fixtures_pkg}.{_mod}"
-    try:
-        m = importlib.import_module(full)
-    except Exception:
-        # Fallback: load fixture module directly from the tests/fixtures directory
+if not _WHEEL_ONLY:
+    for _mod in _fixture_modules:
+        full = f"{_fixtures_pkg}.{_mod}"
         try:
-            fixtures_dir = Path(__file__).resolve().parent / "fixtures"
-            module_path = fixtures_dir / f"{_mod}.py"
-            if module_path.exists():
-                spec = importlib.util.spec_from_file_location(full, str(module_path))
-                if spec is None or spec.loader is None:
-                    continue
-                m = importlib.util.module_from_spec(spec)
-                sys.modules[full] = m
-                spec.loader.exec_module(m)  # type: ignore
-            else:
-                # If the file doesn't exist, skip silently (some fixtures optional)
-                continue
+            m = importlib.import_module(full)
         except Exception:
-            # If any error, skip this fixture module (some runs may not need all fixtures)
-            continue
-    for _name, _obj in vars(m).items():
-        if _name.startswith("_"):
-            continue
-        globals().setdefault(_name, _obj)
+            # Fallback: load fixture module directly from the tests/fixtures directory
+            try:
+                fixtures_dir = Path(__file__).resolve().parent / "fixtures"
+                module_path = fixtures_dir / f"{_mod}.py"
+                if module_path.exists():
+                    spec = importlib.util.spec_from_file_location(
+                        full, str(module_path)
+                    )
+                    if spec is None or spec.loader is None:
+                        continue
+                    m = importlib.util.module_from_spec(spec)
+                    sys.modules[full] = m
+                    spec.loader.exec_module(m)  # type: ignore
+                else:
+                    # If the file doesn't exist, skip silently (some fixtures optional)
+                    continue
+            except Exception:
+                # If any error, skip this fixture module (some runs may not need all fixtures)
+                continue
+        for _name, _obj in vars(m).items():
+            if _name.startswith("_"):
+                continue
+            globals().setdefault(_name, _obj)
 
 # Reference date for all tests - ensures reproducibility
 TEST_DATE = "2025-10-07"
