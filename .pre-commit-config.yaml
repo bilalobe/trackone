@@ -19,7 +19,7 @@ repos:
         # files: .  <-- removed to avoid repo-wide matching
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.1.13
+    rev: v0.15.10
     hooks:
       - id: ruff
         # Lint changed Python files only; keep autofix arg for local convenience
