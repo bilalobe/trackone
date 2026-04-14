@@ -4,13 +4,20 @@ from __future__ import annotations
 
 try:
     from ._native import ledger as _ledger
-except ImportError:
+except ImportError as exc:
     _ledger = None  # type: ignore[assignment]
+    _native_import_error = exc
+else:
+    _native_import_error = None
 
 
 def __getattr__(name: str):  # noqa: ANN201
     if _ledger is None:
-        raise ImportError("Native extension not available")
+        raise ImportError(
+            "Native extension not available "
+            "(trackone_core._native import failed). "
+            "If running wheel tests, ensure the wheel is installed into the environment."
+        ) from _native_import_error
     return getattr(_ledger, name)
 
 
