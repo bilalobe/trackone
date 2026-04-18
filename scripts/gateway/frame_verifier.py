@@ -435,8 +435,8 @@ def _native_replay_state(
     highest_raw = device_table_entry.get("highest_fc_seen", -1)
     highest_fc_seen: int | None = None
     if (
-        isinstance(highest_raw, int)
-        and not isinstance(highest_raw, bool)
+        not isinstance(highest_raw, bool)
+        and isinstance(highest_raw, int)
         and highest_raw >= 0
     ):
         highest_fc_seen = highest_raw
