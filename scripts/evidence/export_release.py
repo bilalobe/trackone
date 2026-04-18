@@ -28,6 +28,7 @@ from scripts.gateway.schema_validation import (  # noqa: E402
 from scripts.gateway.verification_gate import local_verification_failure  # noqa: E402
 from scripts.gateway.verification_manifest import verify_manifest_path  # noqa: E402
 from trackone_core.ledger import sha256_hex  # noqa: E402
+from trackone_core.release import verification_bundle_from_summary  # noqa: E402
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -146,20 +147,14 @@ def _rewrite_exported_manifest(
     verification_bundle = manifest.get("verification_bundle")
     if not isinstance(verification_bundle, dict):
         raise ValueError("exported manifest missing verification_bundle")
-    verification = verifier_summary.get("verification")
-    if isinstance(verification, dict):
-        disclosure_class = verification.get("disclosure_class")
-        commitment_profile_id = verification.get("commitment_profile_id")
-        if isinstance(disclosure_class, str):
-            verification_bundle["disclosure_class"] = disclosure_class
-        if isinstance(commitment_profile_id, str):
-            verification_bundle["commitment_profile_id"] = commitment_profile_id
-    checks_executed = verifier_summary.get("checks_executed")
-    checks_skipped = verifier_summary.get("checks_skipped")
-    if isinstance(checks_executed, list):
-        verification_bundle["checks_executed"] = checks_executed
-    if isinstance(checks_skipped, list):
-        verification_bundle["checks_skipped"] = checks_skipped
+    manifest["verification_bundle"] = verification_bundle_from_summary(
+        verifier_summary,
+        disclosure_class=str(verification_bundle.get("disclosure_class", "A")),
+        commitment_profile_id=str(
+            verification_bundle.get("commitment_profile_id", "")
+            or "trackone-canonical-cbor-v1"
+        ),
+    )
 
     schema = load_schema("verify_manifest")
     if schema is not None:
