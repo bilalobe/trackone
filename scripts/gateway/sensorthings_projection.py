@@ -12,14 +12,14 @@ from typing import Any
 from trackone_core.sensorthings import (
     ProjectionError,
     SensorIdentityResolutionError,
-    _entity_id,
     build_bundle,
+    entity_id,
 )
 
 __all__ = [
     "ProjectionError",
     "SensorIdentityResolutionError",
-    "_entity_id",
+    "entity_id",
     "build_bundle",
     "load_facts",
     "load_provisioning_records",

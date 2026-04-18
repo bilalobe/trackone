@@ -44,7 +44,7 @@ def test_build_bundle_uses_provisioning_metadata_and_time_fields(load_module) ->
     assert bundle["site_id"] == "an-001"
     assert bundle["things"][0]["pod_id"] == "pod-003"
     assert bundle["datastreams"][0]["id"].startswith("trackone:datastream:")
-    assert bundle["datastreams"][0]["sensor_id"] == module._entity_id(
+    assert bundle["datastreams"][0]["sensor_id"] == module.entity_id(
         "sensor", "pod-003", "shtc3-ambient"
     )
     assert bundle["observations"][0]["phenomenon_time"]["start_rfc3339_utc"] == (
@@ -190,7 +190,7 @@ def test_build_bundle_derives_sensor_identity_from_provisioning_metadata(
         provisioning_records=provisioning_records,
     )
 
-    assert bundle["datastreams"][0]["sensor_id"] == module._entity_id(
+    assert bundle["datastreams"][0]["sensor_id"] == module.entity_id(
         "sensor", "pod-003", "shtc3-ambient"
     )
 

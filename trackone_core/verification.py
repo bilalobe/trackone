@@ -72,9 +72,21 @@ def build_verifier_summary(
         "checks_executed": [],
         "checks_skipped": [],
         "channels": {
-            "ots": verification_channel(ots_enabled, STATUS_SKIPPED, "disabled"),
-            "tsa": verification_channel(tsa_enabled, STATUS_SKIPPED, "disabled"),
-            "peers": verification_channel(peers_enabled, STATUS_SKIPPED, "disabled"),
+            "ots": verification_channel(
+                ots_enabled,
+                STATUS_PENDING if ots_enabled else STATUS_SKIPPED,
+                "not-run" if ots_enabled else "disabled",
+            ),
+            "tsa": verification_channel(
+                tsa_enabled,
+                STATUS_PENDING if tsa_enabled else STATUS_SKIPPED,
+                "not-run" if tsa_enabled else "disabled",
+            ),
+            "peers": verification_channel(
+                peers_enabled,
+                STATUS_PENDING if peers_enabled else STATUS_SKIPPED,
+                "not-run" if peers_enabled else "disabled",
+            ),
         },
         "overall": "failed",
     }

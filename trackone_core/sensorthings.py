@@ -38,13 +38,17 @@ class SensorIdentityResolutionError(ProjectionError):
     """Raised when a SensorThings Sensor identity cannot be resolved."""
 
 
-def _entity_id(kind: str, *components: str) -> str:
+def entity_id(kind: str, *components: str) -> str:
     digest = hashlib.sha256()
     digest.update(kind.encode("utf-8"))
     for component in components:
         digest.update(b"\x1f")
         digest.update(component.encode("utf-8"))
     return f"trackone:{kind}:{digest.hexdigest()}"
+
+
+# Backwards-compatible alias; prefer the public name `entity_id`.
+_entity_id = entity_id
 
 
 def resolve_sensor_key(
@@ -574,7 +578,7 @@ __all__ = [
     "SENSOR_IDENTITY_FIELDS",
     "SENSOR_METADATA_SCOPES",
     "SensorIdentityResolutionError",
-    "_entity_id",
+    "entity_id",
     "build_bundle",
     "project_fact",
     "resolve_sensor_key",

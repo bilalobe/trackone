@@ -57,6 +57,16 @@ except ImportError:  # pragma: no cover - fallback for direct script execution
     CHECK_TSA = "tsa_verification"
     CHECK_PEERS = "peer_signature_verification"
 
+    # Keep in sync with trackone_core/release.py DISCLOSURE_CLASS_LABELS.
+    _DISCLOSURE_CLASS_LABELS: dict[str, str] = {
+        "A": "public-recompute",
+        "B": "partner-audit",
+        "C": "anchor-only-evidence",
+    }
+
+    def disclosure_label(dc: str) -> str:
+        return _DISCLOSURE_CLASS_LABELS.get(dc, dc)
+
     def verification_channel(
         enabled: bool,
         status: str,
@@ -78,11 +88,16 @@ except ImportError:  # pragma: no cover - fallback for direct script execution
         tsa_enabled: bool,
         peers_enabled: bool,
     ) -> dict[str, Any]:
+        def _channel(enabled: bool) -> dict[str, Any]:
+            if enabled:
+                return verification_channel(enabled, STATUS_PENDING, "not-run")
+            return verification_channel(enabled, STATUS_SKIPPED, "disabled")
+
         return {
             "policy": {"mode": policy_mode},
             "verification": {
                 "disclosure_class": disclosure_class,
-                "disclosure_label": disclosure_class,
+                "disclosure_label": disclosure_label(disclosure_class),
                 "commitment_profile_id": commitment_profile_id,
                 "publicly_recomputable": False,
             },
@@ -106,11 +121,9 @@ except ImportError:  # pragma: no cover - fallback for direct script execution
             "checks_executed": [],
             "checks_skipped": [],
             "channels": {
-                "ots": verification_channel(ots_enabled, STATUS_SKIPPED, "disabled"),
-                "tsa": verification_channel(tsa_enabled, STATUS_SKIPPED, "disabled"),
-                "peers": verification_channel(
-                    peers_enabled, STATUS_SKIPPED, "disabled"
-                ),
+                "ots": _channel(ots_enabled),
+                "tsa": _channel(tsa_enabled),
+                "peers": _channel(peers_enabled),
             },
             "overall": "failed",
         }

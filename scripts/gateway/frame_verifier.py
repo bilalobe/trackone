@@ -434,7 +434,11 @@ def _native_replay_state(
 ) -> Any:
     highest_raw = device_table_entry.get("highest_fc_seen", -1)
     highest_fc_seen: int | None = None
-    if isinstance(highest_raw, int) and highest_raw >= 0:
+    if (
+        isinstance(highest_raw, int)
+        and not isinstance(highest_raw, bool)
+        and highest_raw >= 0
+    ):
         highest_fc_seen = highest_raw
     return native_crypto.ReplayWindowState(
         window_size=window_size,
@@ -461,7 +465,7 @@ def _admit_framed_fact(
         return None, "invalid_hdr_types", "decrypt"
 
     dev_entry = device_table.get(str(dev_id_u16))
-    if not dev_entry:
+    if dev_entry is None:
         return None, "unknown_device", "decrypt"
 
     native_crypto = _load_native_crypto()
