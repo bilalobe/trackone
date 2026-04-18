@@ -20,6 +20,8 @@ from . import ledger as ledger  # noqa: F401
 from . import merkle as merkle  # noqa: F401
 from . import ots as ots  # noqa: F401
 from . import release as release  # noqa: F401
+from . import sensorthings as sensorthings  # noqa: F401
+from . import verification as verification  # noqa: F401
 
 try:
     from . import radio as _radio_module
@@ -57,4 +59,6 @@ __all__ = [
     "merkle",
     "ots",
     "release",
+    "sensorthings",
+    "verification",
 ]
