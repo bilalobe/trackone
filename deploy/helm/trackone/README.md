@@ -15,8 +15,8 @@ helm upgrade --install trackone oci://ghcr.io/bilalobe/trackone/charts/trackone 
   --set postgres.auth.existingSecret=<your-postgres-secret>
 ```
 
-For example, release tag `v0.1.0-alpha.14` publishes chart version
-`0.1.0-alpha.14`.
+For example, release tag `v0.1.0-alpha.15` publishes chart version
+`0.1.0-alpha.15`.
 
 The base [values.yaml](values.yaml)
 inside that OCI chart assumes:

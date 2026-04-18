@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-alpha.15] - 2026-04-18
+
+### Added
+- Shared Python helper modules for release-contract/reporting and projection policy:
+  - `trackone_core.release` now includes disclosure-label, public-recompute, and manifest-bundle helpers.
+  - `trackone_core.verification` now owns verifier-summary/check bookkeeping helpers used by the CLI and local verification gate.
+  - `trackone_core.sensorthings` now owns deterministic SensorThings projection, provisioning-backed sensor identity resolution, and bundle assembly.
+
+### Changed
+- `trackone-core::VERSION` now reports `0.1.0-alpha.15` to match the workspace release.
+- The `trackone_core` package root now exports the shared `sensorthings` and `verification` helper surfaces directly.
+- Native shim modules (`crypto`, `ledger`, `merkle`, `ots`, `radio`) now handle missing `_native` imports more explicitly and more safely for wheel-only/native-optional workflows.
+
 ## [0.1.0-alpha.14] - 2026-04-13
 
 ### Changed

@@ -293,10 +293,19 @@ Machine-readable contract split:
 
 ## Current release line
 
-The latest tagged release is `0.1.0-alpha.14`.
-The current `main` branch is tracking `alpha.14` consolidation work; release detail for `alpha.14` lives in [`CHANGELOG.md`](CHANGELOG.md), and `Unreleased` tracks the next release work.
+The latest tagged release is `0.1.0-alpha.15`.
+The current `main` branch is tracking `alpha.16` follow-on work; release detail for `alpha.15` lives in [`CHANGELOG.md`](CHANGELOG.md), and `Unreleased` tracks the next release work.
+
+- `alpha.15` hardened the admitted-telemetry boundary:
+
+  - native framed decrypt/material validation remains authoritative
+  - replay admission and duplicate/out-of-window rejection on the supported framed-ingest path now have a native owner
+  - accepted framed telemetry is shaped into canonical facts through the native gateway seam before Python persists artifacts
+  - Python still owns the workflow executor, file lifecycle, audit logging, schema-routing, and broader reporting/export choreography
+  - verifier output, manifest rewriting, and projection helpers now share release/reporting/domain helper surfaces under `trackone_core`
 
 - `alpha.14` hardened the current public spine:
+
   - verifier-facing `day/<date>.verify.json`
   - published canonical CBOR commitment vectors and Rust/Python parity gates
   - native `sha256_hex` / `hex64` helpers on the Python/Rust boundary
@@ -306,6 +315,8 @@ The current `main` branch is tracking `alpha.14` consolidation work; release det
   - shared Rust/Python release constants for `commitment_profile_id` and disclosure classes
   - SCITT statement payload contracts and examples
   - sealed trust-root boundary documentation in [`ADR-046`](adr/ADR-046-sealed-trust-root-boundary-and-deferring-trackone-seal.md)
+
+- `alpha.16` is currently focused on follow-on hardening beyond the current admitted-telemetry cut.
 
 For release-level detail, use [`CHANGELOG.md`](CHANGELOG.md) rather than this README.
 

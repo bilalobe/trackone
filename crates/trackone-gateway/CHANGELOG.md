@@ -7,11 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-alpha.15] - 2026-04-18
+
 ### Added
 - Native `ReplayWindowState` plus `trackone_core.crypto.admit_framed_fact(...)` for the supported framed-ingest path, so Python callers can hand framed input, per-device material, and replay state to one native admission boundary.
 
 ### Changed
 - The native crypto surface now owns duplicate/out-of-window replay decisions and accepted-fact construction for the supported framed-ingest path, extending the earlier decrypt/material-validation boundary instead of returning only a loose decoded payload to Python.
+- Python-facing framed-input extraction and replay-state handling were tightened around the new admission helper, including stricter type rejection on the boundary and clearer separation between decrypt and replay rejection causes.
 
 ## [0.1.0-alpha.14] - 2026-04-13
 

@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-alpha.15] - 2026-04-18
+
+### Changed
+- The supported framed-ingest path now treats native `trackone_core.crypto` admission as authoritative through replay-window decisions and canonical fact shaping, instead of leaving those steps to Python runtime authority after decrypt.
+- `frame_verifier.py` remains the supported CLI/workflow entrypoint, but its normal admission path now delegates framed decrypt, duplicate/out-of-window rejection, and accepted-fact construction to the native gateway seam while Python retains file I/O, audit logging, schema routing, and device-table persistence.
+- Roadmap and Internet-Draft-facing docs now describe the current execution boundary more explicitly: Python is still the workflow executor, while Rust owns selected authoritative hot-path operations including replay admission for the supported framed-ingest path.
+- Verification-manifest disclosure metadata and the `publicly_recomputable` claim are now assembled from shared `trackone_core.release` helpers, so verifier output, pipeline manifest emission, and evidence-export rewrites use the same release-contract policy surface.
+- `verify_cli.py` summary construction, check bookkeeping, manifest status updates, and channel result shaping now flow through shared `trackone_core.verification` helpers, so the verifier JSON/report contract and the local integrity gate use one report vocabulary instead of duplicating those rules inside the CLI.
+- SensorThings projection mapping, provisioning-backed sensor identity resolution, and read-only bundle assembly now live in shared `trackone_core.sensorthings` helpers, while `sensorthings_projection.py` is reduced to schema validation, file loading, and CLI orchestration.
+- The Python package surface was hardened for native-optional and wheel-test workflows: `trackone_core` now exports shared `sensorthings` and `verification` helpers directly, shim modules report missing native-extension failures more clearly, and wheel/import CI coverage was expanded across supported Python versions.
+
 ## [0.1.0-alpha.14] - 2026-04-13
 
 ### Changed
