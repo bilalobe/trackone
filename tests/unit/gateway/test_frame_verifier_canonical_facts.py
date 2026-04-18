@@ -110,8 +110,20 @@ def test_frame_verifier_process_reports_missing_native_ledger(
     )
     monkeypatch.setattr(
         frame_verifier,
-        "_validate_and_decrypt_framed",
-        lambda _frame, _device_table: ({"counter": 1, "temp_c": 23.5}, ""),
+        "_admit_framed_fact",
+        lambda _frame, _device_table, _replay_states, *, window_size, ingest_time, ingest_time_rfc3339_utc: (
+            {
+                "pod_id": "0000000000000001",
+                "fc": 0,
+                "ingest_time": ingest_time,
+                "pod_time": None,
+                "kind": "Custom",
+                "payload": {"counter": 1, "temp_c": 23.5},
+                "ingest_time_rfc3339_utc": ingest_time_rfc3339_utc,
+            },
+            "",
+            "",
+        ),
     )
     monkeypatch.setattr(
         frame_verifier,
