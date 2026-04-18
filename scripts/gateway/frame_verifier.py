@@ -426,6 +426,75 @@ def aead_decrypt(
     return payload
 
 
+def _native_replay_state(
+    native_crypto: Any,
+    device_table_entry: dict[str, Any],
+    *,
+    window_size: int,
+) -> Any:
+    highest_raw = device_table_entry.get("highest_fc_seen", -1)
+    highest_fc_seen: int | None = None
+    if isinstance(highest_raw, int) and highest_raw >= 0:
+        highest_fc_seen = highest_raw
+    return native_crypto.ReplayWindowState(
+        window_size=window_size,
+        highest_fc_seen=highest_fc_seen,
+    )
+
+
+def _admit_framed_fact(
+    frame: dict[str, Any],
+    device_table: dict[str, dict[str, Any]],
+    replay_states: dict[str, Any],
+    *,
+    window_size: int,
+    ingest_time: int,
+    ingest_time_rfc3339_utc: str,
+) -> tuple[dict[str, Any] | None, str, str]:
+    hdr = frame.get("hdr")
+    if not isinstance(hdr, dict):
+        return None, "invalid_hdr", "decrypt"
+
+    try:
+        dev_id_u16 = int(hdr["dev_id"]) & 0xFFFF
+    except (ValueError, TypeError):
+        return None, "invalid_hdr_types", "decrypt"
+
+    dev_entry = device_table.get(str(dev_id_u16))
+    if not dev_entry:
+        return None, "unknown_device", "decrypt"
+
+    native_crypto = _load_native_crypto()
+    state = replay_states.get(str(dev_id_u16))
+    if state is None:
+        state = _native_replay_state(native_crypto, dev_entry, window_size=window_size)
+        replay_states[str(dev_id_u16)] = state
+
+    try:
+        fact, reason, source = native_crypto.admit_framed_fact(
+            frame,
+            dev_entry,
+            state,
+            ingest_time=ingest_time,
+            ingest_time_rfc3339_utc=ingest_time_rfc3339_utc,
+        )
+    except RuntimeError:
+        raise
+    except Exception as exc:
+        raise RuntimeError(
+            "trackone_core native crypto helper failed during authoritative "
+            "framed admission"
+        ) from exc
+
+    if fact is None:
+        return None, reason or "decrypt_failed", source or "decrypt"
+    if not isinstance(fact, dict):
+        raise RuntimeError(
+            "trackone_core native crypto helper returned a non-dict fact"
+        )
+    return fact, "", ""
+
+
 def frame_to_fact(frame: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
     """
     Convert verified frame + decrypted payload to canonical fact.
@@ -538,10 +607,7 @@ def process(argv: list[str] | None = None) -> int:
         # Load device table and schema
         device_table = load_device_table(args.device_table)
         fact_schema = load_fact_schema()
-
-        # Initialize replay window from persisted state
-        replay = ReplayWindow(window_size=args.window)
-        replay.initialize_from_device_table(device_table)
+        replay_states: dict[str, Any] = {}
 
         # Process frames
         total = 0
@@ -576,14 +642,32 @@ def process(argv: list[str] | None = None) -> int:
 
             hdr = frame["hdr"]
             dev_id_str = f"pod-{hdr['dev_id']:03d}"
+            dev_key = str(hdr["dev_id"])
             fc = hdr["fc"]
+            frame_now = datetime.now(UTC)
+            ingest_time = int(frame_now.timestamp())
+            ingest_time_rfc3339 = (
+                frame_now.replace(microsecond=0).isoformat().replace("+00:00", "Z")
+            )
 
-            # Check replay window
-            ok, reason = replay.check_and_update(dev_id_str, fc)
-            if not ok:
+            try:
+                fact, reason, source = _admit_framed_fact(
+                    frame,
+                    device_table,
+                    replay_states,
+                    window_size=args.window,
+                    ingest_time=ingest_time,
+                    ingest_time_rfc3339_utc=ingest_time_rfc3339,
+                )
+            except RuntimeError as exc:
+                print(f"[ERROR] {exc}", file=sys.stderr)
+                return 1
+
+            if fact is None:
                 rejected += 1
                 print(
-                    f"[WARN] Rejected {dev_id_str} fc={fc}: {reason}", file=sys.stderr
+                    f"[WARN] Rejected {dev_id_str} fc={fc}: {reason}",
+                    file=sys.stderr,
                 )
                 if audit_fh is not None:
                     _emit_rejection(
@@ -594,42 +678,10 @@ def process(argv: list[str] | None = None) -> int:
                             reason=reason,
                             observed_at_utc=datetime.now(UTC).isoformat(),
                             frame_sha256=_hash_rejected_line(raw_line),
-                            source="replay",
+                            source=source,
                         ),
                     )
                 continue
-
-            # Validate crypto materials and AEAD decrypt
-            try:
-                payload, decrypt_reason = _validate_and_decrypt_framed(
-                    frame, device_table
-                )
-            except RuntimeError as exc:
-                print(f"[ERROR] {exc}", file=sys.stderr)
-                return 1
-
-            if payload is None:
-                rejected += 1
-                print(
-                    f"[WARN] Rejected {dev_id_str} fc={fc}: {decrypt_reason}",
-                    file=sys.stderr,
-                )
-                if audit_fh is not None:
-                    _emit_rejection(
-                        audit_fh,
-                        RejectionRecord(
-                            device_id=dev_id_str,
-                            fc=fc,
-                            reason=decrypt_reason,
-                            observed_at_utc=datetime.now(UTC).isoformat(),
-                            frame_sha256=_hash_rejected_line(raw_line),
-                            source="decrypt",
-                        ),
-                    )
-                continue
-
-            # Convert to fact
-            fact = frame_to_fact(frame, payload)
 
             # Validate against schema
             validate_fact(fact, fact_schema)
@@ -644,12 +696,15 @@ def process(argv: list[str] | None = None) -> int:
                     json.dump(fact, out_fh, indent=2, sort_keys=True)
 
                 # Update device table for persistence (non-secret runtime state)
-                dev_key = str(hdr["dev_id"])
                 entry = device_table.get(dev_key, {})
-                entry["highest_fc_seen"] = max(
-                    int(entry.get("highest_fc_seen", -1)), fc
+                state = replay_states.get(dev_key)
+                highest_fc_seen = getattr(state, "highest_fc_seen", None)
+                entry["highest_fc_seen"] = (
+                    int(highest_fc_seen)
+                    if isinstance(highest_fc_seen, int)
+                    else max(int(entry.get("highest_fc_seen", -1)), fc)
                 )
-                entry["last_seen"] = datetime.now(UTC).isoformat()
+                entry["last_seen"] = frame_now.isoformat()
                 entry["msg_type"] = hdr["msg_type"]
                 entry["flags"] = hdr["flags"]
                 device_table[dev_key] = entry
