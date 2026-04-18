@@ -5,10 +5,12 @@ from __future__ import annotations
 
 from typing import Any
 
-CHECK_DAY_ARTIFACT = "day_artifact_validation"
-CHECK_MANIFEST = "verification_manifest_validation"
-CHECK_BATCH_METADATA = "batch_metadata_validation"
-CHECK_FACT_RECOMPUTE = "fact_level_recompute"
+from trackone_core.verification import (
+    CHECK_BATCH_METADATA,
+    CHECK_DAY_ARTIFACT,
+    CHECK_FACT_RECOMPUTE,
+    CHECK_MANIFEST,
+)
 
 
 def local_verification_failure(summary: dict[str, Any] | None) -> str | None:
