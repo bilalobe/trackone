@@ -6,6 +6,7 @@ use chacha20poly1305::{
 use pyo3::prelude::*;
 use pyo3::types::{PyBool, PyDict};
 use serde_json::{Map, Value, json};
+use std::collections::BTreeSet;
 
 const MAX_FRAME_CIPHERTEXT_BYTES: usize = 256;
 
@@ -43,6 +44,8 @@ enum RejectReason {
     NonceSaltMismatch,
     NonceFcMismatch,
     DecryptFailed,
+    Duplicate,
+    OutOfWindow,
 }
 
 impl RejectReason {
@@ -64,7 +67,75 @@ impl RejectReason {
             Self::NonceSaltMismatch => "nonce_salt_mismatch",
             Self::NonceFcMismatch => "nonce_fc_mismatch",
             Self::DecryptFailed => "decrypt_failed",
+            Self::Duplicate => "duplicate",
+            Self::OutOfWindow => "out_of_window",
         }
+    }
+}
+
+#[pyclass(skip_from_py_object)]
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct ReplayWindowState {
+    window_size: u64,
+    highest_fc_seen: Option<u64>,
+    seen: BTreeSet<u64>,
+}
+
+#[pymethods]
+impl ReplayWindowState {
+    #[new]
+    #[pyo3(signature = (window_size=64, highest_fc_seen=None))]
+    fn new(window_size: u64, highest_fc_seen: Option<u64>) -> Self {
+        Self {
+            window_size,
+            highest_fc_seen,
+            seen: BTreeSet::new(),
+        }
+    }
+
+    #[getter]
+    fn window_size(&self) -> u64 {
+        self.window_size
+    }
+
+    #[getter]
+    fn highest_fc_seen(&self) -> Option<u64> {
+        self.highest_fc_seen
+    }
+
+    fn seen_fcs(&self) -> Vec<u64> {
+        self.seen.iter().copied().collect()
+    }
+}
+
+impl ReplayWindowState {
+    fn check_and_update(&mut self, fc: u64) -> Result<(), RejectReason> {
+        let Some(highest) = self.highest_fc_seen else {
+            self.highest_fc_seen = Some(fc);
+            self.seen.insert(fc);
+            return Ok(());
+        };
+
+        if self.seen.contains(&fc) {
+            return Err(RejectReason::Duplicate);
+        }
+
+        if fc < highest && (highest - fc) > self.window_size {
+            return Err(RejectReason::OutOfWindow);
+        }
+
+        if fc > highest && (fc - highest) > self.window_size {
+            return Err(RejectReason::OutOfWindow);
+        }
+
+        if fc > highest {
+            self.highest_fc_seen = Some(fc);
+            let lower_bound = fc.saturating_sub(self.window_size);
+            self.seen.retain(|seen_fc| *seen_fc >= lower_bound);
+        }
+
+        self.seen.insert(fc);
+        Ok(())
     }
 }
 
@@ -126,6 +197,13 @@ fn extract_frame_fields(frame: &Bound<'_, PyAny>) -> Result<FrameFields, RejectR
     let fc = u32::try_from(extract_non_bool_u64(
         hdr,
         "fc",
+        RejectReason::InvalidHdrTypes,
+        RejectReason::InvalidHdrTypes,
+    )?)
+    .map_err(|_| RejectReason::InvalidHdrTypes)?;
+    let _flags = u8::try_from(extract_non_bool_u64(
+        hdr,
+        "flags",
         RejectReason::InvalidHdrTypes,
         RejectReason::InvalidHdrTypes,
     )?)
@@ -280,6 +358,51 @@ fn validate_and_decrypt_impl(
     Ok(decode_tlv_payload(&plaintext))
 }
 
+fn payload_to_pydict(py: Python<'_>, payload: Map<String, Value>) -> PyResult<Py<PyDict>> {
+    let payload_dict = PyDict::new(py);
+    for (key, value) in payload {
+        match value {
+            Value::Number(number) if number.is_u64() => {
+                payload_dict.set_item(key, number.as_u64().expect("u64 payload"))?;
+            }
+            Value::Number(number) if number.is_i64() => {
+                payload_dict.set_item(key, number.as_i64().expect("i64 payload"))?;
+            }
+            Value::Number(number) if number.is_f64() => {
+                payload_dict.set_item(key, number.as_f64().expect("f64 payload"))?;
+            }
+            other => {
+                payload_dict.set_item(key, other.to_string())?;
+            }
+        }
+    }
+    Ok(payload_dict.unbind())
+}
+
+fn build_fact_dict(
+    py: Python<'_>,
+    frame: &FrameFields,
+    payload: Map<String, Value>,
+    ingest_time: i64,
+    ingest_time_rfc3339_utc: &str,
+    pod_time: Option<i64>,
+) -> PyResult<Py<PyDict>> {
+    let fact = PyDict::new(py);
+    fact.set_item("pod_id", format!("{:016x}", frame.dev_id))?;
+    fact.set_item("fc", u64::from(frame.fc))?;
+    fact.set_item("ingest_time", ingest_time)?;
+    match pod_time {
+        Some(value) => fact.set_item("pod_time", value)?,
+        None => fact.set_item("pod_time", py.None())?,
+    }
+    fact.set_item("kind", "Custom")?;
+    fact.set_item("payload", payload_to_pydict(py, payload)?)?;
+    fact.set_item("ingest_time_rfc3339_utc", ingest_time_rfc3339_utc)?;
+    Ok(fact.unbind())
+}
+
+type AdmitFramedFactResult = PyResult<(Option<Py<PyDict>>, Option<String>, Option<String>)>;
+
 #[pyfunction]
 fn version() -> &'static str {
     env!("CARGO_PKG_VERSION")
@@ -304,31 +427,79 @@ fn validate_and_decrypt_framed(
         Err(reason) => return Ok((None, Some(reason.as_str().to_string()))),
     };
 
-    let payload_dict = PyDict::new(py);
-    for (key, value) in payload {
-        match value {
-            Value::Number(number) if number.is_u64() => {
-                payload_dict.set_item(key, number.as_u64().expect("u64 payload"))?;
-            }
-            Value::Number(number) if number.is_i64() => {
-                payload_dict.set_item(key, number.as_i64().expect("i64 payload"))?;
-            }
-            Value::Number(number) if number.is_f64() => {
-                payload_dict.set_item(key, number.as_f64().expect("f64 payload"))?;
-            }
-            other => {
-                payload_dict.set_item(key, other.to_string())?;
-            }
+    Ok((Some(payload_to_pydict(py, payload)?), None))
+}
+
+#[pyfunction]
+#[pyo3(signature = (frame, device_entry, state, *, ingest_time, ingest_time_rfc3339_utc, pod_time=None))]
+fn admit_framed_fact(
+    py: Python<'_>,
+    frame: &Bound<'_, PyAny>,
+    device_entry: &Bound<'_, PyAny>,
+    mut state: PyRefMut<'_, ReplayWindowState>,
+    ingest_time: i64,
+    ingest_time_rfc3339_utc: &str,
+    pod_time: Option<i64>,
+) -> AdmitFramedFactResult {
+    let frame_fields = match extract_frame_fields(frame) {
+        Ok(value) => value,
+        Err(reason) => {
+            return Ok((
+                None,
+                Some(reason.as_str().to_string()),
+                Some("decrypt".to_string()),
+            ));
         }
+    };
+    let device_material = match extract_device_material(device_entry) {
+        Ok(value) => value,
+        Err(reason) => {
+            return Ok((
+                None,
+                Some(reason.as_str().to_string()),
+                Some("decrypt".to_string()),
+            ));
+        }
+    };
+    let payload = match validate_and_decrypt_impl(&frame_fields, &device_material) {
+        Ok(value) => value,
+        Err(reason) => {
+            return Ok((
+                None,
+                Some(reason.as_str().to_string()),
+                Some("decrypt".to_string()),
+            ));
+        }
+    };
+
+    if let Err(reason) = state.check_and_update(u64::from(frame_fields.fc)) {
+        return Ok((
+            None,
+            Some(reason.as_str().to_string()),
+            Some("replay".to_string()),
+        ));
     }
 
-    Ok((Some(payload_dict.unbind()), None))
+    Ok((
+        Some(build_fact_dict(
+            py,
+            &frame_fields,
+            payload,
+            ingest_time,
+            ingest_time_rfc3339_utc,
+            pod_time,
+        )?),
+        None,
+        None,
+    ))
 }
 
 pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
     let sub = PyModule::new(parent.py(), "crypto")?;
+    sub.add_class::<ReplayWindowState>()?;
     sub.add_function(wrap_pyfunction!(version, &sub)?)?;
     sub.add_function(wrap_pyfunction!(validate_and_decrypt_framed, &sub)?)?;
+    sub.add_function(wrap_pyfunction!(admit_framed_fact, &sub)?)?;
     parent.add_submodule(&sub)?;
     Ok(())
 }
@@ -438,5 +609,36 @@ mod tests {
         frame.ct_b64 = encode_b64(&tampered);
         let err = validate_and_decrypt_impl(&frame, &device).unwrap_err();
         assert_eq!(err, RejectReason::DecryptFailed);
+    }
+
+    #[test]
+    fn replay_window_state_accepts_and_prunes() {
+        let mut state = ReplayWindowState::new(3, Some(1));
+
+        state.check_and_update(2).expect("fc=2 should be accepted");
+        state.check_and_update(3).expect("fc=3 should be accepted");
+        state.check_and_update(4).expect("fc=4 should be accepted");
+        state.check_and_update(5).expect("fc=5 should be accepted");
+
+        assert_eq!(state.highest_fc_seen, Some(5));
+        assert_eq!(state.seen_fcs(), vec![2, 3, 4, 5]);
+    }
+
+    #[test]
+    fn replay_window_state_rejects_duplicates_and_out_of_window() {
+        let mut state = ReplayWindowState::new(4, Some(10));
+
+        state
+            .check_and_update(10)
+            .expect("first session observation");
+
+        let duplicate = state.check_and_update(10).unwrap_err();
+        assert_eq!(duplicate, RejectReason::Duplicate);
+
+        let too_old = state.check_and_update(5).unwrap_err();
+        assert_eq!(too_old, RejectReason::OutOfWindow);
+
+        let too_new = state.check_and_update(20).unwrap_err();
+        assert_eq!(too_new, RejectReason::OutOfWindow);
     }
 }
