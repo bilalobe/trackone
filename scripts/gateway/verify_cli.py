@@ -19,16 +19,152 @@ from trackone_core.ledger import normalize_hex64, sha256_hex
 try:  # pragma: no cover - optional; may not be installed when run as a script
     from trackone_core.release import (
         DEFAULT_COMMITMENT_PROFILE_ID,
-        DISCLOSURE_CLASS_LABELS,
+    )
+    from trackone_core.verification import (
+        CHECK_BATCH_METADATA,
+        CHECK_DAY_ARTIFACT,
+        CHECK_FACT_RECOMPUTE,
+        CHECK_MANIFEST,
+        CHECK_OTS,
+        CHECK_PEERS,
+        CHECK_TSA,
+        STATUS_FAILED,
+        STATUS_MISSING,
+        STATUS_PENDING,
+        STATUS_SKIPPED,
+        STATUS_VERIFIED,
+        build_verifier_summary,
+        record_executed_check,
+        record_skipped_check,
+        refresh_publicly_recomputable,
+        set_channel,
+        set_manifest_status,
+        verification_channel,
     )
 except ImportError:  # pragma: no cover - fallback for direct script execution
     # Keep these in sync with trackone_core/release.py.
     DEFAULT_COMMITMENT_PROFILE_ID: str = "trackone-canonical-cbor-v1"  # type: ignore[no-redef]
-    DISCLOSURE_CLASS_LABELS: dict[str, str] = {  # type: ignore[no-redef]
-        "A": "public-recompute",
-        "B": "partner-audit",
-        "C": "anchor-only-evidence",
-    }
+    STATUS_VERIFIED = "verified"
+    STATUS_FAILED = "failed"
+    STATUS_MISSING = "missing"
+    STATUS_PENDING = "pending"
+    STATUS_SKIPPED = "skipped"
+    CHECK_DAY_ARTIFACT = "day_artifact_validation"
+    CHECK_FACT_RECOMPUTE = "fact_level_recompute"
+    CHECK_MANIFEST = "verification_manifest_validation"
+    CHECK_BATCH_METADATA = "batch_metadata_validation"
+    CHECK_OTS = "ots_verification"
+    CHECK_TSA = "tsa_verification"
+    CHECK_PEERS = "peer_signature_verification"
+
+    def verification_channel(
+        enabled: bool,
+        status: str,
+        reason: str = "",
+    ) -> dict[str, Any]:
+        return {"enabled": enabled, "status": status, "reason": reason}
+
+    def build_verifier_summary(
+        *,
+        policy_mode: str,
+        disclosure_class: str,
+        commitment_profile_id: str,
+        manifest_schema: str,
+        block_path: Path,
+        day_artifact: Path,
+        ots_path: Path,
+        manifest_path: Path,
+        ots_enabled: bool,
+        tsa_enabled: bool,
+        peers_enabled: bool,
+    ) -> dict[str, Any]:
+        return {
+            "policy": {"mode": policy_mode},
+            "verification": {
+                "disclosure_class": disclosure_class,
+                "disclosure_label": disclosure_class,
+                "commitment_profile_id": commitment_profile_id,
+                "publicly_recomputable": False,
+            },
+            "manifest": {
+                "status": "missing",
+                "source": None,
+                "schema": manifest_schema,
+            },
+            "artifacts": {
+                "block": str(block_path),
+                "day_cbor": str(day_artifact),
+                "day_ots": str(ots_path),
+                "verification_manifest": str(manifest_path),
+            },
+            "checks": {
+                "root_match": None,
+                "artifact_valid": False,
+                "meta_valid": True,
+            },
+            "verification_scope_exercised": [],
+            "checks_executed": [],
+            "checks_skipped": [],
+            "channels": {
+                "ots": verification_channel(ots_enabled, STATUS_SKIPPED, "disabled"),
+                "tsa": verification_channel(tsa_enabled, STATUS_SKIPPED, "disabled"),
+                "peers": verification_channel(
+                    peers_enabled, STATUS_SKIPPED, "disabled"
+                ),
+            },
+            "overall": "failed",
+        }
+
+    def record_executed_check(summary: dict[str, Any], check: str) -> None:
+        checks = summary.setdefault("checks_executed", [])
+        if isinstance(checks, list):
+            checks.append(check)
+        scope = summary.setdefault("verification_scope_exercised", [])
+        if isinstance(scope, list) and check not in scope:
+            scope.append(check)
+
+    def record_skipped_check(summary: dict[str, Any], check: str, reason: str) -> None:
+        checks = summary.setdefault("checks_skipped", [])
+        if isinstance(checks, list):
+            checks.append({"check": check, "reason": reason})
+
+    def refresh_publicly_recomputable(summary: dict[str, Any]) -> None:
+        verification = summary.get("verification")
+        checks = summary.get("checks")
+        if not isinstance(verification, dict) or not isinstance(checks, dict):
+            return
+        verification["publicly_recomputable"] = (
+            verification.get("disclosure_class") == "A"
+            and checks.get("artifact_valid") is True
+            and checks.get("root_match") is True
+        )
+
+    def set_channel(
+        summary: dict[str, Any],
+        name: str,
+        *,
+        enabled: bool,
+        status: str,
+        reason: str,
+    ) -> None:
+        channels = summary.get("channels")
+        if not isinstance(channels, dict):
+            return
+        channels[name] = verification_channel(enabled, status, reason)
+
+    def set_manifest_status(
+        summary: dict[str, Any],
+        *,
+        status: str,
+        source: str | None,
+        schema: str,
+    ) -> None:
+        summary["manifest"] = {
+            "status": status,
+            "source": source,
+            "schema": schema,
+        }
+
 
 try:  # Support both package imports and direct script execution.
     from .anchoring_config import (
@@ -75,19 +211,7 @@ EXIT_ARTIFACT_PATH_MISMATCH = 7
 EXIT_META_INVALID = 8
 EXIT_ARTIFACT_HASH_MISMATCH = 9
 
-STATUS_VERIFIED = "verified"
-STATUS_FAILED = "failed"
-STATUS_MISSING = "missing"
-STATUS_PENDING = "pending"
-STATUS_SKIPPED = "skipped"
 OTS_VERIFY_TIMEOUT_SECS = 30.0
-CHECK_DAY_ARTIFACT = "day_artifact_validation"
-CHECK_FACT_RECOMPUTE = "fact_level_recompute"
-CHECK_MANIFEST = "verification_manifest_validation"
-CHECK_BATCH_METADATA = "batch_metadata_validation"
-CHECK_OTS = "ots_verification"
-CHECK_TSA = "tsa_verification"
-CHECK_PEERS = "peer_signature_verification"
 
 # Optional Rust extension (`trackone_core`) for single-sourced ledger policy.
 _RUST_MERKLE: Any | None = None
@@ -580,39 +704,8 @@ def _load_peer_verify_fn() -> Any | None:
     return verify_fn
 
 
-def _channel(enabled: bool, status: str, reason: str = "") -> dict[str, Any]:
-    return {"enabled": enabled, "status": status, "reason": reason}
-
-
-def _record_executed(summary: dict[str, Any], check: str) -> None:
-    checks = summary.setdefault("checks_executed", [])
-    if isinstance(checks, list):
-        checks.append(check)
-    scope = summary.setdefault("verification_scope_exercised", [])
-    if isinstance(scope, list) and check not in scope:
-        scope.append(check)
-
-
-def _record_skipped(summary: dict[str, Any], check: str, reason: str) -> None:
-    checks = summary.setdefault("checks_skipped", [])
-    if isinstance(checks, list):
-        checks.append({"check": check, "reason": reason})
-
-
-def _refresh_publicly_recomputable(summary: dict[str, Any]) -> None:
-    verification = summary.get("verification")
-    checks = summary.get("checks")
-    if not isinstance(verification, dict) or not isinstance(checks, dict):
-        return
-    verification["publicly_recomputable"] = (
-        verification.get("disclosure_class") == "A"
-        and checks.get("artifact_valid") is True
-        and checks.get("root_match") is True
-    )
-
-
 def _emit(summary: dict[str, Any], json_mode: bool) -> None:
-    _refresh_publicly_recomputable(summary)
+    refresh_publicly_recomputable(summary)
     if json_mode:
         print(json.dumps(summary, indent=2, sort_keys=True))
         return
@@ -895,51 +988,24 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ERROR: Invalid or missing 'merkle_root' in block header: {block_path}")
         return 1
 
-    summary: dict[str, Any] = {
-        "policy": {"mode": cfg.policy.mode},
-        "verification": {
-            "disclosure_class": args.disclosure_class,
-            "disclosure_label": DISCLOSURE_CLASS_LABELS[args.disclosure_class],
-            "commitment_profile_id": args.commitment_profile_id,
-            "publicly_recomputable": False,
-        },
-        "manifest": {
-            "status": "missing",
-            "source": None,
-            "schema": manifest_schema,
-        },
-        "artifacts": {
-            "block": str(block_path),
-            "day_cbor": str(day_artifact),
-            "day_ots": str(ots_path),
-            "verification_manifest": str(manifest_path),
-        },
-        "checks": {
-            "root_match": None,
-            "artifact_valid": False,
-            "meta_valid": True,
-        },
-        "verification_scope_exercised": [],
-        "checks_executed": [],
-        "checks_skipped": [],
-        "channels": {
-            "ots": _channel(
-                cfg.ots.enabled or args.require_ots, STATUS_SKIPPED, "disabled"
-            ),
-            "tsa": _channel(
-                args.verify_tsa or cfg.tsa.enabled, STATUS_SKIPPED, "disabled"
-            ),
-            "peers": _channel(
-                args.verify_peers or cfg.peers.enabled, STATUS_SKIPPED, "disabled"
-            ),
-        },
-        "overall": "failed",
-    }
-    _record_executed(summary, CHECK_DAY_ARTIFACT)
+    summary = build_verifier_summary(
+        policy_mode=cfg.policy.mode,
+        disclosure_class=args.disclosure_class,
+        commitment_profile_id=args.commitment_profile_id,
+        manifest_schema=manifest_schema,
+        block_path=block_path,
+        day_artifact=day_artifact,
+        ots_path=ots_path,
+        manifest_path=manifest_path,
+        ots_enabled=cfg.ots.enabled or args.require_ots,
+        tsa_enabled=args.verify_tsa or cfg.tsa.enabled,
+        peers_enabled=args.verify_peers or cfg.peers.enabled,
+    )
+    record_executed_check(summary, CHECK_DAY_ARTIFACT)
 
     if manifest_path.exists():
-        _record_executed(summary, CHECK_MANIFEST)
-        _record_executed(summary, CHECK_BATCH_METADATA)
+        record_executed_check(summary, CHECK_MANIFEST)
+        record_executed_check(summary, CHECK_BATCH_METADATA)
         try:
             manifest = _load_verification_manifest(
                 manifest_path, schema_name=manifest_schema
@@ -958,21 +1024,23 @@ def main(argv: list[str] | None = None) -> int:
         except _MANIFEST_EXCEPTIONS as exc:
             print(f"ERROR: verification manifest validation failed: {exc}")
             summary["checks"]["meta_valid"] = False
-            summary["manifest"] = {
-                "status": "invalid",
-                "source": manifest_path.name,
-                "schema": manifest_schema,
-            }
+            set_manifest_status(
+                summary,
+                status="invalid",
+                source=manifest_path.name,
+                schema=manifest_schema,
+            )
             _emit(summary, args.json)
             return EXIT_META_INVALID
-        summary["manifest"] = {
-            "status": "present",
-            "source": manifest_path.name,
-            "schema": manifest_schema,
-        }
+        set_manifest_status(
+            summary,
+            status="present",
+            source=manifest_path.name,
+            schema=manifest_schema,
+        )
     else:
-        _record_skipped(summary, CHECK_MANIFEST, "manifest-absent")
-        _record_skipped(summary, CHECK_BATCH_METADATA, "manifest-absent")
+        record_skipped_check(summary, CHECK_MANIFEST, "manifest-absent")
+        record_skipped_check(summary, CHECK_BATCH_METADATA, "manifest-absent")
 
     # Optional OTS metadata sidecar checks
     meta: dict[str, Any] | None = None
@@ -1079,7 +1147,7 @@ def main(argv: list[str] | None = None) -> int:
 
     # Fact-level recomputation is only valid for disclosure class A.
     if args.disclosure_class == "A":
-        _record_executed(summary, CHECK_FACT_RECOMPUTE)
+        record_executed_check(summary, CHECK_FACT_RECOMPUTE)
         fact_files = sorted(facts_dir.glob("*.cbor"))
         if not fact_files:
             json_candidates = sorted(facts_dir.glob("*.json"))
@@ -1114,7 +1182,7 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         summary["checks"]["root_match"] = True
     else:
-        _record_skipped(
+        record_skipped_check(
             summary,
             CHECK_FACT_RECOMPUTE,
             f"disclosure-class-{args.disclosure_class.lower()}",
@@ -1124,10 +1192,14 @@ def main(argv: list[str] | None = None) -> int:
     check_ots = cfg.ots.enabled or args.require_ots
     require_ots = args.require_ots or (strict_mode and check_ots)
     if check_ots:
-        _record_executed(summary, CHECK_OTS)
+        record_executed_check(summary, CHECK_OTS)
         if not ots_path.exists():
-            summary["channels"]["ots"] = _channel(
-                True, STATUS_MISSING, "ots-proof-not-found"
+            set_channel(
+                summary,
+                "ots",
+                enabled=True,
+                status=STATUS_MISSING,
+                reason="ots-proof-not-found",
             )
             if require_ots:
                 summary["overall"] = "failed"
@@ -1150,48 +1222,84 @@ def main(argv: list[str] | None = None) -> int:
             if ots_ok:
                 if ots_status not in {STATUS_VERIFIED, STATUS_PENDING}:
                     ots_status = STATUS_VERIFIED
-                summary["channels"]["ots"] = _channel(True, ots_status, ots_reason)
+                set_channel(
+                    summary,
+                    "ots",
+                    enabled=True,
+                    status=ots_status,
+                    reason=ots_reason,
+                )
             else:
                 if ots_status not in {STATUS_FAILED, STATUS_MISSING}:
                     ots_status = STATUS_FAILED
-                summary["channels"]["ots"] = _channel(True, ots_status, ots_reason)
+                set_channel(
+                    summary,
+                    "ots",
+                    enabled=True,
+                    status=ots_status,
+                    reason=ots_reason,
+                )
                 summary["overall"] = "failed"
                 _emit(summary, args.json)
                 if ots_reason == "ots-proof-not-found":
                     return EXIT_OTS_NOT_FOUND
                 return EXIT_OTS_FAILED
     else:
-        summary["channels"]["ots"] = _channel(False, STATUS_SKIPPED, "disabled")
+        set_channel(
+            summary,
+            "ots",
+            enabled=False,
+            status=STATUS_SKIPPED,
+            reason="disabled",
+        )
 
     # TSA channel
     check_tsa = args.verify_tsa or cfg.tsa.enabled
     tsa_strict = args.tsa_strict or (strict_mode and check_tsa)
     if check_tsa:
-        _record_executed(summary, CHECK_TSA)
+        record_executed_check(summary, CHECK_TSA)
         tsr_path = day_artifact.parent / f"{day}.tsr"
         if tsr_path.exists():
             if verify_tsa(tsr_path, day_artifact):
-                summary["channels"]["tsa"] = _channel(
-                    True, STATUS_VERIFIED, "tsa-verified"
+                set_channel(
+                    summary,
+                    "tsa",
+                    enabled=True,
+                    status=STATUS_VERIFIED,
+                    reason="tsa-verified",
                 )
             else:
-                summary["channels"]["tsa"] = _channel(
-                    True, STATUS_FAILED, "tsa-verification-failed"
+                set_channel(
+                    summary,
+                    "tsa",
+                    enabled=True,
+                    status=STATUS_FAILED,
+                    reason="tsa-verification-failed",
                 )
                 if tsa_strict:
                     summary["overall"] = "failed"
                     _emit(summary, args.json)
                     return EXIT_TSA_FAILED
         else:
-            summary["channels"]["tsa"] = _channel(
-                True, STATUS_MISSING, "tsa-artifact-not-found"
+            set_channel(
+                summary,
+                "tsa",
+                enabled=True,
+                status=STATUS_MISSING,
+                reason="tsa-artifact-not-found",
             )
             if tsa_strict:
                 summary["overall"] = "failed"
                 _emit(summary, args.json)
                 return EXIT_TSA_FAILED
     else:
-        summary["channels"]["tsa"] = _channel(False, STATUS_SKIPPED, "disabled")
+        set_channel(
+            summary,
+            "tsa",
+            enabled=False,
+            status=STATUS_SKIPPED,
+            reason="disabled",
+        )
 
     # Peer channel
     check_peers = args.verify_peers or cfg.peers.enabled
@@ -1200,7 +1308,7 @@ def main(argv: list[str] | None = None) -> int:
         args.peers_min if args.peers_min is not None else cfg.peers.min_signatures
     )
     if check_peers:
-        _record_executed(summary, CHECK_PEERS)
+        record_executed_check(summary, CHECK_PEERS)
         peer_attest_path = day_artifact.parent / "peers" / f"{day}.peers.json"
         if peer_attest_path.exists():
             site_id = block_header.get("site_id", "")
@@ -1208,29 +1316,45 @@ def main(argv: list[str] | None = None) -> int:
                 peer_attest_path, site_id, day, recorded_root
             )
             if all_valid and sig_count >= peers_min:
-                summary["channels"]["peers"] = _channel(
-                    True, STATUS_VERIFIED, f"{sig_count}-signatures"
+                set_channel(
+                    summary,
+                    "peers",
+                    enabled=True,
+                    status=STATUS_VERIFIED,
+                    reason=f"{sig_count}-signatures",
                 )
             else:
-                summary["channels"]["peers"] = _channel(
-                    True,
-                    STATUS_FAILED,
-                    f"insufficient-or-invalid-signatures:{sig_count}",
+                set_channel(
+                    summary,
+                    "peers",
+                    enabled=True,
+                    status=STATUS_FAILED,
+                    reason=f"insufficient-or-invalid-signatures:{sig_count}",
                 )
                 if peers_strict:
                     summary["overall"] = "failed"
                     _emit(summary, args.json)
                     return EXIT_PEERS_FAILED
         else:
-            summary["channels"]["peers"] = _channel(
-                True, STATUS_MISSING, "peer-attestation-not-found"
+            set_channel(
+                summary,
+                "peers",
+                enabled=True,
+                status=STATUS_MISSING,
+                reason="peer-attestation-not-found",
             )
             if peers_strict:
                 summary["overall"] = "failed"
                 _emit(summary, args.json)
                 return EXIT_PEERS_FAILED
     else:
-        summary["channels"]["peers"] = _channel(False, STATUS_SKIPPED, "disabled")
+        set_channel(
+            summary,
+            "peers",
+            enabled=False,
+            status=STATUS_SKIPPED,
+            reason="disabled",
+        )
 
     summary["overall"] = compute_overall_status(
         policy_mode=cfg.policy.mode, channels=summary["channels"]
