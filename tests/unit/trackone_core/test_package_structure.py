@@ -32,8 +32,15 @@ def _make_mock_native() -> MagicMock:
     # Submodules registered via register() in Rust
     for sub in ("crypto", "ledger", "merkle", "ots"):
         setattr(native, sub, MagicMock(name=sub))
+    native.crypto.ReplayWindowState = MagicMock(name="ReplayWindowState")
 
     return native
+
+
+def _clear_trackone_core_modules() -> None:
+    for key in list(sys.modules):
+        if key.startswith("trackone_core"):
+            sys.modules.pop(key, None)
 
 
 @pytest.fixture()
@@ -41,13 +48,13 @@ def mock_native(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
     """Inject a mock _native module and clear stale trackone_core entries."""
     native = _make_mock_native()
 
-    # Remove any already-imported trackone_core modules so tests get fresh imports
-    for key in list(sys.modules):
-        if key.startswith("trackone_core"):
-            monkeypatch.delitem(sys.modules, key, raising=False)
+    _clear_trackone_core_modules()
 
     monkeypatch.setitem(sys.modules, "trackone_core._native", native)
-    return native
+    try:
+        yield native
+    finally:
+        _clear_trackone_core_modules()
 
 
 # ---------------------------------------------------------------------------
@@ -105,7 +112,15 @@ class TestPackageImport:
         import importlib
 
         tc = importlib.import_module("trackone_core")
-        for name in ("crypto", "ledger", "merkle", "ots"):
+        for name in (
+            "crypto",
+            "ledger",
+            "merkle",
+            "ots",
+            "release",
+            "sensorthings",
+            "verification",
+        ):
             assert name in tc.__all__, f"'{name}' missing from __all__"
 
 
@@ -173,6 +188,29 @@ class TestShimSubmodules:
         assert reason is None
         sentinel.assert_called_once()
 
+    def test_crypto_shim_exposes_admit_framed_fact(
+        self, mock_native: MagicMock
+    ) -> None:
+        """The crypto shim should expose the native admitted-fact helper."""
+        import importlib
+
+        sentinel = MagicMock(return_value=({"fc": 1}, None, None))
+        mock_native.crypto.admit_framed_fact = sentinel
+
+        crypto = importlib.import_module("trackone_core.crypto")
+        fact, reason, source = crypto.admit_framed_fact(
+            {},
+            {},
+            object(),
+            ingest_time=1,
+            ingest_time_rfc3339_utc="2026-01-01T00:00:01Z",
+        )
+
+        assert fact == {"fc": 1}
+        assert reason is None
+        assert source is None
+        sentinel.assert_called_once()
+
 
 # ---------------------------------------------------------------------------
 # Radio shim
@@ -205,9 +243,7 @@ class TestRadioShim:
 
         native = _make_mock_native()
 
-        for key in list(sys.modules):
-            if key.startswith("trackone_core"):
-                monkeypatch.delitem(sys.modules, key, raising=False)
+        _clear_trackone_core_modules()
 
         monkeypatch.setitem(sys.modules, "trackone_core._native", native)
 
@@ -221,3 +257,4 @@ class TestRadioShim:
         # Core package should still be importable; radio attribute should be None
         assert tc is not None
         assert tc.radio is None  # type: ignore[attr-defined]
+        _clear_trackone_core_modules()
