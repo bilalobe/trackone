@@ -40,6 +40,9 @@ pub const DISCLOSURE_CLASS_PARTNER_AUDIT_LABEL: &str = "partner-audit";
 /// Human-readable label for disclosure class `C`.
 pub const DISCLOSURE_CLASS_ANCHOR_ONLY_LABEL: &str = "anchor-only-evidence";
 
+/// Active ingest profile identifier for the Rust-native Postcard wire format.
+pub const INGEST_PROFILE_RUST_POSTCARD_V1: &str = "rust-postcard-v1";
+
 #[cfg(test)]
 mod tests {
     use super::*;
