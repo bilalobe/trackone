@@ -42,7 +42,7 @@ def _install_wheel(wheel: Path) -> None:
 
 
 def _verify_import(repo_root: Path) -> None:
-    source = (repo_root / "trackone_core").resolve()
+    source = (repo_root / "src" / "trackone_core").resolve()
 
     import trackone_core
     import trackone_core._native as native
