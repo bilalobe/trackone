@@ -3,7 +3,7 @@
 Pipeline execution fixtures.
 
 Provides high-level fixtures for running pipeline components (merkle_batcher,
-verify_cli, OTS stamping, Rust framed fixture emission) and full end-to-end
+verify_cli, OTS stamping, framed fixture emission) and full end-to-end
 workflows.
 """
 
@@ -13,12 +13,13 @@ from pathlib import Path
 
 import pytest
 
-from scripts.gateway.rust_framed_fixture_emitter import emit_frames
+from scripts.gateway.framed_fixture import emit_frames
+from trackone_core.constants import DEFAULT_INGEST_PROFILE
 
 
 @pytest.fixture
 def write_frames():
-    """Produce Rust-native postcard framed NDJSON output for tests."""
+    """Produce framed NDJSON output through the native ingest boundary."""
 
     def _write(
         device_id: str,
@@ -142,7 +143,7 @@ def run_pipeline(
     """Run the full end-to-end pipeline.
 
     Returns a callable that executes:
-    1. Rust framed fixture emission (write frames)
+    1. Framed fixture emission (write frames)
     2. Frame verifier (verify frames -> facts)
     3. Merkle batcher (batch facts -> day.cbor)
     4. OTS anchor (stamp day.cbor)
@@ -175,7 +176,7 @@ def run_pipeline(
             "--device-table",
             str(temp_dirs["device_table"]),
             "--ingest-profile",
-            "rust-postcard-v1",
+            DEFAULT_INGEST_PROFILE,
         ]
         rc_verify = frame_verifier.process(fv_args)
 
