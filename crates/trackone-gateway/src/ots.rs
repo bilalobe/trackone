@@ -1,29 +1,17 @@
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use serde_json::Value;
-use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 use trackone_constants::OTS_VERIFY_TIMEOUT_SECS;
-use trackone_ledger::hex_lower;
+use trackone_ledger::{sha256_digest, sha256_hex};
 
 const PLACEHOLDER_BYTES: &[u8] = b"OTS_PROOF_PLACEHOLDER";
 const STATIONARY_PREFIX: &[u8] = b"STATIONARY-OTS:";
 const OTS_VERIFY_POLL_INTERVAL: Duration = Duration::from_millis(25);
-
-fn sha256_digest(bytes: &[u8]) -> [u8; 32] {
-    let mut hasher = Sha256::new();
-    hasher.update(bytes);
-    hasher.finalize().into()
-}
-
-fn sha256_hex(bytes: &[u8]) -> String {
-    let digest = sha256_digest(bytes);
-    hex_lower(&digest)
-}
 
 fn trim_ascii(input: &[u8]) -> &[u8] {
     let start = input

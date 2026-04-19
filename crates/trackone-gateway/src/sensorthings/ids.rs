@@ -1,4 +1,4 @@
-use sha2::{Digest, Sha256};
+use trackone_ledger::sha256_hex;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SensorThingsEntityKind {
@@ -24,27 +24,13 @@ impl SensorThingsEntityKind {
 }
 
 pub fn entity_id(kind: SensorThingsEntityKind, components: &[&str]) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(kind.prefix().as_bytes());
+    let mut material = Vec::new();
+    material.extend_from_slice(kind.prefix().as_bytes());
     for component in components {
-        hasher.update([0x1f]);
-        hasher.update(component.as_bytes());
+        material.push(0x1f);
+        material.extend_from_slice(component.as_bytes());
     }
-    format!(
-        "trackone:{}:{}",
-        kind.prefix(),
-        hex_lower(&hasher.finalize())
-    )
-}
-
-fn hex_lower(bytes: &[u8]) -> String {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    let mut out = String::with_capacity(bytes.len() * 2);
-    for byte in bytes {
-        out.push(HEX[(byte >> 4) as usize] as char);
-        out.push(HEX[(byte & 0x0f) as usize] as char);
-    }
-    out
+    format!("trackone:{}:{}", kind.prefix(), sha256_hex(&material))
 }
 
 #[cfg(test)]

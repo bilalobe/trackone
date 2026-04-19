@@ -1,6 +1,6 @@
 use serde_json::json;
-use sha2::{Digest, Sha256};
 use trackone_core::{Fact, FactKind, FactPayload, SampleType};
+use trackone_ledger::sha256_hex;
 
 use super::mapping::{
     EnvObservationProjection, EnvObservationProjectionInput, ObservationResult,
@@ -141,11 +141,8 @@ fn derive_provisioned_sensor_key(
     observed_property_key: &str,
     sensor_channel: Option<u8>,
 ) -> String {
-    let digest = Sha256::digest(identity.as_bytes());
-    let fingerprint = digest[..8]
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect::<String>();
+    let digest = sha256_hex(identity.as_bytes());
+    let fingerprint = &digest[..16];
     let suffix = match sensor_channel {
         Some(channel) => format!("ch{channel}"),
         None => observed_property_key.replace('_', "-"),
