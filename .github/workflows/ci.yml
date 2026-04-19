@@ -285,7 +285,7 @@ jobs:
               import trackone_core
               import trackone_core._native as native
 
-              source = (Path(os.environ["GITHUB_WORKSPACE"]) / "trackone_core").resolve()
+              source = (Path(os.environ["GITHUB_WORKSPACE"]) / "src" / "trackone_core").resolve()
               package_path = Path(trackone_core.__file__).resolve()
               native_path = Path(native.__file__).resolve()
               assert not package_path.is_relative_to(source), "trackone_core imported from checkout instead of wheel"
