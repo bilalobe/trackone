@@ -14,18 +14,14 @@ name = "trackone"
 crate-type = ["cdylib", "rlib"]
 doctest = false
 
-[features]
-default = []
-sensorthings = ["dep:trackone-core"]
-
 [dependencies]
 trackone-constants.workspace = true
 trackone-ledger.workspace = true
+trackone-core = { workspace = true, optional = true }
+trackone-ingest = { workspace = true, features = ["std", "xchacha"] }
 pyo3.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
 base64.workspace = true
-chacha20poly1305.workspace = true
-trackone-core = { workspace = true, optional = true }
 
 [dev-dependencies]
