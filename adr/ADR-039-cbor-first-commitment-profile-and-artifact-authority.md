@@ -2,7 +2,7 @@
 
 **Status**: Accepted
 **Date**: 2026-02-23
-**Updated**: 2026-03-12
+**Updated**: 2026-04-18
 
 ## Related ADRs
 
@@ -70,7 +70,23 @@ JSON artifacts are projections:
 - `facts/*.json` and `day/*.json` are optional human/audit views.
 - JSON projection files MUST NOT be treated as commitment source of truth.
 
-### 4) Compatibility window
+### 4) Framed-ingest projection boundary
+
+The commitment profile begins after framed telemetry has been accepted under
+the active transport, nonce, AAD, anti-replay, and plaintext-profile contract.
+The supported plaintext profile is:
+
+- `rust-postcard-v1`: postcard `Fact` retained for the Rust-native pod path.
+
+That profile is not a public commitment profile. Accepted frames MUST be
+projected into canonical facts before writing authoritative CBOR artifacts. The
+published interop contract is therefore:
+
+1. accepted framed input;
+1. deterministic projection to the canonical fact record;
+1. deterministic CBOR commitment bytes under `trackone-canonical-cbor-v1`.
+
+### 5) Compatibility window
 
 During migration, a dual-artifact mode is allowed:
 
