@@ -17,6 +17,8 @@ Current examples include:
 
 - sizing and framing limits such as `MAX_FACT_LEN`
 - AEAD layout constants such as `AEAD_NONCE_LEN` and `AEAD_TAG_LEN`
+- framed ingest labels such as `INGEST_PROFILE_RUST_POSTCARD_V1` and
+  `FRAMED_FACT_MSG_TYPE`
 - verifier/runtime defaults such as `OTS_VERIFY_TIMEOUT_SECS`
 - release/profile labels such as `COMMITMENT_PROFILE_ID_CANONICAL_CBOR_V1`
 - disclosure-class identifiers and labels
