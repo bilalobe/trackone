@@ -238,6 +238,7 @@ impl fmt::Display for Error {
 mod tests {
     use super::*;
     extern crate alloc;
+    #[cfg(feature = "postcard")]
     use alloc::{boxed::Box, vec::Vec};
 
     const SENSOR_CAPABILITY_EXAMPLE: SensorCapability = SensorCapability {
@@ -254,6 +255,7 @@ mod tests {
         assert_eq!(pod.0[4..8], 42u32.to_be_bytes());
     }
 
+    #[cfg(feature = "postcard")]
     #[test]
     fn fact_roundtrip_postcard() {
         let fact = Fact {
@@ -275,6 +277,7 @@ mod tests {
         assert_eq!(fact, decoded);
     }
 
+    #[cfg(feature = "postcard")]
     #[test]
     fn sensor_capability_roundtrip_postcard() {
         let mut buf = [0u8; 64];

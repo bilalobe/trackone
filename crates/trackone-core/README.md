@@ -20,8 +20,10 @@ This crate owns:
 ## Feature model
 
 - `std`
-  Host-side support. This enables the `std`-backed CBOR surface and other
-  host-friendly helpers.
+  Host-side support for heap-backed helpers such as canonical CBOR encoding.
+- `postcard`
+  Opt-in postcard compatibility coverage for shared core types. Framed postcard
+  transport ownership remains in `trackone-ingest`.
 - `dummy-aead`
   Test/development-only AEAD implementation. Do not use for production builds.
 - `production`
@@ -60,5 +62,5 @@ admitted-telemetry boundary, not as ownership of the lifecycle plane itself.
 ## Typical use
 
 ```bash
-cargo test -p trackone-core
+cargo test -p trackone-core --features std,postcard
 ```

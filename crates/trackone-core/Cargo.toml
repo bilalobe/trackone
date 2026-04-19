@@ -17,7 +17,11 @@ readme = "README.md"
 default = ["std"]
 
 # Enable use of the Rust standard library.
-std = ["dep:ciborium"]
+std = []
+
+# Opt-in postcard compatibility checks for shared core types. Framed postcard
+# ownership still lives in trackone-ingest.
+postcard = ["dep:postcard"]
 
 # Enable the built-in dummy AEAD implementation used for tests and
 # examples. Downstream users targeting production firmware should
@@ -36,26 +40,20 @@ production = []
 # Core data-structure support for no_std environments.
 heapless.workspace = true
 
-# Serialization support
-postcard.workspace = true
-
 # Serde for (de)serializing core types.
-serde = { workspace = true, default-features = false, features = ["derive"] }
+serde.workspace = true
 
 # Serde representation helper
 serde_repr.workspace = true
 
-# Support for large array (de)serialization in no_std contexts.
-serde-big-array.workspace = true
-
 # Zeroize secret key material on drop.
-zeroize = { workspace = true, default-features = false, features = ["derive"] }
+zeroize.workspace = true
 
 # Workspace constants dependency
 trackone-constants.workspace = true
 
-# CBOR support
-ciborium = { workspace = true, optional = true }
+# Optional postcard support for opt-in compatibility tests/helpers.
+postcard = { workspace = true, optional = true }
 
 [dev-dependencies]
 serde_json.workspace = true

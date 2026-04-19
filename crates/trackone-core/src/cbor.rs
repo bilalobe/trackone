@@ -16,8 +16,9 @@
 //! - Schema is already versioned and fixed in TrackOne core types
 //!
 //! Notes:
-//! - `ciborium::into_writer` is convenient for debugging but does not guarantee
-//!   determinism. Use `CanonicalCbor` trait for commitments.
+//! - Use `CanonicalCbor` for commitments; generic serde-driven CBOR helpers are
+//!   intentionally omitted so callers do not confuse them with the canonical
+//!   commitment surface.
 //! - Field order in arrays is part of the canonical contract and MUST NOT change
 //!   without a schema version bump.
 //! - Schema version is embedded as the first array element to enable safe evolution.
@@ -29,16 +30,6 @@ use std::vec::Vec;
 
 use crate::identity_input::ProvisioningRecord;
 use crate::types::{EnvFact, Fact, FactPayload};
-
-/// Encodes a value to CBOR.
-///
-/// This function is intended for *benchmarks and debugging*, not commitments.
-#[cfg(feature = "std")]
-pub fn to_cbor_vec<T: serde::Serialize>(value: &T) -> Vec<u8> {
-    let mut buf = Vec::new();
-    ciborium::into_writer(value, &mut buf).expect("serialize to CBOR");
-    buf
-}
 
 /// Encodes a value to CBOR using deterministic/canonical rules.
 ///
