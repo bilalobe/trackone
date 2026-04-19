@@ -11,8 +11,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import nacl.exceptions
 import pytest
+
+pytest.importorskip("nacl")
+
+import nacl.exceptions
 
 from scripts.gateway import crypto_utils
 

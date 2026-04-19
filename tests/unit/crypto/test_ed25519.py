@@ -6,8 +6,11 @@ Moved from test_crypto_impl.py so the "mother" file can be emptied; these are ac
 
 from __future__ import annotations
 
-import nacl.exceptions
 import pytest
+
+pytest.importorskip("nacl")
+
+import nacl.exceptions
 
 from scripts.gateway import crypto_utils
 

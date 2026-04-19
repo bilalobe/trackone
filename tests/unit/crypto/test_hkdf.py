@@ -6,6 +6,10 @@ Tests for HMAC-based Key Derivation Function (RFC 5869).
 
 from __future__ import annotations
 
+import pytest
+
+pytest.importorskip("nacl")
+
 from scripts.gateway import crypto_utils
 
 

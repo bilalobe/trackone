@@ -6,6 +6,10 @@ Tests for X25519 Elliptic Curve Diffie-Hellman key agreement.
 
 from __future__ import annotations
 
+import pytest
+
+pytest.importorskip("nacl")
+
 from scripts.gateway import crypto_utils
 
 
