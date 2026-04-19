@@ -19,12 +19,6 @@ default = ["std"]
 # Enable use of the Rust standard library.
 std = ["dep:ciborium"]
 
-# Gateway-only helpers (e.g., Merkle tree) that may assume std and
-# are not intended for very small MCUs.
-# Currently this only pulls in sha2, but we keep it as a separate
-# feature so gateway crates can opt in explicitly.
-gateway = ["sha2", "std"]
-
 # Enable the built-in dummy AEAD implementation used for tests and
 # examples. Downstream users targeting production firmware should
 # disable this feature.
@@ -46,16 +40,13 @@ heapless.workspace = true
 postcard.workspace = true
 
 # Serde for (de)serializing core types.
-serde = { workspace = true, default-features = false, features = ["derive", "alloc"] }
+serde = { workspace = true, default-features = false, features = ["derive"] }
 
 # Serde representation helper
 serde_repr.workspace = true
 
 # Support for large array (de)serialization in no_std contexts.
 serde-big-array.workspace = true
-
-# Hashing for Merkle trees and other gateway-only uses.
-sha2 = { workspace = true, default-features = false, optional = true }
 
 # Zeroize secret key material on drop.
 zeroize = { workspace = true, default-features = false, features = ["derive"] }
