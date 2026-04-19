@@ -1,6 +1,6 @@
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
-use pyo3::types::{PyBool, PyDict, PyList, PyModule, PyString, PyTuple};
+use pyo3::types::{PyBool, PyDict, PyList, PyModule, PyTuple};
 use serde_json::{Map, Number, Value};
 
 use super::ids::{SensorThingsEntityKind, entity_id as native_entity_id};
@@ -26,6 +26,14 @@ fn parse_entity_kind(kind: &str) -> Result<SensorThingsEntityKind, &'static str>
     }
 }
 
+fn py_to_json_array<'py>(items: impl IntoIterator<Item = Bound<'py, PyAny>>) -> PyResult<Value> {
+    items
+        .into_iter()
+        .map(|item| py_to_json_value(&item))
+        .collect::<PyResult<Vec<_>>>()
+        .map(Value::Array)
+}
+
 fn py_to_json_value(value: &Bound<'_, PyAny>) -> PyResult<Value> {
     if value.is_none() {
         return Ok(Value::Null);
@@ -45,24 +53,16 @@ fn py_to_json_value(value: &Bound<'_, PyAny>) -> PyResult<Value> {
     }
     // Handle str explicitly before any iterable check: Python strings are iterable and
     // try_iter() would otherwise convert them to arrays of single characters.
-    if let Ok(s) = value.cast::<PyString>() {
-        return Ok(Value::String(s.to_str()?.to_owned()));
+    if let Ok(s) = value.extract::<String>() {
+        return Ok(Value::String(s));
     }
     // Use concrete sequence types instead of a generic try_iter() to avoid
     // accidentally treating other iterable objects (e.g. generators) as arrays.
     if let Ok(list) = value.cast::<PyList>() {
-        let mut items = Vec::new();
-        for item in list.iter() {
-            items.push(py_to_json_value(&item)?);
-        }
-        return Ok(Value::Array(items));
+        return py_to_json_array(list.iter());
     }
     if let Ok(tuple) = value.cast::<PyTuple>() {
-        let mut items = Vec::new();
-        for item in tuple.iter() {
-            items.push(py_to_json_value(&item)?);
-        }
-        return Ok(Value::Array(items));
+        return py_to_json_array(tuple.iter());
     }
     if let Ok(i) = value.extract::<i64>() {
         return Ok(Value::Number(Number::from(i)));
