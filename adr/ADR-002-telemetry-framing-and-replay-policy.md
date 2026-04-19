@@ -17,9 +17,10 @@
 - **Endianness:** Network byte order (big‑endian) for integers
 - **AAD (associated data):** `dev_id || msg_type` (2 B + 1 B)
 - **Current nonce layout:** XChaCha20-Poly1305 nonce bytes are
-  `salt8 || fc64_be || tail8`. `salt8` is provisioned per device, `fc64_be`
-  binds the frame counter into the nonce, and `tail8` remains producer-specific
-  uniqueness material.
+  `salt8 || fc32_as_u64_be || tail8`. `salt8` is provisioned per device,
+  `fc32_as_u64_be` binds the 32-bit frame header counter into the nonce by
+  encoding `u64::from(fc)` as eight big-endian bytes, and `tail8` remains
+  producer-specific uniqueness material.
 - **Profile boundary:** the supported AEAD plaintext profile is
   `rust-postcard-v1`: a postcard-encoded `trackone-core::Fact` decoded by the
   native Rust gateway boundary.
@@ -38,9 +39,10 @@ For test harness and initial development, we use **ChaCha20-Poly1305** with a **
 
 Production deployment will use **XChaCha20-Poly1305** with **192-bit nonce** (24 bytes):
 
-- Nonce: `salt8 || fc64 || rand8`
+- Nonce: `salt8 || fc32_as_u64_be || rand8`
   - `salt8`: per‑device random salt (8 bytes)
-  - `fc64`: 64-bit frame counter
+  - `fc32_as_u64_be`: 32-bit frame header counter expanded with
+    `u64::from(fc)` and encoded as 8 big-endian bytes
   - `rand8`: 8-byte random
 
 This allows test development with standard ChaCha20-Poly1305 while planning for XChaCha's extended nonce space in
