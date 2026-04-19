@@ -3,15 +3,15 @@
 `trackone-ledger` is the Rust home for TrackOne’s deterministic commitment and
 artifact rules.
 
-This crate is the single-source implementation for the parts of the system that
-must not drift between batching, verification, vector generation, and the
-Python/native boundary.
+This crate is the single-source implementation for the deterministic commitment
+primitives that must not drift between batching, verification, vector
+generation, and the Python/native boundary.
 
 ## Responsibilities
 
 This crate owns:
 
-- canonical JSON-to-CBOR commitment encoding
+- deterministic CBOR commitment encoding and JSON projection helpers
 - Merkle leaf hashing and root construction
 - block-header and day-record construction for the current commitment profile
 - lowercase SHA-256 hex generation
@@ -19,12 +19,17 @@ This crate owns:
   path
 
 It is the right place for reusable deterministic logic that belongs to the
-commitment contract.
+commitment contract. Under
+[`ADR-039`](../../adr/ADR-039-cbor-first-commitment-profile-and-artifact-authority.md),
+CBOR artifacts are authoritative; JSON helpers in this crate support stable
+projection and parity workflows.
 
 ## Boundary with other crates
 
 - [`trackone-core`](../trackone-core/README.md) owns shared protocol types and
-  framing semantics
+  crypto-facing traits
+- [`trackone-ingest`](../trackone-ingest/README.md) owns framed Postcard wire
+  profiles and admission helpers before facts enter commitment artifacts
 - [`trackone-gateway`](../trackone-gateway/README.md) exposes selected ledger
   helpers to Python
 - Python scripts still own workflow concerns such as manifest assembly, export
