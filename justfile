@@ -28,14 +28,16 @@ bench: setup-dev
 
 # Run all tests with correct feature combinations
 test:
-    cargo test --package trackone-core --features std,dummy-aead
-    cargo test --package trackone-pod-fw
+    cargo test --package trackone-core --features std,postcard,dummy-aead
+    cargo test --package trackone-ingest --features std,xchacha
+    cargo test --package trackone-pod-fw --features std
     cargo test --package trackone-gateway
 
 # Run clippy with correct features (avoid --all-features due to production+dummy-aead conflict)
 clippy:
-    cargo clippy --package trackone-core --features std,dummy-aead -- -D warnings
-    cargo clippy --package trackone-pod-fw -- -D warnings
+    cargo clippy --package trackone-core --features std,postcard,dummy-aead -- -D warnings
+    cargo clippy --package trackone-ingest --features std,xchacha -- -D warnings
+    cargo clippy --package trackone-pod-fw --features std -- -D warnings
     cargo clippy --package trackone-gateway -- -D warnings
 
 # Build all packages in release mode
@@ -45,12 +47,12 @@ build-release:
 # Build with production feature (ensures dummy-aead is disabled)
 build-production:
     cargo build --package trackone-core --no-default-features --features std,production
-    cargo build --package trackone-pod-fw --no-default-features
+    cargo build --package trackone-pod-fw --features production
     cargo build --package trackone-gateway --release
 
 # Run Rust-side serialization benchmarks
 bench-rust:
-    cargo test --package trackone-core --features std,dummy-aead summary_report -- --nocapture
+    cargo test --package trackone-core --features std,postcard,dummy-aead summary_report -- --nocapture
 
 # Check formatting
 fmt-check:
