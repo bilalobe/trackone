@@ -8,7 +8,6 @@ mod ledger;
 mod merkle;
 mod ots;
 mod radio;
-#[cfg(feature = "sensorthings")]
 pub mod sensorthings;
 
 fn extract_frames(py_frames: &Bound<'_, PyAny>) -> PyResult<Vec<Vec<u8>>> {
@@ -115,6 +114,7 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     ledger::register(m)?;
     merkle::register(m)?;
     ots::register(m)?;
+    sensorthings::python::register(m)?;
 
     m.add(
         "DEFAULT_COMMITMENT_PROFILE_ID",
@@ -143,6 +143,10 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add(
         "DISCLOSURE_CLASS_C_LABEL",
         trackone_constants::DISCLOSURE_CLASS_ANCHOR_ONLY_LABEL,
+    )?;
+    m.add(
+        "INGEST_PROFILE_RUST_POSTCARD_V1",
+        trackone_constants::INGEST_PROFILE_RUST_POSTCARD_V1,
     )?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     Ok(())
