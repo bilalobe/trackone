@@ -2,6 +2,7 @@
 
 **Status**: Accepted
 **Date**: 2025-11-06
+**Updated**: 2026-04-19
 
 ## Related ADRs
 
@@ -9,10 +10,14 @@
 - [ADR-003](ADR-003-merkle-canonicalization-and-ots-anchoring.md): Canonicalization/Merkle Policy
 - [ADR-015](ADR-015-parallel-anchoring-ots-rfc3161-tsa.md): Parallel Anchoring with OTS/TSA (integration point for anchor verification)
 - [ADR-008](ADR-008-m4-completion-ots-workflow.md): M#4 OTS workflow and metadata (production OTS handling)
+- [ADR-049](ADR-049-native-evidence-plane-crypto-boundary-and-pynacl-demotion.md): native evidence-plane crypto boundary and PyNaCl demotion
 
 ## Context
 
-TrackOne currently ships a Python-first gateway with crypto and Merkle logic implemented in Python (libsodium via PyNaCl). For ultra‑low‑power and long‑term maintainability, we want a high‑performance, memory‑safe core that can serve both Python and future embedded/edge targets. Rust offers:
+TrackOne originally shipped a Python-first gateway with crypto and Merkle logic
+implemented in Python (libsodium via PyNaCl). For ultra-low-power and long-term
+maintainability, we want a high-performance, memory-safe core that can serve
+both Python and future embedded/edge targets. Rust offers:
 
 - Safety (no GC, no data races) and predictable performance.
 - A path to `no_std` for microcontrollers (future) and `std` for gateways.
@@ -43,13 +48,18 @@ Python remains the orchestrator (I/O, OTS/TSA, CLI), and the Rust crates are use
   1. Leaf hash (SHA‑256; optional Blake3) and hash‑sorted Merkle root
   1. AEAD XChaCha20‑Poly1305 (deterministic test vectors only; runtime always randomized nonces as spec)
   1. Ed25519 sign/verify; X25519 + HKDF
-- Python keeps fallbacks: if Rust extension not present, use pure‑Python/PyNaCl reference.
+- Historical migration rule: Python kept fallbacks while Rust authority was
+  being introduced. For current supported evidence-plane runtime paths, ADR-049
+  supersedes that fallback posture: native `trackone_core` authority is required
+  and critical paths fail closed when it is unavailable.
 
 ### API Contract
 
 - No change to Python entry points (`canonical_json`, `merkle_root`, `aead_*`, `ed25519_*`).
 - Exact output parity with existing tests/vectors; additional negative tests for misuse.
-- Environment flag `TRACKONE_NO_EXT=1` forces fallback (for debugging/CI).
+- Environment flag `TRACKONE_NO_EXT=1` may still be useful for debugging legacy
+  or reference paths, but it MUST NOT create Python crypto fallback authority for
+  supported evidence-plane runtime behavior.
 
 ### Packaging & CI
 
@@ -82,7 +92,9 @@ Python remains the orchestrator (I/O, OTS/TSA, CLI), and the Rust crates are use
 - Phase 0 (land workspace, latent core): Land the Rust workspace (`trackone-core`, `trackone-gateway`, `trackone-pod-fw`) and basic PyO3 integration; build wheels with `maturin` in CI, but keep Python behavior unchanged.
 - Phase 1 (enable hashing/Merkle): Default to Rust for canonicalization+Merkle when the extension is present, keeping Python fallbacks.
 - Phase 2 (crypto): Gate AEAD/Ed25519 behind feature flags; enable after vectors and misuse tests stabilize.
-- Phase 3 (default on): Use the Rust path by default; keep env flag to disable.
+- Phase 3 (default on): Use the Rust path by default. For supported
+  evidence-plane paths this phase is now refined by ADR-049: missing native
+  authority is a configuration failure, not a fallback trigger.
 - Phase 4 (optional): Publish a small Rust CLI verifier for auditors (no Python runtime).
 
 ## Implementation Notes
