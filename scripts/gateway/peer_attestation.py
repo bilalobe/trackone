@@ -14,6 +14,9 @@ _nacl_exceptions: Any = None
 _HexEncoder: Any = None
 _SigningKey: Any = None
 _VerifyKey: Any = None
+_PYNACL_INSTALL_HINT = (
+    "Install trackone[peer-signatures] or add pynacl to the environment."
+)
 
 try:
     import nacl.exceptions as _nacl_exceptions_mod
@@ -62,8 +65,7 @@ def _require_pynacl() -> tuple[Any, Any, Any, Any]:
         or _VerifyKey is None
     ):
         raise PeerAttestationError(
-            "PyNaCl is required for peer attestation. "
-            "Install trackone[crypto] or add pynacl to the environment."
+            f"PyNaCl is required for peer attestation. {_PYNACL_INSTALL_HINT}"
         ) from _PYNACL_IMPORT_ERROR
     return _nacl_exceptions, _HexEncoder, _SigningKey, _VerifyKey
 
@@ -182,7 +184,8 @@ def verify_peer_signature(
         from nacl.signing import VerifyKey
     except ImportError as exc:
         raise PeerAttestationError(
-            "PyNaCl is required for peer attestation signature verification"
+            "PyNaCl is required for peer attestation signature verification. "
+            f"{_PYNACL_INSTALL_HINT}"
         ) from exc
 
     verify_key = VerifyKey(pubkey_hex, encoder=HexEncoder)
