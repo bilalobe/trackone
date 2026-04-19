@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `INGEST_PROFILE_RUST_POSTCARD_V1` as the shared ingest-profile identifier for the Rust-native Postcard framed telemetry path.
+
 ## [0.1.0-alpha.15] - 2026-04-18
 
 ### Notes

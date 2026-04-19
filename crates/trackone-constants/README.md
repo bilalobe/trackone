@@ -8,6 +8,7 @@ dependency-free `no_std` home for shared policy constants.
 This crate is for constants that need to stay aligned across:
 
 - `trackone-core`
+- `trackone-ingest`
 - `trackone-ledger`
 - `trackone-gateway`
 - `trackone-pod-fw`
@@ -40,6 +41,8 @@ paths.
 
 - [`trackone-core`](../trackone-core/README.md) re-exports the core protocol
   constants
+- [`trackone-ingest`](../trackone-ingest/README.md) uses sizing, nonce, and tag
+  constants for framed admission and fixture emission
 - [`trackone-gateway`](../trackone-gateway/README.md) uses shared release and
   verifier constants at the Python/native boundary
 - [`trackone-pod-fw`](../trackone-pod-fw/README.md) uses the same sizing and
