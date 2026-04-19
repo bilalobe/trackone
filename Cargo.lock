@@ -1076,15 +1076,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "serde-big-array"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11fc7cc2c76d73e0f27ee52abbd64eec84d46f370c88371120433196934e4b7f"
-dependencies = [
- "serde",
-]
-
-[[package]]
 name = "serde-wasm-bindgen"
 version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1300,11 +1291,9 @@ version = "0.1.0-alpha.15"
 name = "trackone-core"
 version = "0.1.0-alpha.15"
 dependencies = [
- "ciborium",
  "heapless",
  "postcard",
  "serde",
- "serde-big-array",
  "serde_json",
  "serde_json_canonicalizer",
  "serde_repr",
@@ -1319,7 +1308,6 @@ dependencies = [
  "base64",
  "pyo3",
  "serde_json",
- "sha2 0.11.0",
  "trackone-constants",
  "trackone-core",
  "trackone-ingest",
