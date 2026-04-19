@@ -1,7 +1,8 @@
 # ADR-021: Safety net for OTS pipeline and verification
 
-**Status**: Proposed
+**Status**: Accepted
 **Date**: 2025-11-25
+**Updated**: 2026-04-19
 
 ## Related ADRs
 

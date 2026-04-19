@@ -1,7 +1,8 @@
 # ADR-013: Python Version Support Policy (Last Three Minors)
 
-**Status**: Proposed
+**Status**: Accepted
 **Date**: 2025-11-02
+**Updated**: 2026-04-19
 
 ## Context
 

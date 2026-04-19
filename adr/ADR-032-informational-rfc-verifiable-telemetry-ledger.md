@@ -1,8 +1,8 @@
 # ADR-032: Proposing an Informational RFC for Verifiable Telemetry Ledgers
 
-**Status**: Proposed
+**Status**: Accepted
 **Date**: 2026-01-04
-**Updated**: 2026-02-23
+**Updated**: 2026-04-19
 
 ## Related ADRs
 

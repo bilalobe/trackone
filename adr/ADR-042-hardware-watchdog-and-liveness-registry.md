@@ -1,7 +1,8 @@
 # ADR-042: Hardware Watchdog & Liveness-Registry Policy
 
-**Status**: Proposed
+**Status**: Accepted
 **Date**: 2026-03-01
+**Updated**: 2026-04-19
 
 ## Related ADRs
 

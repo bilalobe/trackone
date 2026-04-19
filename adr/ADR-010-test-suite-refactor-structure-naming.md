@@ -1,7 +1,8 @@
 # ADR-010: Test suite refactor (structure and naming)
 
-**Status**: Proposed
+**Status**: Accepted
 **Date**: 2025-10-28
+**Updated**: 2026-04-19
 
 ## Related ADRs
 
