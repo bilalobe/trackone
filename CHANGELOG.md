@@ -638,7 +638,7 @@ python -m jsonschema -i device_table.json toolset/unified/schemas/device_table.s
 - **CONTRIBUTING.md**: Guidelines for PRs, ADRs, CI, releases
 - **README.md**: Quick start demos, design decisions, roadmap
 - **adr/README.md**: ADR index and template
-- **LaTeX manuscript structure**: Initial src/main.tex with section includes
+- **LaTeX manuscript structure**: Initial manuscript entrypoint with section includes
 
 ## [0.0.0] - 2025-09-15
 
