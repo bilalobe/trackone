@@ -1,12 +1,24 @@
 # ADR-005: Migrate to PyNaCl for All Cryptographic Primitives
 
-**Status**: Accepted
+**Status**: Superseded by [ADR-049](ADR-049-native-evidence-plane-crypto-boundary-and-pynacl-demotion.md)
 **Date**: 2025-10-12
-**Updated**: 2026-02-25
+**Updated**: 2026-04-19
 
 ## Related ADRs
 
 - [ADR-001](ADR-001-primitives-x25519-hkdf-xchacha.md): Cryptographic Primitives and Framing (updated to reflect PyNaCl)
+- [ADR-049](ADR-049-native-evidence-plane-crypto-boundary-and-pynacl-demotion.md): Native evidence-plane crypto boundary and PyNaCl demotion
+
+## Supersession Note
+
+This ADR remains historical context for the Python-first migration away from a
+mixed `cryptography` plus `pynacl` dependency set.
+
+It no longer governs TrackOne's primary runtime dependency strategy. The current
+evidence-plane boundary is defined by ADR-049: supported framed admission,
+replay, canonical fact construction, commitment CBOR, digest normalization, and
+Merkle behavior are authoritative through `trackone_core`; PyNaCl is demoted to
+optional/tooling scope unless a later ADR accepts a new primary role for it.
 
 ## Context and Problem Statement
 
