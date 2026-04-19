@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +22,18 @@ CHECK_OTS = "ots_verification"
 CHECK_TSA = "tsa_verification"
 CHECK_PEERS = "peer_signature_verification"
 
+PORTABLE_VERIFIER_SUMMARY_FIELDS = (
+    "policy",
+    "verification",
+    "checks",
+    "verification_scope_exercised",
+    "checks_executed",
+    "checks_skipped",
+    "channels",
+    "manifest",
+    "overall",
+)
+
 
 def verification_channel(
     enabled: bool,
@@ -28,6 +41,15 @@ def verification_channel(
     reason: str = "",
 ) -> dict[str, Any]:
     return {"enabled": enabled, "status": status, "reason": reason}
+
+
+def portable_verifier_summary(summary: dict[str, Any]) -> dict[str, Any]:
+    portable: dict[str, Any] = {}
+    for key in PORTABLE_VERIFIER_SUMMARY_FIELDS:
+        value = summary.get(key)
+        if value is not None:
+            portable[key] = json.loads(json.dumps(value))
+    return portable
 
 
 def build_verifier_summary(
@@ -161,6 +183,7 @@ __all__ = [
     "STATUS_SKIPPED",
     "STATUS_VERIFIED",
     "build_verifier_summary",
+    "portable_verifier_summary",
     "record_executed_check",
     "record_skipped_check",
     "refresh_publicly_recomputable",
