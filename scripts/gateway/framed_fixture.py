@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Emit Rust-native postcard framed NDJSON fixtures."""
+"""Emit framed NDJSON fixtures through the native ingest boundary."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ def _load_native_crypto() -> Any:
         import trackone_core.crypto as native_crypto
     except ImportError as exc:  # pragma: no cover - environment issue
         raise RuntimeError(
-            "trackone_core native crypto helper is required for Rust framed fixture emission. "
+            "trackone_core native crypto helper is required for framed fixture emission. "
             "Build/install the native extension or run via tox."
         ) from exc
     return native_crypto
@@ -88,7 +88,7 @@ def emit_frames(
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Emit Rust postcard framed NDJSON fixtures"
+        description="Emit framed NDJSON fixtures through native ingest"
     )
     parser.add_argument("--device-id", default="pod-001")
     parser.add_argument("--count", type=int, default=10)
