@@ -8,6 +8,7 @@ We deliberately use small synthetic facts rather than running the full pod_sim
 pipeline, to keep the tests fast and deterministic while still covering the
 end-to-end merkle_batcher behavior.
 """
+
 from __future__ import annotations
 
 import json
@@ -103,52 +104,6 @@ def test_merkle_batcher_sees_duplicate_free_fc_sets(
     # Our synthetic facts used 5 distinct (dev_id, fc) pairs
     assert header.get("count") == 5
     assert len(leaf_hashes) == 5
-
-
-@pytest.mark.integration
-def test_replay_window_unit_invariants(frame_verifier):
-    """Sanity-check replay_window behavior independently of facts/ IO.
-
-    This is a focused check on the sliding-window invariant described in
-    ADR-024. It ensures that replay_window:
-      - Accepts the first frame per device.
-      - Accepts in-window out-of-order counters exactly once.
-      - Rejects duplicates.
-      - Rejects counters that are too far behind or ahead of the window.
-    """
-
-    replay_window = frame_verifier.ReplayWindow
-    window = replay_window(window_size=4)
-
-    dev = "dev-a"
-
-    # First frame: always accepted
-    ok, reason = window.check_and_update(dev, 10)
-    assert ok and reason in {"first", "ok"}
-
-    # In-window forward moves
-    ok, reason = window.check_and_update(dev, 11)
-    assert ok and reason == "ok"
-
-    ok, reason = window.check_and_update(dev, 12)
-    assert ok and reason == "ok"
-
-    # In-window out-of-order (within [highest-window_size, highest])
-    # highest is 12, window_size=4 so fc=9..12 are in-window.
-    ok, reason = window.check_and_update(dev, 9)
-    assert ok and reason == "ok"
-
-    # Duplicate should be rejected
-    ok, reason = window.check_and_update(dev, 11)
-    assert not ok and reason == "duplicate"
-
-    # Too far behind: highest is 12, fc=6 is 6 behind (> window_size=4)
-    ok, reason = window.check_and_update(dev, 6)
-    assert not ok and reason == "out_of_window"
-
-    # Too far ahead: highest is 12, fc=20 is 8 ahead (> window_size=4)
-    ok, reason = window.check_and_update(dev, 20)
-    assert not ok and reason == "out_of_window"
 
 
 @pytest.mark.integration

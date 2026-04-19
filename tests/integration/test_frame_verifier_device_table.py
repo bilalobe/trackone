@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import base64
-import importlib.util
 import json
 
 import pytest
@@ -163,35 +162,22 @@ def test_parse_frame_error_cases(frame_verifier):
     assert frame is None and err == "line_too_long"
 
 
-def test_aead_decrypt_success_and_failures(tmp_path, frame_verifier, pod_sim):
-    try:
-        spec = importlib.util.find_spec("nacl.bindings")
-    except ModuleNotFoundError:
-        spec = None
-    if spec is None:
-        pytest.skip("PyNaCl not installed")
-
+def test_aead_decrypt_success_and_failures(tmp_path, frame_verifier, write_frames):
     # Prepare a device table path for pod_sim to populate
     dt_path = tmp_path / "device_table.json"
     dt_path.write_text("{}", encoding="utf-8")
     write_sha256_sidecar(dt_path)
 
-    # Emit a framed record using pod_sim.emit_framed which also persists device table
-    frame = pod_sim.emit_framed(
-        "pod-007",
-        3,
-        {"counter": 3, "bioimpedance": 75.5, "temp_c": 25.3},
-        dt_path,
-        None,
-    )
+    frames_path = tmp_path / "frames.ndjson"
+    write_frames("pod-007", 1, frames_path, None, dt_path)
+    frame = json.loads(frames_path.read_text(encoding="utf-8").splitlines()[0])
 
-    # Load device_table into memory using pod_sim helper
-    device_table = pod_sim.load_device_table(dt_path)
+    device_table = frame_verifier.load_device_table(dt_path)
 
-    # Successful decrypt should return a dict with 'counter' parsed
+    # Successful decrypt should return a decoded postcard payload
     payload = frame_verifier.aead_decrypt(frame, device_table)
     assert isinstance(payload, dict)
-    assert "counter" in payload
+    assert "Env" in payload
 
     # Unknown device -> decrypt should fail
     bad_table = {}
