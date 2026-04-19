@@ -19,7 +19,8 @@ This crate currently provides:
 ## Feature model
 
 - `std`
-  Enabled by default for host-side development and tests.
+  Enables host-side development/test support and forwards `std` to
+  `trackone-core` and `trackone-ingest`.
 - `wdg`
   Enables watchdog/liveness-registry helpers.
 - `mock-hal`
@@ -29,10 +30,12 @@ This crate currently provides:
 - `production`
   Intended for embedded builds; implies `wdg` and rejects mock HAL usage.
 
-For embedded builds, disable default features:
+The default build stays `no_std`-friendly. Enable `std` for host-side tests and
+local development:
 
 ```bash
-cargo build -p trackone-pod-fw --no-default-features --features production
+cargo test -p trackone-pod-fw --features std
+cargo build -p trackone-pod-fw --features production
 ```
 
 ## Boundary with other crates
@@ -64,5 +67,5 @@ discipline.
 ## Check
 
 ```bash
-cargo test -p trackone-pod-fw
+cargo test -p trackone-pod-fw --features std
 ```

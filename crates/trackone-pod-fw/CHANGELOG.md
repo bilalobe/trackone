@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- `trackone-pod-fw` is now `no_std`-first by default; the `std` feature is
+  opt-in for host-side tests/development and forwards `std` to its core/ingest
+  dependencies.
 - `CounterNonce24` now emits gateway-admissible nonce bytes through
   `trackone-ingest` framed nonce helpers as `salt8 || fc32_as_u64_be || tail8`.
 - `Pod` now uses `trackone-ingest` for framed fact construction and generic
