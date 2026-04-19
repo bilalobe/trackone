@@ -170,6 +170,64 @@ class TestVerifyCliEdgeCases:
         assert result == 1
         assert "trackone_core native ledger helper is required" in stdout.getvalue()
 
+    def test_verify_main_handles_native_ledger_shim_importerror(
+        self, monkeypatch, tmp_path, verify_cli, facts_dir
+    ):
+        class _ImportErrorShim:
+            def __getattr__(self, _name: str):
+                raise ImportError("native extension not available")
+
+        root = tmp_path / "out"
+        day_dir = root / "day"
+        blocks_dir = root / "blocks"
+        day_dir.mkdir(parents=True)
+        blocks_dir.mkdir(parents=True)
+
+        day = "2025-10-07"
+        day_record = {
+            "version": 1,
+            "site_id": "test-site",
+            "date": day,
+            "prev_day_root": "00" * 32,
+            "batches": [],
+            "day_root": "a" * 64,
+        }
+        (day_dir / f"{day}.json").write_text(json.dumps(day_record), encoding="utf-8")
+        (day_dir / f"{day}.cbor").write_bytes(b"placeholder")
+        (blocks_dir / f"{day}-00.block.json").write_text(
+            json.dumps({"day": day, "site_id": "test-site", "merkle_root": "a" * 64}),
+            encoding="utf-8",
+        )
+
+        monkeypatch.setattr(verify_cli, "native_ledger", _ImportErrorShim())
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            result = verify_cli.main(["--root", str(root), "--facts", str(facts_dir)])
+
+        assert result == 1
+        assert "trackone_core native ledger helper is required" in stdout.getvalue()
+
+    def test_verify_ots_proof_handles_native_ots_shim_importerror(
+        self, monkeypatch, tmp_path, verify_cli
+    ):
+        class _ImportErrorShim:
+            def __getattr__(self, _name: str):
+                raise ImportError("native extension not available")
+
+        ots_path = tmp_path / "day.ots"
+        ots_path.write_bytes(b"not-a-real-proof")
+
+        monkeypatch.setattr(verify_cli, "native_ots", _ImportErrorShim())
+        monkeypatch.setattr(
+            verify_cli,
+            "_verify_ots_python",
+            lambda *_args, **_kwargs: {"status": "fallback-used"},
+        )
+
+        result = verify_cli.verify_ots_proof(ots_path)
+
+        assert result == {"status": "fallback-used"}
+
     def test_verify_main_emits_summary_on_native_merkle_recompute_failure(
         self, monkeypatch, tmp_path, verify_cli
     ):

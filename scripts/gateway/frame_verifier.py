@@ -325,6 +325,7 @@ def _validate_and_decrypt_framed(
         payload, reason = native_crypto.validate_and_decrypt_framed(
             frame,
             dev_entry,
+            ingest_profile=ingest_profile,
         )
     except RuntimeError:
         raise
@@ -424,6 +425,7 @@ def _admit_framed_fact(
             state,
             ingest_time=ingest_time,
             ingest_time_rfc3339_utc=ingest_time_rfc3339_utc,
+            ingest_profile=ingest_profile,
         )
     except RuntimeError:
         raise

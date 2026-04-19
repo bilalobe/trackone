@@ -28,6 +28,14 @@ except ImportError:  # pragma: no cover - extension not built/installed
     native_merkle = None
     native_ots = None
 
+
+def _native_attr(module: Any | None, name: str) -> Any | None:
+    try:
+        return getattr(module, name)
+    except (AttributeError, ImportError):
+        return None
+
+
 try:  # pragma: no cover - optional; may not be installed when run as a script
     from trackone_core.release import (
         DEFAULT_COMMITMENT_PROFILE_ID,
@@ -424,9 +432,10 @@ def verify_ots_proof(
     expected_artifact_sha: str | None = None,
 ) -> Any:
     """Verify an OTS proof using the native boundary when available."""
-    if native_ots is not None and hasattr(native_ots, "verify_ots_proof"):
+    verify_fn = _native_attr(native_ots, "verify_ots_proof")
+    if verify_fn is not None:
         try:  # pragma: no cover - exercised when Rust extension is available
-            return native_ots.verify_ots_proof(
+            return verify_fn(
                 str(ots_path),
                 allow_placeholder=allow_placeholder,
                 expected_artifact_sha=expected_artifact_sha,
@@ -576,9 +585,10 @@ def validate_meta_sidecar(
     ots_path: Path,
 ) -> Any:
     """Validate the OTS sidecar binding, preferring the native boundary."""
-    if native_ots is not None and hasattr(native_ots, "validate_meta_sidecar"):
+    validate_fn = _native_attr(native_ots, "validate_meta_sidecar")
+    if validate_fn is not None:
         try:  # pragma: no cover - exercised when Rust extension is available
-            return native_ots.validate_meta_sidecar(
+            return validate_fn(
                 str(meta_path.resolve()),
                 str(repo_root.resolve()),
                 str(day_artifact.resolve()),
@@ -1098,14 +1108,15 @@ def main(argv: list[str] | None = None) -> int:
 
         try:
             day_json_bytes = day_json_path.read_bytes()
-            if native_ledger is None or not hasattr(
+            canonicalize_fn = _native_attr(
                 native_ledger, "canonicalize_json_to_cbor_bytes"
-            ):
+            )
+            if canonicalize_fn is None:
                 raise RuntimeError(
                     "trackone_core native ledger helper is required for authoritative "
                     "verification paths. Build/install the native extension or run via tox."
                 )
-            canon = bytes(native_ledger.canonicalize_json_to_cbor_bytes(day_json_bytes))
+            canon = bytes(canonicalize_fn(day_json_bytes))
         except (OSError, RuntimeError, TypeError, ValueError) as exc:
             print(
                 f"ERROR: Failed to canonicalize day projection {day_json_path} into "
