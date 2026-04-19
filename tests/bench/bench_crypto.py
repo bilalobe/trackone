@@ -5,6 +5,8 @@ from typing import Any
 
 import pytest
 
+pytest.importorskip("nacl")
+
 # Import the canonical crypto utilities
 from scripts.gateway import crypto_utils
 

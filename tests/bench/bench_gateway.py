@@ -6,8 +6,11 @@ import secrets
 from pathlib import Path
 from typing import Any
 
-import nacl.bindings
 import pytest
+
+pytest.importorskip("nacl")
+
+import nacl.bindings
 
 from scripts.gateway import frame_verifier as fv
 from scripts.gateway.input_integrity import write_sha256_sidecar
