@@ -33,6 +33,9 @@ use trackone_core::{EnvFact, SampleType};
 pub const INGEST_PROFILE_RUST_POSTCARD_V1: &str =
     trackone_constants::INGEST_PROFILE_RUST_POSTCARD_V1;
 
+/// Message type used by the current Rust-native framed fact path.
+pub const FRAMED_FACT_MSG_TYPE: u8 = trackone_constants::FRAMED_FACT_MSG_TYPE;
+
 /// Gateway admission policy for ciphertext bytes, excluding the AEAD tag.
 pub const MAX_FRAME_CIPHERTEXT_BYTES: usize = 256;
 
