@@ -1,33 +1,59 @@
 use base64::{Engine as _, engine::general_purpose::STANDARD};
-use chacha20poly1305::{
-    XChaCha20Poly1305, XNonce,
-    aead::{Aead, KeyInit, Payload},
-};
+use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::{PyBool, PyDict};
+use pyo3::types::{PyBool, PyDict, PyList};
 use serde_json::{Map, Value, json};
-use std::collections::BTreeSet;
-
-const MAX_FRAME_CIPHERTEXT_BYTES: usize = 256;
+use trackone_core::{Fact, FactKind, FactPayload, SampleType};
+use trackone_ingest::{
+    self, DeviceMaterial as IngestDeviceMaterial, FixtureError, FrameHeader, FrameInput,
+    RejectReason, ReplayWindow,
+};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct FrameFields {
-    dev_id: u16,
-    msg_type: u8,
-    fc: u32,
-    nonce_b64: String,
-    ct_b64: String,
-    tag_b64: String,
+struct ParsedFrame {
+    header: FrameHeader,
+    nonce: Vec<u8>,
+    ct: Vec<u8>,
+    tag: Vec<u8>,
+}
+
+impl ParsedFrame {
+    fn as_ingest(&self) -> FrameInput<'_> {
+        FrameInput {
+            header: self.header,
+            nonce: &self.nonce,
+            ct: &self.ct,
+            tag: &self.tag,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct DeviceMaterial {
-    salt8_b64: String,
-    ck_up_b64: String,
+    salt8: Vec<u8>,
+    ck_up: Vec<u8>,
+}
+
+impl DeviceMaterial {
+    fn as_ingest(&self) -> IngestDeviceMaterial<'_> {
+        IngestDeviceMaterial {
+            salt8: &self.salt8,
+            ck_up: &self.ck_up,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct DecryptedFact {
+    pod_id_hex: String,
+    fc: u64,
+    kind: String,
+    payload: Map<String, Value>,
+    pod_time: Option<i64>,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-enum RejectReason {
+enum PyRejectReason {
     MissingFrameFields,
     InvalidHdr,
     InvalidHdrTypes,
@@ -35,20 +61,10 @@ enum RejectReason {
     InvalidBase64,
     UnknownDevice,
     MissingSalt8,
-    Salt8Length,
-    CkUpLength,
-    NonceLength,
-    TagLength,
-    EmptyCiphertext,
-    CiphertextTooLarge,
-    NonceSaltMismatch,
-    NonceFcMismatch,
-    DecryptFailed,
-    Duplicate,
-    OutOfWindow,
+    Ingest(RejectReason),
 }
 
-impl RejectReason {
+impl PyRejectReason {
     fn as_str(self) -> &'static str {
         match self {
             Self::MissingFrameFields => "missing_frame_fields",
@@ -58,27 +74,21 @@ impl RejectReason {
             Self::InvalidBase64 => "invalid_base64",
             Self::UnknownDevice => "unknown_device",
             Self::MissingSalt8 => "missing_salt8",
-            Self::Salt8Length => "salt8_length",
-            Self::CkUpLength => "ck_up_length",
-            Self::NonceLength => "nonce_length",
-            Self::TagLength => "tag_length",
-            Self::EmptyCiphertext => "empty_ciphertext",
-            Self::CiphertextTooLarge => "ciphertext_too_large",
-            Self::NonceSaltMismatch => "nonce_salt_mismatch",
-            Self::NonceFcMismatch => "nonce_fc_mismatch",
-            Self::DecryptFailed => "decrypt_failed",
-            Self::Duplicate => "duplicate",
-            Self::OutOfWindow => "out_of_window",
+            Self::Ingest(reason) => reason.as_str(),
         }
+    }
+}
+
+impl From<RejectReason> for PyRejectReason {
+    fn from(reason: RejectReason) -> Self {
+        Self::Ingest(reason)
     }
 }
 
 #[pyclass(skip_from_py_object)]
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct ReplayWindowState {
-    window_size: u64,
-    highest_fc_seen: Option<u64>,
-    seen: BTreeSet<u64>,
+    inner: ReplayWindow,
 }
 
 #[pymethods]
@@ -87,72 +97,45 @@ impl ReplayWindowState {
     #[pyo3(signature = (window_size=64, highest_fc_seen=None))]
     fn new(window_size: u64, highest_fc_seen: Option<u64>) -> Self {
         Self {
-            window_size,
-            highest_fc_seen,
-            seen: BTreeSet::new(),
+            inner: ReplayWindow::new(window_size, highest_fc_seen),
         }
     }
 
     #[getter]
     fn window_size(&self) -> u64 {
-        self.window_size
+        self.inner.window_size()
     }
 
     #[getter]
     fn highest_fc_seen(&self) -> Option<u64> {
-        self.highest_fc_seen
+        self.inner.highest_fc_seen()
     }
 
     fn seen_fcs(&self) -> Vec<u64> {
-        self.seen.iter().copied().collect()
+        self.inner.seen_fcs()
     }
 }
 
 impl ReplayWindowState {
     fn check_and_update(&mut self, fc: u64) -> Result<(), RejectReason> {
-        let Some(highest) = self.highest_fc_seen else {
-            self.highest_fc_seen = Some(fc);
-            self.seen.insert(fc);
-            return Ok(());
-        };
-
-        if self.seen.contains(&fc) {
-            return Err(RejectReason::Duplicate);
-        }
-
-        if fc < highest && (highest - fc) > self.window_size {
-            return Err(RejectReason::OutOfWindow);
-        }
-
-        if fc > highest && (fc - highest) > self.window_size {
-            return Err(RejectReason::OutOfWindow);
-        }
-
-        if fc > highest {
-            self.highest_fc_seen = Some(fc);
-            let lower_bound = fc.saturating_sub(self.window_size);
-            self.seen.retain(|seen_fc| *seen_fc >= lower_bound);
-        }
-
-        self.seen.insert(fc);
-        Ok(())
+        self.inner.check_and_update(fc)
     }
 }
 
 fn get_required<'py>(
     dict: &Bound<'py, PyDict>,
     key: &str,
-    missing: RejectReason,
-) -> Result<Bound<'py, PyAny>, RejectReason> {
+    missing: PyRejectReason,
+) -> Result<Bound<'py, PyAny>, PyRejectReason> {
     dict.get_item(key).map_err(|_| missing)?.ok_or(missing)
 }
 
 fn extract_non_bool_u64(
     dict: &Bound<'_, PyDict>,
     key: &str,
-    missing: RejectReason,
-    invalid: RejectReason,
-) -> Result<u64, RejectReason> {
+    missing: PyRejectReason,
+    invalid: PyRejectReason,
+) -> Result<u64, PyRejectReason> {
     let value = get_required(dict, key, missing)?;
     if value.is_instance_of::<PyBool>() {
         return Err(invalid);
@@ -163,242 +146,272 @@ fn extract_non_bool_u64(
 fn extract_string(
     dict: &Bound<'_, PyDict>,
     key: &str,
-    missing: RejectReason,
-    invalid: RejectReason,
-) -> Result<String, RejectReason> {
+    missing: PyRejectReason,
+    invalid: PyRejectReason,
+) -> Result<String, PyRejectReason> {
     get_required(dict, key, missing)?
         .extract::<String>()
         .map_err(|_| invalid)
 }
 
-fn extract_frame_fields(frame: &Bound<'_, PyAny>) -> Result<FrameFields, RejectReason> {
+fn extract_b64(
+    dict: &Bound<'_, PyDict>,
+    key: &str,
+    missing: PyRejectReason,
+    invalid: PyRejectReason,
+) -> Result<Vec<u8>, PyRejectReason> {
+    let raw = extract_string(dict, key, missing, invalid)?;
+    STANDARD
+        .decode(raw.as_bytes())
+        .map_err(|_| PyRejectReason::InvalidBase64)
+}
+
+fn extract_frame_fields(frame: &Bound<'_, PyAny>) -> Result<ParsedFrame, PyRejectReason> {
     let frame_dict = frame
         .cast::<PyDict>()
-        .map_err(|_| RejectReason::MissingFrameFields)?;
-    let hdr_obj = get_required(frame_dict, "hdr", RejectReason::MissingFrameFields)?;
+        .map_err(|_| PyRejectReason::MissingFrameFields)?;
+    let hdr_obj = get_required(frame_dict, "hdr", PyRejectReason::MissingFrameFields)?;
     let hdr = hdr_obj
         .cast::<PyDict>()
-        .map_err(|_| RejectReason::InvalidHdr)?;
+        .map_err(|_| PyRejectReason::InvalidHdr)?;
 
     let dev_id = u16::try_from(extract_non_bool_u64(
         hdr,
         "dev_id",
-        RejectReason::InvalidHdrTypes,
-        RejectReason::InvalidHdrTypes,
+        PyRejectReason::InvalidHdrTypes,
+        PyRejectReason::InvalidHdrTypes,
     )?)
-    .map_err(|_| RejectReason::InvalidHdrTypes)?;
+    .map_err(|_| PyRejectReason::InvalidHdrTypes)?;
     let msg_type = u8::try_from(extract_non_bool_u64(
         hdr,
         "msg_type",
-        RejectReason::InvalidHdrTypes,
-        RejectReason::InvalidHdrTypes,
+        PyRejectReason::InvalidHdrTypes,
+        PyRejectReason::InvalidHdrTypes,
     )?)
-    .map_err(|_| RejectReason::InvalidHdrTypes)?;
+    .map_err(|_| PyRejectReason::InvalidHdrTypes)?;
     let fc = u32::try_from(extract_non_bool_u64(
         hdr,
         "fc",
-        RejectReason::InvalidHdrTypes,
-        RejectReason::InvalidHdrTypes,
+        PyRejectReason::InvalidHdrTypes,
+        PyRejectReason::InvalidHdrTypes,
     )?)
-    .map_err(|_| RejectReason::InvalidHdrTypes)?;
-    let _flags = u8::try_from(extract_non_bool_u64(
+    .map_err(|_| PyRejectReason::InvalidHdrTypes)?;
+    let flags = u8::try_from(extract_non_bool_u64(
         hdr,
         "flags",
-        RejectReason::InvalidHdrTypes,
-        RejectReason::InvalidHdrTypes,
+        PyRejectReason::InvalidHdrTypes,
+        PyRejectReason::InvalidHdrTypes,
     )?)
-    .map_err(|_| RejectReason::InvalidHdrTypes)?;
+    .map_err(|_| PyRejectReason::InvalidHdrTypes)?;
 
-    Ok(FrameFields {
-        dev_id,
-        msg_type,
-        fc,
-        nonce_b64: extract_string(
+    Ok(ParsedFrame {
+        header: FrameHeader {
+            dev_id,
+            msg_type,
+            fc,
+            flags,
+        },
+        nonce: extract_b64(
             frame_dict,
             "nonce",
-            RejectReason::MissingFrameFields,
-            RejectReason::InvalidFrameTypes,
+            PyRejectReason::MissingFrameFields,
+            PyRejectReason::InvalidFrameTypes,
         )?,
-        ct_b64: extract_string(
+        ct: extract_b64(
             frame_dict,
             "ct",
-            RejectReason::MissingFrameFields,
-            RejectReason::InvalidFrameTypes,
+            PyRejectReason::MissingFrameFields,
+            PyRejectReason::InvalidFrameTypes,
         )?,
-        tag_b64: extract_string(
+        tag: extract_b64(
             frame_dict,
             "tag",
-            RejectReason::MissingFrameFields,
-            RejectReason::InvalidFrameTypes,
+            PyRejectReason::MissingFrameFields,
+            PyRejectReason::InvalidFrameTypes,
         )?,
     })
 }
 
 fn extract_device_material(
     device_entry: &Bound<'_, PyAny>,
-) -> Result<DeviceMaterial, RejectReason> {
+) -> Result<DeviceMaterial, PyRejectReason> {
     let entry_dict = device_entry
         .cast::<PyDict>()
-        .map_err(|_| RejectReason::UnknownDevice)?;
+        .map_err(|_| PyRejectReason::UnknownDevice)?;
     Ok(DeviceMaterial {
-        salt8_b64: extract_string(
+        salt8: extract_b64(
             entry_dict,
             "salt8",
-            RejectReason::MissingSalt8,
-            RejectReason::InvalidBase64,
+            PyRejectReason::MissingSalt8,
+            PyRejectReason::InvalidBase64,
         )?,
-        ck_up_b64: extract_string(
+        ck_up: extract_b64(
             entry_dict,
             "ck_up",
-            RejectReason::UnknownDevice,
-            RejectReason::InvalidBase64,
+            PyRejectReason::UnknownDevice,
+            PyRejectReason::InvalidBase64,
         )?,
     })
 }
 
-fn decode_tlv_payload(data: &[u8]) -> Map<String, Value> {
-    let mut index = 0usize;
-    let mut out = Map::new();
-
-    while index + 2 <= data.len() {
-        let tag = data[index];
-        let len = data[index + 1] as usize;
-        index += 2;
-        if index + len > data.len() {
-            break;
-        }
-        let value = &data[index..index + len];
-        index += len;
-
-        match (tag, len) {
-            (0x01, 4) => {
-                out.insert(
-                    "counter".to_string(),
-                    json!(u32::from_be_bytes([value[0], value[1], value[2], value[3]])),
-                );
-            }
-            (0x02, 2) => {
-                let raw = u16::from_be_bytes([value[0], value[1]]);
-                out.insert("bioimpedance".to_string(), json!(f64::from(raw) / 100.0));
-            }
-            (0x03, 2) => {
-                let raw = i16::from_be_bytes([value[0], value[1]]);
-                out.insert("temp_c".to_string(), json!(f64::from(raw) / 100.0));
-            }
-            (0x07, 1) => {
-                out.insert("status_flags".to_string(), json!(value[0]));
-            }
-            _ => {}
-        }
-    }
-
-    out
+fn extract_frame_and_device(
+    frame: &Bound<'_, PyAny>,
+    device_entry: &Bound<'_, PyAny>,
+) -> Result<(ParsedFrame, DeviceMaterial), PyRejectReason> {
+    Ok((
+        extract_frame_fields(frame)?,
+        extract_device_material(device_entry)?,
+    ))
 }
 
-fn validate_and_decrypt_impl(
-    frame: &FrameFields,
-    device: &DeviceMaterial,
-) -> Result<Map<String, Value>, RejectReason> {
-    let nonce = STANDARD
-        .decode(frame.nonce_b64.as_bytes())
-        .map_err(|_| RejectReason::InvalidBase64)?;
-    let ct = STANDARD
-        .decode(frame.ct_b64.as_bytes())
-        .map_err(|_| RejectReason::InvalidBase64)?;
-    let tag = STANDARD
-        .decode(frame.tag_b64.as_bytes())
-        .map_err(|_| RejectReason::InvalidBase64)?;
-    let salt8 = STANDARD
-        .decode(device.salt8_b64.as_bytes())
-        .map_err(|_| RejectReason::InvalidBase64)?;
-    let ck_up = STANDARD
-        .decode(device.ck_up_b64.as_bytes())
-        .map_err(|_| RejectReason::InvalidBase64)?;
-
-    if nonce.len() != trackone_constants::AEAD_NONCE_LEN {
-        return Err(RejectReason::NonceLength);
-    }
-    if tag.len() != trackone_constants::AEAD_TAG_LEN {
-        return Err(RejectReason::TagLength);
-    }
-    if salt8.len() != 8 {
-        return Err(RejectReason::Salt8Length);
-    }
-    if ck_up.len() != 32 {
-        return Err(RejectReason::CkUpLength);
-    }
-    if ct.is_empty() {
-        return Err(RejectReason::EmptyCiphertext);
-    }
-    if ct.len() > MAX_FRAME_CIPHERTEXT_BYTES {
-        return Err(RejectReason::CiphertextTooLarge);
-    }
-    if nonce[..8] != salt8[..] {
-        return Err(RejectReason::NonceSaltMismatch);
-    }
-    if u64::from_be_bytes(nonce[8..16].try_into().expect("nonce slice length"))
-        != u64::from(frame.fc)
-    {
-        return Err(RejectReason::NonceFcMismatch);
-    }
-
-    let aad = [frame.dev_id.to_be_bytes().as_slice(), &[frame.msg_type]].concat();
-    let combined = [ct.as_slice(), tag.as_slice()].concat();
-    let cipher = XChaCha20Poly1305::new_from_slice(&ck_up).map_err(|_| RejectReason::CkUpLength)?;
-    let plaintext = cipher
-        .decrypt(
-            XNonce::from_slice(&nonce),
-            Payload {
-                msg: combined.as_slice(),
-                aad: aad.as_slice(),
-            },
-        )
-        .map_err(|_| RejectReason::DecryptFailed)?;
-
-    Ok(decode_tlv_payload(&plaintext))
+fn decrypt_framed_from_py(
+    frame: &Bound<'_, PyAny>,
+    device_entry: &Bound<'_, PyAny>,
+    ingest_profile: Option<&str>,
+) -> Result<(ParsedFrame, DecryptedFact), PyRejectReason> {
+    trackone_ingest::validate_ingest_profile(ingest_profile)?;
+    let (frame_fields, device_material) = extract_frame_and_device(frame, device_entry)?;
+    let accepted = trackone_ingest::validate_and_decrypt(
+        frame_fields.as_ingest(),
+        device_material.as_ingest(),
+    )?;
+    let fact_fields = decrypted_fact_from_core(&accepted.fact)?;
+    Ok((frame_fields, fact_fields))
 }
 
-fn payload_to_pydict(py: Python<'_>, payload: Map<String, Value>) -> PyResult<Py<PyDict>> {
+fn kind_label(kind: FactKind) -> &'static str {
+    match kind {
+        FactKind::Env => "Env",
+        FactKind::Pipeline => "Pipeline",
+        FactKind::Health => "Health",
+        FactKind::Custom => "Custom",
+    }
+}
+
+fn sample_type_label(sample_type: SampleType) -> &'static str {
+    match sample_type {
+        SampleType::AmbientAirTemperature => "AmbientAirTemperature",
+        SampleType::AmbientRelativeHumidity => "AmbientRelativeHumidity",
+        SampleType::InterfaceTemperature => "InterfaceTemperature",
+        SampleType::CoverageCapacitance => "CoverageCapacitance",
+        SampleType::BioImpedanceMagnitude => "BioImpedanceMagnitude",
+        SampleType::BioImpedanceActivity => "BioImpedanceActivity",
+        SampleType::SupplyVoltage => "SupplyVoltage",
+        SampleType::BatterySoc => "BatterySoc",
+        SampleType::FloodContact => "FloodContact",
+        SampleType::LinkQuality => "LinkQuality",
+        SampleType::Custom => "Custom",
+    }
+}
+
+fn payload_map_from_fact_payload(
+    payload: &FactPayload,
+) -> Result<Map<String, Value>, PyRejectReason> {
+    match payload {
+        FactPayload::Env(env) => {
+            let mut env_value = serde_json::to_value(env)
+                .map_err(|_| PyRejectReason::Ingest(RejectReason::DecryptFailed))?;
+            let env_obj = env_value
+                .as_object_mut()
+                .ok_or(PyRejectReason::Ingest(RejectReason::DecryptFailed))?;
+            env_obj.insert(
+                "sample_type".to_string(),
+                json!(sample_type_label(env.sample_type)),
+            );
+
+            let mut out = Map::new();
+            out.insert("Env".to_string(), env_value);
+            Ok(out)
+        }
+        FactPayload::Custom(_) => {
+            let value = serde_json::to_value(payload)
+                .map_err(|_| PyRejectReason::Ingest(RejectReason::DecryptFailed))?;
+            value
+                .as_object()
+                .cloned()
+                .ok_or(PyRejectReason::Ingest(RejectReason::DecryptFailed))
+        }
+    }
+}
+
+fn decrypted_fact_from_core(fact: &Fact) -> Result<DecryptedFact, PyRejectReason> {
+    Ok(DecryptedFact {
+        pod_id_hex: format!("{:016x}", u64::from_be_bytes(fact.pod_id.0)),
+        fc: fact.fc,
+        kind: kind_label(fact.kind).to_string(),
+        payload: payload_map_from_fact_payload(&fact.payload)?,
+        pod_time: fact.pod_time,
+    })
+}
+
+fn py_value(py: Python<'_>, value: &Value) -> PyResult<Py<PyAny>> {
+    match value {
+        Value::Null => Ok(py.None()),
+        Value::Bool(value) => Ok(PyBool::new(py, *value).to_owned().unbind().into_any()),
+        Value::Number(number) if number.is_u64() => Ok(number
+            .as_u64()
+            .expect("u64 payload")
+            .into_pyobject(py)?
+            .unbind()
+            .into_any()),
+        Value::Number(number) if number.is_i64() => Ok(number
+            .as_i64()
+            .expect("i64 payload")
+            .into_pyobject(py)?
+            .unbind()
+            .into_any()),
+        Value::Number(number) => Ok(number
+            .as_f64()
+            .expect("f64 payload")
+            .into_pyobject(py)?
+            .unbind()
+            .into_any()),
+        Value::String(value) => Ok(value.into_pyobject(py)?.unbind().into_any()),
+        Value::Array(values) => {
+            let items = values
+                .iter()
+                .map(|item| py_value(py, item))
+                .collect::<PyResult<Vec<_>>>()?;
+            Ok(PyList::new(py, items)?.unbind().into_any())
+        }
+        Value::Object(map) => Ok(py_payload_dict(py, map.clone())?.into_any()),
+    }
+}
+
+fn py_payload_dict(py: Python<'_>, payload: Map<String, Value>) -> PyResult<Py<PyDict>> {
     let payload_dict = PyDict::new(py);
     for (key, value) in payload {
-        match value {
-            Value::Number(number) if number.is_u64() => {
-                payload_dict.set_item(key, number.as_u64().expect("u64 payload"))?;
-            }
-            Value::Number(number) if number.is_i64() => {
-                payload_dict.set_item(key, number.as_i64().expect("i64 payload"))?;
-            }
-            Value::Number(number) if number.is_f64() => {
-                payload_dict.set_item(key, number.as_f64().expect("f64 payload"))?;
-            }
-            other => {
-                payload_dict.set_item(key, other.to_string())?;
-            }
-        }
+        payload_dict.set_item(key, py_value(py, &value)?)?;
     }
     Ok(payload_dict.unbind())
 }
 
 fn build_fact_dict(
     py: Python<'_>,
-    frame: &FrameFields,
-    payload: Map<String, Value>,
+    fact_fields: &DecryptedFact,
     ingest_time: i64,
     ingest_time_rfc3339_utc: &str,
-    pod_time: Option<i64>,
 ) -> PyResult<Py<PyDict>> {
     let fact = PyDict::new(py);
-    fact.set_item("pod_id", format!("{:016x}", frame.dev_id))?;
-    fact.set_item("fc", u64::from(frame.fc))?;
+    fact.set_item("pod_id", &fact_fields.pod_id_hex)?;
+    fact.set_item("fc", fact_fields.fc)?;
     fact.set_item("ingest_time", ingest_time)?;
-    match pod_time {
+    match fact_fields.pod_time {
         Some(value) => fact.set_item("pod_time", value)?,
         None => fact.set_item("pod_time", py.None())?,
     }
-    fact.set_item("kind", "Custom")?;
-    fact.set_item("payload", payload_to_pydict(py, payload)?)?;
+    fact.set_item("kind", &fact_fields.kind)?;
+    fact.set_item("payload", py_payload_dict(py, fact_fields.payload.clone())?)?;
     fact.set_item("ingest_time_rfc3339_utc", ingest_time_rfc3339_utc)?;
     Ok(fact.unbind())
+}
+
+fn map_fixture_error(error: FixtureError) -> PyErr {
+    match error {
+        FixtureError::Reject(reason) => PyValueError::new_err(reason.as_str()),
+        FixtureError::EncodeFailed => PyRuntimeError::new_err("failed to encode postcard fact"),
+        FixtureError::EncryptFailed => PyRuntimeError::new_err("failed to encrypt framed fixture"),
+    }
 }
 
 type AdmitFramedFactResult = PyResult<(Option<Py<PyDict>>, Option<String>, Option<String>)>;
@@ -409,70 +422,84 @@ fn version() -> &'static str {
 }
 
 #[pyfunction]
+#[pyo3(signature = (dev_id, fc, device_entry, *, msg_type=1, flags=0, pod_time=None))]
+fn emit_rust_postcard_framed_fixture(
+    py: Python<'_>,
+    dev_id: u16,
+    fc: u32,
+    device_entry: &Bound<'_, PyAny>,
+    msg_type: u8,
+    flags: u8,
+    pod_time: Option<i64>,
+) -> PyResult<Py<PyDict>> {
+    let device_material = extract_device_material(device_entry)
+        .map_err(|reason| PyValueError::new_err(reason.as_str()))?;
+    let fixture = trackone_ingest::emit_fixture(
+        dev_id,
+        fc,
+        device_material.as_ingest(),
+        msg_type,
+        flags,
+        pod_time,
+    )
+    .map_err(map_fixture_error)?;
+
+    let hdr = PyDict::new(py);
+    hdr.set_item("dev_id", fixture.dev_id)?;
+    hdr.set_item("msg_type", fixture.msg_type)?;
+    hdr.set_item("fc", fixture.fc)?;
+    hdr.set_item("flags", fixture.flags)?;
+
+    let frame = PyDict::new(py);
+    frame.set_item("hdr", hdr)?;
+    frame.set_item("nonce", STANDARD.encode(fixture.nonce))?;
+    frame.set_item("ct", STANDARD.encode(fixture.ct))?;
+    frame.set_item("tag", STANDARD.encode(fixture.tag))?;
+    Ok(frame.unbind())
+}
+
+#[pyfunction]
+#[pyo3(signature = (frame, device_entry, *, ingest_profile=None))]
 fn validate_and_decrypt_framed(
     py: Python<'_>,
     frame: &Bound<'_, PyAny>,
     device_entry: &Bound<'_, PyAny>,
+    ingest_profile: Option<String>,
 ) -> PyResult<(Option<Py<PyDict>>, Option<String>)> {
-    let frame_fields = match extract_frame_fields(frame) {
-        Ok(value) => value,
-        Err(reason) => return Ok((None, Some(reason.as_str().to_string()))),
-    };
-    let device_material = match extract_device_material(device_entry) {
-        Ok(value) => value,
-        Err(reason) => return Ok((None, Some(reason.as_str().to_string()))),
-    };
-    let payload = match validate_and_decrypt_impl(&frame_fields, &device_material) {
-        Ok(value) => value,
-        Err(reason) => return Ok((None, Some(reason.as_str().to_string()))),
-    };
+    let (_, fact_fields) =
+        match decrypt_framed_from_py(frame, device_entry, ingest_profile.as_deref()) {
+            Ok(value) => value,
+            Err(reason) => return Ok((None, Some(reason.as_str().to_string()))),
+        };
 
-    Ok((Some(payload_to_pydict(py, payload)?), None))
+    Ok((Some(py_payload_dict(py, fact_fields.payload)?), None))
 }
 
 #[pyfunction]
-#[pyo3(signature = (frame, device_entry, state, *, ingest_time, ingest_time_rfc3339_utc, pod_time=None))]
+#[pyo3(signature = (frame, device_entry, state, *, ingest_time, ingest_time_rfc3339_utc, pod_time=None, ingest_profile=None))]
 fn admit_framed_fact(
-    py: Python<'_>,
     frame: &Bound<'_, PyAny>,
     device_entry: &Bound<'_, PyAny>,
     mut state: PyRefMut<'_, ReplayWindowState>,
     ingest_time: i64,
     ingest_time_rfc3339_utc: &str,
     pod_time: Option<i64>,
+    ingest_profile: Option<String>,
 ) -> AdmitFramedFactResult {
-    let frame_fields = match extract_frame_fields(frame) {
-        Ok(value) => value,
-        Err(reason) => {
-            return Ok((
-                None,
-                Some(reason.as_str().to_string()),
-                Some("decrypt".to_string()),
-            ));
-        }
-    };
-    let device_material = match extract_device_material(device_entry) {
-        Ok(value) => value,
-        Err(reason) => {
-            return Ok((
-                None,
-                Some(reason.as_str().to_string()),
-                Some("decrypt".to_string()),
-            ));
-        }
-    };
-    let payload = match validate_and_decrypt_impl(&frame_fields, &device_material) {
-        Ok(value) => value,
-        Err(reason) => {
-            return Ok((
-                None,
-                Some(reason.as_str().to_string()),
-                Some("decrypt".to_string()),
-            ));
-        }
-    };
+    let py = frame.py();
+    let (frame_fields, mut fact_fields) =
+        match decrypt_framed_from_py(frame, device_entry, ingest_profile.as_deref()) {
+            Ok(value) => value,
+            Err(reason) => {
+                return Ok((
+                    None,
+                    Some(reason.as_str().to_string()),
+                    Some("decrypt".to_string()),
+                ));
+            }
+        };
 
-    if let Err(reason) = state.check_and_update(u64::from(frame_fields.fc)) {
+    if let Err(reason) = state.check_and_update(u64::from(frame_fields.header.fc)) {
         return Ok((
             None,
             Some(reason.as_str().to_string()),
@@ -480,14 +507,16 @@ fn admit_framed_fact(
         ));
     }
 
+    if fact_fields.pod_time.is_none() {
+        fact_fields.pod_time = pod_time;
+    }
+
     Ok((
         Some(build_fact_dict(
             py,
-            &frame_fields,
-            payload,
+            &fact_fields,
             ingest_time,
             ingest_time_rfc3339_utc,
-            pod_time,
         )?),
         None,
         None,
@@ -498,6 +527,7 @@ pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
     let sub = PyModule::new(parent.py(), "crypto")?;
     sub.add_class::<ReplayWindowState>()?;
     sub.add_function(wrap_pyfunction!(version, &sub)?)?;
+    sub.add_function(wrap_pyfunction!(emit_rust_postcard_framed_fixture, &sub)?)?;
     sub.add_function(wrap_pyfunction!(validate_and_decrypt_framed, &sub)?)?;
     sub.add_function(wrap_pyfunction!(admit_framed_fact, &sub)?)?;
     parent.add_submodule(&sub)?;
@@ -508,109 +538,6 @@ pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
 mod tests {
     use super::*;
 
-    fn encode_b64(data: &[u8]) -> String {
-        STANDARD.encode(data)
-    }
-
-    fn sample_frame_and_device() -> (FrameFields, DeviceMaterial, Map<String, Value>) {
-        let key = [7u8; 32];
-        let salt8 = *b"salt0001";
-        let fc = 3u32;
-        let nonce_tail = *b"rand0001";
-        let nonce = [
-            salt8.as_slice(),
-            &(u64::from(fc)).to_be_bytes(),
-            nonce_tail.as_slice(),
-        ]
-        .concat();
-        let aad = [1u16.to_be_bytes().as_slice(), &[1u8]].concat();
-        let plaintext = [0x01, 4, 0, 0, 0, 3, 0x03, 2, 0x09, 0xE0];
-        let cipher = XChaCha20Poly1305::new_from_slice(&key).expect("cipher");
-        let combined = cipher
-            .encrypt(
-                XNonce::from_slice(&nonce),
-                Payload {
-                    msg: plaintext.as_slice(),
-                    aad: aad.as_slice(),
-                },
-            )
-            .expect("encrypt");
-        let (ct, tag) = combined.split_at(combined.len() - trackone_constants::AEAD_TAG_LEN);
-
-        let mut expected = Map::new();
-        expected.insert("counter".to_string(), json!(3u32));
-        expected.insert("temp_c".to_string(), json!(25.28));
-
-        (
-            FrameFields {
-                dev_id: 1,
-                msg_type: 1,
-                fc,
-                nonce_b64: encode_b64(&nonce),
-                ct_b64: encode_b64(ct),
-                tag_b64: encode_b64(tag),
-            },
-            DeviceMaterial {
-                salt8_b64: encode_b64(&salt8),
-                ck_up_b64: encode_b64(&key),
-            },
-            expected,
-        )
-    }
-
-    #[test]
-    fn validate_and_decrypt_succeeds_for_valid_frame() {
-        let (frame, device, expected) = sample_frame_and_device();
-        let payload = validate_and_decrypt_impl(&frame, &device).expect("payload");
-        assert_eq!(payload, expected);
-    }
-
-    #[test]
-    fn validate_and_decrypt_rejects_nonce_counter_mismatch() {
-        let (mut frame, device, _expected) = sample_frame_and_device();
-        let nonce = STANDARD.decode(frame.nonce_b64.as_bytes()).expect("nonce");
-        let mut tampered = nonce.clone();
-        tampered[15] ^= 0x01;
-        frame.nonce_b64 = encode_b64(&tampered);
-        let err = validate_and_decrypt_impl(&frame, &device).unwrap_err();
-        assert_eq!(err, RejectReason::NonceFcMismatch);
-    }
-
-    #[test]
-    fn validate_and_decrypt_rejects_oversized_ciphertext() {
-        let (mut frame, device, _expected) = sample_frame_and_device();
-        frame.ct_b64 = encode_b64(&vec![0u8; MAX_FRAME_CIPHERTEXT_BYTES + 1]);
-        let err = validate_and_decrypt_impl(&frame, &device).unwrap_err();
-        assert_eq!(err, RejectReason::CiphertextTooLarge);
-    }
-
-    #[test]
-    fn validate_and_decrypt_rejects_empty_ciphertext() {
-        let (mut frame, device, _expected) = sample_frame_and_device();
-        frame.ct_b64 = encode_b64(&[]);
-        let err = validate_and_decrypt_impl(&frame, &device).unwrap_err();
-        assert_eq!(err, RejectReason::EmptyCiphertext);
-    }
-
-    #[test]
-    fn validate_and_decrypt_rejects_bad_salt_prefix() {
-        let (frame, mut device, _expected) = sample_frame_and_device();
-        device.salt8_b64 = encode_b64(b"salt9999");
-        let err = validate_and_decrypt_impl(&frame, &device).unwrap_err();
-        assert_eq!(err, RejectReason::NonceSaltMismatch);
-    }
-
-    #[test]
-    fn validate_and_decrypt_rejects_decrypt_failure() {
-        let (mut frame, device, _expected) = sample_frame_and_device();
-        let ct = STANDARD.decode(frame.ct_b64.as_bytes()).expect("ct");
-        let mut tampered = ct.clone();
-        tampered[0] ^= 0x01;
-        frame.ct_b64 = encode_b64(&tampered);
-        let err = validate_and_decrypt_impl(&frame, &device).unwrap_err();
-        assert_eq!(err, RejectReason::DecryptFailed);
-    }
-
     #[test]
     fn replay_window_state_accepts_and_prunes() {
         let mut state = ReplayWindowState::new(3, Some(1));
@@ -620,7 +547,7 @@ mod tests {
         state.check_and_update(4).expect("fc=4 should be accepted");
         state.check_and_update(5).expect("fc=5 should be accepted");
 
-        assert_eq!(state.highest_fc_seen, Some(5));
+        assert_eq!(state.highest_fc_seen(), Some(5));
         assert_eq!(state.seen_fcs(), vec![2, 3, 4, 5]);
     }
 
