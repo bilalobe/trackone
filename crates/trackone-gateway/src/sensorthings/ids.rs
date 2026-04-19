@@ -24,8 +24,10 @@ impl SensorThingsEntityKind {
 }
 
 pub fn entity_id(kind: SensorThingsEntityKind, components: &[&str]) -> String {
-    let mut material = Vec::new();
-    material.extend_from_slice(kind.prefix().as_bytes());
+    let prefix = kind.prefix().as_bytes();
+    let capacity = prefix.len() + components.iter().map(|c| 1 + c.len()).sum::<usize>();
+    let mut material = Vec::with_capacity(capacity);
+    material.extend_from_slice(prefix);
     for component in components {
         material.push(0x1f);
         material.extend_from_slice(component.as_bytes());
