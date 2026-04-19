@@ -98,7 +98,7 @@ jobs:
         id: build_calendar
         uses: docker/build-push-action@v7
         with:
-          context: docker/calendar
+          context: deploy/docker/calendar
           push: true
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}

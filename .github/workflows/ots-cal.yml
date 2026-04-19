@@ -42,7 +42,7 @@ jobs:
           IMAGE: ghcr.io/${{ github.repository }}/ots-calendar:latest
         run: |
           echo "Building local calendar image for integration tests: $IMAGE"
-          docker build -t "$IMAGE" docker/calendar
+          docker build -t "$IMAGE" deploy/docker/calendar
 
       - name: Verify Docker availability
         run: |
