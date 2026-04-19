@@ -148,6 +148,10 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
         "INGEST_PROFILE_RUST_POSTCARD_V1",
         trackone_constants::INGEST_PROFILE_RUST_POSTCARD_V1,
     )?;
+    m.add(
+        "FRAMED_FACT_MSG_TYPE",
+        trackone_constants::FRAMED_FACT_MSG_TYPE,
+    )?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     Ok(())
 }
