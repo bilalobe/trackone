@@ -55,6 +55,7 @@ Each ADR captures context, the decision, consequences, and alternatives.
 - [ADR-048: Separate SCITT Publication Profile from the Base Telemetry-Ledger Draft](ADR-048-separate-scitt-publication-profile.md)
 - [ADR-049: Native Evidence-Plane Crypto Boundary and PyNaCl Demotion](ADR-049-native-evidence-plane-crypto-boundary-and-pynacl-demotion.md)
 - [ADR-050: Fiftieth ADR Milestone and Record Stewardship](ADR-050-fiftieth-adr-milestone-and-record-stewardship.md)
+- [ADR-051: Internal Dependency Boundaries and Feature Demotion](ADR-051-internal-dependency-boundaries-and-feature-demotion.md)
 
 ## Index Conventions
 
@@ -155,6 +156,10 @@ Entries list **Status** and **Summary**. Related references are grouped under **
 - **[ADR-050](ADR-050-fiftieth-adr-milestone-and-record-stewardship.md): Fiftieth ADR milestone and record stewardship**
   **Status**: Accepted
   **Summary**: Marks the fiftieth ADR as a documentation-only milestone and treats the ADR corpus as an active release/review artifact without changing protocol, artifact, dependency, or runtime behavior.
+
+- **[ADR-051](ADR-051-internal-dependency-boundaries-and-feature-demotion.md): Internal dependency boundaries and feature demotion**
+  **Status**: Accepted
+  **Summary**: Keeps convenience dependencies from hardening into architecture boundaries: shared inert labels belong in `trackone-constants`, transport helpers in `trackone-core` stay opt-in, PyO3 remains a leaf feature of `trackone-gateway`, and one-off compatibility dependencies should be removed when a small wire-compatible local helper is clearer.
 
 ### Verification, Integrity & OTS Pipeline
 
