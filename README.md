@@ -145,7 +145,7 @@ uv run pytest
 ```bash
 cargo check -p trackone-core
 cargo test -p trackone-ledger
-cargo test -p trackone-pod-fw
+cargo test -p trackone-pod-fw --features std
 ```
 
 ### Build the Python extension locally
