@@ -21,7 +21,7 @@ We currently rely on:
 
 - **Public OpenTimestamps (OTS) calendars** for real Bitcoin-anchored proofs in production (per ADR-003, ADR-007, ADR-008).
 - A **stationary/calendar concept** (ADR-014) to reduce external dependency and flakiness.
-- A **Docker-based sidecar** under `docker/calendar/` and a `tox -e ots-cal` environment (ADR-020) that:
+- A **Docker-based sidecar** under `deploy/docker/calendar/` and a `tox -e ots-cal` environment (ADR-020) that:
   - Runs OTS tooling inside a container.
   - Exposes port `8468` as a placeholder.
   - Does **not** implement a real OpenTimestamps HTTP calendar protocol or persist Merkle / anchoring state.
@@ -91,7 +91,7 @@ We will:
      - Optimized for reproducible integration tests.
      - Not initially responsible for production-grade Bitcoin anchoring.
 
-1. **Anchor this service in `docker/calendar/` and the `ots-cal` tox env**
+1. **Anchor this service in `deploy/docker/calendar/` and the `ots-cal` tox env**
 
    - Replace the current "tooling sidecar only" container with:
      - A container image that runs the new HTTP calendar service by default.
@@ -255,7 +255,7 @@ We will:
 
 1. **Docker and tox integration**
 
-   - Update `docker/calendar/`:
+   - Update `deploy/docker/calendar/`:
      - Replace the current sidecar entrypoint with the new HTTP service entrypoint.
      - Ensure port mapping (e.g. `8468`) remains the same for continuity.
    - Update `tox.ini`:
@@ -299,7 +299,7 @@ We will:
      - Document the goal and scope of a first-party calendar.
      - Make it clear that production still relies on public calendars.
 
-1. **Phase 1 – Prototype calendar service in `docker/calendar/`**
+1. **Phase 1 – Prototype calendar service in `deploy/docker/calendar/`**
 
    - Implement the minimal HTTP service.
    - Test locally via:

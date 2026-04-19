@@ -25,7 +25,7 @@ Since ADR-014, we have:
 - Added a dedicated tox environment `ots-cal` and a GitHub Actions workflow
   to exercise OTS integration in CI.
 - Introduced a container sidecar image `ots/calendar:latest` built from this
-  repository under `docker/calendar/`, which currently runs a long-lived
+  repository under `deploy/docker/calendar/`, which currently runs a long-lived
   **OTS client sidecar** rather than a full HTTP calendar server.
 - Verified that the gateway, `ots_anchor.py`, and verification CLI can be
   configured via `OTS_CALENDARS` to talk to internal or external calendar
@@ -186,7 +186,7 @@ acknowledging that the *server* side is currently stubbed.
     - Either adopt an upstream OTS calendar implementation, or
     - Specify and implement a minimal HTTP calendar API tailored to our
       needs (with clear alignment to ADR-015 for multi-anchor scenarios).
-    - Replace the current `run_calendar.py` in `docker/calendar/` with a
+    - Replace the current `run_calendar.py` in `deploy/docker/calendar/` with a
       real server entrypoint and add protocol-level tests to validate the
       calendar's behavior.
   - That decision will likely warrant its own ADR (or an update to this

@@ -240,13 +240,13 @@ Entries list **Status** and **Summary**. Related references are grouped under **
 
 - **[ADR-020](ADR-020-stationary-ots-calendar-followup.md): Stationary calendar follow-up**
   **Status**: Accepted
-  **Summary**: Clarifies that the current `docker/calendar` container is a tooling sidecar, not a real HTTP calendar. `tox -e ots-cal` may exercise real-OTS client paths, but it is not protocol conformance for a first-party calendar.
+  **Summary**: Clarifies that the current `deploy/docker/calendar` container is a tooling sidecar, not a real HTTP calendar. `tox -e ots-cal` may exercise real-OTS client paths, but it is not protocol conformance for a first-party calendar.
 
   - **See also**: [ADR-014](ADR-014-stationary-ots-calendar.md), [ADR-021](ADR-021-safety-net-ots-pipeline-verification.md), [ADR-022](ADR-022-first-party-stationary-ots-calendar-service.md)
 
 - **[ADR-022](ADR-022-first-party-stationary-ots-calendar-service.md): First-party stationary OTS calendar service in CI**
   **Status**: Proposed
-  **Summary**: Proposes a minimal first-party HTTP calendar for CI/dev (hosted via `docker/calendar` and `tox -e ots-cal`), keeps production on public calendars, and outlines phased migration, config, and documentation requirements.
+  **Summary**: Proposes a minimal first-party HTTP calendar for CI/dev (hosted via `deploy/docker/calendar` and `tox -e ots-cal`), keeps production on public calendars, and outlines phased migration, config, and documentation requirements.
 
   - **See also**: [ADR-003](ADR-003-merkle-canonicalization-and-ots-anchoring.md), [ADR-007](ADR-007-ots-ci-verification-and-bitcoin-headers.md), [ADR-008](ADR-008-m4-completion-ots-workflow.md), [ADR-014](ADR-014-stationary-ots-calendar.md), [ADR-020](ADR-020-stationary-ots-calendar-followup.md), [ADR-021](ADR-021-safety-net-ots-pipeline-verification.md), [ADR-015](ADR-015-parallel-anchoring-ots-rfc3161-tsa.md), [ADR-023](ADR-023-ots-vs-git-integrity.md), [ADR-024](ADR-024-anti-replay-and-ots-backed-ledger.md), [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md)
 
