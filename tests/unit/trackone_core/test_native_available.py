@@ -65,6 +65,42 @@ def test_ledger_digest_and_hex_helpers_smoke() -> None:
     assert normalized == "a" * 64
 
 
+def test_sensorthings_native_smoke() -> None:
+    try:
+        import trackone_core._native as native
+    except ImportError:
+        if _require_native():
+            raise
+        pytest.skip("native extension not available")
+
+    sensorthings = getattr(native, "sensorthings", None)
+    if sensorthings is None:
+        if _require_native():
+            raise AssertionError("native sensorthings submodule unavailable")
+        pytest.skip("native sensorthings submodule unavailable")
+
+    thing_id = sensorthings.entity_id("thing", "pod-003")
+    projection = sensorthings.project_observation(
+        {
+            "pod_id": "pod-003",
+            "site_id": "an-001",
+            "sensor_key": "shtc3-ambient",
+            "observed_property_key": "temperature_air",
+            "stream_key": "raw",
+            "phenomenon_time_start_rfc3339_utc": "2026-03-06T00:05:01Z",
+            "phenomenon_time_end_rfc3339_utc": "2026-03-06T00:05:01Z",
+            "result_time_rfc3339_utc": "2026-03-06T00:05:01Z",
+            "result": 23.5,
+        }
+    )
+
+    assert isinstance(thing_id, str)
+    assert thing_id.startswith("trackone:thing:")
+    assert projection["thing"]["id"] == thing_id
+    assert projection["datastream"]["stream_key"] == "raw"
+    assert projection["observation"]["result"] == 23.5
+
+
 def test_crypto_validate_and_decrypt_framed_smoke() -> None:
     try:
         import trackone_core.crypto as crypto

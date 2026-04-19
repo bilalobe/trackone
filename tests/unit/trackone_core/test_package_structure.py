@@ -30,7 +30,7 @@ def _make_mock_native() -> MagicMock:
     native.PyRadio = MagicMock(name="PyRadio")
 
     # Submodules registered via register() in Rust
-    for sub in ("crypto", "ledger", "merkle", "ots"):
+    for sub in ("crypto", "ledger", "merkle", "ots", "sensorthings"):
         setattr(native, sub, MagicMock(name=sub))
     native.crypto.ReplayWindowState = MagicMock(name="ReplayWindowState")
 
@@ -113,6 +113,7 @@ class TestPackageImport:
 
         tc = importlib.import_module("trackone_core")
         for name in (
+            "constants",
             "crypto",
             "ledger",
             "merkle",
