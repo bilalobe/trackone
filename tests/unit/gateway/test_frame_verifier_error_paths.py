@@ -82,12 +82,12 @@ class TestFrameVerifierErrorPaths:
         payload, reason = frame_verifier._validate_and_decrypt_framed(
             {"hdr": {"dev_id": 1}, "ct": "AA==", "nonce": "AA=="},
             {"1": {"ck_up": "k", "salt8": "s"}},
-            ingest_profile=frame_verifier.INGEST_PROFILE_RUST_POSTCARD_V1,
+            ingest_profile=frame_verifier.DEFAULT_INGEST_PROFILE,
         )
 
         assert payload == {"counter": 1}
         assert reason == ""
-        assert calls["ingest_profile"] == frame_verifier.INGEST_PROFILE_RUST_POSTCARD_V1
+        assert calls["ingest_profile"] == frame_verifier.DEFAULT_INGEST_PROFILE
 
     def test_admit_framed_fact_forwards_ingest_profile(self, monkeypatch) -> None:
         calls: dict[str, object] = {}
@@ -127,10 +127,10 @@ class TestFrameVerifierErrorPaths:
             window_size=64,
             ingest_time=1,
             ingest_time_rfc3339_utc="2026-01-01T00:00:01Z",
-            ingest_profile=frame_verifier.INGEST_PROFILE_RUST_POSTCARD_V1,
+            ingest_profile=frame_verifier.DEFAULT_INGEST_PROFILE,
         )
 
         assert fact == {"fc": 0}
         assert reason == ""
         assert source == ""
-        assert calls["ingest_profile"] == frame_verifier.INGEST_PROFILE_RUST_POSTCARD_V1
+        assert calls["ingest_profile"] == frame_verifier.DEFAULT_INGEST_PROFILE

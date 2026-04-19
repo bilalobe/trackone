@@ -61,17 +61,17 @@ def _ensure_fake_pynacl(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.parametrize(
-    ("script_mod", "native_names"),
+    ("script_mod", "shim_names"),
     [
-        ("scripts.gateway.merkle_batcher", ("native_merkle", "native_ledger")),
+        ("scripts.gateway.merkle_batcher", ("merkle", "ledger")),
         (
             "scripts.gateway.verify_cli",
-            ("native_merkle", "native_ledger", "native_ots"),
+            ("merkle", "ledger", "ots"),
         ),
     ],
 )
 def test_packaged_layout_prefers_trackone_core_public_shims(
-    monkeypatch: pytest.MonkeyPatch, script_mod: str, native_names: tuple[str, ...]
+    monkeypatch: pytest.MonkeyPatch, script_mod: str, shim_names: tuple[str, ...]
 ) -> None:
     _ensure_fake_pynacl(monkeypatch)
     _clear_modules("trackone_core")
@@ -94,10 +94,14 @@ def test_packaged_layout_prefers_trackone_core_public_shims(
     ledger_mod = importlib.import_module("trackone_core.ledger")
     ots_mod = importlib.import_module("trackone_core.ots")
 
-    for attr in native_names:
-        if attr == "native_ots":
+    for attr in shim_names:
+        if attr == "ots":
             assert getattr(m, attr) is ots_mod
-        elif attr == "native_merkle":
+        elif attr == "merkle":
             assert getattr(m, attr) is merkle_mod
-        elif attr == "native_ledger":
+        elif attr == "ledger":
             assert getattr(m, attr) is ledger_mod
+
+    assert not hasattr(m, "native_ledger")
+    assert not hasattr(m, "native_merkle")
+    assert not hasattr(m, "native_ots")

@@ -36,14 +36,14 @@ def test_non_finite_floats_are_rejected(value: float):
         canonicalize_obj_to_cbor(value)
 
 
-def test_canonicalize_json_bytes_falls_back_when_native_shim_raises_importerror(
+def test_canonicalize_json_bytes_falls_back_when_ledger_shim_raises_importerror(
     monkeypatch,
 ):
     class _ImportErrorShim:
         def __getattr__(self, _name: str):
             raise ImportError("native extension not available")
 
-    monkeypatch.setattr(canonical_cbor, "_native_ledger", _ImportErrorShim())
+    monkeypatch.setattr(canonical_cbor, "ledger", _ImportErrorShim())
 
     encoded = canonical_cbor.canonicalize_json_bytes_to_cbor(b'{"aa":1,"b":2}')
 

@@ -51,7 +51,11 @@ class TestMerkleRootEdgeCases:
         assert len(hashes) == 5
 
     def test_merkle_root_requires_native_merkle(self, monkeypatch, merkle_batcher):
-        monkeypatch.setattr(merkle_batcher, "native_merkle", None)
+        class _ImportErrorShim:
+            def __getattr__(self, _name: str):
+                raise ImportError("native extension not available")
+
+        monkeypatch.setattr(merkle_batcher, "merkle", _ImportErrorShim())
         with pytest.raises(
             RuntimeError, match="trackone_core native merkle helper is required"
         ):

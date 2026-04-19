@@ -161,7 +161,11 @@ class TestMerkleBatcherEdgeCases:
         fact_stem.with_suffix(".cbor").write_bytes(canonicalize_obj_to_cbor(fact_obj))
         fact_stem.with_suffix(".json").write_text(json.dumps(fact_obj))
 
-        monkeypatch.setattr(merkle_batcher, "native_ledger", None)
+        class _ImportErrorShim:
+            def __getattr__(self, _name: str):
+                raise ImportError("native extension not available")
+
+        monkeypatch.setattr(merkle_batcher, "ledger", _ImportErrorShim())
 
         stderr = io.StringIO()
         with contextlib.redirect_stderr(stderr):

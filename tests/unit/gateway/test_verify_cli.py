@@ -97,7 +97,11 @@ class TestVerifyCliEdgeCases:
         assert result == 1
 
     def test_verify_merkle_root_requires_native_merkle(self, monkeypatch, verify_cli):
-        monkeypatch.setattr(verify_cli, "native_merkle", None)
+        class _ImportErrorShim:
+            def __getattr__(self, _name: str):
+                raise ImportError("native extension not available")
+
+        monkeypatch.setattr(verify_cli, "merkle", _ImportErrorShim())
         with pytest.raises(
             RuntimeError, match="trackone_core native merkle helper is required"
         ):
@@ -162,7 +166,15 @@ class TestVerifyCliEdgeCases:
             encoding="utf-8",
         )
 
-        monkeypatch.setattr(verify_cli, "native_ledger", None)
+        def _raise_importerror(_input_bytes):
+            raise ImportError("native extension not available")
+
+        monkeypatch.setattr(
+            verify_cli.ledger,
+            "canonicalize_json_to_cbor_bytes",
+            _raise_importerror,
+            raising=False,
+        )
         stdout = io.StringIO()
         with contextlib.redirect_stdout(stdout):
             result = verify_cli.main(["--root", str(root), "--facts", str(facts_dir)])
@@ -173,9 +185,8 @@ class TestVerifyCliEdgeCases:
     def test_verify_main_handles_native_ledger_shim_importerror(
         self, monkeypatch, tmp_path, verify_cli, facts_dir
     ):
-        class _ImportErrorShim:
-            def __getattr__(self, _name: str):
-                raise ImportError("native extension not available")
+        def _raise_importerror(_input_bytes):
+            raise ImportError("native extension not available")
 
         root = tmp_path / "out"
         day_dir = root / "day"
@@ -199,7 +210,12 @@ class TestVerifyCliEdgeCases:
             encoding="utf-8",
         )
 
-        monkeypatch.setattr(verify_cli, "native_ledger", _ImportErrorShim())
+        monkeypatch.setattr(
+            verify_cli.ledger,
+            "canonicalize_json_to_cbor_bytes",
+            _raise_importerror,
+            raising=False,
+        )
         stdout = io.StringIO()
         with contextlib.redirect_stdout(stdout):
             result = verify_cli.main(["--root", str(root), "--facts", str(facts_dir)])
@@ -207,26 +223,22 @@ class TestVerifyCliEdgeCases:
         assert result == 1
         assert "trackone_core native ledger helper is required" in stdout.getvalue()
 
-    def test_verify_ots_proof_handles_native_ots_shim_importerror(
+    def test_verify_ots_proof_calls_public_ots_boundary(
         self, monkeypatch, tmp_path, verify_cli
     ):
-        class _ImportErrorShim:
-            def __getattr__(self, _name: str):
-                raise ImportError("native extension not available")
+        class _FakeOts:
+            @staticmethod
+            def verify_ots_proof(*_args, **_kwargs):
+                return {"status": "public-boundary-used"}
 
         ots_path = tmp_path / "day.ots"
         ots_path.write_bytes(b"not-a-real-proof")
 
-        monkeypatch.setattr(verify_cli, "native_ots", _ImportErrorShim())
-        monkeypatch.setattr(
-            verify_cli,
-            "_verify_ots_python",
-            lambda *_args, **_kwargs: {"status": "fallback-used"},
-        )
+        monkeypatch.setattr(verify_cli, "ots", _FakeOts())
 
         result = verify_cli.verify_ots_proof(ots_path)
 
-        assert result == {"status": "fallback-used"}
+        assert result == {"status": "public-boundary-used"}
 
     def test_verify_main_emits_summary_on_native_merkle_recompute_failure(
         self, monkeypatch, tmp_path, verify_cli
@@ -269,7 +281,12 @@ class TestVerifyCliEdgeCases:
             def canonicalize_json_to_cbor_bytes(_input_bytes):
                 return day_cbor
 
-        monkeypatch.setattr(verify_cli, "native_ledger", _FakeLedger())
+        monkeypatch.setattr(
+            verify_cli.ledger,
+            "canonicalize_json_to_cbor_bytes",
+            _FakeLedger.canonicalize_json_to_cbor_bytes,
+            raising=False,
+        )
 
         def _raise_merkle(_leaves):
             raise RuntimeError("native merkle unavailable")

@@ -63,7 +63,7 @@ def test_frame_verifier_process_reports_missing_native_crypto_for_rust_postcard(
                 "--device-table",
                 str(device_table),
                 "--ingest-profile",
-                "rust-postcard-v1",
+                frame_verifier.DEFAULT_INGEST_PROFILE,
             ]
         )
 
@@ -132,7 +132,7 @@ def test_frame_verifier_process_reports_missing_native_ledger(
                 "--device-table",
                 str(device_table),
                 "--ingest-profile",
-                "rust-postcard-v1",
+                frame_verifier.DEFAULT_INGEST_PROFILE,
             ]
         )
 
