@@ -123,7 +123,6 @@ clean: ## Remove build artifacts and output directories
 	rm -rf .hypothesis
 	rm -rf htmlcov/
 	rm -rf .coverage
-	rm -f src/*.aux src/*.log src/*.out src/*.toc src/*.bbl src/*.blg
 	@echo "[make] ✓ Cleaned"
 
 clean-all: clean ## Remove all build artifacts including .ruff_cache
