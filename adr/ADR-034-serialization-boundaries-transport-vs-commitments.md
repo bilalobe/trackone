@@ -2,6 +2,7 @@
 
 **Status**: Accepted
 **Date**: 2026-01-10
+**Updated**: 2026-04-18
 
 ## Related ADRs
 
@@ -25,6 +26,10 @@ TrackOne needs two different serialization properties:
    - safe from accidental serde configuration drift
 
 Historically, these concerns were conflated into a single “Postcard vs CBOR vs JSON” narrative. This ADR separates them into explicit boundaries.
+
+The framed-ingest path now has one supported plaintext profile:
+`rust-postcard-v1` for the Rust-native `Fact` path. That profile is still
+transport/admission detail. It does not change the commitment boundary.
 
 ## Decision
 
@@ -57,6 +62,20 @@ The following MUST NOT be used to generate commitment bytes:
 
 - `to_cbor_vec(T: Serialize)` or any generic serde-CBOR serializer
 - JSON encodings (compact, pretty, or canonical) unless explicitly selected as the commitment profile in a future ADR
+- AEAD plaintext encodings such as Postcard. These are inputs to
+  admission/projection, not verifier-facing commitment bytes.
+
+### 4) Frame-to-canonical-record projection
+
+Framed telemetry begins as transport-specific input, then passes through native
+Rust admission:
+
+- `rust-postcard-v1` decodes postcard `Fact` through the native Rust boundary.
+- Accepted input MUST project into the same canonical fact contract before
+  commitment.
+
+The public interoperability surface is the projected canonical record plus the
+deterministic CBOR commitment profile, not the internal plaintext encoding.
 
 ## Consequences
 
@@ -65,10 +84,13 @@ The following MUST NOT be used to generate commitment bytes:
 - Commitment stability becomes enforceable via API boundaries (`CanonicalCbor` trait).
 - Transport format can evolve independently of commitment artifacts.
 - Reduces “benchmarks as decisions” confusion: size tests inform transport choice, not commitment correctness.
+- Prevents Postcard transport details from becoming public commitment
+  authority.
 
 ### Negative / Tradeoffs
 
-- Two encodings must be maintained and documented.
+- Multiple ingest plaintext profiles may need to be maintained and documented
+  during migration.
 - Canonical CBOR profile is TrackOne-specific unless standardized externally.
 - Adding new commitment types requires extending `CanonicalCbor` implementations and tests.
 
