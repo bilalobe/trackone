@@ -4,8 +4,8 @@
 //! concerns (HAL, sensors, radio) live outside this crate.
 
 use trackone_core::crypto::AeadEncrypt;
-use trackone_core::frame;
-use trackone_core::{CoreResult, EncryptedFrame, Error, Fact, FactPayload, FrameCounter, PodId};
+use trackone_core::{CoreResult, Error, Fact, FactPayload, FrameCounter, PodId};
+use trackone_ingest::{EncryptedFrame, encrypt_fact, make_fact};
 
 use crate::nonce::Nonce24;
 
@@ -46,7 +46,7 @@ where
     /// Build a `Fact` with the next frame counter and encrypt it into an `EncryptedFrame<N>`.
     pub fn emit_payload(&mut self, payload: FactPayload) -> CoreResult<EncryptedFrame<N>> {
         let fc = self.next_fc;
-        let fact = frame::make_fact(self.pod_id, fc, payload);
+        let fact = make_fact(self.pod_id, fc, payload);
         let frame = self.emit_fact(&fact)?;
         // Only advance the frame counter after successful encryption.
         self.next_fc = self.next_fc.wrapping_add(1);
@@ -55,8 +55,8 @@ where
 
     /// Encrypt an already-constructed `Fact` into an `EncryptedFrame<N>`.
     pub fn emit_fact(&mut self, fact: &Fact) -> CoreResult<EncryptedFrame<N>> {
-        let nonce = self.nonce_gen.next_nonce();
-        frame::encrypt_fact::<N, _>(&self.cipher, nonce, fact)
+        let nonce = self.nonce_gen.nonce_for_frame(fact.fc);
+        encrypt_fact::<N, _>(&self.cipher, nonce, fact)
     }
 }
 
@@ -72,7 +72,7 @@ mod tests {
         static KEY: &[u8] = b"pod-fw-test-key";
         let cipher = DummyAead::new(KEY);
 
-        let nonce_gen = CounterNonce24::from_pod_id(PodId::from(7u32), [0x42u8; 8], 0);
+        let nonce_gen = CounterNonce24::from_provisioned_salt([0x42u8; 8], [0x99u8; 8]);
         let mut pod: Pod<_, _, 512> = Pod::new(PodId::from(7u32), cipher, nonce_gen);
 
         let payload = FactPayload::Env(EnvFact::instant(
@@ -86,7 +86,7 @@ mod tests {
         assert_eq!(frame.fc, 0);
 
         let cipher2 = DummyAead::new(KEY);
-        let decoded = frame::decrypt_fact::<512, _>(&cipher2, &frame).expect("decrypt");
+        let decoded = trackone_ingest::decrypt_fact::<512, _>(&cipher2, &frame).expect("decrypt");
         assert_eq!(decoded.pod_id, PodId::from(7u32));
         assert_eq!(decoded.fc, 0);
         assert_eq!(decoded.payload, payload);
@@ -96,7 +96,7 @@ mod tests {
     fn pod_frame_counter_increments_after_success() {
         static KEY: &[u8] = b"pod-fw-test-key";
         let cipher = DummyAead::new(KEY);
-        let nonce_gen = CounterNonce24::from_pod_id(PodId::from(7u32), [0x42u8; 8], 0);
+        let nonce_gen = CounterNonce24::from_provisioned_salt([0x42u8; 8], [0x99u8; 8]);
         let mut pod: Pod<_, _, 512> = Pod::new(PodId::from(7u32), cipher, nonce_gen);
 
         let payload = FactPayload::Env(EnvFact::instant(
@@ -117,5 +117,27 @@ mod tests {
         let frame2 = pod.emit_payload(payload.clone()).expect("emit frame 2");
         assert_eq!(frame2.fc, 1);
         assert_eq!(pod.next_frame_counter(), 2);
+    }
+
+    #[test]
+    fn pod_nonce_tracks_frame_counter_after_manual_resync() {
+        static KEY: &[u8] = b"pod-fw-test-key";
+        let cipher = DummyAead::new(KEY);
+        let nonce_gen = CounterNonce24::from_provisioned_salt([0x42u8; 8], [0x99u8; 8]);
+        let mut pod: Pod<_, _, 512> = Pod::new(PodId::from(7u32), cipher, nonce_gen);
+        pod.set_next_frame_counter(42);
+
+        let payload = FactPayload::Env(EnvFact::instant(
+            SampleType::AmbientAirTemperature,
+            1_700_000_000,
+            21.5,
+        ));
+
+        let frame = pod.emit_payload(payload).expect("emit frame");
+        assert_eq!(frame.fc, 42);
+        assert_eq!(
+            u64::from_be_bytes(frame.nonce[8..16].try_into().expect("counter bytes")),
+            42
+        );
     }
 }
