@@ -14,7 +14,7 @@
 
 ## Context
 
-TrackOne provisioning currently derives `CK_up`/`CK_down` from an ephemeral X25519 ECDH shared secret via HKDF-SHA256, with a non-secret `salt = SHA-256(Ng || Np || T_pod || B)` as documented in `src/includes/crypto_design.tex`.
+TrackOne provisioning currently derives `CK_up`/`CK_down` from an ephemeral X25519 ECDH shared secret via HKDF-SHA256, with a non-secret `salt = SHA-256(Ng || Np || T_pod || B)` as documented in the project cryptography design material.
 
 As identified in ADR-001 (under the PQC roadmap, e.g., Kyber), exploring post-quantum (PQ) key agility is a planned enhancement. The motivation is "hedging": retaining security if either classical ECDH or the PQ primitive later weakens.
 
@@ -293,7 +293,7 @@ Gateway compromise timing matters:
 ## Acceptance Criteria
 
 - Documentation:
-  - `src/includes/crypto_design.tex` is updated to reference ADR-036, describing the optional hybrid provisioning mode at a high level and explaining its relationship to the PQC roadmap (Dilithium/Kyber at gateways) mentioned in ADR-001.
+  - The project cryptography design material is updated to reference ADR-036, describing the optional hybrid provisioning mode at a high level and explaining its relationship to the PQC roadmap (Dilithium/Kyber at gateways) mentioned in ADR-001.
 - Tests:
   - Deterministic test vectors validate both suites.
   - Negative tests: suite mismatch, modified `ct_kem`, decapsulation failure, transcript tampering.

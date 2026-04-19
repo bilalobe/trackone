@@ -176,7 +176,7 @@ RUN_REAL_OTS=1 make test-ots-real
 
 ### 6. Documentation Updates
 
-**LaTeX Report (`src/main.tex`):**
+**LaTeX Report (historical manuscript artifact):**
 
 - Results section includes M#4 verification details
 - Documents Bitcoin block 919384 attestation
