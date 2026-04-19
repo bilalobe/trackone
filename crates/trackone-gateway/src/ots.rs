@@ -1,4 +1,6 @@
+#[cfg(feature = "python")]
 use pyo3::prelude::*;
+#[cfg(feature = "python")]
 use pyo3::types::PyBytes;
 use serde_json::Value;
 use std::fs;
@@ -167,7 +169,7 @@ fn required_str_field<'a>(
     object.get(key)?.as_str()
 }
 
-#[pyclass(eq, eq_int, skip_from_py_object)]
+#[cfg_attr(feature = "python", pyclass(eq, eq_int, skip_from_py_object))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum OtsStatus {
     Verified,
@@ -189,6 +191,7 @@ impl OtsStatus {
     }
 }
 
+#[cfg(feature = "python")]
 #[pymethods]
 impl OtsStatus {
     #[getter]
@@ -205,7 +208,7 @@ impl OtsStatus {
     }
 }
 
-#[pyclass(skip_from_py_object)]
+#[cfg_attr(feature = "python", pyclass(skip_from_py_object))]
 #[derive(Clone, Debug)]
 struct OtsVerifyResult {
     ok: bool,
@@ -231,6 +234,7 @@ impl OtsVerifyResult {
     }
 }
 
+#[cfg(feature = "python")]
 #[pymethods]
 impl OtsVerifyResult {
     #[getter]
@@ -477,12 +481,14 @@ fn validate_meta_sidecar_impl(
     OtsVerifyResult::success(OtsStatus::Verified, "meta-valid")
 }
 
+#[cfg(feature = "python")]
 #[pyfunction]
 fn hash_for_ots<'py>(py: Python<'py>, artifact: &Bound<'py, PyBytes>) -> Bound<'py, PyBytes> {
     let digest = sha256_digest(artifact.as_bytes());
     PyBytes::new(py, &digest)
 }
 
+#[cfg(feature = "python")]
 #[pyfunction(signature = (ots_path, allow_placeholder = true, expected_artifact_sha = None, ots_binary = None, timeout_secs = None))]
 fn verify_ots_proof(
     ots_path: String,
@@ -500,6 +506,7 @@ fn verify_ots_proof(
     )
 }
 
+#[cfg(feature = "python")]
 #[pyfunction]
 fn validate_meta_sidecar(
     meta_path: String,
@@ -515,6 +522,7 @@ fn validate_meta_sidecar(
     )
 }
 
+#[cfg(feature = "python")]
 pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
     let sub = PyModule::new(parent.py(), "ots")?;
     sub.add_class::<OtsStatus>()?;

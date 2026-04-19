@@ -1,15 +1,23 @@
 #![cfg_attr(not(debug_assertions), deny(warnings))]
 
+#[cfg(feature = "python")]
 use pyo3::prelude::*;
+#[cfg(feature = "python")]
 use pyo3::types::{PyAny, PyBytes};
 
+#[cfg(feature = "python")]
 mod crypto;
+#[cfg(feature = "python")]
 mod ledger;
+#[cfg(feature = "python")]
 mod merkle;
+#[cfg(any(feature = "python", test))]
 mod ots;
+#[cfg(feature = "python")]
 mod radio;
 pub mod sensorthings;
 
+#[cfg(feature = "python")]
 fn extract_frames(py_frames: &Bound<'_, PyAny>) -> PyResult<Vec<Vec<u8>>> {
     let capacity = py_frames.len().unwrap_or(0);
     let mut frames: Vec<Vec<u8>> = Vec::with_capacity(capacity);
@@ -22,6 +30,7 @@ fn extract_frames(py_frames: &Bound<'_, PyAny>) -> PyResult<Vec<Vec<u8>>> {
 }
 
 /// A simple batch of raw frames plus a Merkle root.
+#[cfg(feature = "python")]
 #[pyclass]
 pub struct GatewayBatch {
     /// Raw frames as provided by Python.
@@ -30,6 +39,7 @@ pub struct GatewayBatch {
     merkle_root: [u8; 32],
 }
 
+#[cfg(feature = "python")]
 #[pymethods]
 impl GatewayBatch {
     /// Return the frames as a list of Python bytes objects.
@@ -56,15 +66,18 @@ impl GatewayBatch {
 }
 
 /// High-level gateway helper exposed to Python.
+#[cfg(feature = "python")]
 #[pyclass]
 pub struct Gateway;
 
+#[cfg(feature = "python")]
 impl Default for Gateway {
     fn default() -> Self {
         Self::new()
     }
 }
 
+#[cfg(feature = "python")]
 #[pymethods]
 impl Gateway {
     /// Construct a new Gateway instance.
@@ -102,6 +115,7 @@ impl Gateway {
     }
 }
 
+#[cfg(feature = "python")]
 #[pymodule]
 fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Register high-level classes
