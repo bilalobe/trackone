@@ -2,6 +2,7 @@
 
 **Status**: Accepted
 **Date**: 2025-11-20
+**Updated**: 2026-04-19
 
 ## Related ADRs
 
@@ -102,9 +103,10 @@ whereas in reality we:
      workflow are treated as **integration smoke tests** for the OTS
      client/tooling, *not* full protocol verification of an internal
      calendar.
-   - `RUN_REAL_OTS` is explicitly forced to `0` in `ots-cal` for now, and
-     the test selection uses `-m "not real_ots"` to avoid depending on
-     the presence of a real calendar.
+   - `ots-cal` may set `RUN_REAL_OTS=1` and `OTS_STATIONARY_STUB=0` to
+     exercise real-OTS client code paths against the configured calendar
+     endpoint, but this does not make the local sidecar a first-party OTS
+     calendar implementation.
    - We rely on the standard OTS pipeline and public calendars in the
      other OTS-related tox environments (`ots`, `slow`, etc.) for actual
      proof production and upgrade behavior.
@@ -185,8 +187,8 @@ acknowledging that the *server* side is currently stubbed.
     - Specify and implement a minimal HTTP calendar API tailored to our
       needs (with clear alignment to ADR-015 for multi-anchor scenarios).
     - Replace the current `run_calendar.py` in `docker/calendar/` with a
-      real server entrypoint, update `ots-cal` to mark tests as `real_ots`,
-      and add protocol-level tests to validate the calendar's behavior.
+      real server entrypoint and add protocol-level tests to validate the
+      calendar's behavior.
   - That decision will likely warrant its own ADR (or an update to this
     one) once we select a concrete implementation path.
 
@@ -197,7 +199,9 @@ acknowledging that the *server* side is currently stubbed.
   - Keep using public calendars for production OTS proofs.
   - Use `ots-cal` + `ots/calendar` as a sidecar-based integration check for
     OTS tooling inside CI.
-  - Keep `RUN_REAL_OTS=0` in `ots-cal` until a real calendar is available.
+  - Treat `RUN_REAL_OTS=1` in `ots-cal` as a client-path exercise only; the
+    local sidecar remains a health/tooling endpoint until a real calendar is
+    implemented.
 
 - **Later**
 
@@ -205,9 +209,9 @@ acknowledging that the *server* side is currently stubbed.
     `ots-calendar` port mapping, tox env, and workflow as the
     test/deployment harness.
   - Gradually transition `ots-cal` from "stub/sidecar" to "real calendar
-    conformance" by:
-    - Enabling `RUN_REAL_OTS=1`, and
-    - Expanding the test suite under the `real_ots` marker.
+    conformance" by replacing the sidecar with an actual OTS-compatible
+    calendar service and expanding the protocol-level test suite under the
+    `real_ots` marker.
 
 ## External References
 

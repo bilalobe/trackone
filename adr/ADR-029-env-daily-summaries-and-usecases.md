@@ -1,7 +1,8 @@
 # ADR-029: Environmental Sensing Use-Cases and Daily Summary Metrics
 
-**Status**: Proposed
+**Status**: Superseded by [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md)
 **Date**: 2025-12-15
+**Updated**: 2026-04-19
 
 ## Related ADRs
 
@@ -9,6 +10,14 @@
 - [ADR-027](ADR-027-sensorthings-shtc3-representation.md): SHTC3-class sensors and environmental readings (sensor capabilities)
 - [ADR-028](ADR-028-sensorthings-projection-mapping.md): Mapping TrackOne canonical facts to OGC SensorThings API (API projection)
 - [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md): EnvFact schema and duty-cycled day.bin anchoring (canonical schema)
+
+## Supersession Note
+
+ADR-030 now governs the accepted environmental fact model and summary encoding
+shape: instantaneous observations use `value`, window summaries use
+`min`/`max`/`mean`/`count`, and SensorThings remains a derived projection. This
+ADR remains useful as use-case background, but its richer daily-summary metric
+set is not the current canonical commitment contract.
 
 ## Context
 

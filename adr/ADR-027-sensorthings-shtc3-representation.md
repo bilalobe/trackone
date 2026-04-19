@@ -1,13 +1,21 @@
 # ADR-027: Representation of SHTC3-Class Sensors and Environmental Readings
 
-**Status**: Proposed
+**Status**: Superseded by [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md)
 **Date**: 2025-12-15
+**Updated**: 2026-04-19
 
 ## Related ADRs
 
 - [ADR-028](ADR-028-sensorthings-projection-mapping.md): Mapping TrackOne canonical facts to OGC SensorThings API (projection)
 - [ADR-029](ADR-029-env-daily-summaries-and-usecases.md): Environmental sensing use-cases and daily summary metrics (requirements)
 - [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md): EnvFact schema and duty-cycled day.bin anchoring (canonical schema)
+
+## Supersession Note
+
+ADR-030 now governs the canonical `EnvFact` wire schema, sensor metadata
+placement, SensorThings projection boundary, and duty-cycled anchoring model.
+This ADR remains useful historical context for SHTC3-class capability metadata,
+but its proposed per-reading field shape is not the current authority.
 
 ## Context
 
