@@ -9,7 +9,7 @@ This folder contains the Docker build definition for the `trackone/gateway:local
 eval "$(minikube -p minikube docker-env)"
 
 # Build the image inside minikube
-docker build -t trackone/gateway:local -f docker/gateway/Dockerfile .
+docker build -t trackone/gateway:local -f deploy/docker/gateway/Dockerfile .
 ```
 
 If you use `imagePullPolicy: Never` (as the overlay does), the image must exist inside the minikube docker daemon.

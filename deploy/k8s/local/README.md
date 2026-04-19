@@ -30,11 +30,11 @@ Build them into Minikube's Docker daemon (docker driver) with:
 
 ```bash
 eval "$(minikube -p ${MINIKUBE_PROFILE:-minikube} docker-env)"
-docker build -t trackone/ots-calendar:local -f docker/calendar/Dockerfile docker/calendar
-docker build -t trackone/gateway:local -f docker/gateway/Dockerfile .
-docker build -t trackone/core:local -f docker/core/Dockerfile .
-docker build -t trackone/constants:local -f docker/constants/Dockerfile .
-docker build -t trackone/pod-fw:local -f docker/pod-fw/Dockerfile .
+docker build -t trackone/ots-calendar:local -f deploy/docker/calendar/Dockerfile deploy/docker/calendar
+docker build -t trackone/gateway:local -f deploy/docker/gateway/Dockerfile .
+docker build -t trackone/core:local -f deploy/docker/core/Dockerfile .
+docker build -t trackone/constants:local -f deploy/docker/constants/Dockerfile .
+docker build -t trackone/pod-fw:local -f deploy/docker/pod-fw/Dockerfile .
 ```
 
 Run one to sanity-check it:
