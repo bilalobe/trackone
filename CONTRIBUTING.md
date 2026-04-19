@@ -35,6 +35,12 @@ make dev-setup
 pytest -q
 ```
 
+## Python support
+
+TrackOne follows a rolling three-minor CPython support window (ADR-013). The
+current default matrix is Python 3.12, 3.13, and 3.14; keep `pyproject.toml`,
+`tox.ini`, and CI aligned when a new CPython minor enters the window.
+
 ## Code structure
 
 - `scripts/gateway/`: batcher, anchor, verifier CLIs
