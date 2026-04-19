@@ -2,25 +2,11 @@
 """
 pod_sim.py
 
-Pod simulator that emits NDJSON facts or framed records for testing.
+Pod simulator that emits plain NDJSON facts for reference tests.
 
-This simulator supports two modes:
-
-1. **Plain mode** (M#0): Emits canonical fact JSON (`pod_id`, `fc`, `ingest_time`, `kind`, `payload`)
-   Usage: python pod_sim.py --device-id pod-001 --count 10
-
-2. **Framed mode** (M#2/Production): Emits NDJSON frames with {hdr, nonce, ct, tag} fields using AEAD (XChaCha20-Poly1305)
-   Usage: python pod_sim.py --framed --device-id pod-003 --count 10 --out frames.ndjson --device-table device_table.json
-
-Frame structure (AEAD):
-- hdr: dict with {dev_id: u16, msg_type: u8, fc: u32, flags: u8}
-- nonce: base64 string (24 bytes = salt8 || fc64 || rand8)
-- ct: base64 string (AEAD ciphertext)
-- tag: base64 string (16 bytes Poly1305)
-
-Payload inside AEAD is a compact TLV for minimal overhead.
-
-Optional --facts-out writes plain facts alongside framed output for cross-checking.
+It does not emit supported framed telemetry. The framed ingest contract is
+Rust-owned: NDJSON {hdr, nonce, ct, tag} with postcard `Fact` plaintext,
+native Rust admission, and deterministic canonical CBOR commitment.
 
 References:
 - ADR-001/002: Cryptographic primitives and nonce/replay policy (XChaCha20-Poly1305 with 192-bit nonce)
@@ -36,12 +22,10 @@ import importlib
 import importlib.util
 import json
 import secrets
-import struct
 import sys
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime
-from importlib import import_module
 from pathlib import Path
 from typing import Any, cast
 
@@ -111,16 +95,6 @@ else:
 
 # Use a cryptographically secure RNG for simulations to avoid Bandit B311 warnings.
 _rnd = secrets.SystemRandom()
-
-
-def _load_nacl_bindings() -> Any:
-    try:
-        return import_module("nacl.bindings")
-    except ImportError as exc:
-        raise RuntimeError(
-            "PyNaCl is required for framed AEAD emission paths. "
-            "Install with: pip install PyNaCl"
-        ) from exc
 
 
 def emit_fact(device_id: str, counter: int) -> dict[str, Any]:
@@ -213,26 +187,6 @@ def _demo_deployment_metadata() -> dict[str, Any]:
             "bioimpedance_magnitude": "bioimpedance-pad",
         },
     }
-
-
-# --- TLV helpers (very small, for demo/test) ---
-# t=0x01: counter (u32), t=0x02: bioimpedance*100 (u16), t=0x03: temp_c*100 (i16)
-
-
-def encode_tlv(payload: dict[str, Any]) -> bytes:
-    out = bytearray()
-    # counter
-    c = int(payload.get("counter", 0)) & 0xFFFFFFFF
-    out += bytes([0x01, 4]) + struct.pack(">I", c)
-    # bioimpedance scaled by 100 to u16
-    bio = int(round(float(payload.get("bioimpedance", 0.0)) * 100))
-    bio = max(0, min(65535, bio))
-    out += bytes([0x02, 2]) + struct.pack(">H", bio)
-    # temp_c scaled by 100 to i16
-    tc = int(round(float(payload.get("temp_c", 0.0)) * 100))
-    tc = max(-32768, min(32767, tc))
-    out += bytes([0x03, 2]) + struct.pack(">h", tc)
-    return bytes(out)
 
 
 # --- Device table helpers ---
@@ -364,161 +318,35 @@ def ensure_authoritative_provisioning_record(
         existing["provisioning"]["site_id"] = site_id
 
 
-def build_nonce(salt8: bytes, fc64: int) -> bytes:
-    """Build 24-byte nonce: salt8 || fc64 || rand8 (big-endian for fc)."""
-    rand8 = secrets.token_bytes(8)
-    return salt8 + (fc64 & 0xFFFFFFFFFFFFFFFF).to_bytes(8, "big") + rand8
-
-
-def emit_framed(
-    device_id: str,
-    counter: int,
-    payload: dict[str, Any],
-    device_table_path: Path | None,
-    provisioning_input_path: Path | None,
-    site_id: str | None = None,
-) -> dict[str, Any]:
-    """
-    Emit a framed record with header dict and base64-encoded fields using AEAD (XChaCha20-Poly1305).
-    """
-    dev_id_u16 = parse_dev_id_u16(device_id)
-    msg_type = 1  # measurement
-    fc64 = int(counter)
-    fc_u32 = fc64 & 0xFFFFFFFF
-    flags = 0
-
-    # Device table / keys
-    tbl = load_device_table(device_table_path) if device_table_path else {}
-    entry = ensure_device_entry(tbl, dev_id_u16, site_id=site_id)
-    meta = tbl.get("_meta")
-    master_seed = (
-        base64.b64decode(meta["master_seed"])
-        if isinstance(meta, dict) and isinstance(meta.get("master_seed"), str)
-        else secrets.token_bytes(32)
-    )
-
-    if provisioning_input_path:
-        authoritative_input = load_provisioning_input(provisioning_input_path)
-        ensure_authoritative_provisioning_record(
-            authoritative_input,
-            dev_id_u16=dev_id_u16,
-            master_seed=master_seed,
-            site_id=site_id,
-        )
-        save_provisioning_input(provisioning_input_path, authoritative_input)
-
-    # Retrieve salt8, ensuring it's exactly 8 bytes
-    salt8_raw = entry.get("salt8")
-    if isinstance(salt8_raw, str):
-        salt8 = base64.b64decode(salt8_raw)
-    elif isinstance(salt8_raw, bytes):
-        salt8 = salt8_raw
-    else:
-        raise ValueError(f"Device {dev_id_u16}: missing required salt8 field")
-
-    # Validate salt8 length
-    if len(salt8) != 8:
-        raise ValueError(
-            f"Device {dev_id_u16}: salt8 must be exactly 8 bytes, got {len(salt8)}"
-        )
-
-    ck_up = (
-        base64.b64decode(entry["ck_up"])
-        if isinstance(entry.get("ck_up"), str)
-        else entry["ck_up"]
-    )
-    if len(ck_up) != 32:
-        raise ValueError(
-            f"Device {dev_id_u16}: ck_up must be exactly 32 bytes, got {len(ck_up)}"
-        )
-
-    # Nonce and AAD
-    nonce = build_nonce(salt8, fc64)
-    aad = struct.pack(">HB", dev_id_u16, msg_type & 0xFF)
-
-    # TLV payload and AEAD encrypt (XChaCha20-Poly1305)
-    tlv = encode_tlv(payload)
-    nacl_bindings = _load_nacl_bindings()
-    combined = nacl_bindings.crypto_aead_xchacha20poly1305_ietf_encrypt(
-        tlv, aad, nonce, ck_up
-    )
-    ct, tag = combined[:-16], combined[-16:]
-
-    # Persist highest fc and any updates
-    entry["highest_fc_seen"] = max(int(entry.get("highest_fc_seen", -1)), fc64)
-    tbl[str(dev_id_u16)] = entry
-    save_device_table(device_table_path, tbl)
-
-    return {
-        "hdr": {
-            "dev_id": dev_id_u16,
-            "msg_type": msg_type,
-            "fc": fc_u32,
-            "flags": flags,
-        },
-        "nonce": b64(nonce),
-        "ct": b64(ct),
-        "tag": b64(tag),
-    }
-
-
-def write_plain_fact(path: Path, counter: int, fact: dict[str, Any]) -> None:
-    path.mkdir(parents=True, exist_ok=True)
-    out_file = path / f"{counter:06d}.json"
-    with out_file.open("w", encoding="utf-8") as fh:
-        json.dump(fact, fh, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
-        fh.write("\n")
-
-
 def main(argv: list[str] | None = None) -> int:
-    p = argparse.ArgumentParser(
-        description="Emit NDJSON facts or framed records for testing"
-    )
+    p = argparse.ArgumentParser(description="Emit plain NDJSON facts for testing")
     p.add_argument("--device-id", default="pod-001")
     p.add_argument("--site", default=None)
     p.add_argument("--count", type=int, default=10)
     p.add_argument("--sleep", type=float, default=0.0, help="Seconds between records")
     p.add_argument("--out", type=Path, help="Path to write NDJSON (defaults to stdout)")
-    p.add_argument(
-        "--framed",
-        action="store_true",
-        help="Emit framed NDJSON with {hdr, nonce, ct, tag} fields using AEAD",
-    )
-    p.add_argument(
-        "--facts-out",
-        type=Path,
-        help="When --framed is set, also write plain facts to this directory for cross-check",
-    )
-    p.add_argument(
-        "--device-table",
-        type=Path,
-        help="Path to device table JSON (used to persist per-device salt and key)",
-    )
-    p.add_argument(
-        "--provisioning-input",
-        type=Path,
-        help="Path to authoritative provisioning input JSON emitted alongside runtime state",
-    )
+    p.add_argument("--framed", action="store_true", help=argparse.SUPPRESS)
+    p.add_argument("--facts-out", type=Path, help=argparse.SUPPRESS)
+    p.add_argument("--device-table", type=Path, help=argparse.SUPPRESS)
+    p.add_argument("--provisioning-input", type=Path, help=argparse.SUPPRESS)
     args = p.parse_args(argv)
+
+    if (
+        args.framed
+        or args.facts_out is not None
+        or args.device_table is not None
+        or args.provisioning_input is not None
+    ):
+        p.error(
+            "Python framed emission was removed. Use a Rust postcard framed "
+            "producer for {hdr, nonce, ct, tag} input."
+        )
 
     out_fh = args.out.open("w", encoding="utf-8") if args.out else None
     try:
         for i in range(args.count):
             fact = emit_fact(args.device_id, i)
-            if args.framed:
-                frame = emit_framed(
-                    args.device_id,
-                    i,
-                    fact["payload"],
-                    args.device_table,
-                    args.provisioning_input,
-                    site_id=args.site,
-                )
-                line = json.dumps(frame, separators=(",", ":"))
-                if args.facts_out:
-                    write_plain_fact(args.facts_out, i, fact)
-            else:
-                line = json.dumps(fact, separators=(",", ":"))
+            line = json.dumps(fact, separators=(",", ":"))
             if out_fh:
                 out_fh.write(line + "\n")
             else:
