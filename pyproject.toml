@@ -98,20 +98,21 @@ build-backend = "maturin"
 manifest-path = "crates/trackone-gateway/Cargo.toml"
 bindings = "pyo3"
 #
-# We ship a small Python package `trackone_core/` alongside the native extension.
+# We ship a small Python package `src/trackone_core/` alongside the native
+# extension.
 # The native module lives at `trackone_core._native` so `python-source` can be set
 # without requiring a top-level `trackone_core.py` (which would shadow the extension).
-python-source = "."
+python-source = "src"
 module-name = "trackone_core._native"
 include = [
-    "trackone_core/**/*.py",
+    "src/trackone_core/**/*.py",
     "LICENSE",
     "README.md",
 ]
 exclude = [
     "scripts/**",
-    "trackone_core/**/__pycache__",
-    "trackone_core/**/*.pyc",
+    "src/trackone_core/**/__pycache__",
+    "src/trackone_core/**/*.pyc",
 ]
 
 # Pytest configuration
