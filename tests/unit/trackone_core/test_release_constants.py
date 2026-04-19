@@ -160,3 +160,41 @@ def test_verification_helpers_build_and_update_summary(
         "status": "verified",
         "reason": "ots-verified",
     }
+
+
+def test_portable_verifier_summary_keeps_shared_fields_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _clear_modules("trackone_core")
+    monkeypatch.setitem(sys.modules, "trackone_core._native", None)  # type: ignore[arg-type]
+
+    verification = importlib.import_module("trackone_core.verification")
+
+    summary = {
+        "policy": {"mode": "warn"},
+        "verification": {"disclosure_class": "A"},
+        "checks": {"root_match": True},
+        "verification_scope_exercised": ["day_artifact_validation"],
+        "checks_executed": ["day_artifact_validation"],
+        "checks_skipped": [{"check": "ots_verification", "reason": "disabled"}],
+        "channels": {
+            "ots": {"enabled": False, "status": "skipped", "reason": "disabled"}
+        },
+        "manifest": {"status": "missing", "source": None, "schema": "verify_manifest"},
+        "overall": "verified",
+        "artifacts": {"block": "/tmp/block.json"},
+    }
+
+    assert verification.portable_verifier_summary(summary) == {
+        "policy": {"mode": "warn"},
+        "verification": {"disclosure_class": "A"},
+        "checks": {"root_match": True},
+        "verification_scope_exercised": ["day_artifact_validation"],
+        "checks_executed": ["day_artifact_validation"],
+        "checks_skipped": [{"check": "ots_verification", "reason": "disabled"}],
+        "channels": {
+            "ots": {"enabled": False, "status": "skipped", "reason": "disabled"}
+        },
+        "manifest": {"status": "missing", "source": None, "schema": "verify_manifest"},
+        "overall": "verified",
+    }
