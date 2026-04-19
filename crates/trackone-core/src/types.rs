@@ -198,9 +198,8 @@ pub enum FactPayload {
 
 /// A single telemetry fact produced by a pod.
 ///
-/// Wire format:
-/// 1) postcard serialize `Fact`
-/// 2) AEAD encrypt into `EncryptedFrame`
+/// Rust-native framed transport profiles live in `trackone-ingest`; commitment
+/// authority remains with the canonical CBOR surfaces.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Fact {
     pub pod_id: PodId,
@@ -209,15 +208,6 @@ pub struct Fact {
     pub pod_time: Option<i64>,
     pub kind: FactKind,
     pub payload: FactPayload,
-}
-
-/// AEAD-wrapped fact as seen on the wire (bounded ciphertext).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct EncryptedFrame<const N: usize> {
-    pub pod_id: PodId,
-    pub fc: FrameCounter,
-    pub nonce: [u8; crate::AEAD_NONCE_LEN],
-    pub ciphertext: Vec<u8, N>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

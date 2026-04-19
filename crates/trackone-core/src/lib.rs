@@ -17,19 +17,12 @@ pub mod types;
 
 /// Re-export common types for ergonomic access from other crates.
 pub use crate::types::{
-    CoreResult, DeviceId, EncryptedFrame, EnvFact, Error, Fact, FactKind, FactPayload,
-    FrameCounter, PodId, SampleType, SensorCapability,
+    CoreResult, DeviceId, EnvFact, Error, Fact, FactKind, FactPayload, FrameCounter, PodId,
+    SampleType, SensorCapability,
 };
 
 /// Cryptographic abstractions and key/nonce types.
 pub mod crypto;
-
-/// Frame construction, encryption, and serialization helpers.
-pub mod frame;
-
-/// Gateway-only Merkle tree helpers, enabled via the `gateway` feature.
-#[cfg(feature = "gateway")]
-pub mod merkle;
 
 /// External identity/admission input records and CBOR serialization (ADR-019, ADR-034).
 pub mod identity_input;
@@ -44,7 +37,8 @@ pub use trackone_constants::{
     AEAD_NONCE_LEN, AEAD_TAG_LEN, COMMITMENT_PROFILE_ID_CANONICAL_CBOR_V1, DEFAULT_WATCHDOG_MS,
     DISCLOSURE_CLASS_ANCHOR_ONLY, DISCLOSURE_CLASS_ANCHOR_ONLY_LABEL,
     DISCLOSURE_CLASS_PARTNER_AUDIT, DISCLOSURE_CLASS_PARTNER_AUDIT_LABEL,
-    DISCLOSURE_CLASS_PUBLIC_RECOMPUTE, DISCLOSURE_CLASS_PUBLIC_RECOMPUTE_LABEL, MAX_FACT_LEN,
+    DISCLOSURE_CLASS_PUBLIC_RECOMPUTE, DISCLOSURE_CLASS_PUBLIC_RECOMPUTE_LABEL,
+    INGEST_PROFILE_RUST_POSTCARD_V1, MAX_FACT_LEN,
 };
 
 #[cfg(test)]
