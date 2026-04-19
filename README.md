@@ -47,7 +47,7 @@ At a high level, the repo covers:
 │   ├── trackone-ledger
 │   ├── trackone-gateway
 │   └── trackone-pod-fw
-├── trackone_core/           # Python package surface for native bindings
+├── src/trackone_core/       # Python package surface for native bindings
 ├── scripts/                 # Gateway/demo/verification tooling
 ├── tests/                   # Python test suites
 ├── toolset/                 # Schemas, CDDL, vectors, and example statement payloads
@@ -78,7 +78,7 @@ Current seal/keylock-boundary note:
 
 ### Python/tooling side
 
-- `trackone_core/` — Python package wrapper around the native extension
+- `src/trackone_core/` — Python package wrapper around the native extension
 - `scripts/` — gateway, verification, and demo pipeline scripts
 - `tests/` — unit, integration, and end-to-end validation
 
