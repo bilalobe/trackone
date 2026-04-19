@@ -2,7 +2,7 @@
 
 **Status**: Accepted
 **Date**: 2025-10-06
-**Updated**: 2026-02-25
+**Updated**: 2026-04-19
 
 ## Context
 
@@ -16,26 +16,36 @@
 
 ## Decision
 
-**Implementation Library:** PyNaCl (libsodium bindings) for all cryptographic primitives.
+**Primitives:** TrackOne keeps the primitives below. The historical
+Python-first implementation-library decision that made PyNaCl the primary
+runtime dependency is superseded by
+[ADR-049](ADR-049-native-evidence-plane-crypto-boundary-and-pynacl-demotion.md).
+For supported evidence-plane runtime paths, `trackone_core` is the stable
+Python-facing authority boundary.
 
 - **Key agreement:** X25519 (ECDH over Curve25519)
   - Used during provisioning (ephemeral+static) to derive channel secrets.
-  - Implementation: `nacl.public.PrivateKey` / `nacl.public.Box`
+  - Implementation authority: lifecycle/control-plane dependent until a
+    supported `trackone_core` provisioning surface exists.
 - **KDF:** HKDF-SHA256 (RFC 5869)
   - HKDF‑Extract with a salt; HKDF‑Expand with context strings to derive uplink/downlink keys.
-  - Implementation: `nacl.bindings.crypto_kdf_hkdf_sha256_extract/expand`
+  - Implementation authority: lifecycle/control-plane dependent until a
+    supported `trackone_core` provisioning surface exists.
 - **AEAD (192-bit nonce):** XChaCha20‑Poly1305
   - Encrypts telemetry payloads; provides integrity and confidentiality with 192‑bit nonce.
-  - Implementation: `nacl.bindings.crypto_aead_xchacha20poly1305_ietf_encrypt/decrypt`
+  - Implementation authority: `trackone_core.crypto` for supported
+    evidence-plane framed admission.
 - **AEAD (96-bit nonce):** ChaCha20-Poly1305 (IETF variant)
   - Used in tests and compatibility scenarios requiring 12-byte nonces.
-  - Implementation: `nacl.bindings.crypto_aead_chacha20poly1305_ietf_encrypt/decrypt`
+  - Implementation authority: dev/test or explicit compatibility tooling only.
 - **Signatures:** Ed25519
   - Pod identity and config/firmware authenticity; gateway block header signatures.
-  - Implementation: `nacl.signing.SigningKey` / `nacl.signing.VerifyKey`
+  - Implementation authority: optional publication/lifecycle tooling until a
+    supported `trackone_core` signing surface exists.
 - **Hash:** SHA‑256
   - Merkle leaves/roots, day blobs (for OTS), and auxiliary digests.
-  - Implementation: `nacl.hash.sha256`
+  - Implementation authority: `trackone_core.ledger` and `trackone_core.merkle`
+    for evidence-plane commitments.
 
 ## Telemetry Frame (v1, logical)
 
@@ -83,25 +93,30 @@ nonce/aad/plain/tag.
 - **Simplicity:** AEAD frames are small; nonce assembly deterministic; HKDF context strings document key purpose.
 - **Portability:** libsodium implementations exist in C, Rust, Go, Python; feasible on Cortex‑M0+/M3.
 - **Auditability:** Clear separation of secret frames and public hashes/anchors; easy to produce vectors and proofs.
-- **Performance:** PyNaCl (libsodium) provides optimized implementations faster than pure Python alternatives.
-- **Consistency:** Single crypto library (PyNaCl) instead of mixed cryptography + pynacl dependencies.
+- **Performance:** native `trackone_core` evidence-plane helpers avoid Python
+  crypto on the supported hot path.
+- **Consistency:** protocol-critical evidence-plane operations have one stable
+  Python-facing authority boundary instead of direct script-level crypto calls.
 
 ## Alternatives Considered
 
 - **AES‑GCM:** +HW acceleration on some MCUs; −strict 96‑bit nonce discipline; higher risk if counters ever collide.
 - **ChaCha20‑Poly1305 (96‑bit nonce):** acceptable; −tighter nonce space than XChaCha.
 - **P‑256 ECDH/ECDSA:** acceptable; +HW on some chips; −implementation complexity vs Ed25519/X25519 on MCUs.
-- **cryptography package:** Previous choice; replaced by PyNaCl for better performance and API consistency (see
-  ADR-005).
+- **cryptography package:** Previous Python-first choice; replaced by PyNaCl in
+  the ADR-005 phase, with current runtime dependency strategy superseded by
+  ADR-049.
 
 ## Migration Notes (2025-10-12)
 
-Migrated from mixed `cryptography` + `pynacl` to `pynacl` only:
+Migrated from mixed `cryptography` + `pynacl` to `pynacl` only in the
+Python-first phase:
 
 - **Removed:** `cryptography.hazmat.primitives.*` dependencies
 - **Benefits:** Single crypto library, better performance, cleaner API
 - **Compatibility:** All test vectors regenerated with PyNaCl; backward compatibility maintained
-- **See:** ADR-005 for detailed migration rationale and implementation notes
+- **See:** ADR-005 for historical migration rationale and ADR-049 for current
+  runtime dependency strategy.
 
 ## Non‑decisions (future ADRs)
 
@@ -113,7 +128,9 @@ Migrated from mixed `cryptography` + `pynacl` to `pynacl` only:
 
 - Provide end‑to‑end test vectors: (Ng, Np, Tpod, B, eP/eG, PRK, CK_up/down, nonce, aad, plain, cipher, tag).
 - Interop tests between pod simulator and Python verifier.
-- All test vectors are generated with PyNaCl for deterministic, reproducible results.
+- Historical test vectors were generated with PyNaCl for deterministic,
+  reproducible results. Current supported framed/evidence runtime checks should
+  exercise `trackone_core` authority.
 
 ## Operational Notes
 
@@ -124,4 +141,5 @@ Migrated from mixed `cryptography` + `pynacl` to `pynacl` only:
 ## Status Rationale
 
 - Meets threat model and resource constraints; easy to implement and audit; aligns with verifiable ledger flow.
-- PyNaCl provides battle-tested libsodium implementations with excellent performance characteristics.
+- Primitive choices remain accepted. Runtime dependency authority is updated by
+  ADR-049.
