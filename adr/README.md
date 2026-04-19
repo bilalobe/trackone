@@ -53,6 +53,8 @@ Each ADR captures context, the decision, consequences, and alternatives.
 - [ADR-046: Sealed Trust-Root Boundary and Deferring a Dedicated `trackone-seal` Crate](ADR-046-sealed-trust-root-boundary-and-deferring-trackone-seal.md)
 - [ADR-047: TrackOne as the Evidence Plane Within a Broader Device Lifecycle System](ADR-047-trackone-evidence-plane-within-device-lifecycle.md)
 - [ADR-048: Separate SCITT Publication Profile from the Base Telemetry-Ledger Draft](ADR-048-separate-scitt-publication-profile.md)
+- [ADR-049: Native Evidence-Plane Crypto Boundary and PyNaCl Demotion](ADR-049-native-evidence-plane-crypto-boundary-and-pynacl-demotion.md)
+- [ADR-050: Fiftieth ADR Milestone and Record Stewardship](ADR-050-fiftieth-adr-milestone-and-record-stewardship.md)
 
 ## Index Conventions
 
@@ -96,13 +98,14 @@ Entries list **Status** and **Summary**. Related references are grouped under **
   **Summary**: Documents the temporary plaintext-ciphertext stub used to bring up the end-to-end pipeline before real AEAD; replay window enforced; canonical facts emitted.
 
 - **[ADR-005](ADR-005-pynacl-migration.md): PyNaCl Migration**
-  **Status**: Accepted
-  **Summary**: Consolidate all cryptographic operations to PyNaCl (libsodium):
+  **Status**: Superseded by [ADR-049](ADR-049-native-evidence-plane-crypto-boundary-and-pynacl-demotion.md)
+  **Summary**: Historical Python-first consolidation of crypto operations to PyNaCl (libsodium):
 
   - Removed `cryptography` dependency
   - Unified API for X25519, HKDF, ChaCha/XChaCha AEAD, Ed25519
   - Regenerated test vectors with PyNaCl bindings
-  - Improved maintainability and performance
+  - Superseded for primary runtime dependency strategy by `trackone_core`
+    evidence-plane authority
 
 - **[ADR-034](ADR-034-serialization-boundaries-transport-vs-commitments.md): Serialization Boundaries - Transport vs Commitment Encodings**
   **Status**: Accepted
@@ -111,6 +114,10 @@ Entries list **Status** and **Summary**. Related references are grouped under **
 - **[ADR-039](ADR-039-cbor-first-commitment-profile-and-artifact-authority.md): CBOR-first commitment profile and artifact authority**
   **Status**: Accepted, Updated 2026-03-12
   **Summary**: Makes deterministic CBOR the canonical commitment path (RFC 8949 baseline + TrackOne profile constraints), defines `.cbor` artifacts as authoritative, and demotes JSON to projection-only views.
+
+- **[ADR-049](ADR-049-native-evidence-plane-crypto-boundary-and-pynacl-demotion.md): Native evidence-plane crypto boundary and PyNaCl demotion**
+  **Status**: Accepted
+  **Summary**: Makes `trackone_core` the stable Python-facing authority for supported evidence-plane crypto/admission and commitment paths, demotes PyNaCl from base runtime dependency to optional/tooling scope, and keeps Python scripts as orchestration.
 
 ### Policy & Process
 
@@ -124,13 +131,13 @@ Entries list **Status** and **Summary**. Related references are grouped under **
   **Summary**: Defines which Python components are surface tooling vs protocol-critical, keeps `trackone_core` as the stable native module name, targets `abi3` wheels to reduce the wheel matrix, and adopts two wheel test modes (locked required, pip-resolve gated).
 
 - **[ADR-010](ADR-010-test-suite-refactor-structure-naming.md): Test suite refactor (structure and naming)**
-  **Status**: Proposed
+  **Status**: Accepted
   **Summary**: Decompose monolith tests, move fixtures closer to submodules, and adopt clearer naming (drop `_edge_cases`, `_boost`); improves focus and iteration speed.
 
   - **See also**: [ADR-021](ADR-021-safety-net-ots-pipeline-verification.md)
 
 - **[ADR-013](ADR-013-python-version-support-policy.md): Python Version Support Policy (Last Three Minors)**
-  **Status**: Proposed
+  **Status**: Accepted
   **Summary**: Always support the last three CPython minors in CI/tox (currently 3.12, 3.13, 3.14); drop the oldest from defaults when a new minor releases; keep a dedicated env for explicit checks.
 
 - **[ADR-016](ADR-016-changelog-policy-git-cliff.md): Changelog Policy and Automation with git-cliff**
@@ -144,6 +151,10 @@ Entries list **Status** and **Summary**. Related references are grouped under **
 - **[ADR-044](ADR-044-json-schema-modularity-and-authoritative-contract-artifacts.md): JSON Schema modularity and authoritative contract artifacts**
   **Status**: Accepted, Updated 2026-03-12
   **Summary**: Standardize unified schemas on JSON Schema 2020-12, prefer `$defs`/`$ref` reuse over ad hoc templating, and keep checked-in `.schema.json` files as the authoritative machine-readable contract.
+
+- **[ADR-050](ADR-050-fiftieth-adr-milestone-and-record-stewardship.md): Fiftieth ADR milestone and record stewardship**
+  **Status**: Accepted
+  **Summary**: Marks the fiftieth ADR as a documentation-only milestone and treats the ADR corpus as an active release/review artifact without changing protocol, artifact, dependency, or runtime behavior.
 
 ### Verification, Integrity & OTS Pipeline
 
@@ -172,7 +183,7 @@ Entries list **Status** and **Summary**. Related references are grouped under **
   - **See also**: [ADR-001](ADR-001-primitives-x25519-hkdf-xchacha.md), [ADR-002](ADR-002-telemetry-framing-and-replay-policy.md), [ADR-025](ADR-025-adaptive-uplink-cadence-over-lora.md), [ADR-026](ADR-026-ota-firmware-updates-over-lora.md), [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md)
 
 - **[ADR-021](ADR-021-safety-net-ots-pipeline-verification.md): Safety net for the OTS pipeline**
-  **Status**: Proposed
+  **Status**: Accepted
   **Summary**: Defines SIL-style impact levels for verification/anchoring components, mandates observability/logging for calendar selection, and ties CI/test coverage to OTS proof integrity so misconfigurations fail loudly.
 
   - **See also**: [ADR-003](ADR-003-merkle-canonicalization-and-ots-anchoring.md), [ADR-007](ADR-007-ots-ci-verification-and-bitcoin-headers.md), [ADR-008](ADR-008-m4-completion-ots-workflow.md), [ADR-010](ADR-010-test-suite-refactor-structure-naming.md), [ADR-014](ADR-014-stationary-ots-calendar.md), [ADR-020](ADR-020-stationary-ots-calendar-followup.md), [ADR-022](ADR-022-first-party-stationary-ots-calendar-service.md), [ADR-024](ADR-024-anti-replay-and-ots-backed-ledger.md), [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md)
@@ -229,7 +240,7 @@ Entries list **Status** and **Summary**. Related references are grouped under **
 
 - **[ADR-020](ADR-020-stationary-ots-calendar-followup.md): Stationary calendar follow-up**
   **Status**: Accepted
-  **Summary**: Clarifies that the current `docker/calendar` container is a tooling sidecar, not a real HTTP calendar, and that `tox -e ots-cal` intentionally keeps `RUN_REAL_OTS=0` while relying on public calendars for production proofs.
+  **Summary**: Clarifies that the current `docker/calendar` container is a tooling sidecar, not a real HTTP calendar. `tox -e ots-cal` may exercise real-OTS client paths, but it is not protocol conformance for a first-party calendar.
 
   - **See also**: [ADR-014](ADR-014-stationary-ots-calendar.md), [ADR-021](ADR-021-safety-net-ots-pipeline-verification.md), [ADR-022](ADR-022-first-party-stationary-ots-calendar-service.md)
 
@@ -263,14 +274,14 @@ Entries list **Status** and **Summary**. Related references are grouped under **
 ### Firmware Runtime & Recovery
 
 - **[ADR-042](ADR-042-hardware-watchdog-and-liveness-registry.md): Hardware Watchdog & Liveness-Registry Policy**
-  **Status**: Proposed
+  **Status**: Accepted
   **Summary**: Adds a pod-side hardware watchdog policy with quorum-based feeding, normalized reset-cause reporting, and deferred health-fact wiring so unattended pods recover from hangs without immediate cross-crate schema churn.
 
 ### Environmental Sensing & SensorThings API
 
 - **[ADR-027](ADR-027-sensorthings-shtc3-representation.md): Representation of SHTC3-Class Sensors and Environmental Readings**
-  **Status**: Proposed
-  **Summary**: Canonical schema for temperature/humidity facts emitted by SHTC3 sensors; defines calibration, measurement intervals, and status flags.
+  **Status**: Superseded by [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md)
+  **Summary**: Historical SHTC3-class capability and reading-shape proposal. ADR-030 now governs the canonical `EnvFact` wire schema, sensor metadata placement, and SensorThings projection boundary.
 
   - **See also**: [ADR-028](ADR-028-sensorthings-projection-mapping.md), [ADR-029](ADR-029-env-daily-summaries-and-usecases.md), [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md)
 
@@ -281,8 +292,8 @@ Entries list **Status** and **Summary**. Related references are grouped under **
   - **See also**: [ADR-006](ADR-006-forward-only-schema-and-salt8.md), [ADR-018](ADR-018-cryptographic-randomness-and-nonce-policy.md), [ADR-024](ADR-024-anti-replay-and-ots-backed-ledger.md), [ADR-027](ADR-027-sensorthings-shtc3-representation.md), [ADR-029](ADR-029-env-daily-summaries-and-usecases.md), [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md)
 
 - **[ADR-029](ADR-029-env-daily-summaries-and-usecases.md): Environmental Sensing Use-Cases and Daily Summary Metrics**
-  **Status**: Proposed
-  **Summary**: Specifies daily min/max/mean aggregations, anomaly detection thresholds, and alerting criteria derived from canonical SHTC3 readings.
+  **Status**: Superseded by [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md)
+  **Summary**: Historical environmental analytics/use-case proposal. ADR-030 now governs accepted summary encoding for canonical `EnvFact` commitments; richer daily metric sets remain derived analytics.
 
   - **See also**: [ADR-027](ADR-027-sensorthings-shtc3-representation.md), [ADR-028](ADR-028-sensorthings-projection-mapping.md), [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md)
 
@@ -309,7 +320,7 @@ Entries list **Status** and **Summary**. Related references are grouped under **
 ### Validation & Standards
 
 - **[ADR-032](ADR-032-informational-rfc-verifiable-telemetry-ledger.md): Proposing an Informational RFC for Verifiable Telemetry Ledgers**
-  **Status**: Proposed
+  **Status**: Accepted
   **Summary**: Draft an informational RFC to document TrackOne’s ledger model, dual anchoring, and canonical schemas for broader review and collaboration.
 
 - **[ADR-033](ADR-033-virtual-fleet-verifiable-telemetry.md): Virtual Fleet for Verifiable Telemetry and End-to-End Validation**
@@ -330,7 +341,7 @@ Entries list **Status** and **Summary**. Related references are grouped under **
 
 ### Future Roadmap
 
-- **[ADR-017](ADR-017-rust-core-and-pyo3-integration.md): Rust Core and PyO3 Integration Strategy (Latent Goal)**
+- **[ADR-017](ADR-017-rust-core-and-pyo3-integration.md): Rust Core and PyO3 Integration Strategy**
   **Status**: Accepted
   **Summary**: Introduce a Rust core crate with PyO3 bindings for canonicalization, hashing, Merkle, and eventually AEAD/signatures; ship wheels with `maturin`, keep Python API stable with fallbacks, and roll out in phases post-0.1.0.
 
@@ -344,7 +355,7 @@ Entries list **Status** and **Summary**. Related references are grouped under **
 
 ## Cross-Reference Matrix
 
-**Cryptography & Framing**: [ADR-001](ADR-001-primitives-x25519-hkdf-xchacha.md) \<- [ADR-002](ADR-002-telemetry-framing-and-replay-policy.md), [ADR-005](ADR-005-pynacl-migration.md), [ADR-018](ADR-018-cryptographic-randomness-and-nonce-policy.md), [ADR-034](ADR-034-serialization-boundaries-transport-vs-commitments.md), [ADR-039](ADR-039-cbor-first-commitment-profile-and-artifact-authority.md)
+**Cryptography & Framing**: [ADR-001](ADR-001-primitives-x25519-hkdf-xchacha.md) \<- [ADR-002](ADR-002-telemetry-framing-and-replay-policy.md), [ADR-005](ADR-005-pynacl-migration.md), [ADR-018](ADR-018-cryptographic-randomness-and-nonce-policy.md), [ADR-034](ADR-034-serialization-boundaries-transport-vs-commitments.md), [ADR-039](ADR-039-cbor-first-commitment-profile-and-artifact-authority.md), [ADR-049](ADR-049-native-evidence-plane-crypto-boundary-and-pynacl-demotion.md)
 **OTS Pipeline**: [ADR-003](ADR-003-merkle-canonicalization-and-ots-anchoring.md) \<- [ADR-007](ADR-007-ots-ci-verification-and-bitcoin-headers.md), [ADR-008](ADR-008-m4-completion-ots-workflow.md), [ADR-021](ADR-021-safety-net-ots-pipeline-verification.md), [ADR-023](ADR-023-ots-vs-git-integrity.md)
 **Calendar & Trust**: [ADR-014](ADR-014-stationary-ots-calendar.md) \<- [ADR-020](ADR-020-stationary-ots-calendar-followup.md), [ADR-022](ADR-022-first-party-stationary-ots-calendar-service.md); [ADR-019](ADR-019-rust-gateway-chain-of-trust.md) \<- [ADR-024](ADR-024-anti-replay-and-ots-backed-ledger.md), [ADR-025](ADR-025-adaptive-uplink-cadence-over-lora.md), [ADR-026](ADR-026-ota-firmware-updates-over-lora.md)
 **Ledger & Anti-Replay**: [ADR-024](ADR-024-anti-replay-and-ots-backed-ledger.md) \<- [ADR-002](ADR-002-telemetry-framing-and-replay-policy.md), [ADR-003](ADR-003-merkle-canonicalization-and-ots-anchoring.md), [ADR-006](ADR-006-forward-only-schema-and-salt8.md), [ADR-025](ADR-025-adaptive-uplink-cadence-over-lora.md), [ADR-026](ADR-026-ota-firmware-updates-over-lora.md), [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md), [ADR-041](ADR-041-verification-disclosure-bundles-and-privacy-tiers.md)
@@ -353,6 +364,7 @@ Entries list **Status** and **Summary**. Related references are grouped under **
 **Sensing Integration**: [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md) \<- [ADR-027](ADR-027-sensorthings-shtc3-representation.md), [ADR-028](ADR-028-sensorthings-projection-mapping.md), [ADR-029](ADR-029-env-daily-summaries-and-usecases.md)
 **Future Roadmap**: [ADR-017](ADR-017-rust-core-and-pyo3-integration.md), [ADR-036](ADR-036-post-quantum-kem.md), [ADR-037](ADR-037-signature-roles-and-verification-boundaries.md)
 **System Scope & Boundary**: [ADR-047](ADR-047-trackone-evidence-plane-within-device-lifecycle.md) \<- [ADR-024](ADR-024-anti-replay-and-ots-backed-ledger.md), [ADR-032](ADR-032-informational-rfc-verifiable-telemetry-ledger.md), [ADR-037](ADR-037-signature-roles-and-verification-boundaries.md), [ADR-039](ADR-039-cbor-first-commitment-profile-and-artifact-authority.md), [ADR-041](ADR-041-verification-disclosure-bundles-and-privacy-tiers.md), [ADR-046](ADR-046-sealed-trust-root-boundary-and-deferring-trackone-seal.md)
+**Decision Record Stewardship**: [ADR-050](ADR-050-fiftieth-adr-milestone-and-record-stewardship.md) \<- [ADR-016](ADR-016-changelog-policy-git-cliff.md), [ADR-035](ADR-035-workspace-versioning-and-release-visibility.md), [ADR-038](ADR-038-surface-tooling-and-abi3-wheel-strategy.md)
 
 ## Usage
 
