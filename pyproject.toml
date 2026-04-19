@@ -15,12 +15,11 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-# Testing dependencies (pytest + property testing)
+# Testing dependencies for the base/native-authoritative Python surface
 test = [
     "hypothesis>=6.152.1",
     "jsonschema>=4.26.0",
     "opentimestamps-client>=0.7.2",
-    "pynacl==1.6.2",
     "pytest>=9.0.2",
     "pytest-benchmark>=5.2.3",
     "pytest-cov>=7.1.0",
@@ -58,7 +57,13 @@ anchoring = [
     "requests>=2.33.1",
 ]
 
-crypto = [
+# Experimental peer-signature tooling
+peer-signatures = [
+    "pynacl==1.6.2",
+]
+
+# Legacy/dev-only PyNaCl helpers, parity checks, vectors, and benchmarks
+legacy-crypto = [
     "pynacl==1.6.2",
 ]
 
