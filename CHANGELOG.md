@@ -386,7 +386,7 @@ Confirmed that we remain in the 0.0.x pre-release era: 0.0.1-m6 formalizes the R
 
 ### Added
 - Stationary OTS calendar sidecar image (`ots/calendar:latest`) built from
-  `docker/calendar/` and used by the `ots-cal` and weekly ratchet workflows.
+  `deploy/docker/calendar/` and used by the `ots-cal` and weekly ratchet workflows.
 - Simple HTTP health endpoint on port `8468` (paths `/`, `/health`, `/ready`)
   to support deterministic readiness checks in CI and local testing.
 - Build-provenance attestation for the stationary calendar image using
