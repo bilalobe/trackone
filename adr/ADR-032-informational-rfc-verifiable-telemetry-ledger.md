@@ -9,7 +9,7 @@
 - [ADR-003](ADR-003-merkle-canonicalization-and-ots-anchoring.md): Canonicalization and OTS anchoring (core ledger mechanics)
 - [ADR-015](ADR-015-parallel-anchoring-ots-rfc3161-tsa.md): Parallel anchoring with RFC 3161 (multi-trust model)
 - [ADR-024](ADR-024-anti-replay-and-ots-backed-ledger.md): Anti-replay and ledger semantics
-- [ADR-028](ADR-028-sensorthings-projection-mapping.md) & [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md): SensorThings projections and envfact schemas
+- [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md): environmental evidence model and read-only SensorThings projection
 - [ADR-018](ADR-018-cryptographic-randomness-and-nonce-policy.md): Randomness and nonce policy (crypto foundations)
 - [ADR-039](ADR-039-cbor-first-commitment-profile-and-artifact-authority.md): Commitment profile authority
 - [ADR-040](ADR-040-commitment-test-vectors-and-conformance-gates.md): Conformance vectors and CI gates

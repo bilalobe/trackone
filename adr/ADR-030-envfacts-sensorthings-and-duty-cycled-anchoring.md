@@ -1,88 +1,96 @@
-# ADR-030: EnvFact schema, SensorThings alignment, and duty-cycled day.cbor anchoring
+# ADR-030: Environmental Evidence Model, Projections, and Duty-Cycled Anchoring
 
 **Status**: Accepted
 **Date**: 2025-12-15
-**Updated**: 2026-02-25
+**Updated**: 2026-04-19
+**Supersedes**: [ADR-027](ADR-027-sensorthings-shtc3-representation.md), [ADR-028](ADR-028-sensorthings-projection-mapping.md), [ADR-029](ADR-029-env-daily-summaries-and-usecases.md)
 
 ## Related ADRs
 
-- [ADR-001](ADR-001-primitives-x25519-hkdf-xchacha.md): Core cryptographic primitives (cryptographic basis)
-- [ADR-003](ADR-003-merkle-canonicalization-and-ots-anchoring.md): Merkle canonicalization and OTS anchoring (ledger anchoring)
-- [ADR-002](ADR-002-telemetry-framing-and-replay-policy.md): Replay window and device table (anti-replay semantics)
-- [ADR-006](ADR-006-forward-only-schema-and-salt8.md): Forward-only schema and salt8 (schema discipline)
-- [ADR-014](ADR-014-stationary-ots-calendar.md): Stationary OTS calendar (CI infrastructure)
-- [ADR-018](ADR-018-cryptographic-randomness-and-nonce-policy.md): Cryptographic randomness and nonce policy (security baseline)
-- [ADR-019](ADR-019-rust-gateway-chain-of-trust.md): Gateway chain of trust (verification and deployment)
-- [ADR-020](ADR-020-stationary-ots-calendar-followup.md): Stationary OTS calendar follow-up (operational context)
-- [ADR-021](ADR-021-safety-net-ots-pipeline-verification.md): Safety-net OTS pipeline verification (verification assurance)
-- [ADR-024](ADR-024-anti-replay-and-ots-backed-ledger.md): Anti-replay and OTS-backed ledger (ledger semantics)
-- [ADR-025](ADR-025-adaptive-uplink-cadence-over-lora.md): Adaptive uplink cadence (duty cycling)
-- [ADR-027](ADR-027-sensorthings-shtc3-representation.md): SHTC3-class sensors and environmental readings (sensor metadata)
-- [ADR-028](ADR-028-sensorthings-projection-mapping.md): Mapping TrackOne canonical facts to OGC SensorThings API (presentation layer)
-- [ADR-029](ADR-029-env-daily-summaries-and-usecases.md): Environmental sensing use-cases and daily summary metrics (use-case definition)
+- [ADR-001](ADR-001-primitives-x25519-hkdf-xchacha.md): core cryptographic primitives
+- [ADR-002](ADR-002-telemetry-framing-and-replay-policy.md): telemetry framing and replay policy
+- [ADR-003](ADR-003-merkle-canonicalization-and-ots-anchoring.md): Merkle canonicalization and OTS anchoring
+- [ADR-006](ADR-006-forward-only-schema-and-salt8.md): forward-only schema discipline
+- [ADR-014](ADR-014-stationary-ots-calendar.md): stationary OTS calendar direction
+- [ADR-018](ADR-018-cryptographic-randomness-and-nonce-policy.md): randomness and nonce policy
+- [ADR-019](ADR-019-rust-gateway-chain-of-trust.md): gateway chain of trust
+- [ADR-020](ADR-020-stationary-ots-calendar-followup.md): stationary calendar implementation reality
+- [ADR-021](ADR-021-safety-net-ots-pipeline-verification.md): OTS pipeline safety net
+- [ADR-024](ADR-024-anti-replay-and-ots-backed-ledger.md): anti-replay and ledger semantics
+- [ADR-025](ADR-025-adaptive-uplink-cadence-over-lora.md): duty-cycled uplink policy
+- [ADR-034](ADR-034-serialization-boundaries-transport-vs-commitments.md): transport versus commitment encodings
+- [ADR-039](ADR-039-cbor-first-commitment-profile-and-artifact-authority.md): CBOR-first commitment authority
+- [ADR-047](ADR-047-trackone-evidence-plane-within-device-lifecycle.md): TrackOne evidence-plane scope
 
 ## Context
 
-Over the last iterations we:
+TrackOne needs one active decision for environmental evidence. Earlier ADRs
+split this into SHTC3 sensor representation, SensorThings projection mapping,
+daily-summary analytics, and duty-cycled anchoring. That split was useful while
+the model was still forming, but it now overstates SensorThings and analytics as
+parallel architecture authorities.
 
-- Introduced a Rust core crate (`trackone-core`) with a forward‑only Fact / EnvFact schema used by both pod firmware and gateway.
-- Aligned the environmental telemetry model with OGC SensorThings API concepts (`Thing`, `Datastream`, `Observation`, `phenomenonTime`, `resultTime`).
-- Tightened the anchoring pipeline to produce one canonical `day.cbor` per day, verified and stamped via Merkle + OpenTimestamps, as described in ADR‑014/020/024.
-- Quantified power and airtime budgets that motivate duty‑cycled uplink (1–4 summary frames per day) instead of continuous or high‑rate streaming.
-- Validated that the TrackOne protocol and frame builder fit comfortably on Cortex‑M0+/M4 with very small flash/RAM footprints, and that gateway‑side verification remains practical.
-- Noted that schema and Merkle/OTS details were scattered across prose and test code; we need a single architectural decision that:
-  - fixes the wire‑level schema for environmental facts,
-  - clarifies projection into SensorThings/ArcGIS and into the ledger,
-  - connects duty cycling (uplink frequency, RX windows) with verifiability and energy goals,
-  - lets the report and codebase evolve without duplicating rationale.
+The current architecture is narrower:
+
+- TrackOne is the evidence plane.
+- `trackone_core` owns the stable environmental `Fact` / `EnvFact` wire model.
+- `rust-postcard-v1` is the supported framed plaintext transport profile.
+- `trackone-canonical-cbor-v1` is the verifier-facing commitment profile.
+- SensorThings and analytics outputs are derived projections unless a later ADR
+  promotes them into the evidence contract.
+
+This ADR consolidates ADR-027, ADR-028, and ADR-029 into one governing
+environmental evidence decision.
 
 ## Decision
 
-We adopt a unified environmental fact model and duty‑cycled anchoring strategy as follows.
+### 1. Canonical Environmental Fact Model
 
-### Canonical Fact / EnvFact schema (`trackone-core`)
+The canonical environmental payload is the Rust `EnvFact` model in
+`trackone-core`. It is the shared source for pod firmware, gateway admission,
+and verifier-facing artifact generation.
 
-The core Rust crate `trackone-core` defines the canonical schema for environmental observations on the wire.
+Conceptually:
 
 ```rust
-pub struct PodId(pub [u8; 8]); // canonical device identifier
+pub struct PodId(pub [u8; 8]);
 pub type DeviceId = PodId;
-pub type FrameCounter = u64; // forward-only anti-replay counter
+pub type FrameCounter = u64;
 
 #[repr(u8)]
 pub enum SampleType {
-    AmbientAirTemperature   = 1,
+    AmbientAirTemperature = 1,
     AmbientRelativeHumidity = 2,
-    InterfaceTemperature    = 3,
-    CoverageCapacitance     = 4,
-    BioImpedanceMagnitude   = 5,
-    BioImpedanceActivity    = 6,
-    SupplyVoltage           = 7,
-    BatterySoc              = 8,
-    FloodContact            = 9,
-    LinkQuality             = 10,
-    Custom                  = 250,
+    InterfaceTemperature = 3,
+    CoverageCapacitance = 4,
+    BioImpedanceMagnitude = 5,
+    BioImpedanceActivity = 6,
+    SupplyVoltage = 7,
+    BatterySoc = 8,
+    FloodContact = 9,
+    LinkQuality = 10,
+    Custom = 250,
 }
 
 #[repr(u8)]
 pub enum FactKind {
-    Env      = 1,
+    Env = 1,
     Pipeline = 2,
-    Health   = 3,
-    Custom   = 250,
+    Health = 3,
+    Custom = 250,
 }
 
 pub struct EnvFact {
     pub sample_type: SampleType,
-    pub phenomenon_time_start: i64,   // seconds since epoch
-    pub phenomenon_time_end:   i64,   // seconds since epoch
-    pub value: Option<f32>,           // instantaneous or summary result
-    pub min:   Option<f32>,
-    pub max:   Option<f32>,
-    pub mean:  Option<f32>,
+    pub phenomenon_time_start: i64,
+    pub phenomenon_time_end: i64,
+    pub value: Option<f32>,
+    pub min: Option<f32>,
+    pub max: Option<f32>,
+    pub mean: Option<f32>,
     pub count: Option<u32>,
-    pub quality:       Option<f32>,   // [0,1] or application-specific
-    pub sensor_channel: Option<u8>,   // e.g. ADC channel, bus index
+    pub quality: Option<f32>,
+    pub sensor_channel: Option<u8>,
 }
 
 pub enum FactPayload {
@@ -93,133 +101,172 @@ pub enum FactPayload {
 pub struct Fact {
     pub pod_id: PodId,
     pub fc: FrameCounter,
-    pub ingest_time: i64,         // gateway arrival / resultTime (seconds)
-    pub pod_time: Option<i64>,    // device local time if available
+    pub ingest_time: i64,
+    pub pod_time: Option<i64>,
     pub kind: FactKind,
     pub payload: FactPayload,
 }
 ```
 
-Key properties:
+Normative properties:
 
-- Forward‑only anti‑replay: the tuple `(pod_id, fc)` is unique and monotonically increasing per device (see ADR‑024). Replayed or stale frames never enter the Merkle set.
-- Time semantics:
-  - `phenomenon_time_*` = when the environment was observed (SensorThings `phenomenonTime`).
-  - `ingest_time` = when the gateway accepted the fact (SensorThings `resultTime` / ledger timestamp).
-- Payload semantics:
-  - `EnvFact` supports instantaneous observations (`value`, `count = 1`) and windowed summaries (`min`, `max`, `mean`, `count`).
-  - `Custom` is an escape hatch for experimental payloads; not part of the heritage pipeline contract.
-- Compact and postcard‑friendly: enums use `repr(u8)` (via `serde_repr`); the entire `Fact` serializes within `MAX_FACT_LEN` (256 bytes from `trackone-constants`), enforced by unit tests.
+- `(pod_id, fc)` is the replay boundary. Replayed or stale frames never enter
+  the Merkle set.
+- `phenomenon_time_start` and `phenomenon_time_end` describe the observation
+  window.
+- `ingest_time` describes gateway acceptance time and maps to projection
+  `resultTime`.
+- Instant observations use `value` and normally `count = Some(1)`.
+- Window summaries use `min`, `max`, `mean`, and `count`.
+- `Custom` is an escape hatch and is not part of the stable environmental
+  evidence contract.
+- Canonical commitment bytes are CBOR under ADR-039. JSON remains projection
+  and tooling output.
 
-This schema is the single source of truth for pod firmware (`trackone-pod-fw`) and gateway (`trackone-gateway`). No parallel/proto or JSON‑only schemas are authoritative.
+### 2. Sensor Capabilities Stay Out of Fact Bytes
 
-### Sensor metadata out of band
+SHTC3-class capability metadata is deployment or projection metadata, not
+per-reading commitment content.
 
-Sensor capabilities are kept out of the Fact wire schema:
+TrackOne may describe sensors with fields such as:
 
-```rust
-pub struct SensorCapability {
-    pub sample_type: SampleType,
-    pub resolution: f32,
-    pub accuracy:  f32,
-    pub unit_symbol: &'static str,  // e.g. "°C", "%"
-    pub label:       &'static str,  // e.g. "SHTC3 ambient RH/T"
-}
-```
+- `sensor_type`, for example `SHTC3`, `SHT31`, or `Generic_T_RH`;
+- `sensor_vendor`;
+- measurable quantities;
+- units;
+- resolution;
+- accuracy and confidence class;
+- operating range; and
+- calibration date or notes.
 
-These are defined in `trackone-core` for reuse, but exchanged:
-
-- As static tables in firmware and gateway code; and/or
-- Via metadata endpoints (e.g. SensorThings `Sensor` and `unitOfMeasurement`, or gateway introspection APIs).
+Those fields belong in provisioning/deployment metadata, static firmware/gateway
+tables, schema-backed projection inputs, or SensorThings `Sensor.metadata`.
+They do not belong in every `EnvFact`.
 
 Rationale:
 
-- Avoids serialize/deserialize lifetime issues (`&'static str`) in the core fact stream.
-- Keeps facts small and stable; metadata is not paid per reading.
-- Matches SensorThings, where sensor/unit metadata live outside `Observation`.
+- Facts stay compact for duty-cycled radio paths.
+- Sensor metadata can change by creating new metadata records without changing
+  historical readings.
+- Commitment bytes stay focused on accepted observations rather than verbose
+  descriptive context.
 
-### SensorThings / ArcGIS projection
+### 3. Raw and Summary Semantics
 
-The gateway maps `Fact` → SensorThings model; pods never speak SensorThings directly.
+TrackOne commits a narrow summary shape.
 
-Standardized mapping:
+Raw observations:
 
-- Thing: a pod deployment (identified by `PodId`, plus site/location metadata from provisioning DB).
-- Location / FeatureOfInterest: site geometry (shaft / khettara segment) or pod coordinates.
-- Datastream: (Thing, `SampleType`) pair (e.g. "Pod #7 Ambient RH").
-- Observation:
-  - `phenomenonTime`: `[EnvFact.phenomenon_time_start, EnvFact.phenomenon_time_end]`
-  - `resultTime`: `Fact.ingest_time` (seconds → ISO 8601)
-  - `result`: `EnvFact.value` if present, else `{ min, max, mean, count }`
-  - `resultQuality` / parameters: carry `quality`, `sensor_channel`, and pointer back to the day record (`day_root`, `day.json` id)
+- `phenomenon_time_start == phenomenon_time_end`;
+- `value = Some(reading)`;
+- `count = Some(1)` when known; and
+- aggregate fields are absent.
 
-This projection is a view. Canonical truth remains:
+Window summaries:
 
-- the `facts/` directory,
-- `day/` blobs and records,
-- Merkle roots and OTS proofs as in ADR‑014/020.
+- `phenomenon_time_start <= phenomenon_time_end`;
+- `value = None` unless a later profile defines a single summary result;
+- `min`, `max`, `mean`, and `count` carry the committed summary;
+- `quality` may carry an implementation-defined quality score; and
+- richer analytics stay outside the commitment contract.
 
-SensorThings/ArcGIS are presentation and integration layers, not the root of trust.
+Derived analytics may compute standard deviation, percentiles, day-over-day
+deltas, stability indices, sufficiency flags, or outlier-policy metadata. Those
+outputs are useful, but they are not canonical commitment fields unless a later
+ADR explicitly admits them into the evidence plane.
 
-### Duty‑cycled uplink and daily `day.cbor` anchoring
+### 4. SensorThings Is a Read-Only Projection
 
-Adopt a daily anchoring cadence and duty‑cycled radio policy.
+SensorThings is a deterministic projection over accepted TrackOne evidence. It
+is not a commitment authority.
+
+The gateway may emit schema-backed SensorThings-style bundles containing:
+
+- `Thing` entities for pod deployments;
+- `Sensor` entities from provisioning/deployment-backed sensor identity;
+- `ObservedProperty` entities from `SampleType`;
+- `Datastream` entities for stable `(Thing, Sensor, ObservedProperty, stream)`
+  combinations; and
+- `Observation` entities from accepted facts.
+
+Projection rules:
+
+- Entity IDs must be deterministic from canonical identifiers and deployment
+  metadata.
+- Observation `phenomenonTime` comes from `EnvFact.phenomenon_time_*`.
+- Observation `resultTime` comes from `Fact.ingest_time`.
+- Raw observations project scalar `value`.
+- Summary observations project structured `{min, max, mean, count, quality, sensor_channel}` style results.
+- Public SensorThings surfaces are read-only with respect to the core ledger
+  unless a later ADR accepts a write-through model.
+- Projection bundles are regenerable and schema-backed, but they are not
+  Merkle leaves and do not replace canonical fact/day CBOR.
+
+### 5. Duty-Cycled Uplink and Daily Anchoring
+
+Environmental evidence follows the duty-cycled posture from ADR-025.
 
 Pods:
 
-- Sample sensors locally at higher cadence (e.g. every 5–15 minutes).
-- Aggregate into `EnvFact` windows (min/max/mean/count) per uplink period.
-- Transmit 1–4 `EnvFact`‑bearing frames per day (1/day baseline, 3–4/day during events), staying within a fixed payload budget (`< 256` bytes).
-- Use Class A‑like RX: after each uplink, open a short RX window to receive optional ACK / policy updates. No continuous listening.
+- sample locally at deployment-defined cadence;
+- aggregate locally when needed;
+- transmit sparse `EnvFact` frames, commonly 1-4 times per day;
+- keep payloads within the fixed framed payload budget; and
+- open short receive windows after uplink for optional ACK or policy updates.
 
-Gateway:
+Gateways:
 
-- Validates and stores incoming `Fact`s in `facts/` (anti‑replay, schema validation, site routing).
-- Batches facts into one `day.cbor` per site per day at or just after day boundary (UTC or configured site local time).
-- Computes the Merkle root over that day’s accepted facts and writes the corresponding `day.json` / block header.
-- Runs OTS anchoring:
-  - Stamp the day’s Merkle root / `day.cbor` at day close.
-  - Upgrade pending proofs over hours/days until Bitcoin attestation is available (per ADR‑014/020/021).
-- Exposes verification and status via local CLI/tools (`verify_cli`), SensorThings view, and optional dashboards.
+- validate frames and enforce replay state before admission;
+- write accepted facts into the evidence set;
+- batch accepted facts into daily `day.cbor` artifacts;
+- compute Merkle roots from authoritative commitment bytes;
+- produce block/day records and verification manifests; and
+- anchor day artifacts with OTS and optional adjacent channels.
 
-Duty cycling preserves verifiability because:
-
-- every accepted fact is in exactly one `day.cbor`,
-- every `day.cbor` is anchored (or explicitly marked pending/failed),
-- SensorThings/ArcGIS consume anchored or anchor‑pending daily summaries.
-
-## Alternatives Considered
-
-- Pods emitting SensorThings/JSON directly over LoRa — rejected due to payload bloat, tight coupling, and difficulty preserving the `(pod_id, fc)` anti‑replay invariant.
-- Per‑reading anchoring (OTS for every frame) — rejected because of operational load, energy/bandwidth cost, and poor value versus daily anchors.
-- Embedding full sensor metadata in every Fact — rejected due to wire bloat, lifetime/alloc constraints in `no_std`, and misalignment with SensorThings separation.
-- Gateway‑only proprietary schema (no core crate) — rejected because a shared crate (`trackone-core`) ensures consistent anti‑replay, encoding, verification, and provides testable size/behavior constraints.
+Duty cycling preserves verifiability because every accepted fact is admitted
+once, assigned to a deterministic day artifact, and recomputable by a verifier
+from the published evidence bundle.
 
 ## Consequences
 
-Positive:
+### Positive
 
-- Single canonical schema: all Rust components consume/produce `Fact` / `EnvFact` from `trackone-core`.
-- Schema changes centralized and checked via unit tests (roundtrips, size budgets).
-- Clean SensorThings mapping and ArcGIS integration as presentation layers.
-- Energy‑aware duty cycling: focus on 1–4 uplinks/day and short RX windows; frequency controlled by rare downlink policy messages.
-- Anchoring discipline: `day.cbor` and Merkle roots remain the anchoring unit; anti‑replay aligned with ADR‑024.
-- Testable and portable: stress tests on Cortex‑M0+/M4 and QEMU confirm framing fits constrained targets; gateway and tools share parsing/validation paths.
+- One ADR now governs environmental evidence, metadata, projection, and
+  duty-cycled anchoring.
+- SensorThings is clearly a derived integration view, not a parallel authority.
+- `EnvFact` stays small enough for constrained framed transport.
+- Daily summaries have a stable committed shape while leaving analytics room to
+  evolve outside commitment bytes.
+- Historical ADR links remain valid through ADR-027, ADR-028, and ADR-029
+  supersession stubs.
 
-Negative / Trade‑offs:
+### Negative / Tradeoffs
 
-- Less intra‑fact introspection: richer context (site, wiring, capabilities) is external and requires lookups.
-- Projection complexity concentrated in gateway; increases gateway responsibility.
-- Daily anchoring granularity: smallest cryptographically anchored unit is 24 hours (configurable). Shorter windows (e.g., per‑hour) are possible but out of scope.
+- ADR-030 is broader than a narrowly scoped ADR.
+- Rich SHTC3 metadata and analytics are no longer accepted commitment fields by
+  default; consumers must treat them as metadata or derived outputs.
+- SensorThings implementers must understand the evidence/projection boundary
+  instead of treating SensorThings as the source of truth.
 
-## Implementation Notes and Status
+## Alternatives Considered
 
-- Rust types described are implemented in `crates/trackone-core/src/types.rs` and re‑exported from `trackone-core::lib`.
-- Frame encryption/decryption helpers in `crates/trackone-core/src/frame.rs` use `Fact` as the canonical payload, with `MAX_FACT_LEN` enforced via tests.
-- Pod firmware (`crates/trackone-pod-fw`) builds against the new core types and will evolve to construct `EnvFact` via helpers and schedule duty‑cycled uplinks.
-- Gateway crate (`crates/trackone-gateway`) is being aligned to:
-  - accept `Fact` as its ingress type,
-  - populate `facts/`,
-  - batch into `day.cbor` and Merkle roots,
-  - anchor with OTS,
-  - expose SensorThings‑like views.
+- Keep ADR-027 through ADR-030 as separate active records: rejected because it
+  makes SensorThings and derived analytics look more central than they are.
+- Delete ADR-027 through ADR-029: rejected because it breaks historical links
+  and makes prior review context harder to follow.
+- Promote daily analytics into canonical facts now: rejected because the current
+  implementation only commits the narrower `EnvFact` summary shape.
+
+## Implementation Notes
+
+- `crates/trackone-core/src/types.rs` implements the active `Fact`, `EnvFact`,
+  `SampleType`, and `SensorCapability` types.
+- `crates/trackone-gateway/src/sensorthings/` and
+  `trackone_core.sensorthings` own deterministic SensorThings projection
+  helpers.
+- `toolset/unified/schemas/env_sensor_capability.schema.json` is metadata
+  contract material, not a per-fact commitment schema.
+- `toolset/unified/schemas/sensorthings_projection.schema.json` describes the
+  derived projection artifact.
+- `scripts/gateway/sensorthings_projection.py` is orchestration over the native
+  projection helpers.

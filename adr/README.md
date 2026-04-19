@@ -34,7 +34,7 @@ Each ADR captures context, the decision, consequences, and alternatives.
 - [ADR-027: Representation of SHTC3-Class Sensors and Environmental Readings](ADR-027-sensorthings-shtc3-representation.md)
 - [ADR-028: Mapping TrackOne Canonical Facts to OGC SensorThings API](ADR-028-sensorthings-projection-mapping.md)
 - [ADR-029: Environmental Sensing Use-Cases and Daily Summary Metrics](ADR-029-env-daily-summaries-and-usecases.md)
-- [ADR-030: EnvFact schema, SensorThings alignment, and duty-cycled day.cbor anchoring](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md)
+- [ADR-030: Environmental Evidence Model, Projections, and Duty-Cycled Anchoring](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md)
 - [ADR-031: Key Analysis of SpatiaLite for Geospatial Storage and Query](ADR-031-key-analysis-of-spatialite.md)
 - [ADR-032: Proposing an Informational RFC for Verifiable Telemetry Ledgers](ADR-032-informational-rfc-verifiable-telemetry-ledger.md)
 - [ADR-033: Virtual Fleet for Verifiable Telemetry and End-to-End Validation](ADR-033-virtual-fleet-verifiable-telemetry.md)
@@ -112,7 +112,7 @@ Entries list **Status** and **Summary**. Related references are grouped under **
   **Summary**: Separate transport encoding (Postcard) from commitment encoding to avoid accidental mixing of wire formats and hash commitments.
 
 - **[ADR-039](ADR-039-cbor-first-commitment-profile-and-artifact-authority.md): CBOR-first commitment profile and artifact authority**
-  **Status**: Accepted, Updated 2026-03-12
+  **Status**: Accepted, Updated 2026-04-18
   **Summary**: Makes deterministic CBOR the canonical commitment path (RFC 8949 baseline + TrackOne profile constraints), defines `.cbor` artifacts as authoritative, and demotes JSON to projection-only views.
 
 - **[ADR-049](ADR-049-native-evidence-plane-crypto-boundary-and-pynacl-demotion.md): Native evidence-plane crypto boundary and PyNaCl demotion**
@@ -277,31 +277,31 @@ Entries list **Status** and **Summary**. Related references are grouped under **
   **Status**: Accepted
   **Summary**: Adds a pod-side hardware watchdog policy with quorum-based feeding, normalized reset-cause reporting, and deferred health-fact wiring so unattended pods recover from hangs without immediate cross-crate schema churn.
 
-### Environmental Sensing & SensorThings API
+### Environmental Evidence & Projections
 
 - **[ADR-027](ADR-027-sensorthings-shtc3-representation.md): Representation of SHTC3-Class Sensors and Environmental Readings**
   **Status**: Superseded by [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md)
-  **Summary**: Historical SHTC3-class capability and reading-shape proposal. ADR-030 now governs the canonical `EnvFact` wire schema, sensor metadata placement, and SensorThings projection boundary.
+  **Summary**: Historical SHTC3-class capability and reading-shape proposal retained for link stability. ADR-030 now governs the canonical environmental evidence model.
 
-  - **See also**: [ADR-028](ADR-028-sensorthings-projection-mapping.md), [ADR-029](ADR-029-env-daily-summaries-and-usecases.md), [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md)
+  - **See also**: [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md)
 
 - **[ADR-028](ADR-028-sensorthings-projection-mapping.md): Mapping TrackOne Canonical Facts to OGC SensorThings API**
-  **Status**: Accepted, Updated 2026-03-13
-  **Summary**: Projection layer translating immutable canonical facts to OGC SensorThings Observations; maintains referential integrity, keeps the projection read-only, and now treats the emitted projection bundle as a schema-backed derived artifact.
+  **Status**: Superseded by [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md)
+  **Summary**: Historical SensorThings mapping proposal retained for link stability. ADR-030 now governs SensorThings as a deterministic read-only projection, not a commitment authority.
 
-  - **See also**: [ADR-006](ADR-006-forward-only-schema-and-salt8.md), [ADR-018](ADR-018-cryptographic-randomness-and-nonce-policy.md), [ADR-024](ADR-024-anti-replay-and-ots-backed-ledger.md), [ADR-027](ADR-027-sensorthings-shtc3-representation.md), [ADR-029](ADR-029-env-daily-summaries-and-usecases.md), [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md)
+  - **See also**: [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md)
 
 - **[ADR-029](ADR-029-env-daily-summaries-and-usecases.md): Environmental Sensing Use-Cases and Daily Summary Metrics**
   **Status**: Superseded by [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md)
-  **Summary**: Historical environmental analytics/use-case proposal. ADR-030 now governs accepted summary encoding for canonical `EnvFact` commitments; richer daily metric sets remain derived analytics.
+  **Summary**: Historical environmental analytics/use-case proposal retained for link stability. ADR-030 now governs committed summary encoding; richer daily metrics remain derived analytics.
 
-  - **See also**: [ADR-027](ADR-027-sensorthings-shtc3-representation.md), [ADR-028](ADR-028-sensorthings-projection-mapping.md), [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md)
+  - **See also**: [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md)
 
-- **[ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md): EnvFact schema, SensorThings alignment, and duty-cycled day.cbor anchoring**
+- **[ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md): Environmental Evidence Model, Projections, and Duty-Cycled Anchoring**
   **Status**: Accepted
-  **Summary**: Integrates SHTC3 EnvFact canonical schema, duty-cycled anchoring (day.cbor batches), and SensorThings API projection; harmonizes all sensing and ledger concerns.
+  **Summary**: Consolidates ADR-027, ADR-028, and ADR-029. Defines the active environmental `EnvFact` wire model, out-of-band sensor metadata posture, committed raw/summary encoding, read-only SensorThings projection boundary, and duty-cycled `day.cbor` anchoring.
 
-  - **See also**: [ADR-001](ADR-001-primitives-x25519-hkdf-xchacha.md), [ADR-003](ADR-003-merkle-canonicalization-and-ots-anchoring.md), [ADR-002](ADR-002-telemetry-framing-and-replay-policy.md), [ADR-006](ADR-006-forward-only-schema-and-salt8.md), [ADR-014](ADR-014-stationary-ots-calendar.md), [ADR-018](ADR-018-cryptographic-randomness-and-nonce-policy.md), [ADR-019](ADR-019-rust-gateway-chain-of-trust.md), [ADR-020](ADR-020-stationary-ots-calendar-followup.md), [ADR-021](ADR-021-safety-net-ots-pipeline-verification.md), [ADR-024](ADR-024-anti-replay-and-ots-backed-ledger.md), [ADR-025](ADR-025-adaptive-uplink-cadence-over-lora.md), [ADR-027](ADR-027-sensorthings-shtc3-representation.md), [ADR-028](ADR-028-sensorthings-projection-mapping.md), [ADR-029](ADR-029-env-daily-summaries-and-usecases.md), All ADRs above (integration point)
+  - **See also**: [ADR-001](ADR-001-primitives-x25519-hkdf-xchacha.md), [ADR-002](ADR-002-telemetry-framing-and-replay-policy.md), [ADR-003](ADR-003-merkle-canonicalization-and-ots-anchoring.md), [ADR-006](ADR-006-forward-only-schema-and-salt8.md), [ADR-014](ADR-014-stationary-ots-calendar.md), [ADR-018](ADR-018-cryptographic-randomness-and-nonce-policy.md), [ADR-020](ADR-020-stationary-ots-calendar-followup.md), [ADR-021](ADR-021-safety-net-ots-pipeline-verification.md), [ADR-024](ADR-024-anti-replay-and-ots-backed-ledger.md), [ADR-025](ADR-025-adaptive-uplink-cadence-over-lora.md), [ADR-034](ADR-034-serialization-boundaries-transport-vs-commitments.md), [ADR-039](ADR-039-cbor-first-commitment-profile-and-artifact-authority.md), [ADR-047](ADR-047-trackone-evidence-plane-within-device-lifecycle.md)
 
 ### Data Storage & Analytics
 
@@ -361,7 +361,7 @@ Entries list **Status** and **Summary**. Related references are grouped under **
 **Ledger & Anti-Replay**: [ADR-024](ADR-024-anti-replay-and-ots-backed-ledger.md) \<- [ADR-002](ADR-002-telemetry-framing-and-replay-policy.md), [ADR-003](ADR-003-merkle-canonicalization-and-ots-anchoring.md), [ADR-006](ADR-006-forward-only-schema-and-salt8.md), [ADR-025](ADR-025-adaptive-uplink-cadence-over-lora.md), [ADR-026](ADR-026-ota-firmware-updates-over-lora.md), [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md), [ADR-041](ADR-041-verification-disclosure-bundles-and-privacy-tiers.md)
 **Firmware Runtime & Recovery**: [ADR-042](ADR-042-hardware-watchdog-and-liveness-registry.md) \<- [ADR-021](ADR-021-safety-net-ots-pipeline-verification.md), [ADR-024](ADR-024-anti-replay-and-ots-backed-ledger.md)
 **Conformance & Interop**: [ADR-032](ADR-032-informational-rfc-verifiable-telemetry-ledger.md) \<- [ADR-039](ADR-039-cbor-first-commitment-profile-and-artifact-authority.md), [ADR-040](ADR-040-commitment-test-vectors-and-conformance-gates.md), [ADR-041](ADR-041-verification-disclosure-bundles-and-privacy-tiers.md), [ADR-043](ADR-043-phased-bundle-manifest-maturity-for-id.md)
-**Sensing Integration**: [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md) \<- [ADR-027](ADR-027-sensorthings-shtc3-representation.md), [ADR-028](ADR-028-sensorthings-projection-mapping.md), [ADR-029](ADR-029-env-daily-summaries-and-usecases.md)
+**Environmental Evidence & Projections**: [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md) \<- [ADR-027](ADR-027-sensorthings-shtc3-representation.md), [ADR-028](ADR-028-sensorthings-projection-mapping.md), [ADR-029](ADR-029-env-daily-summaries-and-usecases.md)
 **Future Roadmap**: [ADR-017](ADR-017-rust-core-and-pyo3-integration.md), [ADR-036](ADR-036-post-quantum-kem.md), [ADR-037](ADR-037-signature-roles-and-verification-boundaries.md)
 **System Scope & Boundary**: [ADR-047](ADR-047-trackone-evidence-plane-within-device-lifecycle.md) \<- [ADR-024](ADR-024-anti-replay-and-ots-backed-ledger.md), [ADR-032](ADR-032-informational-rfc-verifiable-telemetry-ledger.md), [ADR-037](ADR-037-signature-roles-and-verification-boundaries.md), [ADR-039](ADR-039-cbor-first-commitment-profile-and-artifact-authority.md), [ADR-041](ADR-041-verification-disclosure-bundles-and-privacy-tiers.md), [ADR-046](ADR-046-sealed-trust-root-boundary-and-deferring-trackone-seal.md)
 **Decision Record Stewardship**: [ADR-050](ADR-050-fiftieth-adr-milestone-and-record-stewardship.md) \<- [ADR-016](ADR-016-changelog-policy-git-cliff.md), [ADR-035](ADR-035-workspace-versioning-and-release-visibility.md), [ADR-038](ADR-038-surface-tooling-and-abi3-wheel-strategy.md)

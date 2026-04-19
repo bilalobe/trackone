@@ -418,4 +418,4 @@ The intent is a practical, reviewable safety net that can evolve alongside the r
 - [ADR-020: Stationary OTS calendar follow-up](ADR-020-stationary-ots-calendar-followup.md)
 - [ADR-022: First-party stationary OTS calendar service in CI](ADR-022-first-party-stationary-ots-calendar-service.md)
 - [ADR-024: Anti-replay and OTS-backed ledger](ADR-024-anti-replay-and-ots-backed-ledger.md)
-- [ADR-030: EnvFact schema and duty-cycled day.cbor anchoring](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md)
+- [ADR-030: Environmental evidence model, projections, and duty-cycled anchoring](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md)
