@@ -1,6 +1,7 @@
 pub mod adapter;
 pub mod ids;
 pub mod mapping;
+#[cfg(feature = "python")]
 pub mod python;
 mod timefmt;
 pub mod types;
