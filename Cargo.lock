@@ -1308,7 +1308,6 @@ dependencies = [
  "serde_json",
  "serde_json_canonicalizer",
  "serde_repr",
- "sha2 0.11.0",
  "trackone-constants",
  "zeroize",
 ]
@@ -1318,13 +1317,25 @@ name = "trackone-gateway"
 version = "0.1.0-alpha.15"
 dependencies = [
  "base64",
- "chacha20poly1305",
  "pyo3",
  "serde_json",
  "sha2 0.11.0",
  "trackone-constants",
  "trackone-core",
+ "trackone-ingest",
  "trackone-ledger",
+]
+
+[[package]]
+name = "trackone-ingest"
+version = "0.1.0-alpha.15"
+dependencies = [
+ "chacha20poly1305",
+ "heapless",
+ "postcard",
+ "serde",
+ "trackone-constants",
+ "trackone-core",
 ]
 
 [[package]]
@@ -1342,6 +1353,7 @@ name = "trackone-pod-fw"
 version = "0.1.0-alpha.15"
 dependencies = [
  "trackone-core",
+ "trackone-ingest",
 ]
 
 [[package]]
