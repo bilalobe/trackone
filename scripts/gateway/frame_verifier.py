@@ -2,16 +2,19 @@
 """
 frame_verifier.py
 
-Parse framed telemetry (NDJSON), enforce replay window, AEAD-decrypt, emit canonical
-facts, and retain structured rejection audit evidence.
+Parse framed telemetry (NDJSON), call native Rust admission, emit canonical
+fact CBOR, and retain structured rejection audit evidence.
 
-Frame format (v1, AEAD):
+Frame envelope (v1, AEAD):
 - Header: dev_id(u16), msg_type(u8), fc(u32), flags(u8)
 - Nonce: 24 bytes (base64 string)
-- Ciphertext: AEAD over compact TLV
+- Ciphertext: AEAD over postcard-encoded trackone-core Fact plaintext
 - Tag: 16 bytes
 
 Transport: NDJSON, one frame per line as JSON with fields {hdr, nonce, ct, tag}.
+
+The public commitment authority is the deterministic canonical CBOR artifact,
+not the transport/plaintext encoding or JSON projection.
 
 References:
 - ADR-002: Telemetry Framing, Nonce/Replay Policy
@@ -68,9 +71,11 @@ except ImportError:  # pragma: no cover - fallback when run as a script
 DEFAULT_REPLAY_WINDOW = 64
 MAX_FRAME_COUNTER = 2**32 - 1
 MAX_NDJSON_LINE_BYTES = 4096
-MAX_CIPHERTEXT_BYTES = 256
 HEADER_FIELDS = {"dev_id", "msg_type", "fc", "flags"}
 FRAME_FIELDS = {"hdr", "nonce", "ct", "tag"}
+INGEST_PROFILE_RUST_POSTCARD_V1 = "rust-postcard-v1"
+INGEST_PROFILES = (INGEST_PROFILE_RUST_POSTCARD_V1,)
+DEFAULT_INGEST_PROFILE = INGEST_PROFILE_RUST_POSTCARD_V1
 
 jsonschema: Any | None = None
 if JSONSCHEMA_AVAILABLE:  # pragma: no branch - import only when installed
@@ -116,70 +121,11 @@ def _load_native_crypto() -> Any:
         ) from exc
 
 
-class ReplayWindow:
-    """
-    Tracks frame counters per device to enforce replay protection.
-
-    Uses a sliding window approach: accept frames within window_size of highest fc seen.
-    Rejects duplicates and frames too far behind.
-    """
-
-    def __init__(self, window_size: int = DEFAULT_REPLAY_WINDOW):
-        self.window_size = window_size
-        self.highest_fc: dict[str, int] = {}
-        self.seen: dict[str, set[int]] = {}
-
-    def initialize_from_device_table(
-        self, device_table: dict[str, dict[str, Any]]
-    ) -> None:
-        """Initialize replay window state from persisted device table."""
-        for dev_key, entry in device_table.items():
-            highest = entry.get("highest_fc_seen", -1)
-            if highest >= 0:
-                dev_id_str = f"pod-{int(dev_key):03d}"
-                self.highest_fc[dev_id_str] = highest
-                # Don't pre-populate seen set - only track current session frames
-                self.seen[dev_id_str] = set()
-
-    def check_and_update(self, dev_id: str, fc: int) -> tuple[bool, str]:
-        """
-        Check if frame counter is acceptable and update state.
-
-        Returns:
-            (accepted: bool, reason: str)
-        """
-        if dev_id not in self.highest_fc:
-            # First frame from this device
-            self.highest_fc[dev_id] = fc
-            self.seen[dev_id] = {fc}
-            return True, "first"
-
-        highest = self.highest_fc[dev_id]
-        seen_set = self.seen[dev_id]
-
-        # Check for duplicate
-        if fc in seen_set:
-            return False, "duplicate"
-
-        # Check if too old (outside window behind)
-        if fc < highest and (highest - fc) > self.window_size:
-            return False, "out_of_window"
-
-        # Check if too far ahead (outside window forward)
-        if fc > highest and (fc - highest) > self.window_size:
-            return False, "out_of_window"
-
-        # Accept and update
-        if fc > highest:
-            self.highest_fc[dev_id] = fc
-            # Prune old entries from seen set
-            seen_set = {f for f in seen_set if (fc - f) <= self.window_size}
-            seen_set.add(fc)
-            self.seen[dev_id] = seen_set
-        else:
-            seen_set.add(fc)
-
-        return True, "ok"
+def _normalize_ingest_profile(value: str | None) -> str:
+    profile = value or DEFAULT_INGEST_PROFILE
+    if profile not in INGEST_PROFILES:
+        raise ValueError(f"Unsupported ingest profile: {profile!r}")
+    return profile
 
 
 def load_fact_schema() -> dict[str, Any] | None:
@@ -239,7 +185,7 @@ def load_device_table(path: Path) -> dict[str, dict[str, Any]]:
     if version != "1.0":
         print(
             f"[ERROR] Device table version {version!r} not supported. "
-            "Expected '1.0'. Regenerate with: python scripts/pod_sim/pod_sim.py --framed --device-table <path>",
+            "Expected '1.0'. Provision a Rust postcard device table.",
             file=sys.stderr,
         )
         raise ValueError(f"Unsupported device table version: {version!r}")
@@ -279,32 +225,6 @@ def save_device_table(path: Path | None, tbl: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(tbl, indent=2) + "\n", encoding="utf-8")
     write_sha256_sidecar(path)
-
-
-# --- TLV helpers (mirror pod_sim) ---
-
-
-def decode_tlv(data: bytes) -> dict[str, Any]:
-    i = 0
-    out: dict[str, Any] = {}
-    while i + 2 <= len(data):
-        t = data[i]
-        length = data[i + 1]
-        i += 2
-        if i + length > len(data):
-            break
-        v = data[i : i + length]
-        i += length
-        if t == 0x01 and length == 4:
-            out["counter"] = int.from_bytes(v, "big", signed=False)
-        elif t == 0x02 and length == 2:
-            out["bioimpedance"] = int.from_bytes(v, "big", signed=False) / 100.0
-        elif t == 0x03 and length == 2:
-            out["temp_c"] = int.from_bytes(v, "big", signed=True) / 100.0
-        elif t == 0x07 and length == 1:
-            out["status_flags"] = v[0]
-        # else: ignore unknown TLVs
-    return out
 
 
 def parse_frame(line: str) -> tuple[dict[str, Any] | None, str]:
@@ -375,8 +295,13 @@ def parse_frame(line: str) -> tuple[dict[str, Any] | None, str]:
 
 
 def _validate_and_decrypt_framed(
-    frame: dict[str, Any], device_table: dict[str, dict[str, Any]]
+    frame: dict[str, Any],
+    device_table: dict[str, dict[str, Any]],
+    *,
+    ingest_profile: str = DEFAULT_INGEST_PROFILE,
 ) -> tuple[dict[str, Any] | None, str]:
+    _normalize_ingest_profile(ingest_profile)
+
     if "ct" not in frame or "nonce" not in frame or "hdr" not in frame:
         return None, "missing_frame_fields"
 
@@ -385,9 +310,11 @@ def _validate_and_decrypt_framed(
         return None, "invalid_hdr"
 
     try:
-        dev_id_u16 = int(hdr["dev_id"]) & 0xFFFF
+        dev_id_u16 = int(hdr["dev_id"])
     except (ValueError, TypeError):
         return None, "invalid_hdr_types"
+    if not (0 <= dev_id_u16 <= 65535):
+        return None, "dev_id_range"
 
     dev_entry = device_table.get(str(dev_id_u16))
     if not dev_entry:
@@ -395,7 +322,10 @@ def _validate_and_decrypt_framed(
 
     try:
         native_crypto = _load_native_crypto()
-        payload, reason = native_crypto.validate_and_decrypt_framed(frame, dev_entry)
+        payload, reason = native_crypto.validate_and_decrypt_framed(
+            frame,
+            dev_entry,
+        )
     except RuntimeError:
         raise
     except Exception as exc:
@@ -411,16 +341,22 @@ def _validate_and_decrypt_framed(
 
 
 def aead_decrypt(
-    frame: dict[str, Any], device_table: dict[str, dict[str, Any]]
+    frame: dict[str, Any],
+    device_table: dict[str, dict[str, Any]],
+    ingest_profile: str = DEFAULT_INGEST_PROFILE,
 ) -> dict[str, Any] | None:
     """
-    Decrypt a framed payload using the native TrackOne crypto helper.
+    Decrypt a framed payload under the selected ingest profile.
 
     Returns:
         payload dict or None on failure
     """
     try:
-        payload, _reason = _validate_and_decrypt_framed(frame, device_table)
+        payload, _reason = _validate_and_decrypt_framed(
+            frame,
+            device_table,
+            ingest_profile=ingest_profile,
+        )
     except RuntimeError:
         return None
     return payload
@@ -454,15 +390,22 @@ def _admit_framed_fact(
     window_size: int,
     ingest_time: int,
     ingest_time_rfc3339_utc: str,
+    ingest_profile: str = INGEST_PROFILE_RUST_POSTCARD_V1,
 ) -> tuple[dict[str, Any] | None, str, str]:
+    ingest_profile = _normalize_ingest_profile(ingest_profile)
+    if ingest_profile != INGEST_PROFILE_RUST_POSTCARD_V1:
+        return None, "invalid_ingest_profile", "decrypt"
+
     hdr = frame.get("hdr")
     if not isinstance(hdr, dict):
         return None, "invalid_hdr", "decrypt"
 
     try:
-        dev_id_u16 = int(hdr["dev_id"]) & 0xFFFF
+        dev_id_u16 = int(hdr["dev_id"])
     except (ValueError, TypeError):
         return None, "invalid_hdr_types", "decrypt"
+    if not (0 <= dev_id_u16 <= 65535):
+        return None, "dev_id_range", "decrypt"
 
     dev_entry = device_table.get(str(dev_id_u16))
     if dev_entry is None:
@@ -499,33 +442,6 @@ def _admit_framed_fact(
     return fact, "", ""
 
 
-def frame_to_fact(frame: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
-    """
-    Convert verified frame + decrypted payload to canonical fact.
-
-    Returns:
-        fact dict matching fact.schema.json
-    """
-    hdr = frame["hdr"]
-    dev_id_u16 = int(hdr["dev_id"])
-    now = datetime.now(UTC)
-    ingest_time = int(now.timestamp())
-    ingest_time_rfc3339 = now.replace(microsecond=0).isoformat().replace("+00:00", "Z")
-    pod_id = f"{dev_id_u16:016x}"
-
-    # Canonical alpha.8 shape. Downstream readers that still support legacy
-    # facts derive compatibility values from canonical fields when needed.
-    return {
-        "pod_id": pod_id,
-        "fc": int(hdr["fc"]),
-        "ingest_time": ingest_time,
-        "pod_time": None,
-        "kind": "Custom",
-        "payload": payload,
-        "ingest_time_rfc3339_utc": ingest_time_rfc3339,
-    }
-
-
 def process(argv: list[str] | None = None) -> int:
     """
     Main processing function.
@@ -551,7 +467,7 @@ def process(argv: list[str] | None = None) -> int:
         dest="out_facts",
         type=Path,
         required=True,
-        help="Output directory for canonical fact JSON files",
+        help="Output directory for authoritative fact CBOR files and JSON projections",
     )
     p.add_argument(
         "--device-table",
@@ -572,6 +488,16 @@ def process(argv: list[str] | None = None) -> int:
         type=Path,
         default=None,
         help="Output directory for structured rejection audit logs",
+    )
+    p.add_argument(
+        "--ingest-profile",
+        choices=INGEST_PROFILES,
+        default=DEFAULT_INGEST_PROFILE,
+        help=(
+            "Framed plaintext/profile contract. The supported path is "
+            "rust-postcard-v1: native Rust postcard Fact admission followed by "
+            "deterministic canonical CBOR commitment."
+        ),
     )
     p.add_argument(
         "--dry-run",
@@ -662,6 +588,7 @@ def process(argv: list[str] | None = None) -> int:
                     window_size=args.window,
                     ingest_time=ingest_time,
                     ingest_time_rfc3339_utc=ingest_time_rfc3339,
+                    ingest_profile=args.ingest_profile,
                 )
             except RuntimeError as exc:
                 print(f"[ERROR] {exc}", file=sys.stderr)
@@ -729,7 +656,8 @@ def process(argv: list[str] | None = None) -> int:
                 accepted_files = accepted
 
         print(
-            f"[frame_verifier] total={total} accepted={accepted_files} rejected={rejected} window={args.window}"
+            f"[frame_verifier] total={total} accepted={accepted_files} rejected={rejected} "
+            f"window={args.window} ingest_profile={args.ingest_profile}"
         )
         return 0
 

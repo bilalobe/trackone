@@ -16,6 +16,18 @@ from typing import Any, cast
 
 from trackone_core.ledger import normalize_hex64, sha256_hex
 
+native_ledger: Any | None
+native_merkle: Any | None
+native_ots: Any | None
+try:  # pragma: no cover - optional native authority
+    from trackone_core import ledger as native_ledger
+    from trackone_core import merkle as native_merkle
+    from trackone_core import ots as native_ots
+except ImportError:  # pragma: no cover - extension not built/installed
+    native_ledger = None
+    native_merkle = None
+    native_ots = None
+
 try:  # pragma: no cover - optional; may not be installed when run as a script
     from trackone_core.release import (
         DEFAULT_COMMITMENT_PROFILE_ID,
@@ -226,30 +238,10 @@ EXIT_ARTIFACT_HASH_MISMATCH = 9
 
 OTS_VERIFY_TIMEOUT_SECS = 30.0
 
-# Optional Rust extension (`trackone_core`) for single-sourced ledger policy.
-_RUST_MERKLE: Any | None = None
-_RUST_LEDGER: Any | None = None
-_RUST_OTS: Any | None = None
-try:  # pragma: no cover - optional acceleration
-    import trackone_core
-
-    native = getattr(trackone_core, "_native", None)
-    rust_mod = native if native is not None else None
-
-    if rust_mod is not None:
-        _RUST_MERKLE = getattr(rust_mod, "merkle", None)
-        _RUST_LEDGER = getattr(rust_mod, "ledger", None)
-        _RUST_OTS = getattr(rust_mod, "ots", None)
-except Exception:  # pragma: no cover - extension not built/installed or init failed
-    trackone_core = None  # type: ignore[assignment]
-    _RUST_MERKLE = None
-    _RUST_LEDGER = None
-    _RUST_OTS = None
-
 
 def merkle_root(leaves: Iterable[bytes]) -> str:
     leaves_list = list(leaves)
-    if _RUST_MERKLE is None:
+    if native_merkle is None:
         raise RuntimeError(
             "trackone_core native merkle helper is required for authoritative "
             "verification paths. Build/install the native extension or run via tox."
@@ -257,7 +249,7 @@ def merkle_root(leaves: Iterable[bytes]) -> str:
     try:  # pragma: no cover - exercised when Rust extension is available
         root_hex, _leaf_hashes = cast(
             tuple[str, list[str]],
-            _RUST_MERKLE.merkle_root_hex_and_leaf_hashes(leaves_list),
+            native_merkle.merkle_root_hex_and_leaf_hashes(leaves_list),
         )
         return root_hex
     except (ImportError, RuntimeError, TypeError, ValueError) as exc:
@@ -432,9 +424,9 @@ def verify_ots_proof(
     expected_artifact_sha: str | None = None,
 ) -> Any:
     """Verify an OTS proof using the native boundary when available."""
-    if _RUST_OTS is not None and hasattr(_RUST_OTS, "verify_ots_proof"):
+    if native_ots is not None and hasattr(native_ots, "verify_ots_proof"):
         try:  # pragma: no cover - exercised when Rust extension is available
-            return _RUST_OTS.verify_ots_proof(
+            return native_ots.verify_ots_proof(
                 str(ots_path),
                 allow_placeholder=allow_placeholder,
                 expected_artifact_sha=expected_artifact_sha,
@@ -584,9 +576,9 @@ def validate_meta_sidecar(
     ots_path: Path,
 ) -> Any:
     """Validate the OTS sidecar binding, preferring the native boundary."""
-    if _RUST_OTS is not None and hasattr(_RUST_OTS, "validate_meta_sidecar"):
+    if native_ots is not None and hasattr(native_ots, "validate_meta_sidecar"):
         try:  # pragma: no cover - exercised when Rust extension is available
-            return _RUST_OTS.validate_meta_sidecar(
+            return native_ots.validate_meta_sidecar(
                 str(meta_path.resolve()),
                 str(repo_root.resolve()),
                 str(day_artifact.resolve()),
@@ -1106,14 +1098,14 @@ def main(argv: list[str] | None = None) -> int:
 
         try:
             day_json_bytes = day_json_path.read_bytes()
-            if _RUST_LEDGER is None or not hasattr(
-                _RUST_LEDGER, "canonicalize_json_to_cbor_bytes"
+            if native_ledger is None or not hasattr(
+                native_ledger, "canonicalize_json_to_cbor_bytes"
             ):
                 raise RuntimeError(
                     "trackone_core native ledger helper is required for authoritative "
                     "verification paths. Build/install the native extension or run via tox."
                 )
-            canon = bytes(_RUST_LEDGER.canonicalize_json_to_cbor_bytes(day_json_bytes))
+            canon = bytes(native_ledger.canonicalize_json_to_cbor_bytes(day_json_bytes))
         except (OSError, RuntimeError, TypeError, ValueError) as exc:
             print(
                 f"ERROR: Failed to canonicalize day projection {day_json_path} into "

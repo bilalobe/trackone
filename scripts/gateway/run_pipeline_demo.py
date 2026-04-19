@@ -576,8 +576,7 @@ def main() -> None:
         "Generating framed telemetry",
         [
             sys.executable,
-            str(scripts_dir / "pod_sim" / "pod_sim.py"),
-            "--framed",
+            str(gateway_dir / "rust_framed_fixture_emitter.py"),
             "--device-id",
             args.device_id,
             "--site",
@@ -605,6 +604,8 @@ def main() -> None:
             str(facts_dir),
             "--device-table",
             str(device_table),
+            "--ingest-profile",
+            "rust-postcard-v1",
             "--window",
             str(args.frame_window),
         ],

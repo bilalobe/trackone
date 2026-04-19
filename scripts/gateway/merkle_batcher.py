@@ -42,6 +42,15 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Any, cast
 
+native_ledger: Any | None
+native_merkle: Any | None
+try:  # pragma: no cover - optional native authority
+    from trackone_core import ledger as native_ledger
+    from trackone_core import merkle as native_merkle
+except ImportError:  # pragma: no cover - extension not built/installed
+    native_ledger = None
+    native_merkle = None
+
 try:  # Support both package imports and direct script execution.
     from .schema_validation import (
         SCHEMA_VALIDATION_EXCEPTIONS,
@@ -57,42 +66,23 @@ except ImportError:  # pragma: no cover - fallback when run as a script
 
 DATE_RX = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
-# Native Rust extension (`trackone_core`) for authoritative ledger policy.
-_RUST_MERKLE: Any | None = None
-_RUST_LEDGER: Any | None = None
-try:  # pragma: no cover - native extension resolution
-    import trackone_core
-
-    # Supported layout: a Python package `trackone_core/` with native extension
-    # at `trackone_core._native`.
-    native = getattr(trackone_core, "_native", None)
-    rust_mod = native if native is not None else None
-
-    if rust_mod is not None:
-        _RUST_MERKLE = getattr(rust_mod, "merkle", None)
-        _RUST_LEDGER = getattr(rust_mod, "ledger", None)
-except Exception:  # pragma: no cover - extension not built/installed or init failed
-    trackone_core = None  # type: ignore[assignment]
-    _RUST_MERKLE = None
-    _RUST_LEDGER = None
-
 
 def _require_native_merkle() -> Any:
-    if _RUST_MERKLE is None:
+    if native_merkle is None:
         raise RuntimeError(
             "trackone_core native merkle helper is required for authoritative "
             "commitment paths. Build/install the native extension or run via tox."
         )
-    return _RUST_MERKLE
+    return native_merkle
 
 
 def _require_native_ledger() -> Any:
-    if _RUST_LEDGER is None:
+    if native_ledger is None:
         raise RuntimeError(
             "trackone_core native ledger helper is required for authoritative "
             "commitment paths. Build/install the native extension or run via tox."
         )
-    return _RUST_LEDGER
+    return native_ledger
 
 
 def canonical_json(obj: Any) -> bytes:

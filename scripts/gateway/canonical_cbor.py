@@ -9,23 +9,15 @@ import struct
 from collections.abc import Callable
 from typing import Any, cast
 
-_RUST_CANONICALIZE_JSON_TO_CBOR = None
+_native_ledger: Any | None
 try:  # pragma: no cover - optional native bridge
-    import trackone_core
-
-    native = getattr(trackone_core, "_native", None)
-    if native is not None:
-        _ledger = getattr(native, "ledger", None)
-        if _ledger is not None:
-            _RUST_CANONICALIZE_JSON_TO_CBOR = getattr(
-                _ledger, "canonicalize_json_to_cbor_bytes", None
-            )
-except Exception:  # pragma: no cover - extension optional
-    _RUST_CANONICALIZE_JSON_TO_CBOR = None
+    from trackone_core import ledger as _native_ledger
+except ImportError:  # pragma: no cover - extension optional
+    _native_ledger = None
 
 
 def _require_native_canonicalizer() -> Callable[[bytes], Any]:
-    rust_fn = _RUST_CANONICALIZE_JSON_TO_CBOR
+    rust_fn = getattr(_native_ledger, "canonicalize_json_to_cbor_bytes", None)
     if rust_fn is None:
         raise RuntimeError(
             "trackone_core native ledger helper is required for authoritative "
@@ -154,7 +146,7 @@ def canonicalize_json_bytes_to_cbor(input_bytes: bytes) -> bytes:
     This helper prefers the native implementation when available, but remains a
     reference/test-oriented compatibility surface.
     """
-    rust_fn = _RUST_CANONICALIZE_JSON_TO_CBOR
+    rust_fn = getattr(_native_ledger, "canonicalize_json_to_cbor_bytes", None)
     if rust_fn is not None:
         try:
             return bytes(rust_fn(input_bytes))

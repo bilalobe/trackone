@@ -2,10 +2,10 @@
 # run_pipeline.sh
 #
 # Track1 end-to-end pipeline (v1.0):
-#   pod_sim --framed → frame_verifier → merkle_batcher → ots_anchor → verify_cli
+#   rust_framed_fixture_emitter (rust-postcard-v1) → frame_verifier → merkle_batcher → ots_anchor → verify_cli
 #
-# This demonstrates the complete framed telemetry ingestion, batching, anchoring,
-# and verification workflow using XChaCha20-Poly1305 (24-byte nonce).
+# This demonstrates the Rust-native framed telemetry path. The public commitment
+# authority remains the post-projection canonical CBOR artifact.
 
 set -euo pipefail
 
@@ -33,12 +33,12 @@ mkdir -p "${FACTS_DIR}"
 # Ensure fresh state for facts (avoid counting stale files)
 rm -f "${FACTS_DIR}"/*.json "${FACTS_DIR}"/*.cbor 2>/dev/null || true
 
-# Step 1: Generate framed telemetry (sim persists device_table with per-device salts/keys)
+# Step 1: Generate framed telemetry (emitter persists device_table with per-device salts/keys)
 echo "[pipeline] Step 1: Generating framed telemetry (${NUM_FRAMES} frames)..."
-python scripts/pod_sim/pod_sim.py \
-  --framed \
+python scripts/gateway/rust_framed_fixture_emitter.py \
   --device-id "${DEVICE_ID}" \
   --count "${NUM_FRAMES}" \
+  --site "${SITE}" \
   --device-table "${DEVICE_TABLE}" \
   --out "${FRAMES_FILE}"
 
@@ -51,6 +51,7 @@ python scripts/gateway/frame_verifier.py \
   --in "${FRAMES_FILE}" \
   --out-facts "${FACTS_DIR}" \
   --device-table "${DEVICE_TABLE}" \
+  --ingest-profile rust-postcard-v1 \
   --window 64
 
 # Step 3: Batch facts into Merkle tree
