@@ -144,12 +144,12 @@ tag: ## Create and push git tag: make tag TAG=vX.Y.Z
 lint: ## Run basic Python linting (if ruff/black available)
 	@echo "[make] Running linting..."
 	@if command -v ruff >/dev/null 2>&1; then \
-		ruff check scripts/ trackone_core/; \
+		ruff check scripts/ src/trackone_core/; \
 	else \
 		echo "[make] ruff not installed, skipping. Install with: pip install ruff"; \
 	fi
 	@if command -v black >/dev/null 2>&1; then \
-		black --check scripts/ trackone_core/; \
+		black --check scripts/ src/trackone_core/; \
 	else \
 		echo "[make] black not installed, skipping. Install with: pip install black"; \
 	fi
@@ -157,7 +157,7 @@ lint: ## Run basic Python linting (if ruff/black available)
 format: ## Auto-format code with black
 	@echo "[make] Auto-formatting code..."
 	@if command -v black >/dev/null 2>&1; then \
-		black scripts/ trackone_core/; \
+		black scripts/ src/trackone_core/; \
 	else \
 		echo "[ERROR] black not installed. Install with: pip install black"; \
 		exit 1; \
@@ -167,7 +167,7 @@ format: ## Auto-format code with black
 lint-fix: ## Run ruff with auto-fix
 	@echo "[make] Running ruff with auto-fix..."
 	@if command -v ruff >/dev/null 2>&1; then \
-		ruff check scripts/ trackone_core/ --fix; \
+		ruff check scripts/ src/trackone_core/ --fix; \
 		echo "[make] ✓ Linting issues fixed"; \
 	else \
 		echo "[ERROR] ruff not installed. Install with: pip install ruff"; \
