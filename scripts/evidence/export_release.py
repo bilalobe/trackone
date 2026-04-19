@@ -29,6 +29,7 @@ from scripts.gateway.verification_gate import local_verification_failure  # noqa
 from scripts.gateway.verification_manifest import verify_manifest_path  # noqa: E402
 from trackone_core.ledger import sha256_hex  # noqa: E402
 from trackone_core.release import verification_bundle_from_summary  # noqa: E402
+from trackone_core.verification import portable_verifier_summary  # noqa: E402
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -142,7 +143,7 @@ def _rewrite_exported_manifest(
     if not isinstance(artifacts, dict):
         raise ValueError("exported manifest missing artifacts")
     artifacts["day_ots_meta"] = _artifact_ref(meta_path, root=dest_root)
-    manifest["verifier"] = _portable_verifier_summary(verifier_summary)
+    manifest["verifier"] = portable_verifier_summary(verifier_summary)
 
     verification_bundle = manifest.get("verification_bundle")
     if not isinstance(verification_bundle, dict):
@@ -161,25 +162,6 @@ def _rewrite_exported_manifest(
         require_schema_validation("verification manifest export validation")
         validate_instance(manifest, schema)
     _write_json(manifest_path, manifest)
-
-
-def _portable_verifier_summary(summary: dict[str, Any]) -> dict[str, Any]:
-    portable: dict[str, Any] = {}
-    for key in (
-        "policy",
-        "verification",
-        "checks",
-        "verification_scope_exercised",
-        "checks_executed",
-        "checks_skipped",
-        "channels",
-        "manifest",
-        "overall",
-    ):
-        value = summary.get(key)
-        if value is not None:
-            portable[key] = json.loads(json.dumps(value))
-    return portable
 
 
 def _require_fresh_verification(
