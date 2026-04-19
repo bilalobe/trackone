@@ -10,6 +10,7 @@
 - [ADR-006](ADR-006-forward-only-schema-and-salt8.md): Forward-only Schema and salt8
 - [ADR-018](ADR-018-cryptographic-randomness-and-nonce-policy.md): Cryptographic Randomness and Nonce Policy
 - [ADR-037](ADR-037-signature-roles-and-verification-boundaries.md): Signature roles and verification boundaries
+- [ADR-049](ADR-049-native-evidence-plane-crypto-boundary-and-pynacl-demotion.md): native evidence-plane crypto boundary and PyNaCl demotion
 
 ## Context
 
@@ -19,7 +20,10 @@ As identified in ADR-001 (under the PQC roadmap, e.g., Kyber), exploring post-qu
 
 Constraints:
 
-- Current authoritative implementation uses PyNaCl/libsodium.
+- Historical Python-first crypto used PyNaCl/libsodium; current evidence-plane
+  runtime authority is `trackone_core` per ADR-049. Provisioning remains a
+  lifecycle/control-plane concern unless and until TrackOne accepts a native
+  provisioning surface.
 - Telemetry framing and replay semantics must not change.
 - Provisioning transcript is already Ed25519-signed by the pod and verified by the gateway (ADR-001; Flow A in ADR-037); this ADR extends the transcript with PQ fields and strengthens transcript binding (see ADR-037 for signature roles).
 - Pods are MCU-class and provisioning traffic is constrained; ML-KEM must remain provisioning-only and may be infeasible on the smallest targets (e.g., STM32L0). Hybrid mode is therefore optional and may be deployed only on pods/gateways that can afford the CPU/RAM cost.
@@ -233,11 +237,18 @@ Costs:
 
 - Larger provisioning transcript: for ML-KEM-768, the PQ ciphertext `ct_kem` adds 1088 bytes (and the PQ public key `pk_pq` is 1184 bytes) compared to the current X25519-only flow. This is a significant but one-time cost during device onboarding and does not affect regular telemetry frames, which remain within the 40–60 byte target from ADR-001.
 - More implementation and test surface (new primitive, vector generation, negative tests).
-- Requires dependency support (PyNaCl/libsodium may not expose ML-KEM; may require Rust `trackone-core` or another vetted binding).
+- Requires dependency support. Because ADR-049 demotes PyNaCl from primary
+  runtime authority, any TrackOne-owned hybrid provisioning surface should prefer
+  Rust/native implementation through `trackone_core` or another explicitly
+  accepted binding.
 
 ## Implementation Notes (Non-Normative)
 
-- If ML-KEM is not available in PyNaCl/libsodium in this environment, implement hybrid provisioning first in Rust (`trackone-core`) and expose to Python via FFI (ADR-017 path), with equivalence tests and deterministic vectors.
+- Implement hybrid provisioning first in Rust (`trackone-core` /
+  `trackone_core`) if TrackOne accepts ownership of that surface, with
+  equivalence tests and deterministic vectors. PyNaCl/libsodium may still be used
+  as optional comparison tooling where available, but not as the default
+  evidence-plane runtime dependency.
 - Add deterministic vectors to `toolset/unified/crypto_test_vectors.json` for:
   - X25519-only provisioning (baseline)
   - Hybrid provisioning (`mlkem_768` recommended starting point: NIST Level 3, roughly matching X25519's ~128-bit classical security while keeping ciphertext/key sizes and CPU cost acceptable for ultra-low-power pods; `mlkem_512` would under-shoot this target and `mlkem_1024` increases bandwidth/CPU without clear benefit for the current threat model)
