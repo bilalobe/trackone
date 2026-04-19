@@ -2,7 +2,7 @@
 # run_pipeline.sh
 #
 # Track1 end-to-end pipeline (v1.0):
-#   rust_framed_fixture_emitter (rust-postcard-v1) → frame_verifier → merkle_batcher → ots_anchor → verify_cli
+#   framed_fixture (rust-postcard-v1) → frame_verifier → merkle_batcher → ots_anchor → verify_cli
 #
 # This demonstrates the Rust-native framed telemetry path. The public commitment
 # authority remains the post-projection canonical CBOR artifact.
@@ -35,7 +35,7 @@ rm -f "${FACTS_DIR}"/*.json "${FACTS_DIR}"/*.cbor 2>/dev/null || true
 
 # Step 1: Generate framed telemetry (emitter persists device_table with per-device salts/keys)
 echo "[pipeline] Step 1: Generating framed telemetry (${NUM_FRAMES} frames)..."
-python scripts/gateway/rust_framed_fixture_emitter.py \
+python scripts/gateway/framed_fixture.py \
   --device-id "${DEVICE_ID}" \
   --count "${NUM_FRAMES}" \
   --site "${SITE}" \

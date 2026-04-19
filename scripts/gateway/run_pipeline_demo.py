@@ -15,6 +15,7 @@ from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
+from trackone_core.constants import DEFAULT_INGEST_PROFILE
 from trackone_core.ledger import sha256_hex
 
 try:  # pragma: no cover - optional; may not be installed when run as a script
@@ -576,7 +577,7 @@ def main() -> None:
         "Generating framed telemetry",
         [
             sys.executable,
-            str(gateway_dir / "rust_framed_fixture_emitter.py"),
+            str(gateway_dir / "framed_fixture.py"),
             "--device-id",
             args.device_id,
             "--site",
@@ -605,7 +606,7 @@ def main() -> None:
             "--device-table",
             str(device_table),
             "--ingest-profile",
-            "rust-postcard-v1",
+            DEFAULT_INGEST_PROFILE,
             "--window",
             str(args.frame_window),
         ],

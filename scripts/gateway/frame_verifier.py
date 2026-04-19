@@ -37,6 +37,11 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+from trackone_core.constants import (  # noqa: E402
+    DEFAULT_INGEST_PROFILE,
+    INGEST_PROFILES,
+)
+
 try:  # Support both package imports and direct script execution.
     from .canonical_cbor import canonicalize_obj_to_cbor_native
     from .input_integrity import require_sha256_sidecar, write_sha256_sidecar
@@ -73,9 +78,6 @@ MAX_FRAME_COUNTER = 2**32 - 1
 MAX_NDJSON_LINE_BYTES = 4096
 HEADER_FIELDS = {"dev_id", "msg_type", "fc", "flags"}
 FRAME_FIELDS = {"hdr", "nonce", "ct", "tag"}
-INGEST_PROFILE_RUST_POSTCARD_V1 = "rust-postcard-v1"
-INGEST_PROFILES = (INGEST_PROFILE_RUST_POSTCARD_V1,)
-DEFAULT_INGEST_PROFILE = INGEST_PROFILE_RUST_POSTCARD_V1
 
 jsonschema: Any | None = None
 if JSONSCHEMA_AVAILABLE:  # pragma: no branch - import only when installed
@@ -391,10 +393,10 @@ def _admit_framed_fact(
     window_size: int,
     ingest_time: int,
     ingest_time_rfc3339_utc: str,
-    ingest_profile: str = INGEST_PROFILE_RUST_POSTCARD_V1,
+    ingest_profile: str = DEFAULT_INGEST_PROFILE,
 ) -> tuple[dict[str, Any] | None, str, str]:
     ingest_profile = _normalize_ingest_profile(ingest_profile)
-    if ingest_profile != INGEST_PROFILE_RUST_POSTCARD_V1:
+    if ingest_profile != DEFAULT_INGEST_PROFILE:
         return None, "invalid_ingest_profile", "decrypt"
 
     hdr = frame.get("hdr")

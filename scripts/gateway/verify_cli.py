@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
+from trackone_core.constants import OTS_VERIFY_TIMEOUT_SECS
 from trackone_core.ledger import normalize_hex64, sha256_hex
 
 native_ledger: Any | None
@@ -243,8 +244,6 @@ EXIT_PEERS_FAILED = 6
 EXIT_ARTIFACT_PATH_MISMATCH = 7
 EXIT_META_INVALID = 8
 EXIT_ARTIFACT_HASH_MISMATCH = 9
-
-OTS_VERIFY_TIMEOUT_SECS = 30.0
 
 
 def merkle_root(leaves: Iterable[bytes]) -> str:
