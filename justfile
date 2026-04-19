@@ -39,6 +39,7 @@ clippy:
     cargo clippy --package trackone-ingest --features std,xchacha -- -D warnings
     cargo clippy --package trackone-pod-fw --features std -- -D warnings
     cargo clippy --package trackone-gateway -- -D warnings
+    cargo clippy --package trackone-gateway --no-default-features -- -D warnings
 
 # Build all packages in release mode
 build-release:
