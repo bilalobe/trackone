@@ -119,8 +119,10 @@ def chacha20poly1305_decrypt(
         nacl.exceptions.CryptoError: If authentication fails
     """
     aad_b = aad if aad is not None else b""
-    return nacl.bindings.crypto_aead_chacha20poly1305_ietf_decrypt(
-        ciphertext + tag, aad_b, nonce96, key
+    return bytes(
+        nacl.bindings.crypto_aead_chacha20poly1305_ietf_decrypt(
+            ciphertext + tag, aad_b, nonce96, key
+        )
     )
 
 
@@ -153,8 +155,10 @@ def xchacha20poly1305_ietf_decrypt(
         nacl.exceptions.CryptoError: If authentication fails
     """
     aad_b = aad if aad is not None else b""
-    return nacl.bindings.crypto_aead_xchacha20poly1305_ietf_decrypt(
-        ciphertext + tag, aad_b, nonce192, key
+    return bytes(
+        nacl.bindings.crypto_aead_xchacha20poly1305_ietf_decrypt(
+            ciphertext + tag, aad_b, nonce192, key
+        )
     )
 
 
@@ -178,7 +182,7 @@ def ed25519_sign(priv: nacl.signing.SigningKey, message: bytes) -> bytes:
     """Sign message with Ed25519."""
     signed = priv.sign(message)
     # Return just the signature (first 64 bytes), not the signed message
-    return signed.signature
+    return bytes(signed.signature)
 
 
 def ed25519_verify(

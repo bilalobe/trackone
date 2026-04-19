@@ -1,15 +1,33 @@
 #!/usr/bin/env python3
 """Peer attestation helper for TrackOne day roots."""
 
+from __future__ import annotations
+
 import argparse
 import json
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
-import nacl.exceptions
-from nacl.encoding import HexEncoder
-from nacl.signing import SigningKey, VerifyKey
+_nacl_exceptions: Any = None
+_HexEncoder: Any = None
+_SigningKey: Any = None
+_VerifyKey: Any = None
+
+try:
+    import nacl.exceptions as _nacl_exceptions_mod
+    from nacl.encoding import HexEncoder as _HexEncoder_cls
+    from nacl.signing import SigningKey as _SigningKey_cls
+    from nacl.signing import VerifyKey as _VerifyKey_cls
+except ImportError as exc:
+    _PYNACL_IMPORT_ERROR: ImportError | None = exc
+else:
+    _PYNACL_IMPORT_ERROR = None
+    _nacl_exceptions = _nacl_exceptions_mod
+    _HexEncoder = _HexEncoder_cls
+    _SigningKey = _SigningKey_cls
+    _VerifyKey = _VerifyKey_cls
 
 DEFAULT_CONTEXT = b"trackone:day-root:v1"
 
@@ -33,6 +51,21 @@ class AttestationResult:
 
 class PeerAttestationError(RuntimeError):
     """Raised when peer attestation cannot be completed."""
+
+
+def _require_pynacl() -> tuple[Any, Any, Any, Any]:
+    if (
+        _PYNACL_IMPORT_ERROR is not None
+        or _nacl_exceptions is None
+        or _HexEncoder is None
+        or _SigningKey is None
+        or _VerifyKey is None
+    ):
+        raise PeerAttestationError(
+            "PyNaCl is required for peer attestation. "
+            "Install trackone[crypto] or add pynacl to the environment."
+        ) from _PYNACL_IMPORT_ERROR
+    return _nacl_exceptions, _HexEncoder, _SigningKey, _VerifyKey
 
 
 def load_peer_config(path: Path) -> list[dict[str, str]]:
@@ -68,11 +101,12 @@ def sign_day_root(
     signing_key_hex: str,
     context: bytes = DEFAULT_CONTEXT,
 ) -> PeerSignature:
-    signing_key = SigningKey(signing_key_hex, encoder=HexEncoder)  # type: ignore[arg-type]
+    _, hex_encoder, signing_key_cls, _ = _require_pynacl()
+    signing_key = signing_key_cls(signing_key_hex, encoder=hex_encoder)
     signature = signing_key.sign(
         attestation_message(site_id, day, day_root_hex, context)
     ).signature
-    verify_key_hex = signing_key.verify_key.encode(encoder=HexEncoder).decode()
+    verify_key_hex = signing_key.verify_key.encode(encoder=hex_encoder).decode()
     return PeerSignature(
         peer_id=peer_id, signature_hex=signature.hex(), pubkey_hex=verify_key_hex
     )
@@ -142,14 +176,15 @@ def verify_peer_signature(
     pubkey_hex: str,
     context: bytes = DEFAULT_CONTEXT,
 ) -> bool:
-    verify_key = VerifyKey(pubkey_hex, encoder=HexEncoder)  # type: ignore[arg-type]
+    nacl_exceptions_mod, hex_encoder, _, verify_key_cls = _require_pynacl()
+    verify_key = verify_key_cls(pubkey_hex, encoder=hex_encoder)
     try:
         verify_key.verify(
             attestation_message(site_id, day, day_root_hex, context),
             bytes.fromhex(signature_hex),
         )
         return True
-    except nacl.exceptions.BadSignatureError:  # pragma: no cover
+    except nacl_exceptions_mod.BadSignatureError:  # pragma: no cover
         return False
 
 
