@@ -11,6 +11,7 @@ readme = "README.md"
 
 [dependencies]
 trackone-core.workspace = true
+trackone-ingest.workspace = true
 
 [dev-dependencies]
 trackone-core = { workspace = true, features = ["dummy-aead"] }
