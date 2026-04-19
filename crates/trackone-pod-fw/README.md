@@ -10,7 +10,7 @@ concerns such as low-power waiting and watchdog coordination.
 This crate currently provides:
 
 - `Pod` for constructing and emitting framed telemetry from payloads
-- `CounterNonce24` for deterministic 24-byte nonce generation
+- `CounterNonce24` for frame-counter-bound 24-byte nonce generation
 - small HAL-facing traits and optional mock implementations
 - low-power helpers such as `idle_wait` and `enter_low_power`
 - stress utilities such as stack-guard paint/scan
@@ -39,6 +39,8 @@ cargo build -p trackone-pod-fw --no-default-features --features production
 
 - [`trackone-core`](../trackone-core/README.md) owns the shared protocol model,
   bounded types, and crypto-facing traits
+- [`trackone-ingest`](../trackone-ingest/README.md) owns the framed Postcard
+  profile, nonce/AAD helpers, and encrypted frame envelope used by pod emission
 - this crate owns firmware-side runtime helpers built on that model
 - board-specific integration belongs in board/application crates such as
   [`trackone-pod-esp32`](../trackone-pod-esp32/README.md)

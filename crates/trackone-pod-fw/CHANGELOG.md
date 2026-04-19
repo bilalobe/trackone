@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- `CounterNonce24` now emits gateway-admissible nonce bytes through
+  `trackone-ingest` framed nonce helpers as `salt8 || fc32_as_u64_be || tail8`.
+- `Pod` now uses `trackone-ingest` for framed fact construction and generic
+  AEAD encryption/decryption helpers.
+- `CounterNonce24` no longer owns a second monotonic counter; pod emission supplies the selected frame counter so nonce bytes and `Fact::fc` cannot drift after manual frame-counter resync.
+- `CounterNonce24::from_provisioned_salt(...)` now makes the stable gateway-validated `salt8` explicit and keeps boot-unique material in the ignored tail bytes.
+
 ## [0.1.0-alpha.15] - 2026-04-18
 
 ### Notes
