@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- `trackone-ingest` is now `no_std`-first by default; host/gateway builds opt
+  into replay-window and XChaCha admission helpers with `--features std,xchacha`.
+
 ### Added
 - Introduced `trackone-ingest` as the Rust-native framed telemetry crate.
 - Added the `rust-postcard-v1` profile contract, nonce/AAD helpers, Postcard

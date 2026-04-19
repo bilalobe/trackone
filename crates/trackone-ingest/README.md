@@ -39,17 +39,21 @@ to keep pods, gateways, and fixtures aligned.
 
 ## Feature Model
 
+- default
+  Minimal `no_std` framing and generic AEAD helpers.
 - `std`
   Host-side helpers such as replay windows.
 - `xchacha`
-  Concrete XChaCha20-Poly1305 framed admission and fixture helpers.
+  Concrete XChaCha20-Poly1305 framed admission and fixture helpers. Implies
+  `std`.
 
-For firmware-oriented builds, disable default features and use the profile,
-nonce, Postcard, and generic AEAD helpers without the host admission surface.
+Host/gateway builds should opt into `std,xchacha`. Firmware-oriented builds can
+use the default `no_std` profile, nonce, Postcard, and generic AEAD helpers
+without the host admission surface.
 
 ## Check
 
 ```bash
-cargo test -p trackone-ingest
+cargo test -p trackone-ingest --features std,xchacha
 cargo check -p trackone-ingest --no-default-features
 ```
