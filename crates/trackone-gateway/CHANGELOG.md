@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Explicit framed-ingest profile validation on the native crypto boundary. The supported wire profile is `rust-postcard-v1`.
+- Native `trackone_core.sensorthings` PyO3 submodule exposing deterministic SensorThings entity IDs and observation projection helpers backed by the existing Rust `sensorthings` domain code.
+
+### Changed
+- Rust-native framed admission now delegates nonce-prefix, AAD, postcard decode,
+  postcard `Fact` header consistency, fixture emission, and replay-window logic
+  to `trackone-ingest`.
+- The native crypto module is back to a PyO3 adapter around Rust-owned ingest
+  and ledger behavior instead of owning framed admission logic itself.
+- Legacy TLV framed plaintext is no longer a supported admission profile; Python verifier orchestration now routes supported framed telemetry through native Rust postcard admission and writes deterministic CBOR fact artifacts after projection.
+- `trackone_core.crypto.validate_and_decrypt_framed(...)` is postcard-only; unsupported profile names such as `python-tlv-legacy` return `invalid_ingest_profile`.
+- SensorThings native support is now built into the gateway extension by default, and the Python `trackone_core.sensorthings` surface delegates deterministic entity-ID and observation-projection work to the native submodule instead of reimplementing those steps in pure Python.
+- Gateway scripts now import the stable `trackone_core.ledger` / `merkle` / `ots` shims directly instead of spelunking through `trackone_core._native`.
+
 ## [0.1.0-alpha.15] - 2026-04-18
 
 ### Added
@@ -25,7 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.0-alpha.13] - 2026-04-03
 
 ### Added
-- Native `trackone_core.crypto.validate_and_decrypt_framed(...)` helper for framed-ingest material validation, nonce-policy enforcement, XChaCha20-Poly1305 decryption, and TLV payload decoding.
+- Native `trackone_core.crypto.validate_and_decrypt_framed(...)` helper for framed-ingest material validation, nonce-policy enforcement, XChaCha20-Poly1305 decryption, and payload decoding.
 
 ### Changed
 - The Python gateway verifier now relies on the native crypto surface for authoritative framed decrypt/validation instead of direct PyNaCl calls.
