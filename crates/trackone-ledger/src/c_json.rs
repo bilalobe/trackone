@@ -5,7 +5,11 @@ use crate::{Error, Result};
 
 /// Canonicalize a JSON `Value` by sorting object keys recursively.
 ///
-/// Encoding (ADR-003):
+/// This is the JSON projection/helper surface for commitment artifacts.
+/// Under ADR-039, authoritative commitment bytes are CBOR; these helpers keep
+/// JSON projections deterministic and stable where JSON views are still needed.
+///
+/// JSON projection encoding:
 /// - UTF-8 JSON bytes
 /// - sorted keys at all nesting levels
 /// - compact separators (no whitespace)
@@ -27,19 +31,19 @@ pub fn canonicalize_value(value: &Value) -> Value {
     }
 }
 
-/// Canonical JSON bytes (UTF-8, sorted keys, no whitespace) from a JSON `Value`.
+/// Deterministic canonical JSON bytes for a projection/helper `Value`.
 pub fn canonical_json_bytes(value: &Value) -> Vec<u8> {
     let canonical = canonicalize_value(value);
     serde_json::to_vec(&canonical).expect("Value -> JSON is infallible")
 }
 
-/// Parse JSON bytes and return canonical JSON bytes.
+/// Parse JSON bytes and return deterministic canonical JSON projection bytes.
 pub fn canonicalize_json_bytes(input: &[u8]) -> Result<Vec<u8>> {
     let value: Value = serde_json::from_slice(input)?;
     Ok(canonical_json_bytes(&value))
 }
 
-/// Convert a serializable structure into canonical JSON bytes.
+/// Convert a serializable structure into deterministic canonical JSON projection bytes.
 pub fn canonicalize_serialize<T: Serialize>(value: &T) -> Result<Vec<u8>> {
     let json = serde_json::to_value(value).map_err(Error::Json)?;
     Ok(canonical_json_bytes(&json))
