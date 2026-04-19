@@ -125,6 +125,11 @@ If you also want the broader CI/test/security tool surface:
 uv sync --extra ci --extra test --extra security
 ```
 
+PyNaCl is opt-in. Add the extra that matches the helper surface you need:
+
+- `uv sync --extra peer-signatures` for experimental peer attestation helpers
+- `uv sync --extra legacy-crypto` for legacy/dev PyNaCl helpers, parity checks, vector regeneration, and benchmark paths
+
 ### Rust workspace checks
 
 ```bash
@@ -137,6 +142,10 @@ cargo test --workspace
 ```bash
 uv run pytest
 ```
+
+The default Python test/tooling path does not require PyNaCl. Tests that
+exercise optional peer-signature or legacy PyNaCl helpers are installed
+explicitly in tox or by adding the corresponding extra above.
 
 ## Common developer workflows
 
