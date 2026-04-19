@@ -6,31 +6,9 @@ from __future__ import annotations
 import json
 import math
 import struct
-from collections.abc import Callable
-from typing import Any, cast
+from typing import Any
 
-_native_ledger: Any | None
-try:  # pragma: no cover - optional native bridge
-    from trackone_core import ledger as _native_ledger
-except ImportError:  # pragma: no cover - extension optional
-    _native_ledger = None
-
-
-def _native_ledger_attr(name: str) -> Any | None:
-    try:
-        return getattr(_native_ledger, name)
-    except (AttributeError, ImportError):
-        return None
-
-
-def _require_native_canonicalizer() -> Callable[[bytes], Any]:
-    rust_fn = _native_ledger_attr("canonicalize_json_to_cbor_bytes")
-    if rust_fn is None:
-        raise RuntimeError(
-            "trackone_core native ledger helper is required for authoritative "
-            "commitment paths. Build/install the native extension or run via tox."
-        )
-    return cast(Callable[[bytes], Any], rust_fn)
+import trackone_core.ledger as ledger
 
 
 def _major_u64(buf: bytearray, major: int, n: int) -> None:
@@ -153,20 +131,17 @@ def canonicalize_json_bytes_to_cbor(input_bytes: bytes) -> bytes:
     This helper prefers the native implementation when available, but remains a
     reference/test-oriented compatibility surface.
     """
-    rust_fn = _native_ledger_attr("canonicalize_json_to_cbor_bytes")
-    if rust_fn is not None:
-        try:
-            return bytes(rust_fn(input_bytes))
-        except Exception:
-            pass
+    try:
+        return bytes(ledger.canonicalize_json_to_cbor_bytes(input_bytes))
+    except Exception:
+        pass
     return canonicalize_obj_to_cbor(json.loads(input_bytes))
 
 
 def canonicalize_json_bytes_to_cbor_native(input_bytes: bytes) -> bytes:
     """Canonicalize JSON bytes through the native ledger boundary only."""
-    rust_fn = _require_native_canonicalizer()
     try:
-        return bytes(rust_fn(input_bytes))
+        return bytes(ledger.canonicalize_json_to_cbor_bytes(input_bytes))
     except Exception as exc:  # pragma: no cover - native path exercised in tox
         raise RuntimeError(
             "trackone_core native ledger helper failed during authoritative CBOR generation"

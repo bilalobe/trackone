@@ -5,200 +5,38 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import shutil
 import subprocess  # nosec B404
 import sys
 from collections.abc import Iterable
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
+import trackone_core.ledger as ledger
+import trackone_core.merkle as merkle
+import trackone_core.ots as ots
 from trackone_core.constants import OTS_VERIFY_TIMEOUT_SECS
-from trackone_core.ledger import normalize_hex64, sha256_hex
-
-native_ledger: Any | None
-native_merkle: Any | None
-native_ots: Any | None
-try:  # pragma: no cover - optional native authority
-    from trackone_core import ledger as native_ledger
-    from trackone_core import merkle as native_merkle
-    from trackone_core import ots as native_ots
-except ImportError:  # pragma: no cover - extension not built/installed
-    native_ledger = None
-    native_merkle = None
-    native_ots = None
-
-
-def _native_attr(module: Any | None, name: str) -> Any | None:
-    try:
-        return getattr(module, name)
-    except (AttributeError, ImportError):
-        return None
-
-
-try:  # pragma: no cover - optional; may not be installed when run as a script
-    from trackone_core.release import (
-        DEFAULT_COMMITMENT_PROFILE_ID,
-    )
-    from trackone_core.verification import (
-        CHECK_BATCH_METADATA,
-        CHECK_DAY_ARTIFACT,
-        CHECK_FACT_RECOMPUTE,
-        CHECK_MANIFEST,
-        CHECK_OTS,
-        CHECK_PEERS,
-        CHECK_TSA,
-        STATUS_FAILED,
-        STATUS_MISSING,
-        STATUS_PENDING,
-        STATUS_SKIPPED,
-        STATUS_VERIFIED,
-        build_verifier_summary,
-        record_executed_check,
-        record_skipped_check,
-        refresh_publicly_recomputable,
-        set_channel,
-        set_manifest_status,
-        verification_channel,
-    )
-except ImportError:  # pragma: no cover - fallback for direct script execution
-    # Keep these in sync with trackone_core/release.py.
-    DEFAULT_COMMITMENT_PROFILE_ID: str = "trackone-canonical-cbor-v1"  # type: ignore[no-redef]
-    STATUS_VERIFIED = "verified"
-    STATUS_FAILED = "failed"
-    STATUS_MISSING = "missing"
-    STATUS_PENDING = "pending"
-    STATUS_SKIPPED = "skipped"
-    CHECK_DAY_ARTIFACT = "day_artifact_validation"
-    CHECK_FACT_RECOMPUTE = "fact_level_recompute"
-    CHECK_MANIFEST = "verification_manifest_validation"
-    CHECK_BATCH_METADATA = "batch_metadata_validation"
-    CHECK_OTS = "ots_verification"
-    CHECK_TSA = "tsa_verification"
-    CHECK_PEERS = "peer_signature_verification"
-
-    # Keep in sync with trackone_core/release.py DISCLOSURE_CLASS_LABELS.
-    _DISCLOSURE_CLASS_LABELS: dict[str, str] = {
-        "A": "public-recompute",
-        "B": "partner-audit",
-        "C": "anchor-only-evidence",
-    }
-
-    def disclosure_label(dc: str) -> str:
-        return _DISCLOSURE_CLASS_LABELS.get(dc, dc)
-
-    def verification_channel(
-        enabled: bool,
-        status: str,
-        reason: str = "",
-    ) -> dict[str, Any]:
-        return {"enabled": enabled, "status": status, "reason": reason}
-
-    def build_verifier_summary(
-        *,
-        policy_mode: str,
-        disclosure_class: str,
-        commitment_profile_id: str,
-        manifest_schema: str,
-        block_path: Path,
-        day_artifact: Path,
-        ots_path: Path,
-        manifest_path: Path,
-        ots_enabled: bool,
-        tsa_enabled: bool,
-        peers_enabled: bool,
-    ) -> dict[str, Any]:
-        def _channel(enabled: bool) -> dict[str, Any]:
-            if enabled:
-                return verification_channel(enabled, STATUS_PENDING, "not-run")
-            return verification_channel(enabled, STATUS_SKIPPED, "disabled")
-
-        return {
-            "policy": {"mode": policy_mode},
-            "verification": {
-                "disclosure_class": disclosure_class,
-                "disclosure_label": disclosure_label(disclosure_class),
-                "commitment_profile_id": commitment_profile_id,
-                "publicly_recomputable": False,
-            },
-            "manifest": {
-                "status": "missing",
-                "source": None,
-                "schema": manifest_schema,
-            },
-            "artifacts": {
-                "block": str(block_path),
-                "day_cbor": str(day_artifact),
-                "day_ots": str(ots_path),
-                "verification_manifest": str(manifest_path),
-            },
-            "checks": {
-                "root_match": None,
-                "artifact_valid": False,
-                "meta_valid": True,
-            },
-            "verification_scope_exercised": [],
-            "checks_executed": [],
-            "checks_skipped": [],
-            "channels": {
-                "ots": _channel(ots_enabled),
-                "tsa": _channel(tsa_enabled),
-                "peers": _channel(peers_enabled),
-            },
-            "overall": "failed",
-        }
-
-    def record_executed_check(summary: dict[str, Any], check: str) -> None:
-        checks = summary.setdefault("checks_executed", [])
-        if isinstance(checks, list):
-            checks.append(check)
-        scope = summary.setdefault("verification_scope_exercised", [])
-        if isinstance(scope, list) and check not in scope:
-            scope.append(check)
-
-    def record_skipped_check(summary: dict[str, Any], check: str, reason: str) -> None:
-        checks = summary.setdefault("checks_skipped", [])
-        if isinstance(checks, list):
-            checks.append({"check": check, "reason": reason})
-
-    def refresh_publicly_recomputable(summary: dict[str, Any]) -> None:
-        verification = summary.get("verification")
-        checks = summary.get("checks")
-        if not isinstance(verification, dict) or not isinstance(checks, dict):
-            return
-        verification["publicly_recomputable"] = (
-            verification.get("disclosure_class") == "A"
-            and checks.get("artifact_valid") is True
-            and checks.get("root_match") is True
-        )
-
-    def set_channel(
-        summary: dict[str, Any],
-        name: str,
-        *,
-        enabled: bool,
-        status: str,
-        reason: str,
-    ) -> None:
-        channels = summary.get("channels")
-        if not isinstance(channels, dict):
-            return
-        channels[name] = verification_channel(enabled, status, reason)
-
-    def set_manifest_status(
-        summary: dict[str, Any],
-        *,
-        status: str,
-        source: str | None,
-        schema: str,
-    ) -> None:
-        summary["manifest"] = {
-            "status": status,
-            "source": source,
-            "schema": schema,
-        }
-
+from trackone_core.release import DEFAULT_COMMITMENT_PROFILE_ID
+from trackone_core.verification import (
+    CHECK_BATCH_METADATA,
+    CHECK_DAY_ARTIFACT,
+    CHECK_FACT_RECOMPUTE,
+    CHECK_MANIFEST,
+    CHECK_OTS,
+    CHECK_PEERS,
+    CHECK_TSA,
+    STATUS_FAILED,
+    STATUS_MISSING,
+    STATUS_PENDING,
+    STATUS_SKIPPED,
+    STATUS_VERIFIED,
+    build_verifier_summary,
+    record_executed_check,
+    record_skipped_check,
+    refresh_publicly_recomputable,
+    set_channel,
+    set_manifest_status,
+)
 
 try:  # Support both package imports and direct script execution.
     from .anchoring_config import (
@@ -248,29 +86,22 @@ EXIT_ARTIFACT_HASH_MISMATCH = 9
 
 def merkle_root(leaves: Iterable[bytes]) -> str:
     leaves_list = list(leaves)
-    if native_merkle is None:
-        raise RuntimeError(
-            "trackone_core native merkle helper is required for authoritative "
-            "verification paths. Build/install the native extension or run via tox."
-        )
     try:  # pragma: no cover - exercised when Rust extension is available
         root_hex, _leaf_hashes = cast(
             tuple[str, list[str]],
-            native_merkle.merkle_root_hex_and_leaf_hashes(leaves_list),
+            merkle.merkle_root_hex_and_leaf_hashes(leaves_list),
         )
         return root_hex
-    except (ImportError, RuntimeError, TypeError, ValueError) as exc:
+    except (AttributeError, ImportError) as exc:
+        raise RuntimeError(
+            "trackone_core native merkle helper is required for authoritative "
+            "verification paths. Build/install the native extension or run via tox."
+        ) from exc
+    except (RuntimeError, TypeError, ValueError) as exc:
         raise RuntimeError(
             "trackone_core native merkle helper failed during authoritative "
             "verification"
         ) from exc
-
-
-@dataclass(slots=True, frozen=True)
-class _PythonOtsVerifyResult:
-    ok: bool
-    status_name: str
-    reason: str
 
 
 def _coerce_ots_status_name(result: Any) -> str:
@@ -292,165 +123,24 @@ def _coerce_ots_status_name(result: Any) -> str:
     return text or STATUS_FAILED
 
 
-def _verify_ots_python(
-    ots_path: Path,
-    allow_placeholder: bool = True,
-    expected_artifact_sha: str | None = None,
-) -> _PythonOtsVerifyResult:
-    try:
-        raw = ots_path.read_bytes()
-        if raw.startswith(b"STATIONARY-OTS:"):
-            if not allow_placeholder:
-                return _PythonOtsVerifyResult(
-                    ok=False,
-                    status_name=STATUS_FAILED,
-                    reason="placeholder-not-allowed",
-                )
-            try:
-                parts = raw.split(b":", 1)
-                if len(parts) != 2:
-                    return _PythonOtsVerifyResult(
-                        ok=False,
-                        status_name=STATUS_FAILED,
-                        reason="stationary-stub-invalid",
-                    )
-                stub_hex = normalize_hex64(
-                    parts[1].strip().splitlines()[0].decode("ascii")
-                )
-                if expected_artifact_sha:
-                    if stub_hex == normalize_hex64(expected_artifact_sha.strip()):
-                        return _PythonOtsVerifyResult(
-                            ok=True,
-                            status_name=STATUS_VERIFIED,
-                            reason="stationary-stub-verified",
-                        )
-                    return _PythonOtsVerifyResult(
-                        ok=False,
-                        status_name=STATUS_FAILED,
-                        reason="stationary-stub-hash-mismatch",
-                    )
-                artifact_candidate = ots_path.with_suffix("")
-                if artifact_candidate.exists():
-                    actual_sha = sha256_hex(artifact_candidate.read_bytes())
-                    if actual_sha == stub_hex:
-                        return _PythonOtsVerifyResult(
-                            ok=True,
-                            status_name=STATUS_VERIFIED,
-                            reason="stationary-stub-verified",
-                        )
-                    return _PythonOtsVerifyResult(
-                        ok=False,
-                        status_name=STATUS_FAILED,
-                        reason="stationary-stub-hash-mismatch",
-                    )
-                return _PythonOtsVerifyResult(
-                    ok=False,
-                    status_name=STATUS_FAILED,
-                    reason="stationary-stub-artifact-missing",
-                )
-            except (OSError, UnicodeDecodeError, ValueError):
-                return _PythonOtsVerifyResult(
-                    ok=False,
-                    status_name=STATUS_FAILED,
-                    reason="stationary-stub-invalid",
-                )
-        if raw.strip() == b"OTS_PROOF_PLACEHOLDER":
-            if allow_placeholder:
-                return _PythonOtsVerifyResult(
-                    ok=True,
-                    status_name=STATUS_PENDING,
-                    reason="placeholder-accepted",
-                )
-            return _PythonOtsVerifyResult(
-                ok=False,
-                status_name=STATUS_FAILED,
-                reason="placeholder-not-allowed",
-            )
-    except OSError:
-        if not ots_path.exists():
-            return _PythonOtsVerifyResult(
-                ok=False,
-                status_name=STATUS_MISSING,
-                reason="ots-proof-not-found",
-            )
-        return _PythonOtsVerifyResult(
-            ok=False,
-            status_name=STATUS_FAILED,
-            reason="ots-proof-read-failed",
-        )
-
-    ots_exe = shutil.which("ots")
-    if not ots_exe:
-        return _PythonOtsVerifyResult(
-            ok=False,
-            status_name=STATUS_FAILED,
-            reason="ots-binary-not-found",
-        )
-    ots_path_obj = Path(ots_exe).resolve()
-    if not ots_path_obj.is_file() or not os.access(str(ots_path_obj), os.X_OK):
-        return _PythonOtsVerifyResult(
-            ok=False,
-            status_name=STATUS_FAILED,
-            reason="ots-binary-not-executable",
-        )
-    try:
-        result = subprocess.run(
-            [str(ots_path_obj), "verify", str(ots_path)],
-            capture_output=True,
-            text=True,
-            timeout=OTS_VERIFY_TIMEOUT_SECS,
-        )  # nosec B603
-        if result.returncode == 0:
-            return _PythonOtsVerifyResult(
-                ok=True,
-                status_name=STATUS_VERIFIED,
-                reason="ots-verified",
-            )
-        return _PythonOtsVerifyResult(
-            ok=False,
-            status_name=STATUS_FAILED,
-            reason="ots-verification-failed",
-        )
-    except subprocess.TimeoutExpired:
-        return _PythonOtsVerifyResult(
-            ok=False,
-            status_name=STATUS_FAILED,
-            reason="ots-timeout",
-        )
-    except (subprocess.CalledProcessError, OSError):
-        return _PythonOtsVerifyResult(
-            ok=False,
-            status_name=STATUS_FAILED,
-            reason="ots-exec-failed",
-        )
-
-
 def verify_ots_proof(
     ots_path: Path,
     allow_placeholder: bool = True,
     expected_artifact_sha: str | None = None,
 ) -> Any:
-    """Verify an OTS proof using the native boundary when available."""
-    verify_fn = _native_attr(native_ots, "verify_ots_proof")
-    if verify_fn is not None:
-        try:  # pragma: no cover - exercised when Rust extension is available
-            return verify_fn(
-                str(ots_path),
-                allow_placeholder=allow_placeholder,
-                expected_artifact_sha=expected_artifact_sha,
-                ots_binary=shutil.which("ots"),
-                timeout_secs=OTS_VERIFY_TIMEOUT_SECS,
-            )
-        except (ImportError, RuntimeError, TypeError, ValueError) as e:
-            print(
-                f"[WARN] Rust ots verify failed, falling back to Python: {e}",
-                file=sys.stderr,
-            )
-    return _verify_ots_python(
-        ots_path,
-        allow_placeholder=allow_placeholder,
-        expected_artifact_sha=expected_artifact_sha,
-    )
+    """Verify an OTS proof through the public trackone_core.ots boundary."""
+    try:  # pragma: no cover - exercised when Rust extension is available
+        return ots.verify_ots_proof(
+            str(ots_path),
+            allow_placeholder=allow_placeholder,
+            expected_artifact_sha=expected_artifact_sha,
+            ots_binary=shutil.which("ots"),
+            timeout_secs=OTS_VERIFY_TIMEOUT_SECS,
+        )
+    except (AttributeError, ImportError, RuntimeError, TypeError, ValueError) as exc:
+        raise RuntimeError(
+            "trackone_core native ots helper failed during proof verification"
+        ) from exc
 
 
 def verify_ots(
@@ -458,122 +148,13 @@ def verify_ots(
     allow_placeholder: bool = True,
     expected_artifact_sha: str | None = None,
 ) -> bool:
-    """Verify an OTS proof file via the Python fallback path."""
-    return _verify_ots_python(
-        ots_path,
-        allow_placeholder=allow_placeholder,
-        expected_artifact_sha=expected_artifact_sha,
-    ).ok
-
-
-def _validate_meta_sidecar_python(
-    meta_path: Path,
-    repo_root: Path,
-    day_artifact: Path,
-    ots_path: Path,
-) -> _PythonOtsVerifyResult:
-    try:
-        meta = json.loads(meta_path.read_text(encoding="utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError):
-        return _PythonOtsVerifyResult(
-            ok=False,
-            status_name=STATUS_FAILED,
-            reason="meta-parse-failed",
+    """Verify an OTS proof file via the public OTS boundary."""
+    return bool(
+        verify_ots_proof(
+            ots_path,
+            allow_placeholder=allow_placeholder,
+            expected_artifact_sha=expected_artifact_sha,
         )
-    except OSError:
-        if not meta_path.exists():
-            return _PythonOtsVerifyResult(
-                ok=False,
-                status_name=STATUS_MISSING,
-                reason="meta-not-found",
-            )
-        return _PythonOtsVerifyResult(
-            ok=False,
-            status_name=STATUS_FAILED,
-            reason="meta-read-failed",
-        )
-
-    if not isinstance(meta, dict):
-        return _PythonOtsVerifyResult(
-            ok=False,
-            status_name=STATUS_FAILED,
-            reason="meta-missing-fields",
-        )
-
-    artifact_rel = meta.get("artifact")
-    meta_day = meta.get("day")
-    expected_sha = meta.get("artifact_sha256")
-    meta_ots_rel = meta.get("ots_proof")
-    if (
-        not isinstance(artifact_rel, str)
-        or not isinstance(meta_day, str)
-        or not meta_day
-        or not isinstance(expected_sha, str)
-        or not isinstance(meta_ots_rel, str)
-    ):
-        return _PythonOtsVerifyResult(
-            ok=False,
-            status_name=STATUS_FAILED,
-            reason="meta-missing-fields",
-        )
-    try:
-        expected_sha = normalize_hex64(expected_sha)
-    except ValueError:
-        return _PythonOtsVerifyResult(
-            ok=False,
-            status_name=STATUS_FAILED,
-            reason="meta-missing-fields",
-        )
-
-    resolved_artifact = (repo_root / artifact_rel).resolve()
-    if resolved_artifact != day_artifact.resolve():
-        return _PythonOtsVerifyResult(
-            ok=False,
-            status_name=STATUS_FAILED,
-            reason="meta-artifact-path-mismatch",
-        )
-
-    if meta_day != day_artifact.stem:
-        return _PythonOtsVerifyResult(
-            ok=False,
-            status_name=STATUS_FAILED,
-            reason="meta-day-mismatch",
-        )
-
-    if not day_artifact.exists():
-        return _PythonOtsVerifyResult(
-            ok=False,
-            status_name=STATUS_MISSING,
-            reason="meta-artifact-missing",
-        )
-
-    actual_sha = sha256_hex(day_artifact.read_bytes())
-    if actual_sha != expected_sha:
-        return _PythonOtsVerifyResult(
-            ok=False,
-            status_name=STATUS_FAILED,
-            reason="meta-artifact-hash-mismatch",
-        )
-
-    resolved_meta_ots = (repo_root / meta_ots_rel).resolve()
-    if resolved_meta_ots != ots_path.resolve():
-        return _PythonOtsVerifyResult(
-            ok=False,
-            status_name=STATUS_FAILED,
-            reason="meta-ots-path-mismatch",
-        )
-
-    if not ots_path.exists():
-        return _PythonOtsVerifyResult(
-            ok=False,
-            status_name=STATUS_MISSING,
-            reason="ots-proof-not-found",
-        )
-
-    return _PythonOtsVerifyResult(
-        ok=True,
-        status_name=STATUS_VERIFIED,
-        reason="meta-valid",
     )
 
 
@@ -583,22 +164,18 @@ def validate_meta_sidecar(
     day_artifact: Path,
     ots_path: Path,
 ) -> Any:
-    """Validate the OTS sidecar binding, preferring the native boundary."""
-    validate_fn = _native_attr(native_ots, "validate_meta_sidecar")
-    if validate_fn is not None:
-        try:  # pragma: no cover - exercised when Rust extension is available
-            return validate_fn(
-                str(meta_path.resolve()),
-                str(repo_root.resolve()),
-                str(day_artifact.resolve()),
-                str(ots_path.resolve()),
-            )
-        except (ImportError, RuntimeError, TypeError, ValueError) as e:
-            print(
-                f"[WARN] Rust ots meta validation failed, falling back to Python: {e}",
-                file=sys.stderr,
-            )
-    return _validate_meta_sidecar_python(meta_path, repo_root, day_artifact, ots_path)
+    """Validate the OTS sidecar binding through the public OTS boundary."""
+    try:  # pragma: no cover - exercised when Rust extension is available
+        return ots.validate_meta_sidecar(
+            str(meta_path.resolve()),
+            str(repo_root.resolve()),
+            str(day_artifact.resolve()),
+            str(ots_path.resolve()),
+        )
+    except (AttributeError, ImportError, RuntimeError, TypeError, ValueError) as exc:
+        raise RuntimeError(
+            "trackone_core native ots helper failed during meta validation"
+        ) from exc
 
 
 def _meta_failure_exit(reason: str) -> int:
@@ -644,8 +221,10 @@ def verify_tsa(tsr_path: Path, day_artifact: Path) -> bool:
             return False
         try:
             meta = json.loads(tsr_json.read_text(encoding="utf-8"))
-            day_hash = sha256_hex(day_artifact.read_bytes())
-            imprint = normalize_hex64(meta.get("message_imprint", "").replace(":", ""))
+            day_hash = ledger.sha256_hex(day_artifact.read_bytes())
+            imprint = ledger.normalize_hex64(
+                meta.get("message_imprint", "").replace(":", "")
+            )
             return imprint == day_hash  # type: ignore
         except (json.JSONDecodeError, OSError, ValueError):
             return False
@@ -857,8 +436,8 @@ def _validate_verification_manifest(
         declared_sha = artifact.get("sha256")
         if not isinstance(declared_sha, str):
             raise ValueError(f"manifest artifact missing sha256: {name}")
-        declared_sha = normalize_hex64(declared_sha)
-        actual_sha = sha256_hex(resolved.read_bytes())
+        declared_sha = ledger.normalize_hex64(declared_sha)
+        actual_sha = ledger.sha256_hex(resolved.read_bytes())
         if actual_sha != declared_sha:
             raise ValueError(
                 f"manifest artifact sha256 mismatch for {name}: expected {declared_sha}, got {actual_sha}"
@@ -997,7 +576,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ERROR: Invalid or missing 'merkle_root' in block header: {block_path}")
         return 1
     try:
-        recorded_root = normalize_hex64(recorded_root)
+        recorded_root = ledger.normalize_hex64(recorded_root)
     except ValueError:
         print(f"ERROR: Invalid or missing 'merkle_root' in block header: {block_path}")
         return 1
@@ -1107,16 +686,22 @@ def main(argv: list[str] | None = None) -> int:
 
         try:
             day_json_bytes = day_json_path.read_bytes()
-            canonicalize_fn = _native_attr(
-                native_ledger, "canonicalize_json_to_cbor_bytes"
+            canon = bytes(ledger.canonicalize_json_to_cbor_bytes(day_json_bytes))
+        except (AttributeError, ImportError):
+            print(
+                "ERROR: Failed to canonicalize day projection "
+                f"{day_json_path} into CBOR commitment bytes: "
+                "trackone_core native ledger helper is required for authoritative "
+                "verification paths. Build/install the native extension or run via tox."
             )
-            if canonicalize_fn is None:
-                raise RuntimeError(
-                    "trackone_core native ledger helper is required for authoritative "
-                    "verification paths. Build/install the native extension or run via tox."
-                )
-            canon = bytes(canonicalize_fn(day_json_bytes))
-        except (OSError, RuntimeError, TypeError, ValueError) as exc:
+            _emit(summary, args.json)
+            return 1
+        except (
+            OSError,
+            RuntimeError,
+            TypeError,
+            ValueError,
+        ) as exc:
             print(
                 f"ERROR: Failed to canonicalize day projection {day_json_path} into "
                 f"CBOR commitment bytes: {exc}"

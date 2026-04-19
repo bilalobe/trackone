@@ -42,14 +42,8 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Any, cast
 
-native_ledger: Any | None
-native_merkle: Any | None
-try:  # pragma: no cover - optional native authority
-    from trackone_core import ledger as native_ledger
-    from trackone_core import merkle as native_merkle
-except ImportError:  # pragma: no cover - extension not built/installed
-    native_ledger = None
-    native_merkle = None
+import trackone_core.ledger as ledger
+import trackone_core.merkle as merkle
 
 try:  # Support both package imports and direct script execution.
     from .schema_validation import (
@@ -65,24 +59,6 @@ except ImportError:  # pragma: no cover - fallback when run as a script
     )
 
 DATE_RX = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-
-
-def _require_native_merkle() -> Any:
-    if native_merkle is None:
-        raise RuntimeError(
-            "trackone_core native merkle helper is required for authoritative "
-            "commitment paths. Build/install the native extension or run via tox."
-        )
-    return native_merkle
-
-
-def _require_native_ledger() -> Any:
-    if native_ledger is None:
-        raise RuntimeError(
-            "trackone_core native ledger helper is required for authoritative "
-            "commitment paths. Build/install the native extension or run via tox."
-        )
-    return native_ledger
 
 
 def canonical_json(obj: Any) -> bytes:
@@ -111,13 +87,17 @@ def _h(x: bytes) -> bytes:
 
 def merkle_root_from_leaves(leaves: list[bytes]) -> tuple[str, list[str]]:
     """Return (root_hex, leaf_hexes) for canonicalized leaves."""
-    native_merkle = _require_native_merkle()
     try:  # pragma: no cover - exercised when Rust extension is available
         return cast(
             tuple[str, list[str]],
-            native_merkle.merkle_root_hex_and_leaf_hashes(leaves),
+            merkle.merkle_root_hex_and_leaf_hashes(leaves),
         )
-    except (ImportError, RuntimeError, TypeError, ValueError) as exc:
+    except (AttributeError, ImportError) as exc:
+        raise RuntimeError(
+            "trackone_core native merkle helper is required for authoritative "
+            "commitment paths. Build/install the native extension or run via tox."
+        ) from exc
+    except (RuntimeError, TypeError, ValueError) as exc:
         raise RuntimeError(
             "trackone_core native merkle helper failed during authoritative "
             "Merkle computation"
@@ -282,21 +262,24 @@ def main(argv: list[str] | None = None) -> int:
     root_hex: str | None = None
 
     try:  # pragma: no cover - exercised when Rust extension is available
-        native_ledger = _require_native_ledger()
-        if not hasattr(native_ledger, "build_day_v1_single_batch_cbor"):
-            raise RuntimeError(
-                "trackone_core native ledger helper is missing build_day_v1_single_batch_cbor"
-            )
         (
             header_json_bytes,
             day_blob,
             day_json_bytes,
-        ) = native_ledger.build_day_v1_single_batch_cbor(
+        ) = ledger.build_day_v1_single_batch_cbor(
             args.site, args.date, prev_root, batch_id, leaves
         )
         header_dict = json.loads(header_json_bytes)
         day_record = json.loads(day_json_bytes)
         root_hex = header_dict.get("merkle_root")
+    except (AttributeError, ImportError):
+        print(
+            "[ERROR] trackone_core native ledger helper is required for "
+            "authoritative commitment paths. Build/install the native extension "
+            "or run via tox.",
+            file=sys.stderr,
+        )
+        return 1
     except (
         RuntimeError,
         TypeError,

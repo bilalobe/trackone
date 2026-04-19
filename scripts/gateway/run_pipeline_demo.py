@@ -11,54 +11,16 @@ import shlex
 import shutil
 import subprocess
 import sys
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
 from trackone_core.constants import DEFAULT_INGEST_PROFILE
 from trackone_core.ledger import sha256_hex
-
-try:  # pragma: no cover - optional; may not be installed when run as a script
-    from trackone_core.release import (
-        DEFAULT_COMMITMENT_PROFILE_ID,
-        verification_bundle_from_summary,
-    )
-except ImportError:  # pragma: no cover - fallback for direct script execution
-    # Keep this in sync with trackone_core/release.py.
-    DEFAULT_COMMITMENT_PROFILE_ID = "trackone-canonical-cbor-v1"
-
-    def verification_bundle_from_summary(
-        verifier_summary: Mapping[str, Any] | None,
-        *,
-        disclosure_class: str = "A",
-        commitment_profile_id: str = DEFAULT_COMMITMENT_PROFILE_ID,
-    ) -> dict[str, Any]:
-        verification_bundle: dict[str, Any] = {
-            "disclosure_class": disclosure_class,
-            "commitment_profile_id": commitment_profile_id,
-            "checks_executed": [],
-            "checks_skipped": [],
-        }
-        if verifier_summary is None:
-            return verification_bundle
-
-        verification = verifier_summary.get("verification")
-        if isinstance(verification, Mapping):
-            cls = verification.get("disclosure_class")
-            prof = verification.get("commitment_profile_id")
-            if isinstance(cls, str) and cls:
-                verification_bundle["disclosure_class"] = cls
-            if isinstance(prof, str) and prof:
-                verification_bundle["commitment_profile_id"] = prof
-
-        checks_executed = verifier_summary.get("checks_executed")
-        checks_skipped = verifier_summary.get("checks_skipped")
-        if isinstance(checks_executed, list):
-            verification_bundle["checks_executed"] = checks_executed
-        if isinstance(checks_skipped, list):
-            verification_bundle["checks_skipped"] = checks_skipped
-        return verification_bundle
-
+from trackone_core.release import (
+    DEFAULT_COMMITMENT_PROFILE_ID,
+    verification_bundle_from_summary,
+)
 
 try:  # Support both package imports and direct script execution.
     from .anchoring_config import (
