@@ -54,18 +54,6 @@ def _run_ots(args: list[str]) -> subprocess.CompletedProcess[bytes]:
     return subprocess.run(args, check=True, env=env)  # nosec B603
 
 
-def _find_repo_root(path: Path) -> Path:
-    """Try to find the repository root by looking for pyproject.toml or .git.
-
-    Falls back to current working directory if not found.
-    """
-    cur = path.resolve()
-    for p in [cur] + list(cur.parents):
-        if (p / "pyproject.toml").exists() or (p / ".git").exists():
-            return p
-    return Path.cwd().resolve()
-
-
 def _ots_client_version() -> str | None:
     """Try to get the ots client version string if available."""
     import shutil
@@ -89,7 +77,7 @@ def _ots_client_version() -> str | None:
 
 def _write_meta_for_day(
     day: str,
-    day_bin_path: Path,
+    day_artifact_path: Path,
     ots_path: Path,
     meta_dir: Path,
 ) -> Path:
@@ -106,16 +94,16 @@ def _write_meta_for_day(
     )
 
     # Compute artifact sha256
-    artifact_bytes = day_bin_path.read_bytes()
+    artifact_bytes = day_artifact_path.read_bytes()
     artifact_sha = sha256(artifact_bytes).hexdigest()
 
     # Prefer repository-relative paths in metadata for portability. If the day
     # artifact lives outside the repository (common in unit tests with tmpdirs),
     # fall back to absolute paths to avoid breaking.
     try:
-        artifact_field = str(day_bin_path.relative_to(repo_root))
+        artifact_field = str(day_artifact_path.relative_to(repo_root))
     except ValueError:
-        artifact_field = str(day_bin_path.resolve())
+        artifact_field = str(day_artifact_path.resolve())
 
     try:
         ots_field = str(ots_path.relative_to(repo_root))
@@ -146,15 +134,15 @@ def _write_meta_for_day(
 
 
 def ots_stamp(
-    day_bin_path: Path,
+    day_artifact_path: Path,
     ots_path: Path,
     meta_dir: Path | None = None,
 ) -> None:
     """Stamp the day artifact using OpenTimestamps CLI, or write a placeholder if not available.
 
     Contract:
-    - Input: day_bin_path (Path to day artifact), ots_path (<artifact>.ots target path)
-    - Behavior: attempt `ots stamp <bin>`; on any failure, write placeholder proof.
+    - Input: day_artifact_path (Path to day artifact), ots_path (<artifact>.ots target path)
+    - Behavior: attempt `ots stamp <artifact>`; on any failure, write placeholder proof.
     - Additionally: write a metadata sidecar to `meta_dir` (if provided) or next
       to the day artifact by default.
 
@@ -165,25 +153,27 @@ def ots_stamp(
     # Stationary stub mode: never call the real ots client.
     if os.environ.get("OTS_STATIONARY_STUB") == "1":
         if meta_dir is None:
-            meta_dir = day_bin_path.parent
+            meta_dir = day_artifact_path.parent
         meta_dir.mkdir(parents=True, exist_ok=True)
 
         # Use hex ASCII for the stationary stub so it is human-readable and
         # verifiable against the artifact_sha256 stored in the sidecar.
-        artifact_sha = sha256(day_bin_path.read_bytes()).hexdigest()
+        artifact_sha = sha256(day_artifact_path.read_bytes()).hexdigest()
         payload = f"STATIONARY-OTS:{artifact_sha}\n".encode()
         ots_path.write_bytes(payload)
 
-        _write_meta_for_day(day_bin_path.stem, day_bin_path, ots_path, meta_dir)
-        print(f"[stationary] Wrote OTS stub + meta for {day_bin_path.stem}")
+        _write_meta_for_day(
+            day_artifact_path.stem, day_artifact_path, ots_path, meta_dir
+        )
+        print(f"[stationary] Wrote OTS stub + meta for {day_artifact_path.stem}")
         return
 
     try:
         # Attempt to invoke the OTS client. Tests expect the plain command name here.
         # nosec B603
         # Reason: call is to a fixed executable name with local file argument; no shell.
-        _run_ots(["ots", "stamp", str(day_bin_path)])
-        # OTS client typically writes <bin>.ots; ensure something exists for downstream steps.
+        _run_ots(["ots", "stamp", str(day_artifact_path)])
+        # OTS client typically writes <artifact>.ots; ensure something exists for downstream steps.
         if not ots_path.exists():
             ots_path.write_text(OTS_PROOF_PLACEHOLDER, encoding="utf-8")
         else:
@@ -198,12 +188,14 @@ def ots_stamp(
         ots_path.write_text(OTS_PROOF_PLACEHOLDER, encoding="utf-8")
 
     if meta_dir is None:
-        meta_dir = day_bin_path.parent
+        meta_dir = day_artifact_path.parent
 
     # Write sidecar meta file
-    day_label = day_bin_path.stem
+    day_label = day_artifact_path.stem
     try:
-        meta_path = _write_meta_for_day(day_label, day_bin_path, ots_path, meta_dir)
+        meta_path = _write_meta_for_day(
+            day_label, day_artifact_path, ots_path, meta_dir
+        )
         print(f"Wrote OTS meta: {meta_path}")
     except OSError as exc:  # pragma: no cover - defensive
         print(f"[WARN] Failed to write OTS meta sidecar: {exc}")
@@ -214,9 +206,9 @@ def main(argv: list[str] | None = None) -> int:
         description="Anchor a day artifact using OpenTimestamps (OTS)"
     )
     p.add_argument(
-        "day_bin",
+        "day_artifact",
         type=Path,
-        help="Path to day/YYYY-MM-DD.cbor artifact (or legacy day blob)",
+        help="Path to day/YYYY-MM-DD.cbor artifact",
     )
     p.add_argument(
         "--meta-dir",
@@ -232,10 +224,10 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = p.parse_args(argv)
 
-    day_bin_path = args.day_bin
-    ots_path = day_bin_path.with_suffix(day_bin_path.suffix + ".ots")
+    day_artifact_path = args.day_artifact
+    ots_path = day_artifact_path.with_suffix(day_artifact_path.suffix + ".ots")
     meta_dir = args.meta_dir
-    ots_stamp(day_bin_path, ots_path, meta_dir=meta_dir)
+    ots_stamp(day_artifact_path, ots_path, meta_dir=meta_dir)
     return 0
 
 

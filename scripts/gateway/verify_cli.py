@@ -7,7 +7,6 @@ import argparse
 import json
 import shutil
 import subprocess  # nosec B404
-import sys
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any, cast
@@ -562,14 +561,6 @@ def main(argv: list[str] | None = None) -> int:
     _manifest_label, manifest_path, manifest_schema = manifest_candidates(day_dir, day)[
         0
     ]
-    legacy_day_artifact = day_dir / f"{day}.bin"
-    if not day_artifact.exists() and legacy_day_artifact.exists():
-        print(
-            "ERROR: legacy day artifact found at "
-            f"{legacy_day_artifact}; migrate it to canonical CBOR at {day_artifact}",
-            file=sys.stderr,
-        )
-        return 1
     ots_path = day_artifact.with_suffix(day_artifact.suffix + ".ots")
     recorded_root = block_header.get("merkle_root")
     if not isinstance(recorded_root, str):

@@ -21,6 +21,15 @@ from trackone_core.release import (
     DEFAULT_COMMITMENT_PROFILE_ID,
     verification_bundle_from_summary,
 )
+from trackone_core.verification import (
+    STATUS_FAILED,
+    STATUS_MISSING,
+    STATUS_PENDING,
+    STATUS_SKIPPED,
+    STATUS_VERIFIED,
+    portable_verifier_summary,
+    verification_channel,
+)
 
 try:  # Support both package imports and direct script execution.
     from .anchoring_config import (
@@ -66,12 +75,6 @@ DEFAULT_DEVICE_ID = "pod-003"
 DEFAULT_SITE = "an-001"
 DEFAULT_FRAME_COUNT = 7
 DEFAULT_FRAME_WINDOW = 64
-
-STATUS_VERIFIED = "verified"
-STATUS_FAILED = "failed"
-STATUS_MISSING = "missing"
-STATUS_PENDING = "pending"
-STATUS_SKIPPED = "skipped"
 
 
 def resolve_repo_path(path: Path | None) -> Path | None:
@@ -128,27 +131,6 @@ def clean_outputs(out_dir: Path, frames_file: Path, *, keep_existing: bool) -> N
 def ensure_dirs(*paths: Path) -> None:
     for path in paths:
         path.mkdir(parents=True, exist_ok=True)
-
-
-def _channel(enabled: bool, status: str, reason: str = "") -> dict[str, Any]:
-    return {"enabled": enabled, "status": status, "reason": reason}
-
-
-def _portable_verifier_summary(summary: dict[str, Any]) -> dict[str, Any]:
-    portable: dict[str, Any] = {}
-    for key in (
-        "policy",
-        "verification",
-        "checks",
-        "checks_executed",
-        "checks_skipped",
-        "channels",
-        "overall",
-    ):
-        value = summary.get(key)
-        if value is not None:
-            portable[key] = json.loads(json.dumps(value))
-    return portable
 
 
 def artifact_manifest(
@@ -223,7 +205,7 @@ def artifact_manifest(
         "verification_bundle": verification_bundle,
     }
     if verifier_summary is not None:
-        manifest["verifier"] = _portable_verifier_summary(verifier_summary)
+        manifest["verifier"] = portable_verifier_summary(verifier_summary)
     verify_schema = load_schema("verify_manifest")
     if verify_schema is not None:
         require_schema_validation("pipeline verification-manifest validation")
@@ -524,13 +506,13 @@ def main() -> None:
     _set_ots_calendars(cfg)
 
     channels: dict[str, dict[str, Any]] = {
-        "ots": _channel(
+        "ots": verification_channel(
             cfg.ots.enabled and not args.skip_ots, STATUS_SKIPPED, "disabled"
         ),
-        "tsa": _channel(
+        "tsa": verification_channel(
             cfg.tsa.enabled and not args.skip_tsa, STATUS_SKIPPED, "disabled"
         ),
-        "peers": _channel(
+        "peers": verification_channel(
             cfg.peers.enabled and not args.skip_peers, STATUS_SKIPPED, "disabled"
         ),
     }
@@ -630,9 +612,11 @@ def main() -> None:
                 [sys.executable, str(gateway_dir / "ots_anchor.py"), str(day_cbor)],
                 cwd=REPO_ROOT,
             )
-            channels["ots"] = _channel(True, STATUS_PENDING, "proof-created")
+            channels["ots"] = verification_channel(
+                True, STATUS_PENDING, "proof-created"
+            )
         except subprocess.CalledProcessError as exc:
-            channels["ots"] = _channel(
+            channels["ots"] = verification_channel(
                 True, STATUS_FAILED, f"ots-stamp-error:{exc.returncode}"
             )
             if strict_mode:
@@ -651,7 +635,9 @@ def main() -> None:
         )
         tsa_strict = args.tsa_strict or strict_mode
         if not tsa_url:
-            channels["tsa"] = _channel(True, STATUS_MISSING, "tsa-url-not-configured")
+            channels["tsa"] = verification_channel(
+                True, STATUS_MISSING, "tsa-url-not-configured"
+            )
             if tsa_strict:
                 raise RuntimeError("TSA enabled under strict policy but URL is missing")
         else:
@@ -673,7 +659,7 @@ def main() -> None:
                     "tsa_meta": tsa_result.tsr_json,
                 }
                 status = STATUS_VERIFIED if tsa_result.verified else STATUS_PENDING
-                channels["tsa"] = _channel(True, status, "tsa-stamp-ok")
+                channels["tsa"] = verification_channel(True, status, "tsa-stamp-ok")
                 print(
                     f"[pipeline] TSA response stored: {rel(tsa_result.tsr)} (verified={tsa_result.verified})"
                 )
@@ -681,7 +667,9 @@ def main() -> None:
                 TsaStampError,
                 subprocess.CalledProcessError,
             ) as exc:
-                channels["tsa"] = _channel(True, STATUS_FAILED, f"tsa-error:{exc}")
+                channels["tsa"] = verification_channel(
+                    True, STATUS_FAILED, f"tsa-error:{exc}"
+                )
                 if tsa_strict:
                     raise RuntimeError(
                         "TSA anchoring failed under strict policy"
@@ -697,7 +685,9 @@ def main() -> None:
         )
         peers_strict = args.peers_strict or strict_mode
         if peer_config_path is None or not peer_config_path.exists():
-            channels["peers"] = _channel(True, STATUS_MISSING, "peer-config-not-found")
+            channels["peers"] = verification_channel(
+                True, STATUS_MISSING, "peer-config-not-found"
+            )
             if peers_strict:
                 raise RuntimeError(
                     "Peers enabled under strict policy but peer config is missing"
@@ -723,7 +713,7 @@ def main() -> None:
                     context=cfg.peers.context.encode(),
                 )
                 peer_attest_path = result.path
-                channels["peers"] = _channel(
+                channels["peers"] = verification_channel(
                     True, STATUS_VERIFIED, "peer-signatures-collected"
                 )
                 print(
@@ -735,7 +725,9 @@ def main() -> None:
                 RuntimeError,
                 ValueError,
             ) as exc:
-                channels["peers"] = _channel(True, STATUS_FAILED, f"peer-error:{exc}")
+                channels["peers"] = verification_channel(
+                    True, STATUS_FAILED, f"peer-error:{exc}"
+                )
                 if peers_strict:
                     raise RuntimeError(
                         "Peer attestation failed under strict policy"
