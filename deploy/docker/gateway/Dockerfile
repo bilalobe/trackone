@@ -37,15 +37,15 @@ FROM python:3.12-slim
 WORKDIR /app
 
 # Runtime deps for a small HTTP server.
-COPY docker/gateway/requirements.txt /app/requirements.txt
+COPY deploy/docker/gateway/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
 # Install the extension module into Python's site-packages.
-COPY trackone_core /usr/local/lib/python3.12/site-packages/trackone_core
+COPY src/trackone_core /usr/local/lib/python3.12/site-packages/trackone_core
 COPY --from=builder /workspace/trackone_core/_native*.so /usr/local/lib/python3.12/site-packages/trackone_core/
 
-COPY docker/gateway/server.py /app/server.py
-COPY docker/gateway/entrypoint.sh /app/entrypoint.sh
+COPY deploy/docker/gateway/server.py /app/server.py
+COPY deploy/docker/gateway/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
 EXPOSE 8080
