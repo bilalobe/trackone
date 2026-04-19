@@ -5,13 +5,14 @@ TrackOne is an alpha-stage telemetry and verification workspace for low-power de
 The repository combines:
 
 - Python tooling for gateway, verification, and demo/pipeline flows
-- Rust workspace crates for shared protocol, ledger, gateway bindings, and pod firmware helpers
+- Rust workspace crates for shared protocol, ingest, ledger, gateway bindings, and pod firmware helpers
 - Machine-readable contract artifacts, conformance vectors, and example statements under `toolset/`
 - Helm packaging for Kubernetes deployment
 - Release automation for crates, wheels, and chart artifacts
 
 [![crates.io](https://img.shields.io/crates/v/trackone-core)](https://crates.io/crates/trackone-core)
 [![crates.io](https://img.shields.io/crates/v/trackone-constants)](https://crates.io/crates/trackone-constants)
+[![crates.io](https://img.shields.io/crates/v/trackone-ingest)](https://crates.io/crates/trackone-ingest)
 [![crates.io](https://img.shields.io/crates/v/trackone-gateway)](https://crates.io/crates/trackone-gateway)
 [![crates.io](https://img.shields.io/crates/v/trackone-pod-fw)](https://crates.io/crates/trackone-pod-fw)
 [![crates.io](https://img.shields.io/crates/v/trackone-ledger)](https://crates.io/crates/trackone-ledger)
@@ -42,6 +43,7 @@ At a high level, the repo covers:
 ├── crates/                  # Rust workspace crates
 │   ├── trackone-core
 │   ├── trackone-constants
+│   ├── trackone-ingest
 │   ├── trackone-ledger
 │   ├── trackone-gateway
 │   └── trackone-pod-fw
@@ -60,8 +62,9 @@ At a high level, the repo covers:
 
 ### Rust workspace crates
 
-- `trackone-core` — core protocol, framing, bounded types, and shared invariants
+- `trackone-core` — core protocol types, crypto-facing traits, and shared invariants
 - `trackone-constants` — shared constants used across crates
+- `trackone-ingest` — framed Postcard ingest, replay, fixtures, and pod emission helpers
 - `trackone-ledger` — canonicalization and deterministic ledger/commitment helpers
 - `trackone-gateway` — PyO3-backed Rust gateway crate exposed to Python
 - `trackone-pod-fw` — firmware-side helpers for pod integration
@@ -245,8 +248,8 @@ For detailed chart configuration and deployment options, see [`deploy/helm/track
 
 End-to-end (see `scripts/gateway/run_pipeline_demo.py`):
 
-1. Pod simulator emits framed telemetry (`pod_sim.py --framed`).
-1. Gateway verifies frames, enforces replay window, emits canonical facts (`frame_verifier.py`).
+1. A Rust producer emits postcard framed telemetry (`rust-postcard-v1`).
+1. Gateway verifies frames through native Rust admission, enforces replay window, and projects accepted frames into canonical facts (`frame_verifier.py`).
 1. Gateway derives a read-only SensorThings projection from the verified fact set (`sensorthings_projection.py`).
 1. Facts are batched into a daily Merkle tree and persisted with headers (`merkle_batcher.py`).
 1. Day blob is anchored with OpenTimestamps (`ots_anchor.py`).
@@ -254,7 +257,7 @@ End-to-end (see `scripts/gateway/run_pipeline_demo.py`):
 
 Outputs live under `out/site_demo/` by default:
 
-- `facts/` — authoritative CBOR facts plus JSON projections
+- `facts/` — authoritative canonical CBOR facts plus JSON projections
 - `blocks/` — block headers that record the authoritative daily Merkle root
 - `day/` — the day evidence set / anchoring set for the run
 - `day/YYYY-MM-DD.cbor` — the authoritative day blob
@@ -269,6 +272,11 @@ For a Git-published evidence set, keep:
 
 - `facts/`, `blocks/`, `day/`, `provisioning/authoritative-input.json`, `provisioning/records.json`, `sensorthings/`, and the verification manifest
 - `frames.ndjson` only when raw framed input disclosure is intended for that bundle
+
+The supported framed ingest profile is `rust-postcard-v1`. The verifier-facing
+public authority is the post-projection deterministic CBOR commitment profile,
+`trackone-canonical-cbor-v1`; JSON files are projections for inspection and
+tooling.
 
 Do not publish workspace/runtime residue:
 
