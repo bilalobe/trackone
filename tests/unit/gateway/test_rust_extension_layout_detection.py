@@ -61,11 +61,17 @@ def _ensure_fake_pynacl(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.parametrize(
-    "script_mod",
-    ["scripts.gateway.merkle_batcher", "scripts.gateway.verify_cli"],
+    ("script_mod", "native_names"),
+    [
+        ("scripts.gateway.merkle_batcher", ("native_merkle", "native_ledger")),
+        (
+            "scripts.gateway.verify_cli",
+            ("native_merkle", "native_ledger", "native_ots"),
+        ),
+    ],
 )
-def test_packaged_layout_prefers_trackone_core_native_submodule(
-    monkeypatch: pytest.MonkeyPatch, script_mod: str
+def test_packaged_layout_prefers_trackone_core_public_shims(
+    monkeypatch: pytest.MonkeyPatch, script_mod: str, native_names: tuple[str, ...]
 ) -> None:
     _ensure_fake_pynacl(monkeypatch)
     _clear_modules("trackone_core")
@@ -74,6 +80,7 @@ def test_packaged_layout_prefers_trackone_core_native_submodule(
     native = MagicMock()
     native.merkle = MagicMock(name="merkle")
     native.ledger = MagicMock(name="ledger")
+    native.ots = MagicMock(name="ots")
     monkeypatch.setitem(sys.modules, "trackone_core._native", native)
 
     # Import the real package from the checkout; it will pick up our mocked _native.
@@ -83,5 +90,14 @@ def test_packaged_layout_prefers_trackone_core_native_submodule(
     m = importlib.import_module(script_mod)
     m = importlib.reload(m)
 
-    assert m._RUST_MERKLE is native.merkle
-    assert m._RUST_LEDGER is native.ledger
+    merkle_mod = importlib.import_module("trackone_core.merkle")
+    ledger_mod = importlib.import_module("trackone_core.ledger")
+    ots_mod = importlib.import_module("trackone_core.ots")
+
+    for attr in native_names:
+        if attr == "native_ots":
+            assert getattr(m, attr) is ots_mod
+        elif attr == "native_merkle":
+            assert getattr(m, attr) is merkle_mod
+        elif attr == "native_ledger":
+            assert getattr(m, attr) is ledger_mod

@@ -2,6 +2,7 @@
 """
 Edge cases for merkle_batcher (moved from test_edge_cases.py)
 """
+
 from __future__ import annotations
 
 import contextlib
@@ -160,7 +161,7 @@ class TestMerkleBatcherEdgeCases:
         fact_stem.with_suffix(".cbor").write_bytes(canonicalize_obj_to_cbor(fact_obj))
         fact_stem.with_suffix(".json").write_text(json.dumps(fact_obj))
 
-        monkeypatch.setattr(merkle_batcher, "_RUST_LEDGER", None)
+        monkeypatch.setattr(merkle_batcher, "native_ledger", None)
 
         stderr = io.StringIO()
         with contextlib.redirect_stderr(stderr):

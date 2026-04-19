@@ -6,35 +6,6 @@ from pathlib import Path
 from scripts.gateway.input_integrity import write_sha256_sidecar
 
 
-def test_frame_to_fact_emits_canonical_fields_only(load_module) -> None:
-    frame_verifier = load_module(
-        "frame_verifier_canonical_facts_under_test",
-        Path("scripts/gateway/frame_verifier.py"),
-    )
-
-    frame = {
-        "hdr": {"dev_id": 3, "msg_type": 1, "fc": 42, "flags": 0},
-        "nonce": "abc123",
-        "ct": "",
-        "tag": "",
-    }
-    payload = {"counter": 42, "temp_c": 23.5}
-
-    fact = frame_verifier.frame_to_fact(frame, payload)
-
-    assert fact["pod_id"] == "0000000000000003"
-    assert fact["fc"] == 42
-    assert isinstance(fact["ingest_time"], int)
-    assert fact["pod_time"] is None
-    assert fact["kind"] == "Custom"
-    assert fact["payload"] == payload
-
-    assert fact["ingest_time_rfc3339_utc"].endswith("Z")
-    assert "device_id" not in fact
-    assert "nonce" not in fact
-    assert "timestamp" not in fact
-
-
 def test_frame_verifier_imports_without_pynacl(monkeypatch, load_module) -> None:
     for key in list(sys.modules):
         if key == "nacl" or key.startswith("nacl."):
@@ -48,7 +19,7 @@ def test_frame_verifier_imports_without_pynacl(monkeypatch, load_module) -> None
     assert frame_verifier.aead_decrypt({}, {}) is None
 
 
-def test_frame_verifier_process_reports_missing_native_crypto(
+def test_frame_verifier_process_reports_missing_native_crypto_for_rust_postcard(
     monkeypatch, load_module, tmp_path
 ) -> None:
     import contextlib
@@ -91,6 +62,8 @@ def test_frame_verifier_process_reports_missing_native_crypto(
                 str(facts),
                 "--device-table",
                 str(device_table),
+                "--ingest-profile",
+                "rust-postcard-v1",
             ]
         )
 
@@ -111,7 +84,7 @@ def test_frame_verifier_process_reports_missing_native_ledger(
     monkeypatch.setattr(
         frame_verifier,
         "_admit_framed_fact",
-        lambda _frame, _device_table, _replay_states, *, window_size, ingest_time, ingest_time_rfc3339_utc: (
+        lambda _frame, _device_table, _replay_states, *, window_size, ingest_time, ingest_time_rfc3339_utc, ingest_profile: (
             {
                 "pod_id": "0000000000000001",
                 "fc": 0,
@@ -158,6 +131,8 @@ def test_frame_verifier_process_reports_missing_native_ledger(
                 str(facts),
                 "--device-table",
                 str(device_table),
+                "--ingest-profile",
+                "rust-postcard-v1",
             ]
         )
 

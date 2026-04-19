@@ -2,6 +2,7 @@
 """
 Edge cases for verify_cli (moved from test_edge_cases.py)
 """
+
 from __future__ import annotations
 
 import contextlib
@@ -96,7 +97,7 @@ class TestVerifyCliEdgeCases:
         assert result == 1
 
     def test_verify_merkle_root_requires_native_merkle(self, monkeypatch, verify_cli):
-        monkeypatch.setattr(verify_cli, "_RUST_MERKLE", None)
+        monkeypatch.setattr(verify_cli, "native_merkle", None)
         with pytest.raises(
             RuntimeError, match="trackone_core native merkle helper is required"
         ):
@@ -161,7 +162,7 @@ class TestVerifyCliEdgeCases:
             encoding="utf-8",
         )
 
-        monkeypatch.setattr(verify_cli, "_RUST_LEDGER", None)
+        monkeypatch.setattr(verify_cli, "native_ledger", None)
         stdout = io.StringIO()
         with contextlib.redirect_stdout(stdout):
             result = verify_cli.main(["--root", str(root), "--facts", str(facts_dir)])
@@ -210,7 +211,7 @@ class TestVerifyCliEdgeCases:
             def canonicalize_json_to_cbor_bytes(_input_bytes):
                 return day_cbor
 
-        monkeypatch.setattr(verify_cli, "_RUST_LEDGER", _FakeLedger())
+        monkeypatch.setattr(verify_cli, "native_ledger", _FakeLedger())
 
         def _raise_merkle(_leaves):
             raise RuntimeError("native merkle unavailable")

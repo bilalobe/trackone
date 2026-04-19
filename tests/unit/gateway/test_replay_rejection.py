@@ -2,6 +2,7 @@
 """
 Tests for replay window rejection cases (moved from test_replay_edges.py)
 """
+
 from __future__ import annotations
 
 import json
@@ -33,27 +34,8 @@ class TestReplayWindowRejection:
         dt["101"]["highest_fc_seen"] = 0
         write_device_table(temp_dirs["device_table"], dt)
 
-        import subprocess
-        import sys
-
         frames65 = temp_dirs["root"] / "frames65.ndjson"
-        subprocess.run(
-            [
-                sys.executable,
-                "scripts/pod_sim/pod_sim.py",
-                "--device-id",
-                "pod-101",
-                "--count",
-                "66",  # fc 0..65
-                "--framed",
-                "--out",
-                str(frames65),
-                "--device-table",
-                str(temp_dirs["device_table"]),
-            ],
-            check=True,
-            capture_output=True,
-        )
+        write_frames("pod-101", 66, frames65, None, temp_dirs["device_table"])
 
         lines = frames65.read_text().strip().splitlines()
         assert len(lines) == 66

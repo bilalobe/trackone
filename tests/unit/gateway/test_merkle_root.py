@@ -2,6 +2,7 @@
 """
 Merkle root edge case tests (moved from test_edge_cases.py)
 """
+
 from __future__ import annotations
 
 import pytest
@@ -50,7 +51,7 @@ class TestMerkleRootEdgeCases:
         assert len(hashes) == 5
 
     def test_merkle_root_requires_native_merkle(self, monkeypatch, merkle_batcher):
-        monkeypatch.setattr(merkle_batcher, "_RUST_MERKLE", None)
+        monkeypatch.setattr(merkle_batcher, "native_merkle", None)
         with pytest.raises(
             RuntimeError, match="trackone_core native merkle helper is required"
         ):

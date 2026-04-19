@@ -2,6 +2,7 @@
 """
 Tests for replay window acceptance cases (moved from test_replay_edges.py)
 """
+
 from __future__ import annotations
 
 import json
@@ -30,28 +31,8 @@ class TestReplayWindowAcceptance:
         assert frame_verifier.process(args) == 0
         assert len(list(temp_dirs["facts"].glob("*.json"))) == 1
 
-        # Produce frames with fc=0..64 in a single run and pick the last (fc=64)
-        import subprocess
-        import sys
-
         frames64 = temp_dirs["root"] / "frames64.ndjson"
-        subprocess.run(
-            [
-                sys.executable,
-                "scripts/pod_sim/pod_sim.py",
-                "--device-id",
-                "pod-100",
-                "--count",
-                "65",  # fc 0..64
-                "--framed",
-                "--out",
-                str(frames64),
-                "--device-table",
-                str(temp_dirs["device_table"]),
-            ],
-            check=True,
-            capture_output=True,
-        )
+        write_frames("pod-100", 65, frames64, None, temp_dirs["device_table"])
 
         # Last frame should be fc=64
         lines = frames64.read_text().strip().splitlines()
