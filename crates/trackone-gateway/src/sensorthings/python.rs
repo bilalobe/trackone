@@ -1,6 +1,6 @@
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
-use pyo3::types::{PyBool, PyDict, PyModule, PyTuple};
+use pyo3::types::{PyBool, PyDict, PyList, PyModule, PyString, PyTuple};
 use serde_json::{Map, Number, Value};
 
 use super::ids::{SensorThingsEntityKind, entity_id as native_entity_id};
@@ -43,10 +43,24 @@ fn py_to_json_value(value: &Bound<'_, PyAny>) -> PyResult<Value> {
         }
         return Ok(Value::Object(out));
     }
-    if let Ok(iter) = value.try_iter() {
+    // Handle str explicitly before any iterable check: Python strings are iterable and
+    // try_iter() would otherwise convert them to arrays of single characters.
+    if let Ok(s) = value.cast::<PyString>() {
+        return Ok(Value::String(s.to_str()?.to_owned()));
+    }
+    // Use concrete sequence types instead of a generic try_iter() to avoid
+    // accidentally treating other iterable objects (e.g. generators) as arrays.
+    if let Ok(list) = value.cast::<PyList>() {
         let mut items = Vec::new();
-        for item in iter {
-            items.push(py_to_json_value(&item?)?);
+        for item in list.iter() {
+            items.push(py_to_json_value(&item)?);
+        }
+        return Ok(Value::Array(items));
+    }
+    if let Ok(tuple) = value.cast::<PyTuple>() {
+        let mut items = Vec::new();
+        for item in tuple.iter() {
+            items.push(py_to_json_value(&item)?);
         }
         return Ok(Value::Array(items));
     }
@@ -60,9 +74,6 @@ fn py_to_json_value(value: &Bound<'_, PyAny>) -> PyResult<Value> {
         let number = Number::from_f64(f)
             .ok_or_else(|| PyValueError::new_err("non-finite float not allowed"))?;
         return Ok(Value::Number(number));
-    }
-    if let Ok(s) = value.extract::<String>() {
-        return Ok(Value::String(s));
     }
     Err(PyValueError::new_err(
         "unsupported structured SensorThings result value",
