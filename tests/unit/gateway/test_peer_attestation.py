@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 """Unit tests for peer attestation helper."""
+
 from __future__ import annotations
 
 import json
 from pathlib import Path
 
 import pytest
+
+pytest.importorskip("nacl")
+
 from nacl.encoding import HexEncoder
 from nacl.signing import SigningKey
 
