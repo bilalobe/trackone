@@ -43,6 +43,9 @@ pub const DISCLOSURE_CLASS_ANCHOR_ONLY_LABEL: &str = "anchor-only-evidence";
 /// Active ingest profile identifier for the Rust-native Postcard wire format.
 pub const INGEST_PROFILE_RUST_POSTCARD_V1: &str = "rust-postcard-v1";
 
+/// Message type used by the current Rust-native framed fact path.
+pub const FRAMED_FACT_MSG_TYPE: u8 = 1;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -59,5 +62,7 @@ mod tests {
         assert_eq!(DISCLOSURE_CLASS_PUBLIC_RECOMPUTE_LABEL, "public-recompute");
         assert_eq!(DISCLOSURE_CLASS_PARTNER_AUDIT_LABEL, "partner-audit");
         assert_eq!(DISCLOSURE_CLASS_ANCHOR_ONLY_LABEL, "anchor-only-evidence");
+        assert_eq!(INGEST_PROFILE_RUST_POSTCARD_V1, "rust-postcard-v1");
+        assert_eq!(FRAMED_FACT_MSG_TYPE, 1);
     }
 }
