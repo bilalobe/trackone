@@ -176,15 +176,23 @@ def verify_peer_signature(
     pubkey_hex: str,
     context: bytes = DEFAULT_CONTEXT,
 ) -> bool:
-    nacl_exceptions_mod, hex_encoder, _, verify_key_cls = _require_pynacl()
-    verify_key = verify_key_cls(pubkey_hex, encoder=hex_encoder)
+    try:
+        from nacl.encoding import HexEncoder
+        from nacl.exceptions import BadSignatureError
+        from nacl.signing import VerifyKey
+    except ImportError as exc:
+        raise PeerAttestationError(
+            "PyNaCl is required for peer attestation signature verification"
+        ) from exc
+
+    verify_key = VerifyKey(pubkey_hex, encoder=HexEncoder)
     try:
         verify_key.verify(
             attestation_message(site_id, day, day_root_hex, context),
             bytes.fromhex(signature_hex),
         )
         return True
-    except nacl_exceptions_mod.BadSignatureError:  # pragma: no cover
+    except BadSignatureError:  # pragma: no cover
         return False
 
 
