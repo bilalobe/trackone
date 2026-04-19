@@ -28,4 +28,12 @@ def __dir__() -> list[str]:
     return sorted(set(globals()).union(dir(_crypto)))
 
 
-__all__ = [n for n in dir(_crypto) if not n.startswith("_")] if _crypto else []
+_native_all = [n for n in dir(_crypto) if not n.startswith("_")] if _crypto else []
+__all__ = sorted(
+    set(_native_all)
+    | {
+        "DEFAULT_INGEST_PROFILE",
+        "INGEST_PROFILES",
+        "INGEST_PROFILE_RUST_POSTCARD_V1",
+    }
+)

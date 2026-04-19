@@ -15,6 +15,7 @@ from typing import Any
 # Importing the extension is optional for some workflows; callers that want it
 # should handle ImportError. The native extension may not be available if the
 # package was installed without building the Rust extension.
+from . import constants as constants  # noqa: F401
 from . import crypto as crypto  # noqa: F401
 from . import ledger as ledger  # noqa: F401
 from . import merkle as merkle  # noqa: F401
@@ -55,6 +56,7 @@ def __getattr__(name: str) -> Any:
 __all__ = [
     "__version__",
     "crypto",
+    "constants",
     "ledger",
     "merkle",
     "ots",
