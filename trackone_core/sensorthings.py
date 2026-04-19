@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from collections.abc import Iterable
 from datetime import UTC, datetime
 from typing import Any, cast
@@ -45,7 +46,9 @@ class SensorIdentityResolutionError(ProjectionError):
 
 def entity_id(kind: str, *components: str) -> str:
     if _native_sensorthings is not None and hasattr(_native_sensorthings, "entity_id"):
-        return cast(str, _native_sensorthings.entity_id(kind, *components))
+        native_id = _native_sensorthings.entity_id(kind, *components)
+        if isinstance(native_id, str):
+            return native_id
     digest = hashlib.sha256()
     digest.update(kind.encode("utf-8"))
     for component in components:
@@ -174,7 +177,7 @@ def build_bundle(
             observations.append(observation)
 
     observations.sort(key=lambda item: item["id"])
-    return {
+    bundle = {
         "generated_at_utc": generated_at_utc or datetime.now(UTC).isoformat(),
         "site_id": site_id,
         "projection_mode": "read_only_canonical_fact_json",
@@ -185,6 +188,14 @@ def build_bundle(
         ),
         "observations": observations,
     }
+    try:
+        json.dumps(bundle, allow_nan=False)
+    except (TypeError, ValueError) as exc:
+        raise ProjectionError(
+            "SensorThings projection bundle must contain only JSON-serializable "
+            "dict/list/scalar values"
+        ) from exc
+    return bundle
 
 
 def _project_env_payload(
@@ -270,30 +281,19 @@ def _project_via_python(
     result_time: str,
     scalar_value: float,
 ) -> dict[str, Any]:
-    if _native_sensorthings is not None and hasattr(
-        _native_sensorthings, "project_observation"
-    ):
-        try:
-            return cast(
-                dict[str, Any],
-                _native_sensorthings.project_observation(
-                    {
-                        "pod_id": device_id,
-                        "site_id": site_id,
-                        "sensor_key": sensor_key,
-                        "observed_property_key": observed_property_key,
-                        "stream_key": stream_key,
-                        "phenomenon_time_start_rfc3339_utc": phenomenon_time_start,
-                        "phenomenon_time_end_rfc3339_utc": phenomenon_time_end,
-                        "result_time_rfc3339_utc": result_time,
-                        "result": scalar_value,
-                    }
-                ),
-            )
-        except (RuntimeError, TypeError, ValueError) as exc:
-            raise ProjectionError(
-                "trackone_core native SensorThings helper failed during observation projection"
-            ) from exc
+    native_projection = _project_via_native(
+        device_id=device_id,
+        site_id=site_id,
+        sensor_key=sensor_key,
+        observed_property_key=observed_property_key,
+        stream_key=stream_key,
+        phenomenon_time_start=phenomenon_time_start,
+        phenomenon_time_end=phenomenon_time_end,
+        result_time=result_time,
+        scalar_value=scalar_value,
+    )
+    if native_projection is not None:
+        return native_projection
     thing_id = _entity_id("thing", device_id)
     sensor_id = _entity_id("sensor", device_id, sensor_key)
     observed_property_id = _entity_id("observed-property", observed_property_key)
@@ -338,6 +338,55 @@ def _project_via_python(
             "result": scalar_value,
         },
     }
+
+
+def _project_via_native(
+    *,
+    device_id: str,
+    site_id: str,
+    sensor_key: str,
+    observed_property_key: str,
+    stream_key: str,
+    phenomenon_time_start: str,
+    phenomenon_time_end: str,
+    result_time: str,
+    scalar_value: float,
+) -> dict[str, Any] | None:
+    if _native_sensorthings is None or not hasattr(
+        _native_sensorthings, "project_observation"
+    ):
+        return None
+    try:
+        projection = _native_sensorthings.project_observation(
+            {
+                "pod_id": device_id,
+                "site_id": site_id,
+                "sensor_key": sensor_key,
+                "observed_property_key": observed_property_key,
+                "stream_key": stream_key,
+                "phenomenon_time_start_rfc3339_utc": phenomenon_time_start,
+                "phenomenon_time_end_rfc3339_utc": phenomenon_time_end,
+                "result_time_rfc3339_utc": result_time,
+                "result": scalar_value,
+            }
+        )
+    except (RuntimeError, TypeError, ValueError) as exc:
+        raise ProjectionError(
+            "trackone_core native SensorThings helper failed during observation projection"
+        ) from exc
+    if not _is_json_object(projection):
+        return None
+    try:
+        json.dumps(projection, allow_nan=False)
+    except (TypeError, ValueError):
+        return None
+    return cast(dict[str, Any], projection)
+
+
+def _is_json_object(value: Any) -> bool:
+    if not isinstance(value, dict):
+        return False
+    return all(isinstance(key, str) for key in value)
 
 
 def _payload_from_fact(fact: dict[str, Any]) -> dict[str, Any] | None:
