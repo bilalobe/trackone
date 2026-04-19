@@ -56,9 +56,13 @@ pub fn hex_lower(bytes: &[u8]) -> String {
     out
 }
 
+pub fn sha256_digest(data: &[u8]) -> [u8; 32] {
+    Sha256::digest(data).into()
+}
+
 pub fn sha256_hex(data: &[u8]) -> String {
-    let digest = Sha256::digest(data);
-    hex_lower(digest.as_ref())
+    let digest = sha256_digest(data);
+    hex_lower(&digest)
 }
 
 pub fn normalize_hex64(value: &str) -> Result<String> {
