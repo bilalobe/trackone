@@ -2,7 +2,7 @@
 
 **Status**: Accepted
 **Date**: 2025-10-06
-**Updated**: 2026-02-25
+**Updated**: 2026-04-18
 
 ## Context
 
@@ -16,6 +16,16 @@
 - **Frame type:** Compact binary record with fixed header + AEAD payload
 - **Endianness:** Network byte order (big‑endian) for integers
 - **AAD (associated data):** `dev_id || msg_type` (2 B + 1 B)
+- **Current nonce layout:** XChaCha20-Poly1305 nonce bytes are
+  `salt8 || fc64_be || tail8`. `salt8` is provisioned per device, `fc64_be`
+  binds the frame counter into the nonce, and `tail8` remains producer-specific
+  uniqueness material.
+- **Profile boundary:** the supported AEAD plaintext profile is
+  `rust-postcard-v1`: a postcard-encoded `trackone-core::Fact` decoded by the
+  native Rust gateway boundary.
+- **Commitment boundary:** Postcard is not the public interoperability
+  contract. Accepted frames are projected into canonical facts, then committed
+  as deterministic CBOR under `trackone-canonical-cbor-v1`.
 
 ### M#2 Implementation Note (Test Harness)
 
@@ -41,18 +51,17 @@ production.
   - `msg_type`: u8 (0=telemetry, 1=alert, 2=ack, 3=cfg_ack)
   - `fc`: u32 (frame counter)
   - `flags`: u8 (bitfield; e.g., low_power, flood, anomaly)
-  - `payload_ct`: 16–24 B ciphertext (variable, compact TLV inside)
+  - `payload_ct`: ciphertext carrying postcard `Fact` plaintext
   - `tag`: 16 B (Poly1305)
   - **Total typical:** 2 + 1 + 4 + 1 + (16–24) + 16 = 40–48 B
 
 ## Payload (inside AEAD)
 
-- Minimal TLV to keep evolvable:
-  - t=0x01: counter (u32)
-  - t=0x02: bioimpedance\*100 (u16)
-  - t=0x03: temp_c\*100 (i16)
-  - t=0x07: status_flags (u8)
-- Gateway decodes TLV into a Fact; schema defined in `fact.schema.json`
+- `rust-postcard-v1`: Postcard-encoded `trackone-core::Fact` for the Rust
+  pod/native path.
+- Gateway admission projects accepted postcard facts into the canonical fact
+  shape. The authoritative commitment bytes are the resulting `.cbor`
+  artifacts, not the AEAD plaintext representation.
 
 ## Replay Policy
 
@@ -62,8 +71,10 @@ production.
   - `salt4`/`salt8` for nonce reconstruction
   - `ck_up` (32-byte AEAD key)
 - On receipt:
-  1. Rebuild nonce from stored salt, fc from header, rand from frame
+  1. Validate nonce prefix/counter against stored salt and header frame counter
   1. Verify AEAD with AAD = `dev_id || msg_type`; if fails → drop
+  1. Decode the selected plaintext profile; if profile semantics conflict with
+     the frame header → drop
   1. Check replay window; if duplicate or outside window → drop and log
   1. If accepted → update `highest_fc_seen`, persist device_table
 - **FC rollback handling:**
@@ -86,15 +97,19 @@ production.
 
 ## Rationale
 
-- Compact header keeps overhead low; TLV payload allows adding fields without breaking parsers.
+- Compact header keeps overhead low; native Rust postcard admission avoids
+  re-defining protocol semantics independently in Python and Rust.
 - 96-bit nonce (M#2) or 192-bit nonce (production) balances determinism (replay defense) and entropy.
 - Windowed acceptance tolerates reordering and brief disconnects without keeping unbounded history.
+- The deterministic CBOR boundary keeps public commitments stable while allowing
+  transport/plaintext encodings to migrate.
 
 ## Testing (M#2 Implemented)
 
 - Deterministic AEAD vectors with fixed key/nonce/AAD and known ct/tag
 - Replay window edge cases: accept at +64, reject at +65, duplicate rejection across restart
-- TLV property-based fuzzing with Hypothesis for robustness
+- Postcard framed-admission regression tests for AAD, nonce, replay, and
+  canonical fact projection
 - Tamper resistance: modified ct/tag/AAD/nonce-length all rejected
 
 ## Operational Notes
