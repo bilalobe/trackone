@@ -14,6 +14,8 @@ import json
 from base64 import b64decode, b64encode
 from pathlib import Path
 
+MAX_OVERSIZED_CIPHERTEXT_BYTES = 257
+
 
 def verify_frames(frames: Path, facts: Path, device_table: Path, frame_verifier) -> int:
     """Helper to run frame verification with standard arguments."""
@@ -150,9 +152,7 @@ class TestTamper:
         write_frames("pod-016", 1, temp_dirs["frames"], temp_dirs["device_table"])
 
         f = json.loads(temp_dirs["frames"].read_text().strip())
-        f["ct"] = b64encode(b"\x00" * (frame_verifier.MAX_CIPHERTEXT_BYTES + 1)).decode(
-            "ascii"
-        )
+        f["ct"] = b64encode(b"\x00" * MAX_OVERSIZED_CIPHERTEXT_BYTES).decode("ascii")
         write_frame_json(temp_dirs["frames"], f)
 
         rc = verify_frames(
