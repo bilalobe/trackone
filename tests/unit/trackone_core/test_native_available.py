@@ -73,23 +73,25 @@ def test_crypto_validate_and_decrypt_framed_smoke() -> None:
             raise
         pytest.skip("trackone_core.crypto not importable")
 
-    frame = {
-        "hdr": {"dev_id": 3, "msg_type": 1, "fc": 0, "flags": 0},
-        "nonce": "0dPrkVqyrzwAAAAAAAAAAN8GlwmTN0eL",
-        "ct": "23gboJSYJiwhuJntomk=",
-        "tag": "e1a45uix1rwmceIwbu4HPQ==",
-    }
     device_entry = {
         "salt8": "0dPrkVqyrzw=",
         "ck_up": "2QmXC8Xl4WRwpgiVg53I8ymATIrlN8AM1DDinl/Z2VU=",
     }
+    frame = crypto.emit_rust_postcard_framed_fixture(
+        dev_id=3,
+        fc=0,
+        device_entry=device_entry,
+        msg_type=1,
+        flags=0,
+        pod_time=1_776_048_000,
+    )
     payload, reason = crypto.validate_and_decrypt_framed(frame, device_entry)
 
     assert reason is None
     assert isinstance(payload, dict)
-    assert payload["counter"] == 0
-    assert payload["bioimpedance"] == 98.61
-    assert payload["temp_c"] == 38.72
+    assert payload["Env"]["sample_type"] == "AmbientAirTemperature"
+    assert payload["Env"]["value"] == 20.0
+    assert payload["Env"]["phenomenon_time_start"] == 1_776_048_000
 
 
 def test_crypto_admit_framed_fact_smoke() -> None:
@@ -100,16 +102,18 @@ def test_crypto_admit_framed_fact_smoke() -> None:
             raise
         pytest.skip("trackone_core.crypto not importable")
 
-    frame = {
-        "hdr": {"dev_id": 3, "msg_type": 1, "fc": 0, "flags": 0},
-        "nonce": "0dPrkVqyrzwAAAAAAAAAAN8GlwmTN0eL",
-        "ct": "23gboJSYJiwhuJntomk=",
-        "tag": "e1a45uix1rwmceIwbu4HPQ==",
-    }
     device_entry = {
         "salt8": "0dPrkVqyrzw=",
         "ck_up": "2QmXC8Xl4WRwpgiVg53I8ymATIrlN8AM1DDinl/Z2VU=",
     }
+    frame = crypto.emit_rust_postcard_framed_fixture(
+        dev_id=3,
+        fc=0,
+        device_entry=device_entry,
+        msg_type=1,
+        flags=0,
+        pod_time=1_776_048_000,
+    )
     state = crypto.ReplayWindowState(window_size=64)
 
     fact, reason, source = crypto.admit_framed_fact(
@@ -125,6 +129,7 @@ def test_crypto_admit_framed_fact_smoke() -> None:
     assert isinstance(fact, dict)
     assert fact["pod_id"] == "0000000000000003"
     assert fact["fc"] == 0
-    assert fact["kind"] == "Custom"
-    assert fact["payload"]["counter"] == 0
+    assert fact["kind"] == "Env"
+    assert fact["payload"]["Env"]["sample_type"] == "AmbientAirTemperature"
+    assert fact["payload"]["Env"]["value"] == 20.0
     assert state.highest_fc_seen == 0

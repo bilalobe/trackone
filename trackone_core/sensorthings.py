@@ -5,7 +5,12 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Iterable
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
+
+try:
+    from ._native import sensorthings as _native_sensorthings
+except ImportError:
+    _native_sensorthings = None
 
 OBSERVED_PROPERTIES: dict[str, dict[str, str]] = {
     "temp_c": {
@@ -39,6 +44,8 @@ class SensorIdentityResolutionError(ProjectionError):
 
 
 def entity_id(kind: str, *components: str) -> str:
+    if _native_sensorthings is not None and hasattr(_native_sensorthings, "entity_id"):
+        return cast(str, _native_sensorthings.entity_id(kind, *components))
     digest = hashlib.sha256()
     digest.update(kind.encode("utf-8"))
     for component in components:
@@ -263,6 +270,30 @@ def _project_via_python(
     result_time: str,
     scalar_value: float,
 ) -> dict[str, Any]:
+    if _native_sensorthings is not None and hasattr(
+        _native_sensorthings, "project_observation"
+    ):
+        try:
+            return cast(
+                dict[str, Any],
+                _native_sensorthings.project_observation(
+                    {
+                        "pod_id": device_id,
+                        "site_id": site_id,
+                        "sensor_key": sensor_key,
+                        "observed_property_key": observed_property_key,
+                        "stream_key": stream_key,
+                        "phenomenon_time_start_rfc3339_utc": phenomenon_time_start,
+                        "phenomenon_time_end_rfc3339_utc": phenomenon_time_end,
+                        "result_time_rfc3339_utc": result_time,
+                        "result": scalar_value,
+                    }
+                ),
+            )
+        except (RuntimeError, TypeError, ValueError) as exc:
+            raise ProjectionError(
+                "trackone_core native SensorThings helper failed during observation projection"
+            ) from exc
     thing_id = _entity_id("thing", device_id)
     sensor_id = _entity_id("sensor", device_id, sensor_key)
     observed_property_id = _entity_id("observed-property", observed_property_key)
