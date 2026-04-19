@@ -41,6 +41,11 @@ from trackone_core.constants import (  # noqa: E402
     DEFAULT_INGEST_PROFILE,
     INGEST_PROFILES,
 )
+from trackone_core.constants import (  # noqa: E402
+    INGEST_PROFILE_RUST_POSTCARD_V1 as _INGEST_PROFILE_RUST_POSTCARD_V1,
+)
+
+INGEST_PROFILE_RUST_POSTCARD_V1 = _INGEST_PROFILE_RUST_POSTCARD_V1
 
 try:  # Support both package imports and direct script execution.
     from .canonical_cbor import canonicalize_obj_to_cbor_native
