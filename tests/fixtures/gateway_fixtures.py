@@ -7,6 +7,7 @@ verify_cli, ots_anchor, crypto_utils) via the centralized gateway_modules loader
 
 These fixtures replace the scattered module-specific loaders in various conftest.py files.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -16,7 +17,7 @@ import pytest
 def frame_verifier(gateway_modules):
     """Load frame_verifier module (module-scoped).
 
-    Provides frame verification and TLV decoding functionality.
+    Provides frame verification and Rust-authoritative postcard framed ingest.
     """
     module = gateway_modules.get("frame_verifier")
     if module is None:
@@ -77,7 +78,8 @@ def crypto_utils(gateway_modules):
 def pod_sim(load_module):
     """Load pod_sim module (module-scoped).
 
-    Provides fact generation, TLV encoding, device table management, and CLI functionality.
+    Provides reference fact generation, device table helpers, and CLI
+    functionality.
     """
     from pathlib import Path
 

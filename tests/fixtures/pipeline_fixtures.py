@@ -3,68 +3,53 @@
 Pipeline execution fixtures.
 
 Provides high-level fixtures for running pipeline components (merkle_batcher,
-verify_cli, OTS stamping, pod_sim) and full end-to-end workflows.
+verify_cli, OTS stamping, Rust framed fixture emission) and full end-to-end
+workflows.
 """
+
 from __future__ import annotations
 
-import subprocess
-import sys
 from pathlib import Path
 
 import pytest
 
+from scripts.gateway.rust_framed_fixture_emitter import emit_frames
+
 
 @pytest.fixture
 def write_frames():
-    """Run pod_sim to produce framed NDJSON output.
+    """Produce Rust-native postcard framed NDJSON output for tests."""
 
-    Returns a callable that invokes pod_sim.py with the specified parameters.
-    Supports both simple and complex usage patterns for unit and e2e tests.
-    """
-
-    def _write(device_id: str, count: int, out_path: Path, *maybe) -> None:
-        # Resolve flexible args for backward compatibility
-        device_table = None
-        facts_out = None
-        if len(maybe) == 1:
-            device_table = maybe[0]
-        elif len(maybe) >= 2:
-            if maybe[0] is None:
-                device_table = maybe[1]
-            else:
-                device_table = maybe[0]
-                facts_out = maybe[1]
-
-        # Normalize str -> Path
-        if isinstance(device_table, str):
-            device_table = Path(device_table)
-        if isinstance(facts_out, str):
-            facts_out = Path(facts_out)
-
-        out_path = Path(out_path)
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-
-        cmd = [
-            sys.executable,
-            "scripts/pod_sim/pod_sim.py",
-            "--device-id",
-            device_id,
-            "--count",
-            str(count),
-            "--framed",
-            "--out",
-            str(out_path),
-        ]
-
-        if device_table:
-            cmd += ["--device-table", str(device_table)]
-        if facts_out and (
-            device_table is None
-            or Path(facts_out).resolve() != Path(device_table).resolve()
-        ):
-            cmd += ["--facts-out", str(facts_out)]
-
-        subprocess.run(cmd, check=True)
+    def _write(
+        device_id: str,
+        count: int,
+        out_path: Path,
+        provisioning_input: Path | None = None,
+        device_table: Path | None = None,
+        *,
+        start_fc: int = 0,
+        site: str | None = None,
+    ) -> None:
+        # Backward-compatibility for older call sites that pass device_table as
+        # the fourth positional argument.
+        if device_table is None and provisioning_input is not None:
+            device_table = provisioning_input
+            provisioning_input = None
+        if device_table is None:
+            raise ValueError(
+                "device_table path is required for framed fixture emission"
+            )
+        emit_frames(
+            device_id=device_id,
+            count=count,
+            out_path=Path(out_path),
+            device_table_path=Path(device_table),
+            site_id=site,
+            provisioning_input_path=Path(provisioning_input)
+            if provisioning_input is not None
+            else None,
+            start_fc=start_fc,
+        )
 
     return _write
 
@@ -157,7 +142,7 @@ def run_pipeline(
     """Run the full end-to-end pipeline.
 
     Returns a callable that executes:
-    1. Pod simulator (write frames)
+    1. Rust framed fixture emission (write frames)
     2. Frame verifier (verify frames -> facts)
     3. Merkle batcher (batch facts -> day.cbor)
     4. OTS anchor (stamp day.cbor)
@@ -176,7 +161,7 @@ def run_pipeline(
         # Ensure root exists
         temp_dirs["root"].mkdir(parents=True, exist_ok=True)
 
-        # 0) Produce framed NDJSON (pod_sim)
+        # 0) Produce framed NDJSON
         write_frames(
             device_id, count, temp_dirs["frames"], None, temp_dirs["device_table"]
         )
@@ -189,6 +174,8 @@ def run_pipeline(
             str(temp_dirs["facts"]),
             "--device-table",
             str(temp_dirs["device_table"]),
+            "--ingest-profile",
+            "rust-postcard-v1",
         ]
         rc_verify = frame_verifier.process(fv_args)
 
