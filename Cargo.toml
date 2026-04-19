@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/trackone-core",
     "crates/trackone-gateway",
+    "crates/trackone-ingest",
     "crates/trackone-pod-fw",
     "crates/trackone-constants",
     "crates/trackone-ledger",
@@ -39,6 +40,7 @@ repository = "https://github.com/bilalobe/trackone"
 
    # Internal crates (workspace path + pinned version for publish compatibility)
    trackone-core = { path = "crates/trackone-core", version = "0.1.0-alpha.15", default-features = false }
+   trackone-ingest = { path = "crates/trackone-ingest", version = "0.1.0-alpha.15", default-features = false }
    trackone-ledger = { path = "crates/trackone-ledger", version = "0.1.0-alpha.15" }
    trackone-constants = { path = "crates/trackone-constants", version = "0.1.0-alpha.15" }
 
