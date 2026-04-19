@@ -156,7 +156,7 @@ For CI-conscious real-OTS testing we provide a lightweight Docker sidecar that
 runs a long-lived HTTP health endpoint and validates the `opentimestamps`
 client stack without depending on public calendars during test bring-up.
 
-- Image: `ots/calendar:latest` (built from `docker/calendar/Dockerfile`).
+- Image: `ots/calendar:latest` (built from `deploy/docker/calendar/Dockerfile`).
 - Entry point: `run_calendar.py`.
 - Port: `8468` (configurable via `OTS_CAL_PORT`).
 - Health: responds `200 OK` with body `OK\n` on `/`, `/health`, `/ready`.
@@ -178,7 +178,7 @@ To build and run the local calendar on a developer machine:
 cd /path/to/trackone
 
 # Build the image
-docker build -t ots/calendar:latest docker/calendar
+docker build -t ots/calendar:latest deploy/docker/calendar
 
 # Start the container (detached)
 cid=$(docker run -d -p 8468:8468 --name trackone_ots_calendar ots/calendar:latest)
