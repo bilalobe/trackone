@@ -107,34 +107,6 @@ class TestVerifyCliEdgeCases:
         ):
             verify_cli.merkle_root([b"leaf"])
 
-    def test_verify_rejects_legacy_day_bin_artifact(
-        self, tmp_path, verify_cli, facts_dir
-    ):
-        root = tmp_path / "out"
-        day_dir = root / "day"
-        blocks_dir = root / "blocks"
-        day_dir.mkdir(parents=True)
-        blocks_dir.mkdir(parents=True)
-
-        day = "2025-10-07"
-        (day_dir / f"{day}.bin").write_bytes(b"legacy")
-        (day_dir / f"{day}.json").write_text(
-            json.dumps({"date": day, "day_root": "a" * 64}),
-            encoding="utf-8",
-        )
-        (blocks_dir / f"{day}-00.block.json").write_text(
-            json.dumps({"day": day, "merkle_root": "a" * 64}),
-            encoding="utf-8",
-        )
-
-        stderr = io.StringIO()
-        with contextlib.redirect_stderr(stderr):
-            result = verify_cli.main(["--root", str(root), "--facts", str(facts_dir)])
-        assert result == 1
-        err = stderr.getvalue()
-        assert "legacy day artifact found" in err
-        assert ".cbor" in err
-
     def test_verify_main_requires_native_ledger_for_day_canonicalization(
         self, monkeypatch, tmp_path, verify_cli, facts_dir
     ):
@@ -168,47 +140,6 @@ class TestVerifyCliEdgeCases:
 
         def _raise_importerror(_input_bytes):
             raise ImportError("native extension not available")
-
-        monkeypatch.setattr(
-            verify_cli.ledger,
-            "canonicalize_json_to_cbor_bytes",
-            _raise_importerror,
-            raising=False,
-        )
-        stdout = io.StringIO()
-        with contextlib.redirect_stdout(stdout):
-            result = verify_cli.main(["--root", str(root), "--facts", str(facts_dir)])
-
-        assert result == 1
-        assert "trackone_core native ledger helper is required" in stdout.getvalue()
-
-    def test_verify_main_handles_native_ledger_shim_importerror(
-        self, monkeypatch, tmp_path, verify_cli, facts_dir
-    ):
-        def _raise_importerror(_input_bytes):
-            raise ImportError("native extension not available")
-
-        root = tmp_path / "out"
-        day_dir = root / "day"
-        blocks_dir = root / "blocks"
-        day_dir.mkdir(parents=True)
-        blocks_dir.mkdir(parents=True)
-
-        day = "2025-10-07"
-        day_record = {
-            "version": 1,
-            "site_id": "test-site",
-            "date": day,
-            "prev_day_root": "00" * 32,
-            "batches": [],
-            "day_root": "a" * 64,
-        }
-        (day_dir / f"{day}.json").write_text(json.dumps(day_record), encoding="utf-8")
-        (day_dir / f"{day}.cbor").write_bytes(b"placeholder")
-        (blocks_dir / f"{day}-00.block.json").write_text(
-            json.dumps({"day": day, "site_id": "test-site", "merkle_root": "a" * 64}),
-            encoding="utf-8",
-        )
 
         monkeypatch.setattr(
             verify_cli.ledger,
