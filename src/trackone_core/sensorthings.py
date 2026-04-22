@@ -276,6 +276,10 @@ OBSERVED_PROPERTIES: dict[str, dict[str, str]] = {
     },
 }
 
+OBSERVED_PROPERTIES_BY_KEY: dict[str, dict[str, str]] = {
+    metadata["key"]: metadata for metadata in OBSERVED_PROPERTIES.values()
+}
+
 SAMPLE_TYPE_TO_PROPERTY_KEY: dict[str, str] = {
     "AmbientAirTemperature": "temperature_air",
     "AmbientRelativeHumidity": "relative_humidity",
@@ -584,12 +588,8 @@ def _observed_property_metadata(
         observed_property_key,
         sensor_channel=sensor_channel,
     )
-    fallback = next(
-        (
-            val
-            for val in OBSERVED_PROPERTIES.values()
-            if val["key"] == observed_property_key
-        ),
+    fallback = OBSERVED_PROPERTIES_BY_KEY.get(
+        observed_property_key,
         {"key": observed_property_key, "label": observed_property_key, "unit": "1"},
     )
     return {
@@ -819,6 +819,7 @@ def _sensor_record_matches(
             channel_value = sensor_meta.get(field_name)
             if isinstance(channel_value, int) and channel_value == sensor_channel:
                 return True
+        return False
 
     return bool(sensor_meta.get("default")) and bool(sensor_key)
 
@@ -834,11 +835,23 @@ def _custom_observed_property_key(
         for sensor_key, sensor_meta in _iter_sensor_records(
             metadata_scope.get("sensors")
         ):
-            if not _sensor_record_matches(
+            if sensor_channel is not None:
+                channel_matches = False
+                for field_name in ("sensor_channel", "channel"):
+                    channel_value = sensor_meta.get(field_name)
+                    if (
+                        isinstance(channel_value, int)
+                        and channel_value == sensor_channel
+                    ):
+                        channel_matches = True
+                        break
+                if not channel_matches:
+                    continue
+            elif not _sensor_record_matches(
                 sensor_meta,
                 sensor_key=sensor_key,
                 observed_property_key="",
-                sensor_channel=sensor_channel,
+                sensor_channel=None,
             ):
                 continue
             direct_property = sensor_meta.get("observed_property_key")

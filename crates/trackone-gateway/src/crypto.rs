@@ -1,8 +1,8 @@
-use base64::{engine::general_purpose::STANDARD, Engine as _};
+use base64::{Engine as _, engine::general_purpose::STANDARD};
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyBool, PyDict, PyList};
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 use trackone_core::{Fact, FactKind, FactPayload, SampleType};
 use trackone_ingest::{
     self, DeviceMaterial as IngestDeviceMaterial, FixtureError, FrameHeader, FrameInput,
@@ -607,5 +607,10 @@ mod tests {
 
         let too_new = state.check_and_update(20).unwrap_err();
         assert_eq!(too_new, RejectReason::OutOfWindow);
+    }
+
+    #[test]
+    fn labels_water_level_sample_type() {
+        assert_eq!(sample_type_label(SampleType::WaterLevel), "WaterLevel");
     }
 }

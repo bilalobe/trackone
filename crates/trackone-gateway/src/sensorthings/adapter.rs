@@ -3,8 +3,8 @@ use trackone_core::{Fact, FactKind, FactPayload, SampleType};
 use trackone_ledger::sha256_hex;
 
 use super::mapping::{
-    project_env_observation, EnvObservationProjection, EnvObservationProjectionInput,
-    ObservationResult,
+    EnvObservationProjection, EnvObservationProjectionInput, ObservationResult,
+    project_env_observation,
 };
 use super::timefmt::format_rfc3339_utc;
 use super::validate::ValidationError;
@@ -195,8 +195,8 @@ mod tests {
     use trackone_core::{EnvFact, Fact, FactKind, FactPayload, PodId, SampleType};
 
     use super::{
-        adapt_env_fact_input, derive_provisioned_sensor_key, project_fact_env_observation,
-        EnvObservationAdapterContext,
+        EnvObservationAdapterContext, adapt_env_fact_input, derive_provisioned_sensor_key,
+        observed_property_key, project_fact_env_observation,
     };
 
     #[test]
@@ -331,6 +331,11 @@ mod tests {
             input.sensor_key,
             derive_provisioned_sensor_key("ed25519-pubkey-pod-012", "temperature_air", None)
         );
+    }
+
+    #[test]
+    fn maps_water_level_to_observed_property_key() {
+        assert_eq!(observed_property_key(SampleType::WaterLevel), "water_level");
     }
 
     #[test]
