@@ -3,8 +3,8 @@ use trackone_core::{Fact, FactKind, FactPayload, SampleType};
 use trackone_ledger::sha256_hex;
 
 use super::mapping::{
-    EnvObservationProjection, EnvObservationProjectionInput, ObservationResult,
-    project_env_observation,
+    project_env_observation, EnvObservationProjection, EnvObservationProjectionInput,
+    ObservationResult,
 };
 use super::timefmt::format_rfc3339_utc;
 use super::validate::ValidationError;
@@ -132,6 +132,46 @@ fn observed_property_key(sample_type: SampleType) -> &'static str {
         SampleType::BatterySoc => "battery_soc",
         SampleType::FloodContact => "flood_contact",
         SampleType::LinkQuality => "link_quality",
+        SampleType::WaterLevel => "water_level",
+        SampleType::WaterFlowRate => "water_flow_rate",
+        SampleType::WaterVolume => "water_volume",
+        SampleType::WaterPressure => "water_pressure",
+        SampleType::WaterTemperature => "water_temperature",
+        SampleType::WaterElectricalConductivity => "water_electrical_conductivity",
+        SampleType::WaterPh => "water_ph",
+        SampleType::WaterDissolvedOxygen => "water_dissolved_oxygen",
+        SampleType::WaterTurbidity => "water_turbidity",
+        SampleType::WaterSalinity => "water_salinity",
+        SampleType::WaterTotalDissolvedSolids => "water_total_dissolved_solids",
+        SampleType::Rainfall => "rainfall",
+        SampleType::RainIntensity => "rain_intensity",
+        SampleType::WindSpeed => "wind_speed",
+        SampleType::WindDirection => "wind_direction",
+        SampleType::BarometricPressure => "barometric_pressure",
+        SampleType::SolarIrradiance => "solar_irradiance",
+        SampleType::SoilMoisture => "soil_moisture",
+        SampleType::SoilTemperature => "soil_temperature",
+        SampleType::SoilElectricalConductivity => "soil_electrical_conductivity",
+        SampleType::VibrationRms => "vibration_rms",
+        SampleType::VibrationPeak => "vibration_peak",
+        SampleType::ShockAcceleration => "shock_acceleration",
+        SampleType::InclinationAngle => "inclination_angle",
+        SampleType::Displacement => "displacement",
+        SampleType::Strain => "strain",
+        SampleType::CrackWidth => "crack_width",
+        SampleType::AcousticNoise => "acoustic_noise",
+        SampleType::AirQualityPm25 => "air_quality_pm25",
+        SampleType::AirQualityPm10 => "air_quality_pm10",
+        SampleType::CarbonDioxide => "carbon_dioxide",
+        SampleType::VolatileOrganicCompounds => "volatile_organic_compounds",
+        SampleType::BatteryVoltage => "battery_voltage",
+        SampleType::BatteryCurrent => "battery_current",
+        SampleType::BatteryTemperature => "battery_temperature",
+        SampleType::SolarChargeCurrent => "solar_charge_current",
+        SampleType::EnclosureHumidity => "enclosure_humidity",
+        SampleType::EnclosureTemperature => "enclosure_temperature",
+        SampleType::RadioRssi => "radio_rssi",
+        SampleType::RadioSnr => "radio_snr",
         SampleType::Custom => "custom",
     }
 }
@@ -155,8 +195,8 @@ mod tests {
     use trackone_core::{EnvFact, Fact, FactKind, FactPayload, PodId, SampleType};
 
     use super::{
-        EnvObservationAdapterContext, adapt_env_fact_input, derive_provisioned_sensor_key,
-        project_fact_env_observation,
+        adapt_env_fact_input, derive_provisioned_sensor_key, project_fact_env_observation,
+        EnvObservationAdapterContext,
     };
 
     #[test]

@@ -1,8 +1,8 @@
-use base64::{Engine as _, engine::general_purpose::STANDARD};
+use base64::{engine::general_purpose::STANDARD, Engine as _};
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyBool, PyDict, PyList};
-use serde_json::{Map, Value, json};
+use serde_json::{json, Map, Value};
 use trackone_core::{Fact, FactKind, FactPayload, SampleType};
 use trackone_ingest::{
     self, DeviceMaterial as IngestDeviceMaterial, FixtureError, FrameHeader, FrameInput,
@@ -300,6 +300,46 @@ fn sample_type_label(sample_type: SampleType) -> &'static str {
         SampleType::BatterySoc => "BatterySoc",
         SampleType::FloodContact => "FloodContact",
         SampleType::LinkQuality => "LinkQuality",
+        SampleType::WaterLevel => "WaterLevel",
+        SampleType::WaterFlowRate => "WaterFlowRate",
+        SampleType::WaterVolume => "WaterVolume",
+        SampleType::WaterPressure => "WaterPressure",
+        SampleType::WaterTemperature => "WaterTemperature",
+        SampleType::WaterElectricalConductivity => "WaterElectricalConductivity",
+        SampleType::WaterPh => "WaterPh",
+        SampleType::WaterDissolvedOxygen => "WaterDissolvedOxygen",
+        SampleType::WaterTurbidity => "WaterTurbidity",
+        SampleType::WaterSalinity => "WaterSalinity",
+        SampleType::WaterTotalDissolvedSolids => "WaterTotalDissolvedSolids",
+        SampleType::Rainfall => "Rainfall",
+        SampleType::RainIntensity => "RainIntensity",
+        SampleType::WindSpeed => "WindSpeed",
+        SampleType::WindDirection => "WindDirection",
+        SampleType::BarometricPressure => "BarometricPressure",
+        SampleType::SolarIrradiance => "SolarIrradiance",
+        SampleType::SoilMoisture => "SoilMoisture",
+        SampleType::SoilTemperature => "SoilTemperature",
+        SampleType::SoilElectricalConductivity => "SoilElectricalConductivity",
+        SampleType::VibrationRms => "VibrationRms",
+        SampleType::VibrationPeak => "VibrationPeak",
+        SampleType::ShockAcceleration => "ShockAcceleration",
+        SampleType::InclinationAngle => "InclinationAngle",
+        SampleType::Displacement => "Displacement",
+        SampleType::Strain => "Strain",
+        SampleType::CrackWidth => "CrackWidth",
+        SampleType::AcousticNoise => "AcousticNoise",
+        SampleType::AirQualityPm25 => "AirQualityPm25",
+        SampleType::AirQualityPm10 => "AirQualityPm10",
+        SampleType::CarbonDioxide => "CarbonDioxide",
+        SampleType::VolatileOrganicCompounds => "VolatileOrganicCompounds",
+        SampleType::BatteryVoltage => "BatteryVoltage",
+        SampleType::BatteryCurrent => "BatteryCurrent",
+        SampleType::BatteryTemperature => "BatteryTemperature",
+        SampleType::SolarChargeCurrent => "SolarChargeCurrent",
+        SampleType::EnclosureHumidity => "EnclosureHumidity",
+        SampleType::EnclosureTemperature => "EnclosureTemperature",
+        SampleType::RadioRssi => "RadioRssi",
+        SampleType::RadioSnr => "RadioSnr",
         SampleType::Custom => "Custom",
     }
 }

@@ -195,6 +195,117 @@ def test_build_bundle_derives_sensor_identity_from_provisioning_metadata(
     )
 
 
+def test_build_bundle_maps_first_class_water_level_sample_type(load_module) -> None:
+    module = load_module(
+        "sensorthings_projection_water_level_under_test",
+        Path("scripts/gateway/sensorthings_projection.py"),
+    )
+
+    fact = {
+        "pod_id": "0000000000000003",
+        "fc": 9,
+        "ingest_time": 1_772_755_641,
+        "ingest_time_rfc3339_utc": "2026-03-06T00:07:21Z",
+        "pod_time": None,
+        "kind": "Env",
+        "payload": {
+            "Env": {
+                "sample_type": "WaterLevel",
+                "value": 1.42,
+                "phenomenon_time_start": "2026-03-06T00:07:20Z",
+                "phenomenon_time_end": "2026-03-06T00:07:20Z",
+            }
+        },
+    }
+    provisioning_records = {
+        "version": 1,
+        "records": [
+            {
+                "pod_id": "0000000000000003",
+                "identity_pubkey": "b" * 64,
+                "deployment": {
+                    "sensor_keys": {
+                        "water_level": "level-ultrasonic",
+                    }
+                },
+            }
+        ],
+    }
+
+    bundle = module.build_bundle(
+        [fact],
+        site_id="an-001",
+        provisioning_records=provisioning_records,
+    )
+
+    assert bundle["datastreams"][0]["sensor_id"] == module.entity_id(
+        "sensor", "pod-003", "level-ultrasonic"
+    )
+    assert bundle["observed_properties"][0]["key"] == "water_level"
+    assert bundle["observed_properties"][0]["label"] == "Water Level"
+    assert bundle["observed_properties"][0]["unit_of_measurement"]["symbol"] == "m"
+
+
+def test_build_bundle_maps_custom_env_channel_from_provisioning_metadata(
+    load_module,
+) -> None:
+    module = load_module(
+        "sensorthings_projection_custom_channel_under_test",
+        Path("scripts/gateway/sensorthings_projection.py"),
+    )
+
+    fact = {
+        "pod_id": "0000000000000003",
+        "fc": 10,
+        "ingest_time": 1_772_755_681,
+        "ingest_time_rfc3339_utc": "2026-03-06T00:08:01Z",
+        "pod_time": None,
+        "kind": "Env",
+        "payload": {
+            "Env": {
+                "sample_type": "Custom",
+                "sensor_channel": 7,
+                "value": 73.4,
+                "phenomenon_time_start": "2026-03-06T00:08:00Z",
+                "phenomenon_time_end": "2026-03-06T00:08:00Z",
+            }
+        },
+    }
+    provisioning_records = {
+        "version": 1,
+        "records": [
+            {
+                "pod_id": "0000000000000003",
+                "identity_pubkey": "b" * 64,
+                "deployment": {
+                    "sensors": [
+                        {
+                            "sensor_key": "level-ultrasonic",
+                            "sensor_channel": 7,
+                            "observed_property_key": "water_level",
+                            "observed_property_label": "Water level",
+                            "unit_symbol": "cm",
+                        }
+                    ]
+                },
+            }
+        ],
+    }
+
+    bundle = module.build_bundle(
+        [fact],
+        site_id="an-001",
+        provisioning_records=provisioning_records,
+    )
+
+    assert bundle["datastreams"][0]["sensor_id"] == module.entity_id(
+        "sensor", "pod-003", "level-ultrasonic"
+    )
+    assert bundle["observed_properties"][0]["key"] == "water_level"
+    assert bundle["observed_properties"][0]["label"] == "Water level"
+    assert bundle["observed_properties"][0]["unit_of_measurement"]["symbol"] == "cm"
+
+
 def test_build_bundle_rejects_missing_sensor_identity_metadata(load_module) -> None:
     module = load_module(
         "sensorthings_projection_missing_identity_under_test",

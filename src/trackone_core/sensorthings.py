@@ -24,12 +24,309 @@ OBSERVED_PROPERTIES: dict[str, dict[str, str]] = {
         "label": "Bioimpedance Magnitude",
         "unit": "1",
     },
+    "temperature_air": {
+        "key": "temperature_air",
+        "label": "Ambient Air Temperature",
+        "unit": "Cel",
+    },
+    "relative_humidity": {
+        "key": "relative_humidity",
+        "label": "Relative Humidity",
+        "unit": "%",
+    },
+    "temperature_interface": {
+        "key": "temperature_interface",
+        "label": "Interface Temperature",
+        "unit": "Cel",
+    },
+    "coverage_capacitance": {
+        "key": "coverage_capacitance",
+        "label": "Coverage Capacitance",
+        "unit": "F",
+    },
+    "bioimpedance_magnitude": {
+        "key": "bioimpedance_magnitude",
+        "label": "Bioimpedance Magnitude",
+        "unit": "1",
+    },
+    "bioimpedance_activity": {
+        "key": "bioimpedance_activity",
+        "label": "Bioimpedance Activity",
+        "unit": "1",
+    },
+    "supply_voltage": {
+        "key": "supply_voltage",
+        "label": "Supply Voltage",
+        "unit": "V",
+    },
+    "battery_soc": {
+        "key": "battery_soc",
+        "label": "Battery State of Charge",
+        "unit": "%",
+    },
+    "flood_contact": {
+        "key": "flood_contact",
+        "label": "Flood Contact",
+        "unit": "1",
+    },
+    "link_quality": {
+        "key": "link_quality",
+        "label": "Link Quality",
+        "unit": "1",
+    },
+    "water_level": {
+        "key": "water_level",
+        "label": "Water Level",
+        "unit": "m",
+    },
+    "water_flow_rate": {
+        "key": "water_flow_rate",
+        "label": "Water Flow Rate",
+        "unit": "m3/s",
+    },
+    "water_volume": {
+        "key": "water_volume",
+        "label": "Water Volume",
+        "unit": "m3",
+    },
+    "water_pressure": {
+        "key": "water_pressure",
+        "label": "Water Pressure",
+        "unit": "Pa",
+    },
+    "water_temperature": {
+        "key": "water_temperature",
+        "label": "Water Temperature",
+        "unit": "Cel",
+    },
+    "water_electrical_conductivity": {
+        "key": "water_electrical_conductivity",
+        "label": "Water Electrical Conductivity",
+        "unit": "uS/cm",
+    },
+    "water_ph": {
+        "key": "water_ph",
+        "label": "Water pH",
+        "unit": "pH",
+    },
+    "water_dissolved_oxygen": {
+        "key": "water_dissolved_oxygen",
+        "label": "Water Dissolved Oxygen",
+        "unit": "mg/L",
+    },
+    "water_turbidity": {
+        "key": "water_turbidity",
+        "label": "Water Turbidity",
+        "unit": "NTU",
+    },
+    "water_salinity": {
+        "key": "water_salinity",
+        "label": "Water Salinity",
+        "unit": "ppt",
+    },
+    "water_total_dissolved_solids": {
+        "key": "water_total_dissolved_solids",
+        "label": "Water Total Dissolved Solids",
+        "unit": "mg/L",
+    },
+    "rainfall": {
+        "key": "rainfall",
+        "label": "Rainfall",
+        "unit": "mm",
+    },
+    "rain_intensity": {
+        "key": "rain_intensity",
+        "label": "Rain Intensity",
+        "unit": "mm/h",
+    },
+    "wind_speed": {
+        "key": "wind_speed",
+        "label": "Wind Speed",
+        "unit": "m/s",
+    },
+    "wind_direction": {
+        "key": "wind_direction",
+        "label": "Wind Direction",
+        "unit": "deg",
+    },
+    "barometric_pressure": {
+        "key": "barometric_pressure",
+        "label": "Barometric Pressure",
+        "unit": "Pa",
+    },
+    "solar_irradiance": {
+        "key": "solar_irradiance",
+        "label": "Solar Irradiance",
+        "unit": "W/m2",
+    },
+    "soil_moisture": {
+        "key": "soil_moisture",
+        "label": "Soil Moisture",
+        "unit": "%",
+    },
+    "soil_temperature": {
+        "key": "soil_temperature",
+        "label": "Soil Temperature",
+        "unit": "Cel",
+    },
+    "soil_electrical_conductivity": {
+        "key": "soil_electrical_conductivity",
+        "label": "Soil Electrical Conductivity",
+        "unit": "uS/cm",
+    },
+    "vibration_rms": {
+        "key": "vibration_rms",
+        "label": "Vibration RMS",
+        "unit": "mm/s",
+    },
+    "vibration_peak": {
+        "key": "vibration_peak",
+        "label": "Vibration Peak",
+        "unit": "mm/s",
+    },
+    "shock_acceleration": {
+        "key": "shock_acceleration",
+        "label": "Shock Acceleration",
+        "unit": "g",
+    },
+    "inclination_angle": {
+        "key": "inclination_angle",
+        "label": "Inclination Angle",
+        "unit": "deg",
+    },
+    "displacement": {
+        "key": "displacement",
+        "label": "Displacement",
+        "unit": "mm",
+    },
+    "strain": {
+        "key": "strain",
+        "label": "Strain",
+        "unit": "microstrain",
+    },
+    "crack_width": {
+        "key": "crack_width",
+        "label": "Crack Width",
+        "unit": "mm",
+    },
+    "acoustic_noise": {
+        "key": "acoustic_noise",
+        "label": "Acoustic Noise",
+        "unit": "dB",
+    },
+    "air_quality_pm25": {
+        "key": "air_quality_pm25",
+        "label": "Air Quality PM2.5",
+        "unit": "ug/m3",
+    },
+    "air_quality_pm10": {
+        "key": "air_quality_pm10",
+        "label": "Air Quality PM10",
+        "unit": "ug/m3",
+    },
+    "carbon_dioxide": {
+        "key": "carbon_dioxide",
+        "label": "Carbon Dioxide",
+        "unit": "ppm",
+    },
+    "volatile_organic_compounds": {
+        "key": "volatile_organic_compounds",
+        "label": "Volatile Organic Compounds",
+        "unit": "ppb",
+    },
+    "battery_voltage": {
+        "key": "battery_voltage",
+        "label": "Battery Voltage",
+        "unit": "V",
+    },
+    "battery_current": {
+        "key": "battery_current",
+        "label": "Battery Current",
+        "unit": "A",
+    },
+    "battery_temperature": {
+        "key": "battery_temperature",
+        "label": "Battery Temperature",
+        "unit": "Cel",
+    },
+    "solar_charge_current": {
+        "key": "solar_charge_current",
+        "label": "Solar Charge Current",
+        "unit": "A",
+    },
+    "enclosure_humidity": {
+        "key": "enclosure_humidity",
+        "label": "Enclosure Humidity",
+        "unit": "%",
+    },
+    "enclosure_temperature": {
+        "key": "enclosure_temperature",
+        "label": "Enclosure Temperature",
+        "unit": "Cel",
+    },
+    "radio_rssi": {
+        "key": "radio_rssi",
+        "label": "Radio RSSI",
+        "unit": "dBm",
+    },
+    "radio_snr": {
+        "key": "radio_snr",
+        "label": "Radio SNR",
+        "unit": "dB",
+    },
 }
 
 SAMPLE_TYPE_TO_PROPERTY_KEY: dict[str, str] = {
     "AmbientAirTemperature": "temperature_air",
     "AmbientRelativeHumidity": "relative_humidity",
+    "InterfaceTemperature": "temperature_interface",
+    "CoverageCapacitance": "coverage_capacitance",
     "BioImpedanceMagnitude": "bioimpedance_magnitude",
+    "BioImpedanceActivity": "bioimpedance_activity",
+    "SupplyVoltage": "supply_voltage",
+    "BatterySoc": "battery_soc",
+    "FloodContact": "flood_contact",
+    "LinkQuality": "link_quality",
+    "WaterLevel": "water_level",
+    "WaterFlowRate": "water_flow_rate",
+    "WaterVolume": "water_volume",
+    "WaterPressure": "water_pressure",
+    "WaterTemperature": "water_temperature",
+    "WaterElectricalConductivity": "water_electrical_conductivity",
+    "WaterPh": "water_ph",
+    "WaterDissolvedOxygen": "water_dissolved_oxygen",
+    "WaterTurbidity": "water_turbidity",
+    "WaterSalinity": "water_salinity",
+    "WaterTotalDissolvedSolids": "water_total_dissolved_solids",
+    "Rainfall": "rainfall",
+    "RainIntensity": "rain_intensity",
+    "WindSpeed": "wind_speed",
+    "WindDirection": "wind_direction",
+    "BarometricPressure": "barometric_pressure",
+    "SolarIrradiance": "solar_irradiance",
+    "SoilMoisture": "soil_moisture",
+    "SoilTemperature": "soil_temperature",
+    "SoilElectricalConductivity": "soil_electrical_conductivity",
+    "VibrationRms": "vibration_rms",
+    "VibrationPeak": "vibration_peak",
+    "ShockAcceleration": "shock_acceleration",
+    "InclinationAngle": "inclination_angle",
+    "Displacement": "displacement",
+    "Strain": "strain",
+    "CrackWidth": "crack_width",
+    "AcousticNoise": "acoustic_noise",
+    "AirQualityPm25": "air_quality_pm25",
+    "AirQualityPm10": "air_quality_pm10",
+    "CarbonDioxide": "carbon_dioxide",
+    "VolatileOrganicCompounds": "volatile_organic_compounds",
+    "BatteryVoltage": "battery_voltage",
+    "BatteryCurrent": "battery_current",
+    "BatteryTemperature": "battery_temperature",
+    "SolarChargeCurrent": "solar_charge_current",
+    "EnclosureHumidity": "enclosure_humidity",
+    "EnclosureTemperature": "enclosure_temperature",
+    "RadioRssi": "radio_rssi",
+    "RadioSnr": "radio_snr",
 }
 
 SENSOR_METADATA_SCOPES = ("deployment", "provisioning")
@@ -209,7 +506,13 @@ def _project_env_payload(
     sample_type = env_payload.get("sample_type")
     if not isinstance(sample_type, str):
         return None
-    observed_property_key = SAMPLE_TYPE_TO_PROPERTY_KEY.get(sample_type)
+    sensor_channel = _sensor_channel_from_payload(env_payload)
+    observed_property_meta = _observed_property_metadata(
+        sample_type,
+        device_meta=device_meta,
+        sensor_channel=sensor_channel,
+    )
+    observed_property_key = observed_property_meta.get("key")
     if observed_property_key is None:
         return None
 
@@ -228,7 +531,7 @@ def _project_env_payload(
         device_id,
         observed_property_key,
         device_meta=device_meta,
-        sensor_channel=_sensor_channel_from_payload(env_payload),
+        sensor_channel=sensor_channel,
     )
     phenomenon_start = _normalize_time(
         env_payload.get("phenomenon_time_start"), fallback=result_time
@@ -249,14 +552,6 @@ def _project_env_payload(
         scalar_value=scalar_value,
     )
 
-    observed_property_meta = next(
-        (
-            val
-            for val in OBSERVED_PROPERTIES.values()
-            if val["key"] == observed_property_key
-        ),
-        {"key": observed_property_key, "label": observed_property_key, "unit": "1"},
-    )
     projection["observed_property"] = {
         "id": _entity_id("observed-property", observed_property_key),
         "key": observed_property_key,
@@ -267,6 +562,41 @@ def _project_env_payload(
         },
     }
     return projection
+
+
+def _observed_property_metadata(
+    sample_type: str,
+    *,
+    device_meta: dict[str, Any] | None,
+    sensor_channel: int | None,
+) -> dict[str, str]:
+    observed_property_key = SAMPLE_TYPE_TO_PROPERTY_KEY.get(sample_type)
+    if observed_property_key is None and sample_type == "Custom":
+        observed_property_key = _custom_observed_property_key(
+            device_meta,
+            sensor_channel=sensor_channel,
+        )
+    if observed_property_key is None:
+        return {}
+
+    metadata = _observed_property_metadata_from_device(
+        device_meta,
+        observed_property_key,
+        sensor_channel=sensor_channel,
+    )
+    fallback = next(
+        (
+            val
+            for val in OBSERVED_PROPERTIES.values()
+            if val["key"] == observed_property_key
+        ),
+        {"key": observed_property_key, "label": observed_property_key, "unit": "1"},
+    )
+    return {
+        "key": observed_property_key,
+        "label": metadata.get("label") or fallback["label"],
+        "unit": metadata.get("unit") or fallback["unit"],
+    }
 
 
 def _project_via_python(
@@ -491,6 +821,86 @@ def _sensor_record_matches(
                 return True
 
     return bool(sensor_meta.get("default")) and bool(sensor_key)
+
+
+def _custom_observed_property_key(
+    device_meta: dict[str, Any] | None,
+    *,
+    sensor_channel: int | None,
+) -> str | None:
+    if not isinstance(device_meta, dict):
+        return None
+    for metadata_scope in _sensor_metadata_scopes(device_meta):
+        for sensor_key, sensor_meta in _iter_sensor_records(
+            metadata_scope.get("sensors")
+        ):
+            if not _sensor_record_matches(
+                sensor_meta,
+                sensor_key=sensor_key,
+                observed_property_key="",
+                sensor_channel=sensor_channel,
+            ):
+                continue
+            direct_property = sensor_meta.get("observed_property_key")
+            if isinstance(direct_property, str) and direct_property.strip():
+                return direct_property.strip()
+            observed = sensor_meta.get("observed_property_keys")
+            if isinstance(observed, list):
+                for candidate in observed:
+                    if isinstance(candidate, str) and candidate.strip():
+                        return candidate.strip()
+    return None
+
+
+def _observed_property_metadata_from_device(
+    device_meta: dict[str, Any] | None,
+    observed_property_key: str,
+    *,
+    sensor_channel: int | None,
+) -> dict[str, str]:
+    if not isinstance(device_meta, dict):
+        return {}
+
+    for metadata_scope in _sensor_metadata_scopes(device_meta):
+        observed_properties = metadata_scope.get("observed_properties")
+        if isinstance(observed_properties, dict):
+            candidate = observed_properties.get(observed_property_key)
+            metadata = _property_metadata(candidate)
+            if metadata:
+                return metadata
+
+        for sensor_key, sensor_meta in _iter_sensor_records(
+            metadata_scope.get("sensors")
+        ):
+            if _sensor_record_matches(
+                sensor_meta,
+                sensor_key=sensor_key,
+                observed_property_key=observed_property_key,
+                sensor_channel=sensor_channel,
+            ):
+                metadata = _property_metadata(sensor_meta)
+                if metadata:
+                    return metadata
+
+    return {}
+
+
+def _property_metadata(value: Any) -> dict[str, str]:
+    if not isinstance(value, dict):
+        return {}
+
+    label = value.get("observed_property_label") or value.get("label")
+    unit = (
+        value.get("unit_symbol")
+        or value.get("unit")
+        or value.get("unit_of_measurement_symbol")
+    )
+    result: dict[str, str] = {}
+    if isinstance(label, str) and label.strip():
+        result["label"] = label.strip()
+    if isinstance(unit, str) and unit.strip():
+        result["unit"] = unit.strip()
+    return result
 
 
 def _sensor_identity_from_metadata(metadata: dict[str, Any]) -> str | None:
