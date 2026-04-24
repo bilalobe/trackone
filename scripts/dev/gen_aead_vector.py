@@ -30,8 +30,8 @@ def gen_chacha_vector() -> dict:
     rand4 = bytes([0x01, 0x02, 0x03, 0x04])
     nonce = salt4 + fc.to_bytes(4, "big") + rand4
 
-    # AAD for dev_id=0x0123, msg_type=1
-    aad = struct.pack(">HB", 0x0123, 1)
+    # AAD for dev_id=0x0123, msg_type=1, flags=0
+    aad = struct.pack(">HBB", 0x0123, 1, 0)
 
     # TLV payload as used by pod_sim.encode_tlv
     counter = fc
@@ -73,10 +73,10 @@ def gen_xchacha_vector() -> dict:
     salt8 = bytes.fromhex("0a0b0c0d0e0f1011")
     fc = 42
     rand8 = bytes.fromhex("0102030405060708")
-    nonce = salt8 + fc.to_bytes(4, "big") + rand8
+    nonce = salt8 + fc.to_bytes(8, "big") + rand8
 
-    # AAD for dev_id=0x0123, msg_type=1
-    aad = struct.pack(">HB", 0x0123, 1)
+    # AAD for dev_id=0x0123, msg_type=1, flags=0
+    aad = struct.pack(">HBB", 0x0123, 1, 0)
 
     # TLV payload identical to chacha vector
     counter = fc
@@ -126,9 +126,7 @@ def main() -> int:
     data["deterministic_xaead_vectors"] = [xchacha_vec]
 
     OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    OUT_PATH.write_text(
-        json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-    )
+    OUT_PATH.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
     print(f"Wrote vectors to {OUT_PATH}")
     return 0
 

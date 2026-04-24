@@ -297,6 +297,8 @@ def parse_frame(line: str) -> tuple[dict[str, Any] | None, str]:
         return None, "fc_range"
     if not (0 <= flags <= 255):
         return None, "flags_range"
+    if flags != 0:
+        return None, "unsupported_flags"
 
     return frame, ""
 

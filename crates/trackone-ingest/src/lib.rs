@@ -75,6 +75,7 @@ pub enum RejectReason {
     CiphertextTooLarge,
     NonceSaltMismatch,
     NonceFcMismatch,
+    UnsupportedFlags,
     DecryptFailed,
     InvalidIngestProfile,
     PostcardPodIdMismatch,
@@ -94,6 +95,7 @@ impl RejectReason {
             Self::CiphertextTooLarge => "ciphertext_too_large",
             Self::NonceSaltMismatch => "nonce_salt_mismatch",
             Self::NonceFcMismatch => "nonce_fc_mismatch",
+            Self::UnsupportedFlags => "unsupported_flags",
             Self::DecryptFailed => "decrypt_failed",
             Self::InvalidIngestProfile => "invalid_ingest_profile",
             Self::PostcardPodIdMismatch => "postcard_pod_id_mismatch",
@@ -170,14 +172,14 @@ pub fn legacy_dev_id_from_pod_id(pod_id: PodId) -> u16 {
 }
 
 /// Construct AEAD associated data for framed material.
-pub fn framed_aad(dev_id: u16, msg_type: u8) -> [u8; 3] {
+pub fn framed_aad(dev_id: u16, msg_type: u8, flags: u8) -> [u8; 4] {
     let [hi, lo] = dev_id.to_be_bytes();
-    [hi, lo, msg_type]
+    [hi, lo, msg_type, flags]
 }
 
 /// Construct AEAD associated data from a canonical `PodId`.
-pub fn framed_aad_for_pod(pod_id: PodId, msg_type: u8) -> [u8; 3] {
-    framed_aad(legacy_dev_id_from_pod_id(pod_id), msg_type)
+pub fn framed_aad_for_pod(pod_id: PodId, msg_type: u8, flags: u8) -> [u8; 4] {
+    framed_aad(legacy_dev_id_from_pod_id(pod_id), msg_type, flags)
 }
 
 /// Build a gateway-admissible XChaCha20-Poly1305 framed nonce.
@@ -272,7 +274,7 @@ where
 {
     let mut serialized = [0u8; MAX_FACT_LEN];
     let used = encode_fact_postcard(fact, &mut serialized)?;
-    let aad = framed_aad_for_pod(fact.pod_id, 1); // msg_type 1 = fact frame
+    let aad = framed_aad_for_pod(fact.pod_id, 1, 0); // msg_type 1 = fact frame
 
     let mut ciphertext_buf = [0u8; N];
     if ciphertext_buf.len() < used.len() + AEAD_TAG_LEN {
@@ -301,7 +303,7 @@ pub fn decrypt_fact<const N: usize, C>(cipher: &C, frame: &EncryptedFrame<N>) ->
 where
     C: AeadDecrypt<Error = Error>,
 {
-    let aad = framed_aad_for_pod(frame.pod_id, 1); // msg_type 1 = fact frame
+    let aad = framed_aad_for_pod(frame.pod_id, 1, 0); // msg_type 1 = fact frame
     let mut plaintext_buf = [0u8; MAX_FACT_LEN];
 
     if plaintext_buf.len() < frame.ciphertext.len() {
@@ -410,10 +412,17 @@ pub fn validate_and_decrypt(
     if frame.ct.len() > MAX_FRAME_CIPHERTEXT_BYTES {
         return Err(RejectReason::CiphertextTooLarge);
     }
+    if frame.header.flags != 0 {
+        return Err(RejectReason::UnsupportedFlags);
+    }
     validate_nonce_prefix(frame.nonce, device.salt8, frame.header.fc)
         .map_err(map_framed_nonce_error)?;
 
-    let aad = framed_aad(frame.header.dev_id, frame.header.msg_type);
+    let aad = framed_aad(
+        frame.header.dev_id,
+        frame.header.msg_type,
+        frame.header.flags,
+    );
     let mut combined = Vec::with_capacity(frame.ct.len() + frame.tag.len());
     combined.extend_from_slice(frame.ct);
     combined.extend_from_slice(frame.tag);
@@ -459,6 +468,9 @@ pub fn emit_fixture(
     if device.ck_up.len() != 32 {
         return Err(FixtureError::Reject(RejectReason::CkUpLength));
     }
+    if flags != 0 {
+        return Err(FixtureError::Reject(RejectReason::UnsupportedFlags));
+    }
 
     let observed_at = pod_time.unwrap_or(1_700_000_000 + i64::from(fc));
     let fact = Fact {
@@ -482,7 +494,7 @@ pub fn emit_fixture(
     let salt8: [u8; 8] = device.salt8.try_into().expect("checked salt8 length");
     let tail = ((u64::from(dev_id) << 48) | u64::from(fc)).to_be_bytes();
     let nonce = framed_nonce(salt8, fc, tail);
-    let aad = framed_aad(dev_id, msg_type);
+    let aad = framed_aad(dev_id, msg_type, flags);
     let cipher = XChaCha20Poly1305::new_from_slice(device.ck_up)
         .map_err(|_| FixtureError::Reject(RejectReason::CkUpLength))?;
     let combined = cipher
@@ -541,11 +553,11 @@ mod tests {
     }
 
     struct InspectAead {
-        expected_aad: [u8; 3],
+        expected_aad: [u8; 4],
     }
 
     impl InspectAead {
-        const fn new(expected_aad: [u8; 3]) -> Self {
+        const fn new(expected_aad: [u8; 4]) -> Self {
             Self { expected_aad }
         }
     }
@@ -592,10 +604,10 @@ mod tests {
     }
 
     #[test]
-    fn framed_aad_uses_legacy_dev_id_and_msg_type() {
+    fn framed_aad_uses_legacy_dev_id_msg_type_and_flags() {
         assert_eq!(
-            framed_aad_for_pod(PodId::from(0x1234u32), 1),
-            [0x12, 0x34, 1]
+            framed_aad_for_pod(PodId::from(0x1234u32), 1, 0),
+            [0x12, 0x34, 1, 0]
         );
     }
 
@@ -672,8 +684,8 @@ mod tests {
     }
 
     #[test]
-    fn fact_encrypt_decrypt_use_dev_id_msg_type_aad() {
-        let cipher = InspectAead::new([0x12, 0x34, 1]);
+    fn fact_encrypt_decrypt_use_dev_id_msg_type_flags_aad() {
+        let cipher = InspectAead::new([0x12, 0x34, 1, 0]);
         let fact = make_fact(
             PodId::from(0x1234u32),
             1,
@@ -832,7 +844,7 @@ mod tests {
         };
         let (plaintext, used) = encode_fact_postcard_buf(&fact).expect("encode");
         let nonce = framed_nonce(salt8, 3, *b"rand0001");
-        let aad = framed_aad(1, 1);
+        let aad = framed_aad(1, 1, 0);
         let cipher = XChaCha20Poly1305::new_from_slice(&key).expect("cipher");
         let combined = cipher
             .encrypt(
@@ -879,12 +891,33 @@ mod tests {
 
     #[cfg(feature = "xchacha")]
     #[test]
+    fn validate_and_decrypt_rejects_nonzero_flags() {
+        let (frame, salt8, key) = sample_frame_and_device();
+        let err = validate_and_decrypt(
+            FrameInput {
+                header: FrameHeader {
+                    flags: 1,
+                    ..frame.header
+                },
+                ..frame
+            },
+            DeviceMaterial {
+                salt8: &salt8,
+                ck_up: &key,
+            },
+        )
+        .unwrap_err();
+        assert_eq!(err, RejectReason::UnsupportedFlags);
+    }
+
+    #[cfg(feature = "xchacha")]
+    #[test]
     fn rust_postcard_profile_rejects_legacy_tlv_plaintext() {
         let key = [7u8; 32];
         let salt8 = *b"salt0001";
         let plaintext = [0x01, 4, 0, 0, 0, 3, 0x03, 2, 0x09, 0xE0];
         let nonce = framed_nonce(salt8, 3, *b"rand0001");
-        let aad = framed_aad(1, 1);
+        let aad = framed_aad(1, 1, 0);
         let cipher = XChaCha20Poly1305::new_from_slice(&key).expect("cipher");
         let combined = cipher
             .encrypt(
@@ -929,7 +962,7 @@ mod tests {
         fact.fc = 4;
         let (plaintext, used) = encode_fact_postcard_buf(&fact).expect("encode");
         let nonce = framed_nonce(salt8, 3, *b"rand0001");
-        let aad = framed_aad(1, 1);
+        let aad = framed_aad(1, 1, 0);
         let cipher = XChaCha20Poly1305::new_from_slice(&key).expect("cipher");
         let combined = cipher
             .encrypt(
@@ -1021,5 +1054,25 @@ mod tests {
 
         assert_eq!(accepted.fact.pod_id, PodId::from(1u32));
         assert_eq!(accepted.fact.fc, 3);
+    }
+
+    #[cfg(feature = "xchacha")]
+    #[test]
+    fn emit_fixture_rejects_nonzero_flags() {
+        let salt8 = *b"salt0001";
+        let key = [7u8; 32];
+        let err = emit_fixture(
+            1,
+            3,
+            DeviceMaterial {
+                salt8: &salt8,
+                ck_up: &key,
+            },
+            1,
+            1,
+            Some(1_700_000_000),
+        )
+        .unwrap_err();
+        assert_eq!(err, FixtureError::Reject(RejectReason::UnsupportedFlags));
     }
 }

@@ -150,6 +150,16 @@ def test_parse_frame_error_cases(frame_verifier):
     frame, err = frame_verifier.parse_frame(json.dumps(as_strings))
     assert frame is None and err == "invalid_hdr_types"
 
+    # nonzero flags are reserved by the reference framed transport profile
+    unsupported_flags = {
+        "hdr": {"dev_id": 1, "msg_type": 1, "fc": 1, "flags": 1},
+        "nonce": "",
+        "ct": "",
+        "tag": "",
+    }
+    frame, err = frame_verifier.parse_frame(json.dumps(unsupported_flags))
+    assert frame is None and err == "unsupported_flags"
+
     # line-length guard triggers before JSON parse
     long_nonce = "A" * (frame_verifier.MAX_NDJSON_LINE_BYTES + 1)
     too_long = {

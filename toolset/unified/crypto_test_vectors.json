@@ -1,7 +1,7 @@
 {
   "deterministic_aead_vectors": [
     {
-      "aad": "012301",
+      "aad": "01230100",
       "ciphertext": "59d55b8430aabcf1b5e121750d06",
       "description": "Deterministic AEAD vector (ChaCha20-Poly1305, fixed inputs)",
       "fc": 42,
@@ -10,18 +10,21 @@
       "plaintext": "01040000002a02022710030209f6",
       "rand4": "01020304",
       "salt4": "0a0b0c0d",
-      "tag": "8def57bcfc4ff24e34785281393b19ca"
+      "tag": "830a47ccb00e755c5ca3288341ae5ad1"
     }
   ],
   "deterministic_xaead_vectors": [
     {
       "description": "Deterministic XAEAD vector (XChaCha20-Poly1305, fixed inputs)",
       "key": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
-      "nonce": "000102030405060708090a0b0c0d0e0f1011121314151617",
-      "aad": "012301",
+      "nonce": "0a0b0c0d0e0f1011000000000000002a0102030405060708",
+      "aad": "01230100",
       "plaintext": "01040000002a02022710030209f6",
-      "ciphertext": "9fc60f7f90f88fac145425ccc2a4",
-      "tag": "1b0bf7d7ac89d4086624b917f6b0815d"
+      "ciphertext": "008a5dcf21ef1d77017c4183ed82",
+      "tag": "f4105b97fa959fc0f68ada676aa4ed7e",
+      "fc": 42,
+      "rand8": "0102030405060708",
+      "salt8": "0a0b0c0d0e0f1011"
     }
   ],
   "canonical_hash_vectors": [

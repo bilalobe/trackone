@@ -11,7 +11,7 @@ This crate owns:
 
 - the `rust-postcard-v1` ingest profile identifier and compatibility rules
 - framed nonce construction and validation (`salt8 || fc32_as_u64_be || tail8`)
-- framed AEAD associated-data construction from `dev_id` and `msg_type`
+- framed AEAD associated-data construction from `dev_id`, `msg_type`, and `flags`
 - Postcard encode/decode for canonical `trackone-core::Fact` plaintexts
 - `EncryptedFrame<N>` and pod-side fact encryption/decryption helpers
 - gateway-side framed validation/decryption for the Rust-native profile
