@@ -310,8 +310,14 @@ Machine-readable contract split:
 
 ## Current release line
 
-The latest tagged release is `0.1.0-alpha.15`.
-The current `main` branch is tracking `alpha.16` follow-on work; release detail for `alpha.15` lives in [`CHANGELOG.md`](CHANGELOG.md), and `Unreleased` tracks the next release work.
+The latest tagged release is `0.1.0-alpha.16`.
+The current `main` branch is tracking `alpha.17` follow-on work; release detail for `alpha.16` lives in [`CHANGELOG.md`](CHANGELOG.md), and `Unreleased` tracks the next release work.
+
+- `alpha.16` continued admitted-telemetry hardening:
+
+  - gateway scripts now use stable `trackone_core` shim surfaces instead of `trackone_core._native` spelunking
+  - deterministic SensorThings entity/projection helpers now have a native-owned Python boundary
+  - `trackone-ingest` and `trackone-pod-fw` are now `no_std`-first by default, with explicit `std` opt-in for host workflows
 
 - `alpha.15` hardened the admitted-telemetry boundary:
 
@@ -333,7 +339,7 @@ The current `main` branch is tracking `alpha.16` follow-on work; release detail 
   - SCITT statement payload contracts and examples
   - sealed trust-root boundary documentation in [`ADR-046`](adr/ADR-046-sealed-trust-root-boundary-and-deferring-trackone-seal.md)
 
-- `alpha.16` is currently focused on follow-on hardening beyond the current admitted-telemetry cut.
+- `alpha.17` is currently focused on follow-on hardening beyond the current admitted-telemetry cut.
 
 For release-level detail, use [`CHANGELOG.md`](CHANGELOG.md) rather than this README.
 

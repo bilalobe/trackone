@@ -7,10 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-alpha.16] - 2026-04-24
+
 ### Changed
-- Clarified crate docs/comments to reflect the current ADR split: CBOR artifacts
-  are authoritative for commitments (ADR-039), while JSON helpers remain
-  deterministic projection/helper surfaces.
+- Clarified crate docs/comments to reflect the current ADR split: CBOR artifacts are authoritative for commitments (ADR-039), while JSON helpers remain deterministic projection/helper surfaces.
 
 ## [0.1.0-alpha.15] - 2026-04-18
 

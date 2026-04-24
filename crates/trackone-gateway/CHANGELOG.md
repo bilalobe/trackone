@@ -7,16 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-alpha.16] - 2026-04-24
+
 ### Added
 - Explicit framed-ingest profile validation on the native crypto boundary. The supported wire profile is `rust-postcard-v1`.
 - Native `trackone_core.sensorthings` PyO3 submodule exposing deterministic SensorThings entity IDs and observation projection helpers backed by the existing Rust `sensorthings` domain code.
 
 ### Changed
-- Rust-native framed admission now delegates nonce-prefix, AAD, postcard decode,
-  postcard `Fact` header consistency, fixture emission, and replay-window logic
-  to `trackone-ingest`.
-- The native crypto module is back to a PyO3 adapter around Rust-owned ingest
-  and ledger behavior instead of owning framed admission logic itself.
+- Rust-native framed admission now delegates nonce-prefix, AAD, postcard decode, postcard `Fact` header consistency, fixture emission, and replay-window logic to `trackone-ingest`.
+- The native crypto module is back to a PyO3 adapter around Rust-owned ingest and ledger behavior instead of owning framed admission logic itself.
 - Legacy TLV framed plaintext is no longer a supported admission profile; Python verifier orchestration now routes supported framed telemetry through native Rust postcard admission and writes deterministic CBOR fact artifacts after projection.
 - `trackone_core.crypto.validate_and_decrypt_framed(...)` is postcard-only; unsupported profile names such as `python-tlv-legacy` return `invalid_ingest_profile`.
 - SensorThings native support is now built into the gateway extension by default, and the Python `trackone_core.sensorthings` surface delegates deterministic entity-ID and observation-projection work to the native submodule instead of reimplementing those steps in pure Python.

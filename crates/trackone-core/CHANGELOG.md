@@ -7,13 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-alpha.16] - 2026-04-24
+
 ### Changed
-- Moved framed ingest profile helpers, `EncryptedFrame`, and framed fact
-  encryption/decryption out to `trackone-ingest`.
-- Kept `trackone-core` focused on canonical protocol types, crypto-facing
-  traits, identity input, constants, and CBOR commitment surfaces.
-- The gateway-gated Merkle helper now hashes explicit frame parts rather than
-  owning a framed envelope type.
+- `trackone-core::VERSION` now reports `0.1.0-alpha.16` to match the workspace release.
+- Moved framed ingest profile helpers, `EncryptedFrame`, and framed fact encryption/decryption out to `trackone-ingest`.
+- Kept `trackone-core` focused on canonical protocol types, crypto-facing traits, identity input, constants, and CBOR commitment surfaces.
+- The gateway-gated Merkle helper now hashes explicit frame parts rather than owning a framed envelope type.
 
 ## [0.1.0-alpha.15] - 2026-04-18
 

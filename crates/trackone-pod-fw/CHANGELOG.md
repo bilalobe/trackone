@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-alpha.16] - 2026-04-24
+
 ### Changed
 - `trackone-pod-fw` is now `no_std`-first by default; the `std` feature is
   opt-in for host-side tests/development and forwards `std` to its core/ingest

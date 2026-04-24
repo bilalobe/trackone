@@ -7,12 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-alpha.16] - 2026-04-24
+
 ### Changed
 - Gateway scripts that need native authority (`canonical_cbor.py`, `merkle_batcher.py`, and `verify_cli.py`) now import the stable `trackone_core.ledger`, `trackone_core.merkle`, and `trackone_core.ots` surfaces directly instead of reaching into `trackone_core._native`.
 - The native gateway extension now exports a real `trackone_core.sensorthings` boundary for deterministic SensorThings entity IDs and observation projection, and the shared Python `trackone_core.sensorthings` module now delegates those deterministic steps to Rust instead of reimplementing them locally.
-- `trackone-ingest` and `trackone-pod-fw` now default to their `no_std`-friendly
-  surfaces; host-side replay/admission and pod test workflows opt into `std`
-  explicitly through crate features and root `just` recipes.
+- `trackone-ingest` and `trackone-pod-fw` now default to their `no_std`-friendly surfaces; host-side replay/admission and pod test workflows opt into `std` explicitly through crate features and root `just` recipes.
 
 ## [0.1.0-alpha.15] - 2026-04-18
 
