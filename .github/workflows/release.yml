@@ -88,6 +88,7 @@ jobs:
           crates=(
             trackone-constants
             trackone-core
+            trackone-ingest
             trackone-ledger
             trackone-pod-fw
             trackone-gateway
@@ -95,10 +96,29 @@ jobs:
 
           for crate in "${crates[@]}"; do
             echo "::group::Publishing ${crate}"
-            set +e
-            cargo publish -p "${crate}" --locked 2>&1 | tee /tmp/publish-out.txt
-            rc=${PIPESTATUS[0]}
-            set -e
+            rc=0
+            for attempt in 1 2 3; do
+              set +e
+              cargo publish -p "${crate}" --locked 2>&1 | tee /tmp/publish-out.txt
+              rc=${PIPESTATUS[0]}
+              set -e
+
+              if [ "$rc" -eq 0 ]; then
+                break
+              fi
+
+              if grep -qi "already exists" /tmp/publish-out.txt; then
+                break
+              fi
+
+              if grep -qi "no matching package named" /tmp/publish-out.txt && [ "$attempt" -lt 3 ]; then
+                echo "Retrying ${crate} after crates.io index propagation delay..."
+                sleep 20
+                continue
+              fi
+
+              break
+            done
 
             if [ "$rc" -ne 0 ]; then
               if grep -qi "already exists" /tmp/publish-out.txt; then
