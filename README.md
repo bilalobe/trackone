@@ -192,7 +192,8 @@ Notes:
 - `just demo` writes to `out/site_demo` by default; override with `just demo out_dir=out/other_demo`.
 - `just verify` defaults to `out/site_demo`; override with `just verify out_dir=out/other_demo`.
 - `just bench` runs the Python (`tox -e bench`) pytest-benchmark suite.
-- `just bench-rust` runs the Rust-only serialization benchmarks via `cargo bench`.
+- `just bench-rust` runs the Rust-side serialization benchmark report through
+  the current `trackone-core` cargo test target.
 
 ### Run project-wide quality checks
 
