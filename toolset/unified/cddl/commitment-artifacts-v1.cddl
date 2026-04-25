@@ -1,5 +1,6 @@
 ; TrackOne authoritative CBOR commitment family.
 ; Scope of this file:
+; - fact-json-projection-v1
 ; - env-fact-v1
 ; - fact-v1
 ; - block-header-v1
@@ -18,10 +19,13 @@
 ;   the Rust ledger types in crates/trackone-ledger/src/types.rs
 ; - Deterministic JSON-to-CBOR profile:
 ;   * unsigned and negative integers use shortest-form CBOR integer encoding
+;   * JSON integer inputs are valid only inside the signed-i64 or unsigned-u64
+;     ranges; out-of-range integers are invalid profile inputs
 ;   * finite JSON numbers with fractional representation use the shortest exact
 ;     CBOR float width: float16, then float32, otherwise float64
 ;   * non-finite floats are invalid inputs
 ;   * text map keys are sorted by encoded key length, then bytewise UTF-8 order
+;   * a field encoded as null is distinct from an absent optional field
 ; - ADR-003 Merkle policy for this commitment profile:
 ;   * leaf_hash = SHA-256(leaf_cbor_bytes)
 ;   * leaf hashes are sorted lexicographically as raw 32-byte values
@@ -31,6 +35,8 @@
 ; - String lexical constraints (for example lowercase hex) are enforced by the
 ;   JSON Schema and implementation layers; the first CDDL pass stays structural
 ;   so it remains portable and parser-friendly.
+; - Published vector-corpus facts use RFC3339 UTC text timestamps. The runtime
+;   fact.schema.json integer timestamp shape is a separate operational schema.
 
 pod-id = bstr .size 8
 timestamp = int
@@ -46,6 +52,7 @@ fact-kind = 1 / 2 / 3 / 250
 float-or-nil = float / nil
 uint-or-nil = uint / nil
 time-or-nil = int / nil
+projection-time-or-nil = tstr / nil
 
 json-cbor-scalar = nil / bool / int / float / tstr
 json-cbor-value = json-cbor-scalar / [* json-cbor-value] / {* tstr => json-cbor-value}
@@ -53,8 +60,8 @@ json-cbor-value = json-cbor-scalar / [* json-cbor-value] / {* tstr => json-cbor-
 fact-json-projection-v1 = {
   "pod_id": tstr,
   "fc": uint,
-  "ingest_time": int / tstr,
-  "pod_time": int / tstr / nil,
+  "ingest_time": tstr,
+  "pod_time": projection-time-or-nil,
   "kind": tstr,
   "payload": {* tstr => json-cbor-value},
   ? "ingest_time_rfc3339_utc": tstr,
