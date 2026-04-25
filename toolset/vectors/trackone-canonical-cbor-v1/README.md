@@ -19,6 +19,22 @@ shortest exact finite-float encoding (`float16`, then `float32`, otherwise
 `float64`), and text map keys sorted by encoded key length then bytewise UTF-8
 order. Non-finite floats are invalid.
 
+The corpus fact JSON files use `commitment_fact_projection.schema.json`, not
+the runtime `fact.schema.json` operational shape. The audited profile rules
+are:
+
+- JSON integers are valid only in signed-`i64` or unsigned-`u64` range;
+  out-of-range integers are invalid profile inputs.
+- Top-level fact fields are closed by schema. Payload keys are open, but values
+  must be JSON values accepted by the deterministic JSON-to-CBOR profile.
+- `ingest_time` and `pod_time` in corpus facts are RFC3339 UTC text with a `Z`
+  suffix; `pod_time` is required and may be explicit `null`.
+- Optional fields are omitted when unset. Absent and `null` are not equivalent.
+- Artifact files are raw bytes. Digest and root fields in JSON are lowercase
+  hexadecimal text. JSON projection payloads do not encode arbitrary bytes.
+- Day and block versions are version `1`; unknown top-level fields are rejected
+  by the public schemas.
+
 The Merkle policy is:
 
 - `leaf_hash = SHA-256(leaf_cbor_bytes)`
