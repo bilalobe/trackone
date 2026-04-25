@@ -57,6 +57,7 @@ Each ADR captures context, the decision, consequences, and alternatives.
 - [ADR-050: Fiftieth ADR Milestone and Record Stewardship](ADR-050-fiftieth-adr-milestone-and-record-stewardship.md)
 - [ADR-051: Internal Dependency Boundaries and Feature Demotion](ADR-051-internal-dependency-boundaries-and-feature-demotion.md)
 - [ADR-052: Commitment Profile Identifier Binding Boundary](ADR-052-commitment-profile-identifier-binding-boundary.md)
+- [ADR-053: Beta Public Contract Spine](ADR-053-beta-public-contract-spine.md)
 
 ## Index Conventions
 
@@ -120,6 +121,10 @@ Entries list **Status** and **Summary**. Related references are grouped under **
 - **[ADR-052](ADR-052-commitment-profile-identifier-binding-boundary.md): Commitment profile identifier binding boundary**
   **Status**: Accepted
   **Summary**: Defines `trackone-canonical-cbor-v1` as a claim-bound profile selector rather than a value embedded in every fact/day/Merkle/anchor preimage; signed manifests, evidence publications, and SCITT-style statements bind the identifier to claims, while raw roots remain non-self-describing.
+
+- **[ADR-053](ADR-053-beta-public-contract-spine.md): Beta public contract spine**
+  **Status**: Accepted
+  **Summary**: Freezes beta-bar migration rules for commitment-profile IDs, schema versions, artifact families, verifier tolerance, and projections; treats `day/<date>.verify.json` as public spine; defines disclosure classes by verifier behavior; and keeps rejection audit as schema-governed operator evidence unless promoted to a separate artifact family.
 
 - **[ADR-049](ADR-049-native-evidence-plane-crypto-boundary-and-pynacl-demotion.md): Native evidence-plane crypto boundary and PyNaCl demotion**
   **Status**: Accepted
