@@ -2,6 +2,7 @@
 
 **Status**: Accepted
 **Date**: 2026-04-10
+**Updated**: 2026-04-25
 
 ## Related ADRs
 
@@ -10,6 +11,7 @@
 - [ADR-043](ADR-043-phased-bundle-manifest-maturity-for-id.md): verifier-manifest maturity and publication posture
 - [ADR-045](ADR-045-git-signed-evidence-distribution-plane.md): publication/distribution boundary for evidence artifacts
 - [ADR-047](ADR-047-trackone-evidence-plane-within-device-lifecycle.md): evidence-plane boundary within a broader lifecycle system
+- [ADR-052](ADR-052-commitment-profile-identifier-binding-boundary.md): commitment profile identifier binding boundary
 
 ## Context
 
@@ -98,6 +100,11 @@ at minimum:
 - the applicable disclosure class; and
 - enough bundle or artifact identity to let a relying party relate the SCITT
   statement to the disclosed TrackOne evidence set.
+
+Per ADR-052, including `commitment_profile_id` in the signed SCITT statement
+payload is how SCITT publication binds the profile claim. SCITT publication
+does not retroactively put the profile identifier into fact, day, Merkle, OTS,
+TSA, or peer-signature preimages.
 
 Additional metadata such as `day_root`, site/day labels, or anchor-channel
 summary may be included, but local TrackOne verification remains authoritative
