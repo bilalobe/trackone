@@ -198,3 +198,59 @@ def test_portable_verifier_summary_keeps_shared_fields_only(
         "manifest": {"status": "missing", "source": None, "schema": "verify_manifest"},
         "overall": "verified",
     }
+
+
+def test_publication_channel_policy_and_manifest_env_overrides(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _clear_modules("trackone_core")
+    monkeypatch.setitem(sys.modules, "trackone_core._native", None)  # type: ignore[arg-type]
+
+    verification = importlib.import_module("trackone_core.verification")
+
+    channels = {
+        verification.CHANNEL_OTS: {
+            "enabled": True,
+            "status": verification.STATUS_VERIFIED,
+        },
+        verification.CHANNEL_TSA: {
+            "enabled": True,
+            "status": verification.STATUS_MISSING,
+        },
+        verification.CHANNEL_PEERS: {
+            "enabled": True,
+            "status": verification.STATUS_FAILED,
+        },
+        verification.CHANNEL_SCITT: {
+            "enabled": False,
+            "status": verification.STATUS_SKIPPED,
+        },
+    }
+
+    assert (
+        verification.compute_publication_overall_status(
+            policy_mode="warn",
+            channels=channels,
+        )
+        == "success"
+    )
+    assert (
+        verification.compute_publication_overall_status(
+            policy_mode="strict",
+            channels=channels,
+        )
+        == "failed"
+    )
+    assert verification.publication_channel_env_overrides(
+        {
+            "channels": {
+                verification.CHANNEL_OTS: {"enabled": True},
+                verification.CHANNEL_TSA: {"enabled": False},
+                verification.CHANNEL_SCITT: {"enabled": True},
+            }
+        }
+    ) == {
+        "ANCHOR_OTS_ENABLED": "1",
+        "ANCHOR_TSA_ENABLED": "0",
+        "ANCHOR_SCITT_ENABLED": "1",
+    }
