@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `trackone_core.admission` now provides package-level gateway admission-state
+  and rejection-audit helper shapes for rejection records, rejected-frame
+  hashing, audit day labels, and non-secret device-table state updates.
+- Public commitment-vector manifest schema plus vector-corpus README documenting the CBOR encoding profile, fact/day CBOR shapes, and ADR-003 Merkle policy needed by source-independent verifiers.
+
+### Changed
+- The local verification/export refusal gate now lives on
+  `trackone_core.verification.local_verification_failure`, so evidence export,
+  the demo runner, and compatibility imports share one package-level
+  local-integrity vocabulary.
+- `provisioning_records.py` now delegates provisioning-bundle construction and
+  shape validation to `trackone_core.sensorthings`, while retaining sidecar
+  checks, schema validation, and file writing in the CLI wrapper.
+- `frame_verifier.py` now delegates rejection-audit serialization and
+  admission-state update shaping to `trackone_core.admission`, while native
+  framed admission remains owned by the Rust ingest/gateway boundary.
+- Publication-channel status reduction and manifest channel enablement override
+  shaping now live behind `trackone_core.verification`, including shared
+  OTS/TSA/peer/SCITT channel-name vocabulary.
+- README surface labels and supported root workflow notes now match the current
+  package/script split and the `justfile` implementation of `bench-rust`.
+- The published `trackone-canonical-cbor-v1` vector manifest now names its CDDL profile, manifest schema, deterministic JSON-to-CBOR profile, and Merkle policy so external verifiers do not need to recover those rules from implementation comments.
+- `commitment-artifacts-v1.cddl` now distinguishes the published JSON-projection fact leaf shape from lower-level Rust positional fact arrays, documents the deterministic JSON-to-CBOR and Merkle policies, and aligns `sample-type` with the current appended `SampleType` vocabulary.
+
 ## [0.1.0-alpha.16] - 2026-04-24
 
 ### Changed
