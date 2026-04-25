@@ -4,6 +4,10 @@ import json
 from pathlib import Path
 
 from scripts.gateway.input_integrity import write_sha256_sidecar
+from trackone_core.sensorthings import (
+    build_provisioning_bundle,
+    validate_provisioning_bundle_shape,
+)
 
 
 def _write_authoritative_input(path: Path, payload: dict[str, object]) -> None:
@@ -61,6 +65,38 @@ def test_main_writes_canonical_bundle(tmp_path: Path, load_module) -> None:
     assert record["pod_id"] == "0000000000000003"
     assert record["deployment"]["deployment_sensor_key"] == "shtc3-ambient"
     assert record["identity_pubkey"] == "a" * 64
+
+
+def test_public_sensorthings_surface_builds_provisioning_bundle() -> None:
+    bundle = build_provisioning_bundle(
+        authoritative_input={
+            "version": 1,
+            "site_id": "an-001",
+            "records": [
+                {
+                    "pod_id": "0000000000000003",
+                    "deployment": {
+                        "deployment_sensor_key": "shtc3-ambient",
+                        "sensor_keys": {"temperature_air": "shtc3-ambient"},
+                    },
+                    "provisioning": {
+                        "identity_pubkey": "A" * 64,
+                        "firmware_version": "v1.2.3",
+                        "firmware_hash": "B" * 64,
+                        "birth_cert_sig": "C" * 128,
+                        "provisioned_at": 1_772_755_500,
+                    },
+                }
+            ],
+        },
+        site_id="an-001",
+        generated_at_utc="2026-04-25T12:00:00+00:00",
+    )
+
+    validate_provisioning_bundle_shape(bundle)
+    assert bundle["generated_at_utc"] == "2026-04-25T12:00:00+00:00"
+    assert bundle["records"][0]["identity_pubkey"] == "a" * 64
+    assert bundle["records"][0]["firmware_hash"] == "b" * 64
 
 
 def test_main_fails_when_input_lacks_authoritative_metadata(
