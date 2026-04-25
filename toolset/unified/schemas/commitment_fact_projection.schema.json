@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/schemas/commitment_fact_projection.schema.json",
+  "title": "TrackOne commitment fact JSON projection",
+  "type": "object",
+  "description": "JSON projection shape used by the trackone-canonical-cbor-v1 vector corpus before deterministic JSON-to-CBOR encoding. This is a conformance-corpus projection shape, not the runtime fact.schema.json shape.",
+  "properties": {
+    "pod_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Projection identifier string. This corpus does not require the runtime hex16 pod_id form."
+    },
+    "fc": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 18446744073709551615,
+      "description": "Frame counter encoded as a JSON integer in the uint64 range."
+    },
+    "ingest_time": {
+      "$ref": "#/$defs/rfc3339_utc_z",
+      "description": "UTC ingest timestamp rendered as RFC3339 text with a Z suffix."
+    },
+    "pod_time": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/rfc3339_utc_z"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "UTC pod timestamp rendered as RFC3339 text with a Z suffix, or explicit null when unavailable. The field is required; absence and null are not equivalent."
+    },
+    "kind": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_.-]*$",
+      "description": "Projection fact kind. The vector corpus uses lower-case dotted names such as env.sample."
+    },
+    "payload": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/json_value"
+      },
+      "description": "Sensor/application payload. Payload keys are open, but values must stay within JSON value types supported by the deterministic JSON-to-CBOR profile."
+    },
+    "ingest_time_rfc3339_utc": {
+      "$ref": "#/$defs/rfc3339_utc_z",
+      "description": "Optional compatibility timestamp. Omit when unset; do not encode as null."
+    },
+    "signature": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Optional detached signature text. Omit when unset; do not encode as null."
+    }
+  },
+  "$defs": {
+    "rfc3339_utc_z": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+    },
+    "json_scalar": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "integer",
+          "minimum": -9223372036854775808,
+          "maximum": 18446744073709551615
+        },
+        {
+          "type": "number",
+          "not": {
+            "type": "integer"
+          }
+        },
+        {
+          "type": "string"
+        }
+      ]
+    },
+    "json_value": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/json_scalar"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/json_value"
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/json_value"
+          }
+        }
+      ]
+    }
+  },
+  "required": [
+    "pod_id",
+    "fc",
+    "ingest_time",
+    "pod_time",
+    "kind",
+    "payload"
+  ],
+  "additionalProperties": false
+}
