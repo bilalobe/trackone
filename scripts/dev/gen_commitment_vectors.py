@@ -21,10 +21,42 @@ FACTS_DIR = OUT_DIR / "facts"
 PROFILE_ID = "trackone-canonical-cbor-v1"
 CDDL_PROFILE = "toolset/unified/cddl/commitment-artifacts-v1.cddl"
 MANIFEST_SCHEMA = "toolset/unified/schemas/commitment_vector_manifest.schema.json"
+FACT_JSON_SCHEMA = "toolset/unified/schemas/commitment_fact_projection.schema.json"
 SITE_ID = "an-001"
 DATE = "2025-10-07"
 BATCH_ID = f"{SITE_ID}-{DATE}-00"
 PREV_DAY_ROOT = "00" * 32
+PROFILE_CONSTRAINTS = {
+    "integer_ranges": {
+        "json_integer": "signed-or-unsigned-64-bit",
+        "signed_min": -9223372036854775808,
+        "unsigned_max": 18446744073709551615,
+        "out_of_range": "invalid",
+    },
+    "timestamp_representation": {
+        "fact_projection": "rfc3339-utc-z-text",
+        "day_labels": "yyyy-mm-dd-utc-text",
+        "runtime_fact_schema": "integer-unix-seconds-not-used-by-this-vector-projection",
+    },
+    "null_vs_absent": {
+        "pod_time": "required-nullable",
+        "optional_fields": "omit-when-unset",
+        "null_encoding": "cbor-null-only-when-json-field-is-present-null",
+    },
+    "bytes_representation": {
+        "artifact_files": "raw-bytes",
+        "digests": "lowercase-hex-text",
+        "json_projection_bytes": "not-used",
+        "lower_level_bstr": "only-in-positional-runtime-cddl-shapes",
+    },
+    "unknown_fields": {
+        "fact_projection_top_level": "reject",
+        "block_header": "reject",
+        "day_record": "reject",
+        "manifest": "reject",
+        "payload": "allow-json-values",
+    },
+}
 CBOR_PROFILE = {
     "id": "trackone-deterministic-json-cbor-v1",
     "map_key_order": "encoded-key-length-then-utf8-bytes",
@@ -127,8 +159,10 @@ def main() -> int:
         "commitment_profile_id": PROFILE_ID,
         "cddl_profile": CDDL_PROFILE,
         "manifest_schema": MANIFEST_SCHEMA,
+        "fact_json_schema": FACT_JSON_SCHEMA,
         "fact_cbor_shape": "fact-json-projection-v1",
         "day_record_cbor_shape": "day-record-v1",
+        "profile_constraints": PROFILE_CONSTRAINTS,
         "cbor_profile": CBOR_PROFILE,
         "merkle_policy": MERKLE_POLICY,
         "site_id": SITE_ID,
