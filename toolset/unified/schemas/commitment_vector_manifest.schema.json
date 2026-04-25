@@ -20,6 +20,9 @@
     "manifest_schema": {
       "type": "string"
     },
+    "fact_json_schema": {
+      "type": "string"
+    },
     "fact_cbor_shape": {
       "type": "string",
       "const": "fact-json-projection-v1"
@@ -58,6 +61,154 @@
         "integer_encoding",
         "float_encoding",
         "non_finite_floats"
+      ],
+      "additionalProperties": false
+    },
+    "profile_constraints": {
+      "type": "object",
+      "properties": {
+        "integer_ranges": {
+          "type": "object",
+          "properties": {
+            "json_integer": {
+              "type": "string",
+              "const": "signed-or-unsigned-64-bit"
+            },
+            "signed_min": {
+              "type": "integer",
+              "const": -9223372036854775808
+            },
+            "unsigned_max": {
+              "type": "integer",
+              "const": 18446744073709551615
+            },
+            "out_of_range": {
+              "type": "string",
+              "const": "invalid"
+            }
+          },
+          "required": [
+            "json_integer",
+            "signed_min",
+            "unsigned_max",
+            "out_of_range"
+          ],
+          "additionalProperties": false
+        },
+        "timestamp_representation": {
+          "type": "object",
+          "properties": {
+            "fact_projection": {
+              "type": "string",
+              "const": "rfc3339-utc-z-text"
+            },
+            "day_labels": {
+              "type": "string",
+              "const": "yyyy-mm-dd-utc-text"
+            },
+            "runtime_fact_schema": {
+              "type": "string",
+              "const": "integer-unix-seconds-not-used-by-this-vector-projection"
+            }
+          },
+          "required": [
+            "fact_projection",
+            "day_labels",
+            "runtime_fact_schema"
+          ],
+          "additionalProperties": false
+        },
+        "null_vs_absent": {
+          "type": "object",
+          "properties": {
+            "pod_time": {
+              "type": "string",
+              "const": "required-nullable"
+            },
+            "optional_fields": {
+              "type": "string",
+              "const": "omit-when-unset"
+            },
+            "null_encoding": {
+              "type": "string",
+              "const": "cbor-null-only-when-json-field-is-present-null"
+            }
+          },
+          "required": [
+            "pod_time",
+            "optional_fields",
+            "null_encoding"
+          ],
+          "additionalProperties": false
+        },
+        "bytes_representation": {
+          "type": "object",
+          "properties": {
+            "artifact_files": {
+              "type": "string",
+              "const": "raw-bytes"
+            },
+            "digests": {
+              "type": "string",
+              "const": "lowercase-hex-text"
+            },
+            "json_projection_bytes": {
+              "type": "string",
+              "const": "not-used"
+            },
+            "lower_level_bstr": {
+              "type": "string",
+              "const": "only-in-positional-runtime-cddl-shapes"
+            }
+          },
+          "required": [
+            "artifact_files",
+            "digests",
+            "json_projection_bytes",
+            "lower_level_bstr"
+          ],
+          "additionalProperties": false
+        },
+        "unknown_fields": {
+          "type": "object",
+          "properties": {
+            "fact_projection_top_level": {
+              "type": "string",
+              "const": "reject"
+            },
+            "block_header": {
+              "type": "string",
+              "const": "reject"
+            },
+            "day_record": {
+              "type": "string",
+              "const": "reject"
+            },
+            "manifest": {
+              "type": "string",
+              "const": "reject"
+            },
+            "payload": {
+              "type": "string",
+              "const": "allow-json-values"
+            }
+          },
+          "required": [
+            "fact_projection_top_level",
+            "block_header",
+            "day_record",
+            "manifest",
+            "payload"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "integer_ranges",
+        "timestamp_representation",
+        "null_vs_absent",
+        "bytes_representation",
+        "unknown_fields"
       ],
       "additionalProperties": false
     },
@@ -164,9 +315,11 @@
     "commitment_profile_id",
     "cddl_profile",
     "manifest_schema",
+    "fact_json_schema",
     "fact_cbor_shape",
     "day_record_cbor_shape",
     "cbor_profile",
+    "profile_constraints",
     "merkle_policy",
     "site_id",
     "date",
