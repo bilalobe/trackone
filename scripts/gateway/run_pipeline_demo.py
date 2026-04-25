@@ -27,6 +27,7 @@ from trackone_core.verification import (
     STATUS_PENDING,
     STATUS_SKIPPED,
     STATUS_VERIFIED,
+    local_verification_failure,
     portable_verifier_summary,
     verification_channel,
 )
@@ -53,7 +54,6 @@ try:  # Support both package imports and direct script execution.
         validate_instance,
     )
     from .tsa_stamp import TsaStampError, tsa_stamp_day_blob
-    from .verification_gate import local_verification_failure
     from .verification_manifest import verify_manifest_path
 except ImportError:  # pragma: no cover - fallback when run as a script
     from schema_validation import (  # type: ignore
@@ -65,7 +65,6 @@ except ImportError:  # pragma: no cover - fallback when run as a script
         TsaStampError,
         tsa_stamp_day_blob,
     )
-    from verification_gate import local_verification_failure  # type: ignore
     from verification_manifest import verify_manifest_path  # type: ignore
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
