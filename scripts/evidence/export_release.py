@@ -25,11 +25,14 @@ from scripts.gateway.schema_validation import (  # noqa: E402
     require_schema_validation,
     validate_instance,
 )
-from scripts.gateway.verification_gate import local_verification_failure  # noqa: E402
 from scripts.gateway.verification_manifest import verify_manifest_path  # noqa: E402
 from trackone_core.ledger import sha256_hex  # noqa: E402
 from trackone_core.release import verification_bundle_from_summary  # noqa: E402
-from trackone_core.verification import portable_verifier_summary  # noqa: E402
+from trackone_core.verification import (  # noqa: E402
+    local_verification_failure,
+    portable_verifier_summary,
+    publication_channel_env_overrides,
+)
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -193,16 +196,7 @@ def _require_fresh_verification(
                 policy_mode = mode
         channels = anchoring.get("channels")
         if isinstance(channels, dict):
-            for name, env_name in (
-                ("ots", "ANCHOR_OTS_ENABLED"),
-                ("tsa", "ANCHOR_TSA_ENABLED"),
-                ("peers", "ANCHOR_PEERS_ENABLED"),
-            ):
-                channel = channels.get(name)
-                if isinstance(channel, dict):
-                    enabled = channel.get("enabled")
-                    if isinstance(enabled, bool):
-                        env_overrides[env_name] = "1" if enabled else "0"
+            env_overrides.update(publication_channel_env_overrides(anchoring))
 
     verify_args = [
         "--root",
