@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from scripts.gateway.verification_gate import local_verification_failure
+from trackone_core.verification import local_verification_failure
 
 
 def test_local_verification_failure_accepts_warn_mode_anchoring_failure() -> None:
