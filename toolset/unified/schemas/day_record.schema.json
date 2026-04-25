@@ -7,7 +7,7 @@
   "properties": {
     "version": {
       "type": "integer",
-      "minimum": 1,
+      "const": 1,
       "description": "Schema version (currently 1)."
     },
     "site_id": {
