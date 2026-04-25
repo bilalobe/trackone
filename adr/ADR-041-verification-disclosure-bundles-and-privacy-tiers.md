@@ -2,7 +2,7 @@
 
 **Status**: Accepted
 **Date**: 2026-02-23
-**Updated**: 2026-03-13
+**Updated**: 2026-04-25
 
 ## Related ADRs
 
@@ -11,6 +11,7 @@
 - [ADR-015](ADR-015-parallel-anchoring-ots-rfc3161-tsa.md): Optional parallel attestations
 - [ADR-032](ADR-032-informational-rfc-verifiable-telemetry-ledger.md): RFC posture
 - [ADR-043](ADR-043-phased-bundle-manifest-maturity-for-id.md): Phased manifest maturity for the I-D
+- [ADR-052](ADR-052-commitment-profile-identifier-binding-boundary.md): Commitment profile identifier binding boundary
 
 ## Context
 
@@ -47,6 +48,11 @@ carrying:
 - artifact path plus digest entries; and
 - machine-readable executed/skipped-check metadata.
 
+Per ADR-052, `commitment_profile_id` is a claim-bound identifier. It is not
+part of the fact/day/Merkle/OTS commitment preimages, so the standalone
+manifest is the normal place where a Tier A bundle explicitly binds the
+profile claim to the disclosed artifact set.
+
 The current pipeline tooling emits that manifest on the main demo/pipeline
 path. Per ADR-043, the standalone manifest is RECOMMENDED but not yet
 universally enforced: manifest absence is not currently fatal across every
@@ -59,6 +65,10 @@ labeled "not independently recomputable". If the standalone manifest is
 absent on a tooling path that supports manifest emission, output SHOULD be labeled
 "manifest-absent" or equivalent transitional wording until strict manifest
 requirement is enabled consistently.
+
+If `commitment_profile_id` is absent and a verifier uses a configured/default
+profile, output SHOULD state that the profile was inferred or defaulted rather
+than explicitly claim-bound.
 
 ### 3) Normative minimum for Tier B
 
