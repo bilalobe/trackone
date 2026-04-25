@@ -82,7 +82,8 @@
       "properties": {
         "commitment_profile_id": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Claim-bound commitment profile identifier signed as part of the SCITT statement payload; it is not embedded in lower-level fact/day/Merkle preimages."
         },
         "disclosure_class": {
           "enum": [

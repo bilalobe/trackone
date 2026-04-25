@@ -26,3 +26,9 @@ The Merkle policy is:
 - `parent_hash = SHA-256(left || right)`
 - duplicate the last hash at odd levels
 - empty tree root is `SHA-256(b"")`
+
+The profile identifier is claim-bound, not embedded into every commitment
+preimage. This corpus carries `commitment_profile_id` in `manifest.json`, but
+the fact hashes, Merkle root, and day-record digest are computed over the
+artifact bytes and Merkle policy above. A verifier must select and check the
+explicit profile claim before interpreting the committed bytes.

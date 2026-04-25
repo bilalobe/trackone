@@ -3,6 +3,10 @@
 ; The SCITT envelope itself is COSE_Sign1. Protected headers are expected to
 ; carry alg, content type, and CWT claims for iss/sub. Receipts are attached by
 ; the transparency service in unprotected header label 394.
+;
+; Per ADR-052, "commitment_profile_id" is bound by the signed statement payload
+; claim. It is not embedded in the lower-level fact, day, Merkle, OTS, TSA, or
+; peer-signature preimages.
 
 trackone-verify-manifest-statement = {
   "statement_kind" => "trackone.verify-manifest.v1",

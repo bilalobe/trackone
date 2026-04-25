@@ -11,7 +11,8 @@
     },
     "commitment_profile_id": {
       "type": "string",
-      "const": "trackone-canonical-cbor-v1"
+      "const": "trackone-canonical-cbor-v1",
+      "description": "Claim-bound commitment profile identifier for this conformance corpus; it is not embedded in the fact/day/Merkle preimages."
     },
     "cddl_profile": {
       "type": "string"
