@@ -141,7 +141,9 @@ fn encode_value(buf: &mut Vec<u8>, value: &Value) -> Result<()> {
                 cbor_i64(buf, i);
                 return Ok(());
             }
-            if let Some(f) = num.as_f64() {
+            if num.is_f64()
+                && let Some(f) = num.as_f64()
+            {
                 return cbor_float(buf, f);
             }
             Err(Error::UnsupportedNumber)
@@ -229,6 +231,27 @@ mod tests {
         let cbor = canonical_cbor_bytes(&v).expect("cbor");
         assert!(cbor.windows(2).any(|w| w == [0x61, b'n']));
         assert!(cbor.contains(&0x0A));
+    }
+
+    #[test]
+    fn cbor_integer_bounds_use_integer_encoding() {
+        assert_eq!(
+            canonical_cbor_bytes(&json!(u64::MAX)).unwrap(),
+            vec![0x1B, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]
+        );
+        assert_eq!(
+            canonical_cbor_bytes(&json!(i64::MIN)).unwrap(),
+            vec![0x3B, 0x7F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]
+        );
+    }
+
+    #[test]
+    fn cbor_distinguishes_null_from_absent_field() {
+        let absent = canonical_cbor_bytes(&json!({})).unwrap();
+        let present_null = canonical_cbor_bytes(&json!({"pod_time": null})).unwrap();
+
+        assert_ne!(absent, present_null);
+        assert!(present_null.contains(&0xF6));
     }
 
     #[test]
