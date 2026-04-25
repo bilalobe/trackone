@@ -56,6 +56,7 @@ Each ADR captures context, the decision, consequences, and alternatives.
 - [ADR-049: Native Evidence-Plane Crypto Boundary and PyNaCl Demotion](ADR-049-native-evidence-plane-crypto-boundary-and-pynacl-demotion.md)
 - [ADR-050: Fiftieth ADR Milestone and Record Stewardship](ADR-050-fiftieth-adr-milestone-and-record-stewardship.md)
 - [ADR-051: Internal Dependency Boundaries and Feature Demotion](ADR-051-internal-dependency-boundaries-and-feature-demotion.md)
+- [ADR-052: Commitment Profile Identifier Binding Boundary](ADR-052-commitment-profile-identifier-binding-boundary.md)
 
 ## Index Conventions
 
@@ -113,8 +114,12 @@ Entries list **Status** and **Summary**. Related references are grouped under **
   **Summary**: Separate transport encoding (Postcard) from commitment encoding to avoid accidental mixing of wire formats and hash commitments.
 
 - **[ADR-039](ADR-039-cbor-first-commitment-profile-and-artifact-authority.md): CBOR-first commitment profile and artifact authority**
-  **Status**: Accepted, Updated 2026-04-18
-  **Summary**: Makes deterministic CBOR the canonical commitment path (RFC 8949 baseline + TrackOne profile constraints), defines `.cbor` artifacts as authoritative, and demotes JSON to projection-only views.
+  **Status**: Accepted, Updated 2026-04-25
+  **Summary**: Makes deterministic CBOR the canonical commitment path (RFC 8949 baseline + TrackOne profile constraints), defines `.cbor` artifacts as authoritative, demotes JSON to projection-only views, and points profile-identifier binding semantics to ADR-052.
+
+- **[ADR-052](ADR-052-commitment-profile-identifier-binding-boundary.md): Commitment profile identifier binding boundary**
+  **Status**: Accepted
+  **Summary**: Defines `trackone-canonical-cbor-v1` as a claim-bound profile selector rather than a value embedded in every fact/day/Merkle/anchor preimage; signed manifests, evidence publications, and SCITT-style statements bind the identifier to claims, while raw roots remain non-self-describing.
 
 - **[ADR-049](ADR-049-native-evidence-plane-crypto-boundary-and-pynacl-demotion.md): Native evidence-plane crypto boundary and PyNaCl demotion**
   **Status**: Accepted
@@ -360,12 +365,12 @@ Entries list **Status** and **Summary**. Related references are grouped under **
 
 ## Cross-Reference Matrix
 
-**Cryptography & Framing**: [ADR-001](ADR-001-primitives-x25519-hkdf-xchacha.md) \<- [ADR-002](ADR-002-telemetry-framing-and-replay-policy.md), [ADR-005](ADR-005-pynacl-migration.md), [ADR-018](ADR-018-cryptographic-randomness-and-nonce-policy.md), [ADR-034](ADR-034-serialization-boundaries-transport-vs-commitments.md), [ADR-039](ADR-039-cbor-first-commitment-profile-and-artifact-authority.md), [ADR-049](ADR-049-native-evidence-plane-crypto-boundary-and-pynacl-demotion.md)
+**Cryptography & Framing**: [ADR-001](ADR-001-primitives-x25519-hkdf-xchacha.md) \<- [ADR-002](ADR-002-telemetry-framing-and-replay-policy.md), [ADR-005](ADR-005-pynacl-migration.md), [ADR-018](ADR-018-cryptographic-randomness-and-nonce-policy.md), [ADR-034](ADR-034-serialization-boundaries-transport-vs-commitments.md), [ADR-039](ADR-039-cbor-first-commitment-profile-and-artifact-authority.md), [ADR-049](ADR-049-native-evidence-plane-crypto-boundary-and-pynacl-demotion.md), [ADR-052](ADR-052-commitment-profile-identifier-binding-boundary.md)
 **OTS Pipeline**: [ADR-003](ADR-003-merkle-canonicalization-and-ots-anchoring.md) \<- [ADR-007](ADR-007-ots-ci-verification-and-bitcoin-headers.md), [ADR-008](ADR-008-m4-completion-ots-workflow.md), [ADR-021](ADR-021-safety-net-ots-pipeline-verification.md), [ADR-023](ADR-023-ots-vs-git-integrity.md)
 **Calendar & Trust**: [ADR-014](ADR-014-stationary-ots-calendar.md) \<- [ADR-020](ADR-020-stationary-ots-calendar-followup.md), [ADR-022](ADR-022-first-party-stationary-ots-calendar-service.md); [ADR-019](ADR-019-rust-gateway-chain-of-trust.md) \<- [ADR-024](ADR-024-anti-replay-and-ots-backed-ledger.md), [ADR-025](ADR-025-adaptive-uplink-cadence-over-lora.md), [ADR-026](ADR-026-ota-firmware-updates-over-lora.md)
 **Ledger & Anti-Replay**: [ADR-024](ADR-024-anti-replay-and-ots-backed-ledger.md) \<- [ADR-002](ADR-002-telemetry-framing-and-replay-policy.md), [ADR-003](ADR-003-merkle-canonicalization-and-ots-anchoring.md), [ADR-006](ADR-006-forward-only-schema-and-salt8.md), [ADR-025](ADR-025-adaptive-uplink-cadence-over-lora.md), [ADR-026](ADR-026-ota-firmware-updates-over-lora.md), [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md), [ADR-041](ADR-041-verification-disclosure-bundles-and-privacy-tiers.md)
 **Firmware Runtime & Recovery**: [ADR-042](ADR-042-hardware-watchdog-and-liveness-registry.md) \<- [ADR-021](ADR-021-safety-net-ots-pipeline-verification.md), [ADR-024](ADR-024-anti-replay-and-ots-backed-ledger.md)
-**Conformance & Interop**: [ADR-032](ADR-032-informational-rfc-verifiable-telemetry-ledger.md) \<- [ADR-039](ADR-039-cbor-first-commitment-profile-and-artifact-authority.md), [ADR-040](ADR-040-commitment-test-vectors-and-conformance-gates.md), [ADR-041](ADR-041-verification-disclosure-bundles-and-privacy-tiers.md), [ADR-043](ADR-043-phased-bundle-manifest-maturity-for-id.md)
+**Conformance & Interop**: [ADR-032](ADR-032-informational-rfc-verifiable-telemetry-ledger.md) \<- [ADR-039](ADR-039-cbor-first-commitment-profile-and-artifact-authority.md), [ADR-040](ADR-040-commitment-test-vectors-and-conformance-gates.md), [ADR-041](ADR-041-verification-disclosure-bundles-and-privacy-tiers.md), [ADR-043](ADR-043-phased-bundle-manifest-maturity-for-id.md), [ADR-052](ADR-052-commitment-profile-identifier-binding-boundary.md)
 **Environmental Evidence & Projections**: [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md) \<- [ADR-027](ADR-027-sensorthings-shtc3-representation.md), [ADR-028](ADR-028-sensorthings-projection-mapping.md), [ADR-029](ADR-029-env-daily-summaries-and-usecases.md)
 **Future Roadmap**: [ADR-017](ADR-017-rust-core-and-pyo3-integration.md), [ADR-036](ADR-036-post-quantum-kem.md), [ADR-037](ADR-037-signature-roles-and-verification-boundaries.md)
 **System Scope & Boundary**: [ADR-047](ADR-047-trackone-evidence-plane-within-device-lifecycle.md) \<- [ADR-024](ADR-024-anti-replay-and-ots-backed-ledger.md), [ADR-032](ADR-032-informational-rfc-verifiable-telemetry-ledger.md), [ADR-037](ADR-037-signature-roles-and-verification-boundaries.md), [ADR-039](ADR-039-cbor-first-commitment-profile-and-artifact-authority.md), [ADR-041](ADR-041-verification-disclosure-bundles-and-privacy-tiers.md), [ADR-046](ADR-046-sealed-trust-root-boundary-and-deferring-trackone-seal.md)
