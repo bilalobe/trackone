@@ -2,7 +2,7 @@
 
 **Status**: Accepted
 **Date**: 2026-02-23
-**Updated**: 2026-04-18
+**Updated**: 2026-04-25
 
 ## Related ADRs
 
@@ -10,6 +10,7 @@
 - [ADR-034](ADR-034-serialization-boundaries-transport-vs-commitments.md): Transport vs commitment boundary
 - [ADR-024](ADR-024-anti-replay-and-ots-backed-ledger.md): Ledger semantics and anti-replay
 - [ADR-032](ADR-032-informational-rfc-verifiable-telemetry-ledger.md): Informational RFC track
+- [ADR-052](ADR-052-commitment-profile-identifier-binding-boundary.md): Commitment profile identifier binding boundary
 
 ## Context
 
@@ -93,6 +94,24 @@ During migration, a dual-artifact mode is allowed:
 - both CBOR canonical artifacts and JSON projections may be emitted;
 - verifiers MUST recompute roots from canonical CBOR bytes;
 - any root mismatch between CBOR and JSON projections MUST fail CI.
+
+### 6) Commitment profile identifier binding
+
+`trackone-canonical-cbor-v1` is the identifier for the profile semantics, but
+it is not embedded into every lower-level commitment preimage.
+
+Per ADR-052, the identifier is **claim-bound, not commitment-preimage-bound**:
+
+- fact hashes, Merkle roots, day-artifact digests, OTS/TSA proofs, and optional
+  peer signatures bind the artifact bytes and their local context;
+- verifier manifests, conformance manifests, exported evidence manifests, and
+  SCITT-style statement payloads carry `commitment_profile_id`; and
+- if those claim objects are signed or published through a signed distribution
+  surface, the profile identifier is bound to that claim by the enclosing
+  signature or publication mechanism.
+
+A raw root or artifact digest is therefore not self-describing. Verifiers MUST
+select an explicit supported profile before interpreting disclosed artifacts.
 
 ## Consequences
 
