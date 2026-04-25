@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from collections.abc import Iterable
 from datetime import UTC, datetime
 from typing import Any, cast
@@ -345,6 +346,14 @@ class SensorIdentityResolutionError(ProjectionError):
     """Raised when a SensorThings Sensor identity cannot be resolved."""
 
 
+class ProvisioningRecordsError(ValueError):
+    """Raised when provisioning records cannot be materialized safely."""
+
+
+_HEX_64_RE = re.compile(r"^[0-9a-fA-F]{64}$")
+_HEX_128_RE = re.compile(r"^[0-9a-fA-F]{128}$")
+
+
 def entity_id(kind: str, *components: str) -> str:
     if _native_sensorthings is not None and hasattr(_native_sensorthings, "entity_id"):
         native_id = _native_sensorthings.entity_id(kind, *components)
@@ -497,6 +506,176 @@ def build_bundle(
             "dict/list/scalar values"
         ) from exc
     return bundle
+
+
+def build_provisioning_bundle(
+    *,
+    authoritative_input: dict[str, Any],
+    site_id: str,
+    generated_at_utc: str | None = None,
+) -> dict[str, Any]:
+    records: list[dict[str, Any]] = []
+    source_records = authoritative_input.get("records")
+    if not isinstance(source_records, list):
+        raise ProvisioningRecordsError(
+            "authoritative provisioning input must contain records[]"
+        )
+    for entry in source_records:
+        if not isinstance(entry, dict):
+            continue
+        pod_id = entry.get("pod_id")
+        if not isinstance(pod_id, str) or not pod_id:
+            continue
+        records.append(
+            _build_provisioning_record(
+                pod_id=pod_id,
+                entry=entry,
+                site_id=site_id,
+            )
+        )
+
+    return {
+        "version": 1,
+        "generated_at_utc": generated_at_utc or datetime.now(UTC).isoformat(),
+        "site_id": site_id,
+        "records": records,
+    }
+
+
+def validate_provisioning_bundle_shape(bundle: dict[str, Any]) -> None:
+    records = bundle.get("records")
+    if not isinstance(records, list):
+        raise ProvisioningRecordsError("provisioning bundle must contain records[]")
+    for idx, record in enumerate(records):
+        if not isinstance(record, dict):
+            raise ProvisioningRecordsError(f"records[{idx}] must be an object")
+        for key in (
+            "pod_id",
+            "firmware_version",
+            "firmware_hash",
+            "identity_pubkey",
+            "birth_cert_sig",
+            "provisioned_at",
+            "deployment",
+        ):
+            if key not in record:
+                raise ProvisioningRecordsError(f"records[{idx}] missing field: {key}")
+        deployment = record["deployment"]
+        if not isinstance(deployment, dict):
+            raise ProvisioningRecordsError(f"records[{idx}].deployment must be object")
+        deployment_sensor_key = deployment.get("deployment_sensor_key")
+        if (
+            not isinstance(deployment_sensor_key, str)
+            or not deployment_sensor_key.strip()
+        ):
+            raise ProvisioningRecordsError(
+                f"records[{idx}].deployment.deployment_sensor_key must be non-empty"
+            )
+
+
+def _build_provisioning_record(
+    *,
+    pod_id: str,
+    entry: dict[str, Any],
+    site_id: str,
+) -> dict[str, Any]:
+    provisioning = _require_provisioning_object(entry, pod_id)
+    identity_pubkey = provisioning.get("identity_pubkey")
+    firmware_version = provisioning.get("firmware_version")
+    firmware_hash = provisioning.get("firmware_hash")
+    birth_cert_sig = provisioning.get("birth_cert_sig")
+    provisioned_at = provisioning.get("provisioned_at")
+    if (
+        not isinstance(identity_pubkey, str)
+        or _HEX_64_RE.fullmatch(identity_pubkey) is None
+    ):
+        raise ProvisioningRecordsError(
+            f"record {pod_id} provisioning.identity_pubkey must be 64 hex chars"
+        )
+    if not isinstance(firmware_version, str) or not firmware_version.strip():
+        raise ProvisioningRecordsError(
+            f"record {pod_id} provisioning.firmware_version must be non-empty"
+        )
+    if (
+        not isinstance(firmware_hash, str)
+        or _HEX_64_RE.fullmatch(firmware_hash) is None
+    ):
+        raise ProvisioningRecordsError(
+            f"record {pod_id} provisioning.firmware_hash must be 64 hex chars"
+        )
+    if (
+        not isinstance(birth_cert_sig, str)
+        or _HEX_128_RE.fullmatch(birth_cert_sig) is None
+    ):
+        raise ProvisioningRecordsError(
+            f"record {pod_id} provisioning.birth_cert_sig must be 128 hex chars"
+        )
+    if not isinstance(provisioned_at, int):
+        raise ProvisioningRecordsError(
+            f"record {pod_id} provisioning.provisioned_at must be an integer"
+        )
+
+    site_override = provisioning.get("site_id")
+    if isinstance(site_override, str):
+        record_site_id: str | None = site_override
+    else:
+        record_site_id = site_id
+
+    return {
+        "pod_id": pod_id,
+        "firmware_version": firmware_version.strip(),
+        "firmware_hash": firmware_hash.lower(),
+        "identity_pubkey": identity_pubkey.lower(),
+        "birth_cert_sig": birth_cert_sig.lower(),
+        "provisioned_at": provisioned_at,
+        "site_id": record_site_id,
+        "deployment": _deployment_object(pod_id=pod_id, entry=entry),
+    }
+
+
+def _require_provisioning_object(entry: dict[str, Any], pod_id: str) -> dict[str, Any]:
+    provisioning = entry.get("provisioning")
+    if not isinstance(provisioning, dict):
+        raise ProvisioningRecordsError(f"record {pod_id} missing provisioning metadata")
+    return provisioning
+
+
+def _deployment_object(
+    *,
+    pod_id: str,
+    entry: dict[str, Any],
+) -> dict[str, Any]:
+    deployment = entry.get("deployment")
+    if not isinstance(deployment, dict):
+        raise ProvisioningRecordsError(f"record {pod_id} missing deployment metadata")
+    deployment_obj = deployment
+
+    sensor_keys = deployment_obj.get("sensor_keys")
+    clean_sensor_keys: dict[str, str] | None = None
+    if isinstance(sensor_keys, dict):
+        clean_sensor_keys = {
+            str(k): str(v).strip()
+            for k, v in sensor_keys.items()
+            if isinstance(k, str) and isinstance(v, str) and v.strip()
+        }
+        if not clean_sensor_keys:
+            clean_sensor_keys = None
+
+    deployment_sensor_key = deployment_obj.get("deployment_sensor_key")
+    if not isinstance(deployment_sensor_key, str) or not deployment_sensor_key.strip():
+        raise ProvisioningRecordsError(
+            f"record {pod_id} deployment missing deployment_sensor_key"
+        )
+
+    out: dict[str, Any] = {
+        "deployment_sensor_key": deployment_sensor_key.strip(),
+    }
+    if clean_sensor_keys is not None:
+        out["sensor_keys"] = clean_sensor_keys
+    sensors = deployment_obj.get("sensors")
+    if isinstance(sensors, list | dict):
+        out["sensors"] = sensors
+    return out
 
 
 def _project_env_payload(
@@ -1077,12 +1256,15 @@ def _device_num_from_id(device_id: str) -> int | None:
 __all__ = [
     "OBSERVED_PROPERTIES",
     "ProjectionError",
+    "ProvisioningRecordsError",
     "SAMPLE_TYPE_TO_PROPERTY_KEY",
     "SENSOR_IDENTITY_FIELDS",
     "SENSOR_METADATA_SCOPES",
     "SensorIdentityResolutionError",
+    "build_provisioning_bundle",
     "entity_id",
     "build_bundle",
     "project_fact",
     "resolve_sensor_key",
+    "validate_provisioning_bundle_shape",
 ]
