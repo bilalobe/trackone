@@ -16,6 +16,7 @@
   "day_record_cbor_shape": "day-record-v1",
   "day_record_json_path": "day-record.json",
   "fact_cbor_shape": "fact-json-projection-v1",
+  "fact_json_schema": "toolset/unified/schemas/commitment_fact_projection.schema.json",
   "facts": [
     {
       "cbor_path": "facts/fact-001.cbor",
@@ -52,6 +53,37 @@
   },
   "merkle_root": "95f6c013cc5bc306a3b5bbb2484078b5491e36a8b0f4b32aab85d211ee562853",
   "prev_day_root": "0000000000000000000000000000000000000000000000000000000000000000",
+  "profile_constraints": {
+    "bytes_representation": {
+      "artifact_files": "raw-bytes",
+      "digests": "lowercase-hex-text",
+      "json_projection_bytes": "not-used",
+      "lower_level_bstr": "only-in-positional-runtime-cddl-shapes"
+    },
+    "integer_ranges": {
+      "json_integer": "signed-or-unsigned-64-bit",
+      "out_of_range": "invalid",
+      "signed_min": -9223372036854775808,
+      "unsigned_max": 18446744073709551615
+    },
+    "null_vs_absent": {
+      "null_encoding": "cbor-null-only-when-json-field-is-present-null",
+      "optional_fields": "omit-when-unset",
+      "pod_time": "required-nullable"
+    },
+    "timestamp_representation": {
+      "day_labels": "yyyy-mm-dd-utc-text",
+      "fact_projection": "rfc3339-utc-z-text",
+      "runtime_fact_schema": "integer-unix-seconds-not-used-by-this-vector-projection"
+    },
+    "unknown_fields": {
+      "block_header": "reject",
+      "day_record": "reject",
+      "fact_projection_top_level": "reject",
+      "manifest": "reject",
+      "payload": "allow-json-values"
+    }
+  },
   "site_id": "an-001",
   "version": 1
 }
