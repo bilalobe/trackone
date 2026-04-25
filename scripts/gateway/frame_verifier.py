@@ -27,9 +27,7 @@ import argparse
 import importlib
 import json
 import sys
-from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
-from hashlib import sha256
 from pathlib import Path
 from typing import Any, TextIO
 
@@ -37,6 +35,14 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+from trackone_core.admission import (  # noqa: E402
+    RejectionRecord,
+    admission_state_update,
+    apply_admission_state_update,
+    audit_day_label,
+    emit_rejection,
+    hash_rejected_line,
+)
 from trackone_core.constants import (  # noqa: E402
     DEFAULT_INGEST_PROFILE,
     INGEST_PROFILES,
@@ -89,29 +95,9 @@ if JSONSCHEMA_AVAILABLE:  # pragma: no branch - import only when installed
     jsonschema = importlib.import_module("jsonschema")
 
 
-@dataclass(slots=True, frozen=True)
-class RejectionRecord:
-    device_id: str
-    fc: int | None
-    reason: str
-    observed_at_utc: str
-    frame_sha256: str
-    source: str
-
-
-def _hash_rejected_line(raw_line: str) -> str:
-    """Hash a rejected raw frame line, ignoring only trailing newline bytes."""
-    return sha256(raw_line.rstrip("\r\n").encode("utf-8")).hexdigest()
-
-
-def _audit_day_label(now: datetime | None = None) -> str:
-    current = now if now is not None else datetime.now(UTC)
-    return current.date().isoformat()
-
-
-def _emit_rejection(out_fh: TextIO, record: RejectionRecord) -> None:
-    out_fh.write(json.dumps(asdict(record), sort_keys=True) + "\n")
-    out_fh.flush()
+_hash_rejected_line = hash_rejected_line
+_audit_day_label = audit_day_label
+_emit_rejection = emit_rejection
 
 
 def _is_json_int(value: Any) -> bool:
@@ -637,19 +623,22 @@ def process(argv: list[str] | None = None) -> int:
                 with fact_file_json.open("w", encoding="utf-8") as out_fh:
                     json.dump(fact, out_fh, indent=2, sort_keys=True)
 
-                # Update device table for persistence (non-secret runtime state)
+                # Update non-secret runtime replay/admission state.
                 entry = device_table.get(dev_key, {})
-                state = replay_states.get(dev_key)
-                highest_fc_seen = getattr(state, "highest_fc_seen", None)
-                entry["highest_fc_seen"] = (
-                    int(highest_fc_seen)
-                    if isinstance(highest_fc_seen, int)
-                    else max(int(entry.get("highest_fc_seen", -1)), fc)
+                if not isinstance(entry, dict):
+                    entry = {}
+                apply_admission_state_update(
+                    device_table,
+                    admission_state_update(
+                        device_key=dev_key,
+                        device_table_entry=entry,
+                        replay_state=replay_states.get(dev_key),
+                        accepted_fc=fc,
+                        observed_at=frame_now,
+                        msg_type=hdr["msg_type"],
+                        flags=hdr["flags"],
+                    ),
                 )
-                entry["last_seen"] = frame_now.isoformat()
-                entry["msg_type"] = hdr["msg_type"]
-                entry["flags"] = hdr["flags"]
-                device_table[dev_key] = entry
 
             accepted += 1
 
