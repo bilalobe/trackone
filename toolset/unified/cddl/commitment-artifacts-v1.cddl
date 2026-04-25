@@ -9,10 +9,25 @@
 ; JSON projections and operational JSON artifacts remain specified by JSON Schema.
 ;
 ; Notes:
-; - env-fact-v1 and fact-v1 model the positional array encodings implemented in
-;   crates/trackone-core/src/cbor.rs
+; - env-fact-v1 and fact-v1 model the lower-level positional array encodings
+;   implemented in crates/trackone-core/src/cbor.rs. Published Merkle leaves in
+;   the trackone-canonical-cbor-v1 vector corpus are deterministic CBOR encodings
+;   of the canonical JSON fact projection, not these lower-level framed payload
+;   arrays.
 ; - block-header-v1 and day-record-v1 model the canonical CBOR map structure of
 ;   the Rust ledger types in crates/trackone-ledger/src/types.rs
+; - Deterministic JSON-to-CBOR profile:
+;   * unsigned and negative integers use shortest-form CBOR integer encoding
+;   * finite JSON numbers with fractional representation use the shortest exact
+;     CBOR float width: float16, then float32, otherwise float64
+;   * non-finite floats are invalid inputs
+;   * text map keys are sorted by encoded key length, then bytewise UTF-8 order
+; - ADR-003 Merkle policy for this commitment profile:
+;   * leaf_hash = SHA-256(leaf_cbor_bytes)
+;   * leaf hashes are sorted lexicographically as raw 32-byte values
+;   * parent_hash = SHA-256(left || right)
+;   * odd levels duplicate the last hash
+;   * an empty tree root is SHA-256(empty byte string)
 ; - String lexical constraints (for example lowercase hex) are enforced by the
 ;   JSON Schema and implementation layers; the first CDDL pass stays structural
 ;   so it remains portable and parser-friendly.
@@ -25,12 +40,26 @@ site-id = tstr
 day-label = tstr
 batch-id = tstr
 
-sample-type = 1..10 / 250
+sample-type = 1..50 / 250
 fact-kind = 1 / 2 / 3 / 250
 
 float-or-nil = float / nil
 uint-or-nil = uint / nil
 time-or-nil = int / nil
+
+json-cbor-scalar = nil / bool / int / float / tstr
+json-cbor-value = json-cbor-scalar / [* json-cbor-value] / {* tstr => json-cbor-value}
+
+fact-json-projection-v1 = {
+  "pod_id": tstr,
+  "fc": uint,
+  "ingest_time": int / tstr,
+  "pod_time": int / tstr / nil,
+  "kind": tstr,
+  "payload": {* tstr => json-cbor-value},
+  ? "ingest_time_rfc3339_utc": tstr,
+  ? "signature": tstr,
+}
 
 env-fact-v1 = [
   1,

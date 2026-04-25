@@ -1,11 +1,21 @@
 {
   "batch_id": "an-001-2025-10-07-00",
   "block_header_path": "block-header.json",
+  "cbor_profile": {
+    "float_encoding": "shortest-exact-float16-float32-float64",
+    "id": "trackone-deterministic-json-cbor-v1",
+    "integer_encoding": "shortest-form",
+    "map_key_order": "encoded-key-length-then-utf8-bytes",
+    "non_finite_floats": "invalid"
+  },
+  "cddl_profile": "toolset/unified/cddl/commitment-artifacts-v1.cddl",
   "commitment_profile_id": "trackone-canonical-cbor-v1",
   "date": "2025-10-07",
   "day_cbor_sha256": "5bfc50a7dcab7b7908ff9740b5759abb8eac0bdae58147b41eb6b7c3a9fb7209",
   "day_record_cbor_path": "day-record.cbor",
+  "day_record_cbor_shape": "day-record-v1",
   "day_record_json_path": "day-record.json",
+  "fact_cbor_shape": "fact-json-projection-v1",
   "facts": [
     {
       "cbor_path": "facts/fact-001.cbor",
@@ -31,6 +41,15 @@
     "57dfb9693e09132384b45d84c174dc1816e7d54e5aeb42a484fc5c0118fea049",
     "97358f1da38b74190dc6c033494bbc739c75e2ad427eb1fe4fd211332c6b207e"
   ],
+  "manifest_schema": "toolset/unified/schemas/commitment_vector_manifest.schema.json",
+  "merkle_policy": {
+    "empty_root": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "id": "trackone-adr003-sha256-hash-sorted-v1",
+    "leaf_hash": "SHA-256(leaf_cbor_bytes)",
+    "leaf_order": "lexicographic-raw-32-byte-hash",
+    "odd_leaf": "duplicate-last",
+    "parent_hash": "SHA-256(left || right)"
+  },
   "merkle_root": "95f6c013cc5bc306a3b5bbb2484078b5491e36a8b0f4b32aab85d211ee562853",
   "prev_day_root": "0000000000000000000000000000000000000000000000000000000000000000",
   "site_id": "an-001",

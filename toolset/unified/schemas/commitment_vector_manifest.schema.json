@@ -1,0 +1,183 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/schemas/commitment_vector_manifest.schema.json",
+  "title": "TrackOne commitment vector manifest",
+  "type": "object",
+  "description": "Portable manifest for the published TrackOne canonical CBOR commitment vector corpus.",
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1
+    },
+    "commitment_profile_id": {
+      "type": "string",
+      "const": "trackone-canonical-cbor-v1"
+    },
+    "cddl_profile": {
+      "type": "string"
+    },
+    "manifest_schema": {
+      "type": "string"
+    },
+    "fact_cbor_shape": {
+      "type": "string",
+      "const": "fact-json-projection-v1"
+    },
+    "day_record_cbor_shape": {
+      "type": "string",
+      "const": "day-record-v1"
+    },
+    "cbor_profile": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "const": "trackone-deterministic-json-cbor-v1"
+        },
+        "map_key_order": {
+          "type": "string",
+          "const": "encoded-key-length-then-utf8-bytes"
+        },
+        "integer_encoding": {
+          "type": "string",
+          "const": "shortest-form"
+        },
+        "float_encoding": {
+          "type": "string",
+          "const": "shortest-exact-float16-float32-float64"
+        },
+        "non_finite_floats": {
+          "type": "string",
+          "const": "invalid"
+        }
+      },
+      "required": [
+        "id",
+        "map_key_order",
+        "integer_encoding",
+        "float_encoding",
+        "non_finite_floats"
+      ],
+      "additionalProperties": false
+    },
+    "merkle_policy": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "const": "trackone-adr003-sha256-hash-sorted-v1"
+        },
+        "leaf_hash": {
+          "type": "string",
+          "const": "SHA-256(leaf_cbor_bytes)"
+        },
+        "leaf_order": {
+          "type": "string",
+          "const": "lexicographic-raw-32-byte-hash"
+        },
+        "parent_hash": {
+          "type": "string",
+          "const": "SHA-256(left || right)"
+        },
+        "odd_leaf": {
+          "type": "string",
+          "const": "duplicate-last"
+        },
+        "empty_root": {
+          "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex64_lower"
+        }
+      },
+      "required": [
+        "id",
+        "leaf_hash",
+        "leaf_order",
+        "parent_hash",
+        "odd_leaf",
+        "empty_root"
+      ],
+      "additionalProperties": false
+    },
+    "site_id": {
+      "type": "string"
+    },
+    "date": {
+      "type": "string"
+    },
+    "prev_day_root": {
+      "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex64_lower"
+    },
+    "batch_id": {
+      "type": "string"
+    },
+    "facts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "json_path": {
+            "type": "string"
+          },
+          "cbor_path": {
+            "type": "string"
+          },
+          "cbor_sha256": {
+            "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex64_lower"
+          }
+        },
+        "required": [
+          "name",
+          "json_path",
+          "cbor_path",
+          "cbor_sha256"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "block_header_path": {
+      "type": "string"
+    },
+    "day_record_json_path": {
+      "type": "string"
+    },
+    "day_record_cbor_path": {
+      "type": "string"
+    },
+    "leaf_hashes": {
+      "type": "array",
+      "items": {
+        "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex64_lower"
+      }
+    },
+    "merkle_root": {
+      "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex64_lower"
+    },
+    "day_cbor_sha256": {
+      "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex64_lower"
+    }
+  },
+  "required": [
+    "version",
+    "commitment_profile_id",
+    "cddl_profile",
+    "manifest_schema",
+    "fact_cbor_shape",
+    "day_record_cbor_shape",
+    "cbor_profile",
+    "merkle_policy",
+    "site_id",
+    "date",
+    "prev_day_root",
+    "batch_id",
+    "facts",
+    "block_header_path",
+    "day_record_json_path",
+    "day_record_cbor_path",
+    "leaf_hashes",
+    "merkle_root",
+    "day_cbor_sha256"
+  ],
+  "additionalProperties": false
+}

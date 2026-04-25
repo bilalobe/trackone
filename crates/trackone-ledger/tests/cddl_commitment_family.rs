@@ -28,7 +28,13 @@ fn commitment_family_cddl_exposes_expected_top_level_rules() {
 
     let rule_names: BTreeSet<_> = ast.rules.iter().map(|rule| rule.name()).collect();
 
-    for expected in ["env-fact-v1", "fact-v1", "block-header-v1", "day-record-v1"] {
+    for expected in [
+        "fact-json-projection-v1",
+        "env-fact-v1",
+        "fact-v1",
+        "block-header-v1",
+        "day-record-v1",
+    ] {
         assert!(
             rule_names.contains(expected),
             "missing top-level CDDL rule {expected}"

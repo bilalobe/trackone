@@ -19,10 +19,27 @@ from trackone_core.ledger import sha256_hex  # noqa: E402
 OUT_DIR = ROOT / "toolset" / "vectors" / "trackone-canonical-cbor-v1"
 FACTS_DIR = OUT_DIR / "facts"
 PROFILE_ID = "trackone-canonical-cbor-v1"
+CDDL_PROFILE = "toolset/unified/cddl/commitment-artifacts-v1.cddl"
+MANIFEST_SCHEMA = "toolset/unified/schemas/commitment_vector_manifest.schema.json"
 SITE_ID = "an-001"
 DATE = "2025-10-07"
 BATCH_ID = f"{SITE_ID}-{DATE}-00"
 PREV_DAY_ROOT = "00" * 32
+CBOR_PROFILE = {
+    "id": "trackone-deterministic-json-cbor-v1",
+    "map_key_order": "encoded-key-length-then-utf8-bytes",
+    "integer_encoding": "shortest-form",
+    "float_encoding": "shortest-exact-float16-float32-float64",
+    "non_finite_floats": "invalid",
+}
+MERKLE_POLICY = {
+    "id": "trackone-adr003-sha256-hash-sorted-v1",
+    "leaf_hash": "SHA-256(leaf_cbor_bytes)",
+    "leaf_order": "lexicographic-raw-32-byte-hash",
+    "parent_hash": "SHA-256(left || right)",
+    "odd_leaf": "duplicate-last",
+    "empty_root": sha256_hex(b""),
+}
 
 FACTS: list[dict[str, Any]] = [
     {
@@ -108,6 +125,12 @@ def main() -> int:
     manifest = {
         "version": 1,
         "commitment_profile_id": PROFILE_ID,
+        "cddl_profile": CDDL_PROFILE,
+        "manifest_schema": MANIFEST_SCHEMA,
+        "fact_cbor_shape": "fact-json-projection-v1",
+        "day_record_cbor_shape": "day-record-v1",
+        "cbor_profile": CBOR_PROFILE,
+        "merkle_policy": MERKLE_POLICY,
         "site_id": SITE_ID,
         "date": DATE,
         "prev_day_root": PREV_DAY_ROOT,
