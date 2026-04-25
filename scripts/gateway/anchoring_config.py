@@ -20,6 +20,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from trackone_core.verification import (
+    compute_publication_overall_status,
+)
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CONFIG_PATH = REPO_ROOT / "anchoring.toml"
 
@@ -338,20 +342,8 @@ def compute_overall_status(
     policy_mode: str,
     channels: Mapping[str, Mapping[str, Any]],
 ) -> str:
-    """Reduce per-channel status into a single run status.
-
-    `channels` expects mappings that contain:
-    - `enabled`: bool
-    - `status`: one of verified|failed|missing|pending|skipped
-    """
-    if policy_mode == STRICT:
-        for item in channels.values():
-            if item.get("enabled", False) and item.get("status") != "verified":
-                return "failed"
-        return "success"
-
-    # warn-mode: OTS remains the integrity-critical channel when enabled.
-    ots = channels.get("ots", {})
-    if ots.get("enabled", False) and ots.get("status") in {"failed", "missing"}:
-        return "failed"
-    return "success"
+    """Compatibility wrapper for package-level publication-channel policy."""
+    return compute_publication_overall_status(
+        policy_mode=policy_mode,
+        channels=dict(channels),
+    )
