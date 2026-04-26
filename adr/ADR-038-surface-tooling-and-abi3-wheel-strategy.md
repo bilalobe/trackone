@@ -112,15 +112,15 @@ The CPython stable ABI tagging scheme may evolve over time (for example, by intr
 `abi3` tag). TrackOne will migrate to any such successor scheme once PyO3 and maturin support it. The underlying
 goal is unchanged: **one wheel per platform, targeted at the minimum supported CPython minor**.
 
-### 4. Wheel testing has two modes: locked (required) + resolve (gated)
+### 4. Wheel testing has two modes: locked + resolve
 
-| Mode                          | Trigger                  | What it does                                                                      | Purpose                               |
-| ----------------------------- | ------------------------ | --------------------------------------------------------------------------------- | ------------------------------------- |
-| **Locked** (`test-wheel`)     | Every PR (required)      | Install deps from committed lock, install wheel without deps, run test suite      | Determinism — "what we meant to ship" |
-| **Resolve** (`wheel-resolve`) | Label / dispatch (gated) | `pip install` wheel normally (pip resolves from index), `pip check`, smoke-import | Detect ecosystem drift early          |
+| Mode                          | Trigger             | What it does                                                                      | Purpose                               |
+| ----------------------------- | ------------------- | --------------------------------------------------------------------------------- | ------------------------------------- |
+| **Locked** (`test-wheel`)     | Every PR (required) | Install deps from committed lock, install wheel without deps, run test suite      | Determinism — "what we meant to ship" |
+| **Resolve** (`wheel-resolve`) | Every PR (required) | `pip install` wheel normally (pip resolves from index), `pip check`, smoke-import | Detect ecosystem drift early          |
 
-The two modes surface different failure classes without conflating them. The gated resolve test is intentionally
-opt-in to avoid making every PR subject to index churn.
+The two modes surface different failure classes without conflating them. The resolve test now runs inside the main
+CI workflow after the wheel is built, so packaging drift is visible without a separate label/dispatch-only workflow.
 
 ## Consequences
 
@@ -136,7 +136,7 @@ opt-in to avoid making every PR subject to index churn.
 
 - `abi3` constrains which CPython C-APIs are available; some "nice-to-have" Python integration features may be
   harder to implement.
-- Gated resolve tests can miss breakage until explicitly triggered (by design — the trade-off is intentional).
+- Resolve tests can fail because the live package index has changed even when the committed lock remains valid.
 - Keeping a Python fallback path increases short-term maintenance (two implementations during migration). This cost
   decreases as ADR-017 progresses through Phases 2–3 (crypto, then default-on).
 
@@ -186,7 +186,7 @@ Acceptance criteria for `abi3` readiness:
 - [x] `abi3-py312` feature enabled in `pyo3` workspace dependency.
 - [x] A single wheel artifact installs and passes the test suite on CPython 3.12, 3.13, and 3.14.
 - [x] The locked wheel test (`test-wheel`) runs the full test suite against the installed wheel on every PR.
-- [x] The gated resolve test (`wheel-resolve`) can be triggered to check "pip reality" without requiring lock changes.
+- [x] The resolve test (`wheel-resolve`) checks "pip reality" in the main CI workflow without requiring lock changes.
 - [x] Wheel filename contains the expected `cp312-abi3` tag (verified in CI).
 
 ## External References
