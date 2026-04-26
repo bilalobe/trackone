@@ -11,8 +11,8 @@ from scripts.gateway.config import get_bool_env
 
 def test_day_cbor_sha256_sidecar_matches_out_dir_env():
     """
-    When OUT_DIR is set (CI sha-verify workflow), verify that every day/*.cbor has a
-    sibling *.cbor.sha256 file containing the correct hex digest.
+    When OUT_DIR is set by an artifact-verification CI path, verify that every
+    day/*.cbor has a sibling *.cbor.sha256 file containing the correct hex digest.
     """
     out_dir = os.environ.get("OUT_DIR")
     if not out_dir:
@@ -40,6 +40,6 @@ def test_day_cbor_sha256_sidecar_matches_out_dir_env():
         assert len(declared) == 64, f"Invalid sha256 hex length in {sha_path}"
 
         actual = sha256(cbor_path.read_bytes()).hexdigest()
-        assert (
-            actual == declared
-        ), f"sha256 mismatch for {cbor_path}: declared={declared} actual={actual}"
+        assert actual == declared, (
+            f"sha256 mismatch for {cbor_path}: declared={declared} actual={actual}"
+        )
