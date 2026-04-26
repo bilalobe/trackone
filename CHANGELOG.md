@@ -12,6 +12,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and rejection-audit helper shapes for rejection records, rejected-frame
   hashing, audit day labels, and non-secret device-table state updates.
 - Public commitment-vector manifest schema plus vector-corpus README documenting the CBOR encoding profile, fact/day CBOR shapes, and ADR-003 Merkle policy needed by source-independent verifiers.
+- Public commitment fact projection schema for the vector corpus, separating
+  RFC3339-text corpus facts from the runtime `fact.schema.json` integer-time
+  operational shape.
+- `ADR-053` now defines the beta public-contract spine: migration rules for
+  commitment-profile IDs, schema versions, artifact families, verifier
+  tolerance, and projection-only changes; verifier-manifest public-spine
+  behavior; disclosure-class verifier semantics; and rejection-audit scope.
+- `toolset/unified/schemas/rejection_audit.schema.json` now freezes the
+  operator-audit NDJSON record shape and parse/decrypt/replay reason taxonomy
+  without promoting rejection logs into the beta day commitment spine.
 
 ### Changed
 - The local verification/export refusal gate now lives on
@@ -31,6 +41,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   package/script split and the `justfile` implementation of `bench-rust`.
 - The published `trackone-canonical-cbor-v1` vector manifest now names its CDDL profile, manifest schema, deterministic JSON-to-CBOR profile, and Merkle policy so external verifiers do not need to recover those rules from implementation comments.
 - `commitment-artifacts-v1.cddl` now distinguishes the published JSON-projection fact leaf shape from lower-level Rust positional fact arrays, documents the deterministic JSON-to-CBOR and Merkle policies, and aligns `sample-type` with the current appended `SampleType` vocabulary.
+- The vector manifest and README now explicitly audit integer ranges, map
+  ordering, null-versus-absent handling, timestamp representation, byte versus
+  hex-string representation, float policy, and unknown-field handling.
+- `verify_manifest.schema.json` now treats `day/<date>.verify.json` as a
+  portable public contract by describing verifier-spine semantics and rejecting
+  absolute or parent-traversal artifact paths.
 
 ## [0.1.0-alpha.16] - 2026-04-24
 
