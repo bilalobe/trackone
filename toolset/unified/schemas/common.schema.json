@@ -61,12 +61,17 @@
     "integer_timestamp": {
       "type": "integer"
     },
+    "portable_relative_path": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$",
+      "description": "Bundle-root-relative path. Absolute paths and parent-directory traversal are not portable verifier-manifest claims."
+    },
     "artifact_ref": {
       "type": "object",
       "properties": {
         "path": {
-          "type": "string",
-          "minLength": 1
+          "$ref": "#/$defs/portable_relative_path"
         },
         "sha256": {
           "$ref": "#/$defs/hex64_lower"
@@ -169,7 +174,7 @@
       "properties": {
         "version": {
           "type": "integer",
-          "minimum": 1
+          "const": 1
         },
         "site_id": {
           "$ref": "#/$defs/site_id"
