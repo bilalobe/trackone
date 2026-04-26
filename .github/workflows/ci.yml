@@ -247,6 +247,9 @@ jobs:
 
   archive-evidence-scenario:
     runs-on: ubuntu-latest
+    env:
+      ARCHIVE_DAY: '2025-10-07'
+      ARCHIVE_SITE: an-001
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -278,6 +281,8 @@ jobs:
       - name: Run exported evidence archive scenario
         env:
           ARCHIVE_SCENARIO_RESULT: ${{ runner.temp }}/archive-evidence-scenario/result.json
+          PIPELINE_DATE: ${{ env.ARCHIVE_DAY }}
+          PIPELINE_SITE: ${{ env.ARCHIVE_SITE }}
         run: tox -e archive-evidence-scenario
 
       - name: Upload archive scenario result
@@ -286,6 +291,129 @@ jobs:
         with:
           name: archive-evidence-scenario
           path: ${{ runner.temp }}/archive-evidence-scenario/result.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Assemble self-contained archive bundle
+        if: always()
+        env:
+          ARCHIVE_RESULT: ${{ runner.temp }}/archive-evidence-scenario/result.json
+          ARCHIVE_TARBALL: ${{ runner.temp }}/trackone-evidence-${{ env.ARCHIVE_SITE }}-${{ env.ARCHIVE_DAY }}.tar.gz
+        run: |
+          set -euo pipefail
+          bundle_root=".tox/archive-evidence-scenario/tmp/evidence/site/${ARCHIVE_SITE}/day/${ARCHIVE_DAY}"
+          if [ ! -d "${bundle_root}" ]; then
+            echo "::error::Archive evidence bundle not found: ${bundle_root}"
+            exit 1
+          fi
+
+          package_dir="${RUNNER_TEMP}/trackone-archive-oci"
+          rm -rf "${package_dir}"
+          mkdir -p "${package_dir}/bundle" "${package_dir}/verifier" "${package_dir}/docs"
+          cp -R "${bundle_root}/." "${package_dir}/bundle/"
+          cp toolset/independent-verifier/verify_vector_corpus.py "${package_dir}/verifier/"
+          cp toolset/independent-verifier/README.md "${package_dir}/docs/independent-verifier.md"
+          cp toolset/independent-verifier/reverse_engineering_notes.md "${package_dir}/docs/reverse-engineering-notes.md"
+          cp "${ARCHIVE_RESULT}" "${package_dir}/result.json"
+          cat > "${package_dir}/README.md" <<EOF
+          # TrackOne Archived Evidence Bundle
+
+          This bundle is intended to verify without the TrackOne repository, CI scripts,
+          or private operator context.
+
+          Verify from the extracted bundle root:
+
+              python verifier/verify_vector_corpus.py --bundle-root bundle
+
+          Expected verifier output includes "ok": true.
+          EOF
+
+          (cd "${package_dir}" && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)
+          tar_parent="$(dirname "${package_dir}")"
+          tar_name="$(basename "${package_dir}")"
+          (cd "${tar_parent}" && tar --sort=name --mtime='UTC 1970-01-01' --owner=0 --group=0 --numeric-owner -cf - "${tar_name}" | gzip -n > "${ARCHIVE_TARBALL}")
+          sha256sum "${ARCHIVE_TARBALL}" > "${ARCHIVE_TARBALL}.sha256"
+
+      - name: Upload self-contained archive bundle
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: archive-evidence-bundle
+          path: |
+            ${{ runner.temp }}/trackone-evidence-${{ env.ARCHIVE_SITE }}-${{ env.ARCHIVE_DAY }}.tar.gz
+            ${{ runner.temp }}/trackone-evidence-${{ env.ARCHIVE_SITE }}-${{ env.ARCHIVE_DAY }}.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+  archive-evidence-oci:
+    runs-on: ubuntu-latest
+    needs: archive-evidence-scenario
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Download self-contained archive bundle
+        uses: actions/download-artifact@v8
+        with:
+          name: archive-evidence-bundle
+          path: archive-evidence-bundle
+
+      - name: Set up ORAS
+        uses: oras-project/setup-oras@v1
+
+      - name: Log in to GHCR
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "${GHCR_TOKEN}" | oras login ghcr.io \
+            --username "${GITHUB_ACTOR}" \
+            --password-stdin
+
+      - name: Publish archive bundle to GHCR OCI
+        env:
+          ARCHIVE_OCI_REF: ghcr.io/${{ github.repository }}/evidence-archive:sha-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          bundle="$(ls archive-evidence-bundle/*.tar.gz)"
+          sha_file="${bundle}.sha256"
+          test -f "${sha_file}"
+          declared_sha="$(cut -d' ' -f1 "${sha_file}")"
+          actual_sha="$(sha256sum "${bundle}" | cut -d' ' -f1)"
+          if [ "${declared_sha}" != "${actual_sha}" ]; then
+            echo "::error::Archive tarball SHA-256 mismatch before OCI publish"
+            exit 1
+          fi
+
+          oras push "${ARCHIVE_OCI_REF}" \
+            --artifact-type application/vnd.trackone.evidence.archive.v1+tar \
+            --annotation org.opencontainers.image.source="https://github.com/${GITHUB_REPOSITORY}" \
+            --annotation org.opencontainers.image.revision="${GITHUB_SHA}" \
+            --annotation org.opencontainers.image.title="TrackOne evidence archive bundle" \
+            "${bundle}:application/gzip"
+          oras resolve "${ARCHIVE_OCI_REF}" | tee archive-evidence-oci-digest.txt
+
+      - name: Pull archive bundle back from GHCR
+        env:
+          ARCHIVE_OCI_REF: ghcr.io/${{ github.repository }}/evidence-archive:sha-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p pulled-archive
+          oras pull --output pulled-archive "${ARCHIVE_OCI_REF}"
+          pulled="$(find pulled-archive -maxdepth 1 -name '*.tar.gz' -print -quit)"
+          test -n "${pulled}"
+          expected_sha="$(cut -d' ' -f1 archive-evidence-bundle/*.tar.gz.sha256)"
+          actual_sha="$(sha256sum "${pulled}" | cut -d' ' -f1)"
+          if [ "${expected_sha}" != "${actual_sha}" ]; then
+            echo "::error::Pulled OCI archive SHA-256 mismatch"
+            exit 1
+          fi
+
+      - name: Upload OCI digest
+        uses: actions/upload-artifact@v7
+        with:
+          name: archive-evidence-oci-digest
+          path: archive-evidence-oci-digest.txt
           if-no-files-found: error
           retention-days: 30
 
