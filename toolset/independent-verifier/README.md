@@ -43,3 +43,31 @@ tox -e archive-evidence-scenario
 
 Expected output includes `"ok": true`, the corpus Merkle root, and the day CBOR
 SHA-256 digest.
+
+## Archive Carriers
+
+CI publishes the archival scenario in two forms:
+
+- an Actions artifact named `archive-evidence-bundle`, containing a deterministic
+  tarball with `bundle/`, `verifier/`, `docs/`, `result.json`, and `SHA256SUMS`;
+- on trusted pushes to `main` or `master`, an OCI artifact in GHCR at
+  `ghcr.io/<owner>/<repo>/evidence-archive:sha-<commit>`.
+
+The OCI tag is a locator. The durable citation is the OCI digest emitted by the
+`archive-evidence-oci` job and uploaded as `archive-evidence-oci-digest`.
+
+To verify a pulled archive:
+
+```sh
+sha256sum -c trackone-evidence-*.tar.gz.sha256
+tar -xzf trackone-evidence-*.tar.gz
+cd trackone-archive-oci
+sha256sum -c SHA256SUMS
+python verifier/verify_vector_corpus.py --bundle-root bundle
+```
+
+Git LFS remains acceptable for large `.ots` proof sidecars, and this repository
+already tracks `*.ots` through LFS. It is not the primary five-year archive
+answer because a normal Git clone or source archive may contain only LFS pointer
+files unless the LFS object store is also fetched and preserved. The OCI bundle
+is therefore the preferred portable carrier; LFS is an operator convenience.
