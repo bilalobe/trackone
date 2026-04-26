@@ -3,6 +3,7 @@
   "$id": "https://example.org/schemas/verify_manifest.schema.json",
   "title": "Verification Manifest",
   "type": "object",
+  "description": "Public verifier-facing day-bundle contract for day/<date>.verify.json. Paths are bundle-root-relative and every listed artifact carries a SHA-256 digest so the manifest remains portable outside the emitting host.",
   "properties": {
     "version": {
       "const": 1
@@ -15,27 +16,31 @@
     },
     "device_id": {
       "type": "string",
-      "minLength": 1
+      "minLength": 1,
+      "description": "Current single-device summary field. It is not the authority for fact identity; fact/day artifacts remain authoritative."
     },
     "frame_count": {
-      "$ref": "https://example.org/schemas/common.schema.json#/$defs/non_negative_integer"
+      "$ref": "https://example.org/schemas/common.schema.json#/$defs/non_negative_integer",
+      "description": "Current verifier summary count for admitted frames/facts in the bundle."
     },
     "facts_dir": {
-      "type": "string",
-      "minLength": 1
+      "$ref": "https://example.org/schemas/common.schema.json#/$defs/portable_relative_path",
+      "description": "Bundle-root-relative directory containing disclosed fact artifacts. Class A verification depends on this path."
     },
     "frames_file": {
-      "type": "string",
-      "minLength": 1
+      "$ref": "https://example.org/schemas/common.schema.json#/$defs/portable_relative_path"
     },
     "artifacts": {
-      "$ref": "#/$defs/artifacts"
+      "$ref": "#/$defs/artifacts",
+      "description": "Digest-covered artifacts referenced by the verifier manifest. Required entries reflect the current beta-bar public spine."
     },
     "anchoring": {
-      "type": "object"
+      "type": "object",
+      "description": "Verifier-visible anchoring and publication-channel status. Channels may be enabled, disabled, skipped, or failed but must be reported by the verifier output."
     },
     "verifier": {
-      "type": "object"
+      "type": "object",
+      "description": "Portable verifier metadata. Host-local absolute paths are not verifier claims and must not be required for replay."
     },
     "verification_bundle": {
       "$ref": "#/$defs/verification_bundle"
@@ -113,7 +118,8 @@
           "items": {
             "type": "string",
             "minLength": 1
-          }
+          },
+          "description": "Machine-readable checks that were actually executed for this disclosure class."
         },
         "checks_skipped": {
           "type": "array",
@@ -134,7 +140,8 @@
               "reason"
             ],
             "additionalProperties": false
-          }
+          },
+          "description": "Machine-readable checks not executed, with the verifier's reason. Disclosure-class skips must appear here rather than being omitted."
         }
       },
       "required": [
