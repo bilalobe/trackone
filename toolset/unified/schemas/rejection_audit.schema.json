@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/schemas/rejection_audit.schema.json",
+  "title": "Rejection Audit Record",
+  "type": "object",
+  "description": "One NDJSON record from audit/rejections-<day>.ndjson. This is operator-audit evidence, not a beta public-spine commitment artifact.",
+  "properties": {
+    "device_id": {
+      "type": "string",
+      "description": "Verifier-facing device label when a frame header could be parsed; empty string when parsing failed before device identity was available."
+    },
+    "fc": {
+      "anyOf": [
+        {
+          "$ref": "https://example.org/schemas/common.schema.json#/$defs/non_negative_integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Frame counter when available; null for parse-stage rejects that cannot expose a valid counter."
+    },
+    "reason": {
+      "enum": [
+        "line_too_long",
+        "invalid_json",
+        "not_dict",
+        "missing_frame_fields",
+        "unexpected_frame_fields",
+        "invalid_hdr",
+        "invalid_frame_types",
+        "missing_hdr_fields",
+        "unexpected_hdr_fields",
+        "invalid_hdr_types",
+        "dev_id_range",
+        "msg_type_range",
+        "fc_range",
+        "flags_range",
+        "invalid_ingest_profile",
+        "unsupported_flags",
+        "unknown_device",
+        "missing_salt8",
+        "invalid_base64",
+        "salt8_length",
+        "ck_up_length",
+        "nonce_length",
+        "tag_length",
+        "empty_ciphertext",
+        "ciphertext_too_large",
+        "nonce_salt_mismatch",
+        "nonce_fc_mismatch",
+        "decrypt_failed",
+        "postcard_pod_id_mismatch",
+        "postcard_fc_mismatch",
+        "duplicate",
+        "out_of_window"
+      ]
+    },
+    "observed_at_utc": {
+      "$ref": "https://example.org/schemas/common.schema.json#/$defs/rfc3339_utc"
+    },
+    "frame_sha256": {
+      "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex64_lower"
+    },
+    "source": {
+      "enum": [
+        "parse",
+        "decrypt",
+        "replay"
+      ]
+    }
+  },
+  "required": [
+    "device_id",
+    "fc",
+    "reason",
+    "observed_at_utc",
+    "frame_sha256",
+    "source"
+  ],
+  "additionalProperties": false
+}
