@@ -247,6 +247,7 @@ jobs:
 
   archive-evidence-scenario:
     runs-on: ubuntu-latest
+    needs: [pipeline, archive-independent-verify]
     env:
       ARCHIVE_DAY: '2025-10-07'
       ARCHIVE_SITE: an-001
@@ -352,6 +353,9 @@ jobs:
       contents: read
       packages: write
     steps:
+      - name: Checkout publishing commit
+        uses: actions/checkout@v6
+
       - name: Download self-contained archive bundle
         uses: actions/download-artifact@v8
         with:
@@ -397,14 +401,28 @@ jobs:
           ARCHIVE_OCI_REF: ghcr.io/${{ github.repository }}/evidence-archive:sha-${{ github.sha }}
         run: |
           set -euo pipefail
+
           mkdir -p pulled-archive
           oras pull --output pulled-archive "${ARCHIVE_OCI_REF}"
-          pulled="$(find pulled-archive -maxdepth 1 -name '*.tar.gz' -print -quit)"
-          test -n "${pulled}"
-          expected_sha="$(cut -d' ' -f1 archive-evidence-bundle/*.tar.gz.sha256)"
+
+          expected_bundle="$(ls archive-evidence-bundle/*.tar.gz)"
+          expected_name="$(basename "${expected_bundle}")"
+
+          pulled="$(find pulled-archive -type f -name "${expected_name}" -print -quit)"
+          if [ -z "${pulled}" ]; then
+            echo "::error::Pulled OCI archive not found: ${expected_name}"
+            echo "Pulled files:"
+            find pulled-archive -maxdepth 5 -type f -print
+            exit 1
+          fi
+
+          expected_sha="$(cut -d' ' -f1 "${expected_bundle}.sha256")"
           actual_sha="$(sha256sum "${pulled}" | cut -d' ' -f1)"
+
           if [ "${expected_sha}" != "${actual_sha}" ]; then
             echo "::error::Pulled OCI archive SHA-256 mismatch"
+            echo "expected=${expected_sha}"
+            echo "actual=${actual_sha}"
             exit 1
           fi
 
