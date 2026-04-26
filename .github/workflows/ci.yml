@@ -313,7 +313,6 @@ jobs:
           cp -R "${bundle_root}/." "${package_dir}/bundle/"
           cp toolset/independent-verifier/verify_vector_corpus.py "${package_dir}/verifier/"
           cp toolset/independent-verifier/README.md "${package_dir}/docs/independent-verifier.md"
-          cp toolset/independent-verifier/reverse_engineering_notes.md "${package_dir}/docs/reverse-engineering-notes.md"
           cp "${ARCHIVE_RESULT}" "${package_dir}/result.json"
           cat > "${package_dir}/README.md" <<EOF
           # TrackOne Archived Evidence Bundle
