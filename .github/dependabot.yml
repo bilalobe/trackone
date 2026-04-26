@@ -1,24 +1,13 @@
 version: 2
 
 updates:
-  # Python dependencies managed via pyproject.toml + uv.lock
-  - package-ecosystem: "pip"
+  - package-ecosystem: "uv"
     directory: "/"
     schedule:
       interval: "weekly"
-    # Dependabot updates pyproject.toml constraints, but this repo treats
-    # uv.lock as part of the verified Python/wheel surface. Version-update PRs
-    # therefore need to stay small and intentional; maintainers regenerate the
-    # lockfile explicitly via `uv lock`.
-    allow:
-      - dependency-type: "direct"
+
     groups:
-      python-runtime:
-        dependency-type: "production"
-        patterns:
-          - "*"
       python-tooling:
-        dependency-type: "development"
         patterns:
           - "*"
     cooldown:
@@ -46,7 +35,6 @@ updates:
       - "python"
     open-pull-requests-limit: 2
 
-  # Rust workspace (trackone-core, trackone-gateway, trackone-pod-fw,...)
   - package-ecosystem: "cargo"
     directory: "/"
     schedule:
@@ -56,7 +44,6 @@ updates:
       - "rust"
     open-pull-requests-limit: 5
 
-  # GitHub Actions workflows, if/when they exist in .github/workflows
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
