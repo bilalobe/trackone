@@ -11,6 +11,46 @@ from typing import Any, TextIO
 REJECTION_SOURCE_PARSE = "parse"
 REJECTION_SOURCE_DECRYPT = "decrypt"
 REJECTION_SOURCE_REPLAY = "replay"
+REJECTION_SOURCE_TAXONOMY = (
+    REJECTION_SOURCE_PARSE,
+    REJECTION_SOURCE_DECRYPT,
+    REJECTION_SOURCE_REPLAY,
+)
+
+REJECTION_REASON_TAXONOMY = (
+    "line_too_long",
+    "invalid_json",
+    "not_dict",
+    "missing_frame_fields",
+    "unexpected_frame_fields",
+    "invalid_hdr",
+    "invalid_frame_types",
+    "missing_hdr_fields",
+    "unexpected_hdr_fields",
+    "invalid_hdr_types",
+    "dev_id_range",
+    "msg_type_range",
+    "fc_range",
+    "flags_range",
+    "invalid_ingest_profile",
+    "unsupported_flags",
+    "unknown_device",
+    "missing_salt8",
+    "invalid_base64",
+    "salt8_length",
+    "ck_up_length",
+    "nonce_length",
+    "tag_length",
+    "empty_ciphertext",
+    "ciphertext_too_large",
+    "nonce_salt_mismatch",
+    "nonce_fc_mismatch",
+    "decrypt_failed",
+    "postcard_pod_id_mismatch",
+    "postcard_fc_mismatch",
+    "duplicate",
+    "out_of_window",
+)
 
 
 @dataclass(slots=True, frozen=True)
@@ -96,6 +136,8 @@ __all__ = [
     "REJECTION_SOURCE_DECRYPT",
     "REJECTION_SOURCE_PARSE",
     "REJECTION_SOURCE_REPLAY",
+    "REJECTION_REASON_TAXONOMY",
+    "REJECTION_SOURCE_TAXONOMY",
     "RejectionRecord",
     "admission_state_update",
     "apply_admission_state_update",
