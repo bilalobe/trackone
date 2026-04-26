@@ -291,9 +291,13 @@ tooling.
 Do not publish workspace/runtime residue:
 
 - `device_table.json` — runtime replay/key state only
-- `audit/` — local rejection diagnostics
+- `audit/` — local rejection diagnostics; schema-governed operator evidence,
+  not beta public-spine commitment artifacts
 
-The verification manifest is publication-safe: it carries relative artifact refs plus digests and does not embed host-local verifier paths.
+The verification manifest `day/<date>.verify.json` is publication-safe and
+part of the public spine: it carries relative artifact refs plus digests,
+disclosure-class metadata, executed/skipped checks, and does not embed
+host-local verifier paths.
 
 Git-publishable evidence bundles can be exported with:
 
@@ -302,12 +306,16 @@ Git-publishable evidence bundles can be exported with:
 Machine-readable contract split:
 
 - JSON projection and operational artifact contracts live under `toolset/unified/schemas/` as JSON Schema.
+- The verifier-facing day manifest contract is described by `toolset/unified/schemas/verify_manifest.schema.json`.
 - The authoritative CBOR commitment family is described separately in `toolset/unified/cddl/commitment-artifacts-v1.cddl`.
+- The public commitment-vector manifest contract is described by `toolset/unified/schemas/commitment_vector_manifest.schema.json`.
+- The public commitment-vector fact projection contract is described by `toolset/unified/schemas/commitment_fact_projection.schema.json`; it is intentionally separate from the runtime `fact.schema.json` shape.
+- Rejection audit records are described by `toolset/unified/schemas/rejection_audit.schema.json`; they explain non-admission decisions for operators and auditors, but are not part of the day commitment profile unless promoted to a future artifact family.
 - SCITT statement payload shapes and examples live under:
   - `toolset/unified/schemas/scitt_*.schema.json`
   - `toolset/unified/cddl/scitt-statements-v1.cddl`
   - `toolset/unified/examples/scitt_*.json`
-- The published canonical CBOR commitment corpus lives under `toolset/vectors/trackone-canonical-cbor-v1/` and is used by Rust/Python parity tests.
+- The published canonical CBOR commitment corpus lives under `toolset/vectors/trackone-canonical-cbor-v1/` and is used by Rust/Python parity tests. Its `manifest.json` names the CBOR encoding profile, profile constraints, and ADR-003 Merkle policy so an external verifier can recompute the corpus without inspecting TrackOne source code.
 
 ## Current release line
 
