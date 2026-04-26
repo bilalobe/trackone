@@ -2,6 +2,7 @@
 """
 Schema loading and validation tests extracted from test_gateway_pipeline.py
 """
+
 from __future__ import annotations
 
 import json
@@ -11,7 +12,17 @@ import pytest
 
 # Import helpers from the actual implementation so tests can reuse them.
 from scripts.gateway.merkle_batcher import load_schemas, validate_against_schema
-from scripts.gateway.schema_validation import load_all_schemas, validate_schema_document
+from scripts.gateway.schema_validation import (
+    SCHEMA_VALIDATION_EXCEPTIONS,
+    load_all_schemas,
+    load_schema,
+    validate_instance,
+    validate_schema_document,
+)
+from trackone_core.admission import (
+    REJECTION_REASON_TAXONOMY,
+    REJECTION_SOURCE_TAXONOMY,
+)
 
 
 class TestSchemaValidation:
@@ -132,3 +143,87 @@ class TestSchemaValidation:
             schemas["scitt_evidence_bundle_statement"],
             "SCITT evidence-bundle statement example",
         )
+
+    def test_commitment_vector_corpus_matches_public_schemas(self):
+        repo_root = Path(__file__).resolve().parents[2]
+        vector_dir = repo_root / "toolset" / "vectors" / "trackone-canonical-cbor-v1"
+        manifest_schema = load_schema("commitment_vector_manifest")
+        fact_schema = load_schema("commitment_fact_projection")
+        assert manifest_schema is not None
+        assert fact_schema is not None
+
+        manifest = json.loads((vector_dir / "manifest.json").read_text("utf-8"))
+        validate_instance(manifest, manifest_schema)
+
+        for entry in manifest["facts"]:
+            fact = json.loads((vector_dir / entry["json_path"]).read_text("utf-8"))
+            validate_instance(fact, fact_schema)
+
+    def test_verify_manifest_contract_rejects_nonportable_artifact_paths(self):
+        schema = load_schema("verify_manifest")
+        assert schema is not None
+        digest = "a" * 64
+
+        manifest = {
+            "version": 1,
+            "date": "2026-04-25",
+            "site": "site-a",
+            "device_id": "pod-001",
+            "frame_count": 1,
+            "facts_dir": "facts",
+            "artifacts": {
+                "block": {"path": "blocks/2026-04-25-00.block.json", "sha256": digest},
+                "day_cbor": {"path": "day/2026-04-25.cbor", "sha256": digest},
+                "day_json": {"path": "day/2026-04-25.json", "sha256": digest},
+                "day_sha256": {"path": "day/2026-04-25.sha256", "sha256": digest},
+                "provisioning_input": {
+                    "path": "provisioning/authoritative-input.json",
+                    "sha256": digest,
+                },
+                "provisioning_records": {
+                    "path": "provisioning/records.json",
+                    "sha256": digest,
+                },
+                "sensorthings_projection": {
+                    "path": "sensorthings/projection.json",
+                    "sha256": digest,
+                },
+            },
+            "anchoring": {},
+            "verification_bundle": {
+                "disclosure_class": "A",
+                "commitment_profile_id": "trackone-canonical-cbor-v1",
+                "checks_executed": ["verification_manifest_validation"],
+                "checks_skipped": [],
+            },
+        }
+
+        validate_instance(manifest, schema)
+
+        manifest["artifacts"]["day_cbor"]["path"] = "/tmp/2026-04-25.cbor"
+        with pytest.raises(SCHEMA_VALIDATION_EXCEPTIONS):
+            validate_instance(manifest, schema)
+
+    def test_rejection_audit_schema_matches_operator_taxonomy(self):
+        schema = load_schema("rejection_audit")
+        assert schema is not None
+        assert (
+            tuple(schema["properties"]["reason"]["enum"]) == REJECTION_REASON_TAXONOMY
+        )
+        assert (
+            tuple(schema["properties"]["source"]["enum"]) == REJECTION_SOURCE_TAXONOMY
+        )
+
+        record = {
+            "device_id": "pod-001",
+            "fc": 7,
+            "reason": "duplicate",
+            "observed_at_utc": "2026-04-25T12:00:00+00:00",
+            "frame_sha256": "a" * 64,
+            "source": "replay",
+        }
+        validate_instance(record, schema)
+
+        record["reason"] = "operator-note"
+        with pytest.raises(SCHEMA_VALIDATION_EXCEPTIONS):
+            validate_instance(record, schema)
