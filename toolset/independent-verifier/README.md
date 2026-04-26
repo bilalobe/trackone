@@ -56,6 +56,13 @@ CI publishes the archival scenario in two forms:
 The OCI tag is a locator. The durable citation is the OCI digest emitted by the
 `archive-evidence-oci` job and uploaded as `archive-evidence-oci-digest`.
 
+The archive scenario is deliberately downstream of the normal `pipeline` job.
+`pipeline` remains the repo integration gate. The archive scenario then reruns a
+fixed public day/site export and packages only the public bundle plus the
+stdlib-only verifier. The OCI publish job checks out the publishing commit for
+source context, but the bytes it pushes come from the `archive-evidence-bundle`
+artifact, not from repo paths.
+
 To verify a pulled archive:
 
 ```sh
