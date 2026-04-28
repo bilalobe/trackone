@@ -4,51 +4,28 @@ updates:
   - package-ecosystem: "uv"
     directory: "/"
     schedule:
-      interval: "weekly"
-
-    groups:
-      python-tooling:
-        patterns:
-          - "*"
-    cooldown:
-      semver-minor-days: 14
-      semver-patch-days: 14
-      include:
-        - "black"
-        - "ruff"
-        - "mypy"
-        - "pytest"
-        - "pytest-*"
-        - "hypothesis"
-        - "tox"
-        - "tox-uv"
-        - "bandit"
-        - "pip-audit"
-        - "time-machine"
+      interval: "monthly"
     ignore:
-      - dependency-name: "uv"
-      - dependency-name: "mdformat"
-      - dependency-name: "mdformat-gfm"
-      - dependency-name: "mdformat-ruff"
+      - dependency-name: "*"
     labels:
       - "dependencies"
       - "python"
-    open-pull-requests-limit: 2
+    open-pull-requests-limit: 0
 
   - package-ecosystem: "cargo"
     directory: "/"
     schedule:
-      interval: "weekly"
+      interval: "monthly"
     labels:
       - "dependencies"
       - "rust"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 2
 
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
+      interval: "monthly"
     labels:
       - "dependencies"
       - "ci"
-    open-pull-requests-limit: 2
+    open-pull-requests-limit: 1
