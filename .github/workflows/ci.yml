@@ -463,11 +463,61 @@ jobs:
             exit 1
           fi
 
-      - name: Upload OCI digest
+      - name: Verify pulled OCI archive independently
+        run: |
+          set -euo pipefail
+
+          pulled="$(find pulled-archive -type f -name '*.tar.gz' -print -quit)"
+          if [ -z "${pulled}" ]; then
+            echo "::error::Pulled OCI archive tarball not found"
+            find pulled-archive -maxdepth 5 -type f -print
+            exit 1
+          fi
+
+          rm -rf extracted-archive
+          mkdir -p extracted-archive
+          tar -xzf "${pulled}" -C extracted-archive
+
+          archive_root="$(find extracted-archive -mindepth 1 -maxdepth 1 -type d -print -quit)"
+          if [ -z "${archive_root}" ]; then
+            echo "::error::Extracted OCI archive root not found"
+            find extracted-archive -maxdepth 3 -type f -print
+            exit 1
+          fi
+
+          test -f "${archive_root}/SHA256SUMS"
+          test -f "${archive_root}/verifier/verify_vector_corpus.py"
+          test -d "${archive_root}/bundle"
+
+          (
+            cd "${archive_root}"
+            sha256sum -c SHA256SUMS
+            env -u PYTHONPATH python verifier/verify_vector_corpus.py \
+              --bundle-root bundle \
+              --output "${GITHUB_WORKSPACE}/archive-evidence-oci-verification.json"
+          )
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          result = json.loads(
+              Path("archive-evidence-oci-verification.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          if result.get("ok") is not True:
+              raise SystemExit("OCI archive verifier did not report ok=true")
+          print("OCI archive independent verifier ok=true")
+          PY
+
+      - name: Upload OCI verification artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: archive-evidence-oci-digest
-          path: archive-evidence-oci-digest.txt
+          name: archive-evidence-oci-verification
+          path: |
+            archive-evidence-oci-digest.txt
+            archive-evidence-oci-verification.json
           if-no-files-found: error
           retention-days: 30
 
