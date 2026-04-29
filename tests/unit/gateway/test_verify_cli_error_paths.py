@@ -2,9 +2,9 @@
 """
 Error-path tests for verify_cli (moved from test_unit_coverage_boost.py)
 """
+
 from __future__ import annotations
 
-import subprocess
 from unittest.mock import patch
 
 from scripts.gateway import verify_cli
@@ -37,8 +37,8 @@ class TestVerifyCliErrorPaths:
             result = verify_cli.verify_ots(ots_file)
             assert result is False
 
-    def test_verify_ots_subprocess_oserror(self, tmp_path):
-        """Test verify_ots when subprocess.run raises OSError."""
+    def test_verify_ots_public_boundary_exec_failure(self, tmp_path):
+        """Test verify_ots when the public OTS boundary reports exec failure."""
         ots_file = tmp_path / "test.ots"
         ots_file.write_text("some ots data", encoding="utf-8")
 
@@ -48,10 +48,19 @@ class TestVerifyCliErrorPaths:
 
         with (
             patch("shutil.which", return_value=str(fake_ots)),
-            patch("subprocess.run", side_effect=OSError("Execution failed")),
+            patch.object(
+                verify_cli.ots, "verify_ots_proof", return_value=False
+            ) as verify,
         ):
             result = verify_cli.verify_ots(ots_file)
             assert result is False
+            verify.assert_called_once_with(
+                str(ots_file),
+                allow_placeholder=True,
+                expected_artifact_sha=None,
+                ots_binary=str(fake_ots),
+                timeout_secs=verify_cli.OTS_VERIFY_TIMEOUT_SECS,
+            )
 
     def test_verify_ots_ots_path_is_directory(self, tmp_path):
         """Test verify_ots when resolved ots path is a directory, not a file."""
@@ -66,8 +75,8 @@ class TestVerifyCliErrorPaths:
             # Should return False because path is not a file
             assert result is False
 
-    def test_verify_ots_subprocess_timeout(self, tmp_path):
-        """Test verify_ots when subprocess.run times out."""
+    def test_verify_ots_public_boundary_timeout(self, tmp_path):
+        """Test verify_ots when the public OTS boundary reports timeout."""
         ots_file = tmp_path / "test.ots"
         ots_file.write_text("some ots data", encoding="utf-8")
 
@@ -77,13 +86,16 @@ class TestVerifyCliErrorPaths:
 
         with (
             patch("shutil.which", return_value=str(fake_ots)),
-            patch(
-                "subprocess.run",
-                side_effect=subprocess.TimeoutExpired(
-                    cmd=["ots", "verify", str(ots_file)],
-                    timeout=verify_cli.OTS_VERIFY_TIMEOUT_SECS,
-                ),
-            ),
+            patch.object(
+                verify_cli.ots, "verify_ots_proof", return_value=False
+            ) as verify,
         ):
             result = verify_cli.verify_ots(ots_file)
             assert result is False
+            verify.assert_called_once_with(
+                str(ots_file),
+                allow_placeholder=True,
+                expected_artifact_sha=None,
+                ots_binary=str(fake_ots),
+                timeout_secs=verify_cli.OTS_VERIFY_TIMEOUT_SECS,
+            )
