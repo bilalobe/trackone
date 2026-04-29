@@ -77,7 +77,7 @@ fn parse_rfc3339_utc(field: &'static str, value: &str) -> Result<Timestamp, Vali
 #[cfg(test)]
 mod tests {
     use super::{ValidationError, validate_env_observation_input};
-    use crate::sensorthings::mapping::{EnvObservationProjectionInput, ObservationResult};
+    use crate::mapping::{EnvObservationProjectionInput, ObservationResult};
 
     #[test]
     fn rejects_empty_fields() {
