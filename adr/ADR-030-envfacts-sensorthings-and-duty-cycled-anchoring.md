@@ -301,9 +301,10 @@ from the published evidence bundle.
 
 - `crates/trackone-core/src/types.rs` implements the active `Fact`, `EnvFact`,
   `SampleType`, and `SensorCapability` types.
-- `crates/trackone-gateway/src/sensorthings/` and
-  `trackone_core.sensorthings` own deterministic SensorThings projection
-  helpers.
+- `trackone-sensorthings` owns deterministic SensorThings projection
+  semantics; `trackone-gateway` only exposes those helpers through PyO3.
+- `trackone_core.sensorthings` owns the stable Python facade, native fallback,
+  provisioning bundle assembly, and compatibility behavior for Python callers.
 - `toolset/unified/schemas/env_sensor_capability.schema.json` is metadata
   contract material, not a per-fact commitment schema.
 - `toolset/unified/schemas/sensorthings_projection.schema.json` describes the
