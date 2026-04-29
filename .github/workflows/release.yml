@@ -234,6 +234,7 @@ jobs:
             trackone-core
             trackone-ingest
             trackone-ledger
+            trackone-sensorthings
             trackone-pod-fw
             trackone-gateway
           )
