@@ -58,7 +58,7 @@ class TestMerkleBatcherEdgeCases:
             "ingest_time": 1759831200,
             "ingest_time_rfc3339_utc": "2025-10-07T10:00:00Z",
             "pod_time": None,
-            "kind": "Custom",
+            "kind": "custom.raw",
             "payload": {},
         }
         fact_stem = facts_dir / "fact"
@@ -121,7 +121,7 @@ class TestMerkleBatcherEdgeCases:
             "ingest_time": 1759831200,
             "ingest_time_rfc3339_utc": "2025-10-07T10:00:00Z",
             "pod_time": None,
-            "kind": "Custom",
+            "kind": "custom.raw",
             "payload": {},
         }
         fact_stem = facts_dir / "fact"
@@ -154,7 +154,7 @@ class TestMerkleBatcherEdgeCases:
             "ingest_time": 1759831200,
             "ingest_time_rfc3339_utc": "2025-10-07T10:00:00Z",
             "pod_time": None,
-            "kind": "Custom",
+            "kind": "custom.raw",
             "payload": {},
         }
         fact_stem = facts_dir / "fact"

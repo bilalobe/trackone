@@ -165,7 +165,7 @@ def test_crypto_admit_framed_fact_smoke() -> None:
     assert isinstance(fact, dict)
     assert fact["pod_id"] == "0000000000000003"
     assert fact["fc"] == 0
-    assert fact["kind"] == "Env"
+    assert fact["kind"] == "env.sample"
     assert fact["payload"]["Env"]["sample_type"] == "AmbientAirTemperature"
     assert fact["payload"]["Env"]["value"] == 20.0
     assert state.highest_fc_seen == 0

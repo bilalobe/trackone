@@ -16,7 +16,7 @@ def test_build_bundle_uses_provisioning_metadata_and_time_fields(load_module) ->
         "ingest_time": 1_772_755_501,
         "ingest_time_rfc3339_utc": "2026-03-06T00:05:01Z",
         "pod_time": None,
-        "kind": "Custom",
+        "kind": "custom.raw",
         "payload": {
             "counter": 1,
             "temp_c": 23.5,
@@ -71,7 +71,7 @@ def test_write_bundle_emits_projection_file(tmp_path: Path, load_module) -> None
                 "ingest_time": 1_772_755_501,
                 "ingest_time_rfc3339_utc": "2026-03-06T00:05:01Z",
                 "pod_time": None,
-                "kind": "Custom",
+                "kind": "custom.raw",
                 "payload": {"temp_c": 23.5, "bioimpedance": 78.2},
             }
         ),
@@ -85,7 +85,7 @@ def test_write_bundle_emits_projection_file(tmp_path: Path, load_module) -> None
                 "ingest_time": 1_772_755_561,
                 "ingest_time_rfc3339_utc": "2026-03-06T00:06:01Z",
                 "pod_time": None,
-                "kind": "Custom",
+                "kind": "custom.raw",
                 "payload": {"temp_c": 24.0},
             }
         ),
@@ -154,7 +154,7 @@ def test_build_bundle_derives_sensor_identity_from_provisioning_metadata(
         "ingest_time": 1_772_755_561,
         "ingest_time_rfc3339_utc": "2026-03-06T00:06:01Z",
         "pod_time": None,
-        "kind": "Env",
+        "kind": "env.sample",
         "payload": {
             "Env": {
                 "sample_type": "AmbientAirTemperature",
@@ -207,7 +207,7 @@ def test_build_bundle_maps_first_class_water_level_sample_type(load_module) -> N
         "ingest_time": 1_772_755_641,
         "ingest_time_rfc3339_utc": "2026-03-06T00:07:21Z",
         "pod_time": None,
-        "kind": "Env",
+        "kind": "env.sample",
         "payload": {
             "Env": {
                 "sample_type": "WaterLevel",
@@ -260,7 +260,7 @@ def test_build_bundle_maps_custom_env_channel_from_provisioning_metadata(
         "ingest_time": 1_772_755_681,
         "ingest_time_rfc3339_utc": "2026-03-06T00:08:01Z",
         "pod_time": None,
-        "kind": "Env",
+        "kind": "env.sample",
         "payload": {
             "Env": {
                 "sample_type": "Custom",
@@ -320,7 +320,7 @@ def test_build_bundle_prefers_channel_specific_custom_sensor_over_default(
         "ingest_time": 1_772_755_741,
         "ingest_time_rfc3339_utc": "2026-03-06T00:10:41Z",
         "pod_time": None,
-        "kind": "Env",
+        "kind": "env.sample",
         "payload": {
             "Env": {
                 "sample_type": "Custom",
@@ -384,7 +384,7 @@ def test_build_bundle_rejects_missing_sensor_identity_metadata(load_module) -> N
         "ingest_time": 1_772_755_621,
         "ingest_time_rfc3339_utc": "2026-03-06T00:07:01Z",
         "pod_time": None,
-        "kind": "Custom",
+        "kind": "custom.raw",
         "payload": {"temp_c": 24.5},
     }
 
@@ -416,7 +416,7 @@ def test_build_bundle_rejects_missing_canonical_pod_id_with_context(
         "ingest_time": 1_772_755_622,
         "ingest_time_rfc3339_utc": "2026-03-06T00:07:02Z",
         "pod_time": None,
-        "kind": "Custom",
+        "kind": "custom.raw",
         "payload": {"temp_c": 24.5},
     }
 
@@ -451,7 +451,7 @@ def test_main_accepts_valid_provisioning_records_file(
                 "ingest_time": 1_772_755_501,
                 "ingest_time_rfc3339_utc": "2026-03-06T00:05:01Z",
                 "pod_time": None,
-                "kind": "Custom",
+                "kind": "custom.raw",
                 "payload": {"temp_c": 23.5},
             }
         ),
@@ -515,7 +515,7 @@ def test_main_rejects_invalid_provisioning_records_file(
                 "ingest_time": 1_772_755_501,
                 "ingest_time_rfc3339_utc": "2026-03-06T00:05:01Z",
                 "pod_time": None,
-                "kind": "Custom",
+                "kind": "custom.raw",
                 "payload": {"temp_c": 23.5},
             }
         ),

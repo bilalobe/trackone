@@ -31,7 +31,7 @@ def test_build_bundle_falls_back_when_native_projection_is_mock(
             "ingest_time": 1_772_755_501,
             "ingest_time_rfc3339_utc": "2026-03-06T00:05:01Z",
             "pod_time": None,
-            "kind": "Custom",
+            "kind": "custom.raw",
             "payload": {"temp_c": 23.5},
         }
         provisioning_records = {
@@ -120,7 +120,7 @@ def test_build_bundle_uses_native_projection_when_available(monkeypatch) -> None
             "ingest_time": 1_772_755_501,
             "ingest_time_rfc3339_utc": "2026-03-06T00:05:01Z",
             "pod_time": None,
-            "kind": "Custom",
+            "kind": "custom.raw",
             "payload": {"temp_c": 23.5},
         }
         provisioning_records = {

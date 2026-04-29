@@ -90,7 +90,7 @@ def test_frame_verifier_process_reports_missing_native_ledger(
                 "fc": 0,
                 "ingest_time": ingest_time,
                 "pod_time": None,
-                "kind": "Custom",
+                "kind": "custom.raw",
                 "payload": {"counter": 1, "temp_c": 23.5},
                 "ingest_time_rfc3339_utc": ingest_time_rfc3339_utc,
             },

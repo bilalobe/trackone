@@ -30,7 +30,7 @@ class TestMainFunction:
         for line in lines:
             fact = json.loads(line)
             assert fact.get("pod_id") == "0000000000000001"
-            assert fact.get("kind") == "Custom"
+            assert fact.get("kind") == "custom.raw"
 
     def test_main_default_count(self, tmp_path, pod_sim):
         out_file = tmp_path / "output.ndjson"

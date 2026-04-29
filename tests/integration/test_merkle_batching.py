@@ -15,6 +15,7 @@ from hashlib import sha256
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    # fmt: off
     # Provide typing-only stubs for names injected by conftest autouse fixture
     def canonical_json(obj: Any) -> bytes:
         ...
@@ -37,6 +38,7 @@ if TYPE_CHECKING:
 
     def batcher_main(args: list) -> int:
         ...
+    # fmt: on
 
 
 class TestMerkleReproduction:
@@ -60,7 +62,7 @@ class TestMerkleReproduction:
             "ingest_time": 1759752000,
             "ingest_time_rfc3339_utc": "2025-10-06T12:00:00Z",
             "pod_time": None,
-            "kind": "Custom",
+            "kind": "custom.raw",
             "payload": {"temp": 22.5},
         }
 
@@ -81,7 +83,7 @@ class TestMerkleReproduction:
                 "ingest_time": 1759744800,
                 "ingest_time_rfc3339_utc": "2025-10-06T10:00:00Z",
                 "pod_time": None,
-                "kind": "Custom",
+                "kind": "custom.raw",
                 "payload": {"x": 1},
             },
             {
@@ -90,7 +92,7 @@ class TestMerkleReproduction:
                 "ingest_time": 1759748400,
                 "ingest_time_rfc3339_utc": "2025-10-06T11:00:00Z",
                 "pod_time": None,
-                "kind": "Custom",
+                "kind": "custom.raw",
                 "payload": {"x": 2},
             },
         ]

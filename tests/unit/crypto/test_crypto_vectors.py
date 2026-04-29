@@ -3,6 +3,7 @@
 Canonical JSON, schema, and vector tests remain here; crypto-specific enabled tests were migrated
 into focused offshoot modules (AEAD, HKDF, X25519, Ed25519) to avoid duplication.
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -57,9 +58,9 @@ class TestCanonicalHashVectors:
     def test_vectors_file_exists(self):
         """Verify test vectors file is present and valid JSON."""
         path = _find_vectors_path()
-        assert (
-            path is not None and path.exists()
-        ), "Test vectors file not found: toolset/unified/crypto_test_vectors.json"
+        assert path is not None and path.exists(), (
+            "Test vectors file not found: toolset/unified/crypto_test_vectors.json"
+        )
         vectors = json.loads(path.read_text(encoding="utf-8"))
         assert "canonical_hash_vectors" in vectors
         assert isinstance(vectors["canonical_hash_vectors"], list)
@@ -126,7 +127,7 @@ class TestFactSchemaCompliance:
             "ingest_time": 1759752000,
             "ingest_time_rfc3339_utc": "2025-10-06T12:00:00Z",
             "pod_time": None,
-            "kind": "Custom",
+            "kind": "custom.raw",
             "payload": {},
         }
 
@@ -144,7 +145,7 @@ class TestFactSchemaCompliance:
             "ingest_time": 1759752000,
             "ingest_time_rfc3339_utc": "2025-10-06T12:00:00Z",
             "pod_time": None,
-            "kind": "Custom",
+            "kind": "custom.raw",
             "payload": {"data": "test"},
             "signature": "deadbeef",
         }
@@ -165,7 +166,7 @@ class TestFactSchemaCompliance:
             "ingest_time": 1759752000,
             "ingest_time_rfc3339_utc": "2025-10-06T12:00:00Z",
             "pod_time": None,
-            "kind": "Custom",
+            "kind": "custom.raw",
             "payload": {},
         }
 
