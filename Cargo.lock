@@ -1285,11 +1285,11 @@ dependencies = [
 
 [[package]]
 name = "trackone-constants"
-version = "0.1.0-alpha.16"
+version = "0.1.0-alpha.17"
 
 [[package]]
 name = "trackone-core"
-version = "0.1.0-alpha.16"
+version = "0.1.0-alpha.17"
 dependencies = [
  "heapless",
  "postcard",
@@ -1303,7 +1303,7 @@ dependencies = [
 
 [[package]]
 name = "trackone-gateway"
-version = "0.1.0-alpha.16"
+version = "0.1.0-alpha.17"
 dependencies = [
  "base64",
  "pyo3",
@@ -1316,7 +1316,7 @@ dependencies = [
 
 [[package]]
 name = "trackone-ingest"
-version = "0.1.0-alpha.16"
+version = "0.1.0-alpha.17"
 dependencies = [
  "chacha20poly1305",
  "heapless",
@@ -1328,7 +1328,7 @@ dependencies = [
 
 [[package]]
 name = "trackone-ledger"
-version = "0.1.0-alpha.16"
+version = "0.1.0-alpha.17"
 dependencies = [
  "cddl",
  "serde",
@@ -1338,7 +1338,7 @@ dependencies = [
 
 [[package]]
 name = "trackone-pod-fw"
-version = "0.1.0-alpha.16"
+version = "0.1.0-alpha.17"
 dependencies = [
  "trackone-core",
  "trackone-ingest",

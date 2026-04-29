@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-alpha.17] - 2026-04-29
+
+### Changed
+- `trackone_core.sensorthings` now recognizes the lowercase public fact-kind
+  labels emitted by the current JSON/runtime projection surface while
+  preserving compatibility with the older `Env` / `Custom` payload wrapper
+  shapes used by existing callers.
+- The shared projection contract is now aligned with the public lowercase
+  runtime labels used by exported facts and the independent verifier.
+
 ## [0.1.0-alpha.16] - 2026-04-24
 
 ### Changed

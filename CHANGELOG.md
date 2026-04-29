@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-alpha.17] - 2026-04-29
+
 ### Added
 - `trackone_core.admission` now provides package-level gateway admission-state
   and rejection-audit helper shapes for rejection records, rejected-frame
@@ -15,6 +17,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Public commitment fact projection schema for the vector corpus, separating
   RFC3339-text corpus facts from the runtime `fact.schema.json` integer-time
   operational shape.
+- The stdlib-only independent verifier now enforces canonical CBOR
+  shortest-form integer/length rules, shortest exact float width, exact vector
+  manifest entries, portable vector paths, decoded bundle fact validation, and
+  stricter verification-manifest semantics.
+- Runtime/exported fact JSON now uses lowercase public `kind` labels
+  (`env.sample`, `pipeline.event`, `health.status`, `custom.raw`) and the
+  draft / schema surfaces were updated to reflect that public projection
+  contract.
 - `ADR-053` now defines the beta public-contract spine: migration rules for
   commitment-profile IDs, schema versions, artifact families, verifier
   tolerance, and projection-only changes; verifier-manifest public-spine
@@ -39,6 +49,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   OTS/TSA/peer/SCITT channel-name vocabulary.
 - README surface labels and supported root workflow notes now match the current
   package/script split and the `justfile` implementation of `bench-rust`.
+- The beta roadmap and independent verifier docs now describe the stricter
+  public vector contract and the lowercase public fact-kind labels explicitly.
 - The published `trackone-canonical-cbor-v1` vector manifest now names its CDDL profile, manifest schema, deterministic JSON-to-CBOR profile, and Merkle policy so external verifiers do not need to recover those rules from implementation comments.
 - `commitment-artifacts-v1.cddl` now distinguishes the published JSON-projection fact leaf shape from lower-level Rust positional fact arrays, documents the deterministic JSON-to-CBOR and Merkle policies, and aligns `sample-type` with the current appended `SampleType` vocabulary.
 - The vector manifest and README now explicitly audit integer ranges, map

@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-alpha.17] - 2026-04-29
+
+### Changed
+- The native gateway PyO3 projection now emits lowercase public fact-kind
+  labels for the JSON/runtime surface (`env.sample`, `pipeline.event`,
+  `health.status`, `custom.raw`) instead of the older capitalized labels, while
+  keeping the Rust enum discriminants unchanged.
+- SensorThings projection compatibility now accepts the lowercase public fact
+  labels in addition to the older `Env` wrapper shape for the current
+  transition period.
+
 ## [0.1.0-alpha.16] - 2026-04-24
 
 ### Added
