@@ -39,6 +39,8 @@ The crate remains `no_std`-capable when `std` is disabled.
   profiles, nonce/AAD binding, fixture emission, replay, and framed admission.
 - [`trackone-gateway`](../trackone-gateway/README.md) exposes selected core and
   ledger functionality to Python via PyO3.
+- [`trackone-sensorthings`](../trackone-sensorthings/README.md) owns read-only
+  SensorThings projection semantics over accepted facts.
 - [`trackone-pod-fw`](../trackone-pod-fw/README.md) builds firmware-side
   runtime helpers on top of the core protocol model.
 

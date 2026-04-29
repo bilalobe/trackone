@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- SensorThings Rust domain logic now lives in `trackone-sensorthings`; this
+  crate keeps only the PyO3 adapter that exposes the projection helpers to
+  Python.
+
 ## [0.1.0-alpha.17] - 2026-04-29
 
 ### Changed

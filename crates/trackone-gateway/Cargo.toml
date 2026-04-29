@@ -23,6 +23,7 @@ trackone-constants.workspace = true
 trackone-ledger.workspace = true
 trackone-core.workspace = true
 trackone-ingest = { workspace = true, features = ["std", "xchacha"] }
+trackone-sensorthings.workspace = true
 pyo3 = { workspace = true, optional = true }
 serde_json.workspace = true
 base64 = { workspace = true, optional = true }

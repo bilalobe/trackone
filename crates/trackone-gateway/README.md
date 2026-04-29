@@ -9,8 +9,8 @@ and Rust-owned deterministic protocol/ledger behavior.
 This crate is responsible for:
 
 - exporting native modules under the `trackone_core` Python package
-- exposing selected helpers from `trackone-core`, `trackone-ingest`, and
-  `trackone-ledger`
+- exposing selected helpers from `trackone-core`, `trackone-ingest`,
+  `trackone-ledger`, and `trackone-sensorthings`
 - keeping Python-facing behavior aligned with Rust-owned commitment and digest
   contracts
 - consuming external lifecycle/admission results only where they are needed to
@@ -32,6 +32,9 @@ Current Python-facing modules include:
   - Rust Postcard framed fixture emission
   - framed payload validation/decrypt helpers
   - replay-window-backed framed admission
+- `trackone_core.sensorthings`
+  - SensorThings entity-ID and observation-projection helpers backed by
+    `trackone-sensorthings`
 
 ## What this crate is not
 
@@ -67,6 +70,8 @@ control plane.
   replay, and gateway admission helpers
 - [`trackone-ledger`](../trackone-ledger/README.md) for commitment, Merkle, and
   digest logic
+- [`trackone-sensorthings`](../trackone-sensorthings/README.md) for
+  deterministic read-only SensorThings projection semantics
 - `pyo3` for Python bindings
 
 ## Local build

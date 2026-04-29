@@ -32,6 +32,9 @@ projection and parity workflows.
   profiles and admission helpers before facts enter commitment artifacts
 - [`trackone-gateway`](../trackone-gateway/README.md) exposes selected ledger
   helpers to Python
+- [`trackone-sensorthings`](../trackone-sensorthings/README.md) may use digest
+  helpers for deterministic projection IDs, but those projections are not
+  commitment artifacts
 - Python scripts still own workflow concerns such as manifest assembly, export
   policy, and file choreography
 
