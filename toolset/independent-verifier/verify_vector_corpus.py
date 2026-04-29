@@ -67,7 +67,10 @@ PROFILE_CONSTRAINTS = {
     },
 }
 FACT_FIELDS = {"pod_id", "fc", "ingest_time", "pod_time", "kind", "payload"}
-BUNDLE_FACT_FIELDS = FACT_FIELDS | {"ingest_time_rfc3339_utc", "signature"}
+FACT_OPTIONAL_FIELDS = {"ingest_time_rfc3339_utc", "signature"}
+BUNDLE_FACT_FIELDS = FACT_FIELDS | FACT_OPTIONAL_FIELDS
+RUNTIME_FACT_KINDS = {"env.sample", "pipeline.event", "health.status", "custom.raw"}
+VECTOR_ENTRY_FIELDS = {"name", "json_path", "cbor_path", "cbor_sha256"}
 BLOCK_FIELDS = {
     "version",
     "site_id",
@@ -99,13 +102,38 @@ BUNDLE_REQUIRED_ARTIFACTS = {
     "provisioning_records",
     "sensorthings_projection",
 }
+BUNDLE_OPTIONAL_ARTIFACTS = {
+    "day_ots",
+    "day_ots_meta",
+    "peer_attest",
+    "tsa_info",
+    "tsa_tsr",
+}
+BUNDLE_ARTIFACTS = BUNDLE_REQUIRED_ARTIFACTS | BUNDLE_OPTIONAL_ARTIFACTS
 HEX64_RE = re.compile(r"^[0-9a-f]{64}$")
+FACT_KIND_RE = re.compile(r"^[a-z][a-z0-9_.-]*$")
 RFC3339_Z_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
 UTC_DAY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 class VerifyError(Exception):
     pass
+
+
+def _same_float_value(actual: float, expected: float) -> bool:
+    if actual != expected:
+        return False
+    if actual == 0.0:
+        return math.copysign(1.0, actual) == math.copysign(1.0, expected)
+    return True
+
+
+def _float_roundtrips(value: float, fmt: str) -> bool:
+    try:
+        packed = struct.pack(fmt, value)
+    except OverflowError:
+        return False
+    return _same_float_value(struct.unpack(fmt, packed)[0], value)
 
 
 @dataclass
@@ -138,13 +166,25 @@ class CborDecoder:
         if addl < 24:
             return addl
         if addl == 24:
-            return self._take(1)[0]
+            value = self._take(1)[0]
+            if value < 24:
+                raise VerifyError("non-shortest CBOR integer or length encoding")
+            return value
         if addl == 25:
-            return int.from_bytes(self._take(2), "big")
+            value = int.from_bytes(self._take(2), "big")
+            if value <= 0xFF:
+                raise VerifyError("non-shortest CBOR integer or length encoding")
+            return value
         if addl == 26:
-            return int.from_bytes(self._take(4), "big")
+            value = int.from_bytes(self._take(4), "big")
+            if value <= 0xFFFF:
+                raise VerifyError("non-shortest CBOR integer or length encoding")
+            return value
         if addl == 27:
-            return int.from_bytes(self._take(8), "big")
+            value = int.from_bytes(self._take(8), "big")
+            if value <= 0xFFFFFFFF:
+                raise VerifyError("non-shortest CBOR integer or length encoding")
+            return value
         raise VerifyError("indefinite or reserved CBOR length is not allowed")
 
     def _item(self) -> Any:
@@ -205,6 +245,12 @@ class CborDecoder:
             raise VerifyError(f"unsupported CBOR simple value {addl}")
         if not math.isfinite(value):
             raise VerifyError("non-finite CBOR float is not allowed")
+        if addl == 26 and _float_roundtrips(value, ">e"):
+            raise VerifyError("non-shortest CBOR float encoding")
+        if addl == 27 and (
+            _float_roundtrips(value, ">e") or _float_roundtrips(value, ">f")
+        ):
+            raise VerifyError("non-shortest CBOR float encoding")
         return value
 
 
@@ -269,6 +315,31 @@ def assert_portable_path(value: Any, label: str) -> str:
     return value
 
 
+def assert_non_empty_text(value: Any, label: str) -> None:
+    if not isinstance(value, str) or not value:
+        raise VerifyError(f"{label} must be non-empty text")
+
+
+def assert_rfc3339_z(value: Any, label: str) -> None:
+    if not isinstance(value, str) or not RFC3339_Z_RE.fullmatch(value):
+        raise VerifyError(f"{label} must be RFC3339 UTC Z text")
+
+
+def assert_fact_kind(value: Any, label: str) -> None:
+    if not isinstance(value, str) or not FACT_KIND_RE.fullmatch(value):
+        raise VerifyError(f"{label} must match public fact kind syntax")
+
+
+def assert_uint64(value: Any, label: str) -> None:
+    if (
+        not isinstance(value, int)
+        or isinstance(value, bool)
+        or value < 0
+        or value > 2**64 - 1
+    ):
+        raise VerifyError(f"{label} must be a uint64 integer")
+
+
 def resolve_portable(root: Path, value: Any, label: str) -> Path:
     rel = assert_portable_path(value, label)
     path = (root / rel).resolve()
@@ -309,25 +380,27 @@ def validate_json_value(value: Any, label: str) -> None:
 def validate_fact(fact: Any, label: str) -> None:
     if not isinstance(fact, dict):
         raise VerifyError(f"{label} must be a JSON object")
-    if set(fact) != FACT_FIELDS:
-        raise VerifyError(f"{label} fields mismatch: {sorted(fact)}")
-    if not isinstance(fact["pod_id"], str) or not fact["pod_id"]:
-        raise VerifyError(f"{label}.pod_id must be non-empty text")
-    if (
-        not isinstance(fact["fc"], int)
-        or isinstance(fact["fc"], bool)
-        or fact["fc"] < 0
-    ):
-        raise VerifyError(f"{label}.fc must be a non-negative integer")
-    if not isinstance(fact["kind"], str) or not fact["kind"]:
-        raise VerifyError(f"{label}.kind must be non-empty text")
+    missing = FACT_FIELDS - set(fact)
+    if missing:
+        raise VerifyError(f"{label} missing fields: {sorted(missing)}")
+    unknown = set(fact) - BUNDLE_FACT_FIELDS
+    if unknown:
+        raise VerifyError(f"{label} unknown fields: {sorted(unknown)}")
+    assert_non_empty_text(fact["pod_id"], f"{label}.pod_id")
+    assert_uint64(fact["fc"], f"{label}.fc")
+    assert_fact_kind(fact["kind"], f"{label}.kind")
     for field in ("ingest_time", "pod_time"):
         if field == "pod_time" and fact[field] is None:
             continue
-        if not isinstance(fact[field], str) or not RFC3339_Z_RE.fullmatch(fact[field]):
-            raise VerifyError(f"{label}.{field} must be RFC3339 UTC Z text")
+        assert_rfc3339_z(fact[field], f"{label}.{field}")
     if not isinstance(fact["payload"], dict):
         raise VerifyError(f"{label}.payload must be an object")
+    if "ingest_time_rfc3339_utc" in fact:
+        assert_rfc3339_z(
+            fact["ingest_time_rfc3339_utc"], f"{label}.ingest_time_rfc3339_utc"
+        )
+    if "signature" in fact:
+        assert_non_empty_text(fact["signature"], f"{label}.signature")
     validate_json_value(fact["payload"], f"{label}.payload")
 
 
@@ -340,14 +413,8 @@ def validate_bundle_fact(fact: Any, label: str) -> None:
     unknown = set(fact) - BUNDLE_FACT_FIELDS
     if unknown:
         raise VerifyError(f"{label} unknown fields: {sorted(unknown)}")
-    if not isinstance(fact["pod_id"], str) or not fact["pod_id"]:
-        raise VerifyError(f"{label}.pod_id must be non-empty text")
-    if (
-        not isinstance(fact["fc"], int)
-        or isinstance(fact["fc"], bool)
-        or fact["fc"] < 0
-    ):
-        raise VerifyError(f"{label}.fc must be a non-negative integer")
+    assert_non_empty_text(fact["pod_id"], f"{label}.pod_id")
+    assert_uint64(fact["fc"], f"{label}.fc")
     if not isinstance(fact["ingest_time"], int) or isinstance(
         fact["ingest_time"], bool
     ):
@@ -356,35 +423,34 @@ def validate_bundle_fact(fact: Any, label: str) -> None:
         not isinstance(fact["pod_time"], int) or isinstance(fact["pod_time"], bool)
     ):
         raise VerifyError(f"{label}.pod_time must be null or an integer timestamp")
-    if not isinstance(fact["kind"], str) or not fact["kind"]:
-        raise VerifyError(f"{label}.kind must be non-empty text")
+    if fact["kind"] not in RUNTIME_FACT_KINDS:
+        raise VerifyError(f"{label}.kind must match public runtime fact kinds")
     if not isinstance(fact["payload"], dict):
         raise VerifyError(f"{label}.payload must be an object")
-    if "ingest_time_rfc3339_utc" in fact and (
-        not isinstance(fact["ingest_time_rfc3339_utc"], str)
-        or not fact["ingest_time_rfc3339_utc"]
-    ):
-        raise VerifyError(f"{label}.ingest_time_rfc3339_utc must be non-empty text")
-    if "signature" in fact and (
-        not isinstance(fact["signature"], str) or not fact["signature"]
-    ):
-        raise VerifyError(f"{label}.signature must be non-empty text")
+    if "ingest_time_rfc3339_utc" in fact:
+        assert_rfc3339_z(
+            fact["ingest_time_rfc3339_utc"], f"{label}.ingest_time_rfc3339_utc"
+        )
+    if "signature" in fact:
+        assert_non_empty_text(fact["signature"], f"{label}.signature")
     validate_json_value(fact, label)
 
 
 def validate_block(block: Any, label: str) -> None:
     if not isinstance(block, dict) or set(block) != BLOCK_FIELDS:
         raise VerifyError(f"{label} fields mismatch")
-    if block["version"] != 1:
+    if block["version"] != 1 or isinstance(block["version"], bool):
         raise VerifyError(f"{label}.version must be 1")
-    if not isinstance(block["site_id"], str) or not block["site_id"]:
-        raise VerifyError(f"{label}.site_id must be non-empty text")
+    assert_non_empty_text(block["site_id"], f"{label}.site_id")
     if not isinstance(block["day"], str) or not UTC_DAY_RE.fullmatch(block["day"]):
         raise VerifyError(f"{label}.day must be yyyy-mm-dd")
-    if not isinstance(block["batch_id"], str) or not block["batch_id"]:
-        raise VerifyError(f"{label}.batch_id must be non-empty text")
+    assert_non_empty_text(block["batch_id"], f"{label}.batch_id")
     assert_hex64(block["merkle_root"], f"{label}.merkle_root")
-    if not isinstance(block["count"], int) or block["count"] < 0:
+    if (
+        not isinstance(block["count"], int)
+        or isinstance(block["count"], bool)
+        or block["count"] < 0
+    ):
         raise VerifyError(f"{label}.count must be non-negative")
     if not isinstance(block["leaf_hashes"], list):
         raise VerifyError(f"{label}.leaf_hashes must be an array")
@@ -401,10 +467,9 @@ def validate_block(block: Any, label: str) -> None:
 def validate_day(day: Any, label: str) -> None:
     if not isinstance(day, dict) or set(day) != DAY_FIELDS:
         raise VerifyError(f"{label} fields mismatch")
-    if day["version"] != 1:
+    if day["version"] != 1 or isinstance(day["version"], bool):
         raise VerifyError(f"{label}.version must be 1")
-    if not isinstance(day["site_id"], str) or not day["site_id"]:
-        raise VerifyError(f"{label}.site_id must be non-empty text")
+    assert_non_empty_text(day["site_id"], f"{label}.site_id")
     if not isinstance(day["date"], str) or not UTC_DAY_RE.fullmatch(day["date"]):
         raise VerifyError(f"{label}.date must be yyyy-mm-dd")
     assert_hex64(day["prev_day_root"], f"{label}.prev_day_root")
@@ -445,7 +510,8 @@ def validate_manifest(manifest: Any) -> None:
     }
     if not isinstance(manifest, dict) or set(manifest) != expected_keys:
         raise VerifyError("manifest fields do not match public contract")
-    assert_equal(manifest["version"], 1, "manifest.version")
+    if manifest["version"] != 1 or isinstance(manifest["version"], bool):
+        raise VerifyError("manifest.version must be 1")
     assert_equal(manifest["commitment_profile_id"], COMMITMENT_PROFILE_ID, "profile id")
     assert_equal(manifest["cbor_profile"], CBOR_PROFILE, "cbor_profile")
     assert_equal(manifest["merkle_policy"], MERKLE_POLICY, "merkle_policy")
@@ -469,8 +535,22 @@ def validate_manifest(manifest: Any) -> None:
     )
     assert_equal(manifest["fact_cbor_shape"], "fact-json-projection-v1", "fact shape")
     assert_equal(manifest["day_record_cbor_shape"], "day-record-v1", "day shape")
+    assert_non_empty_text(manifest["site_id"], "manifest.site_id")
+    if not isinstance(manifest["date"], str) or not UTC_DAY_RE.fullmatch(
+        manifest["date"]
+    ):
+        raise VerifyError("manifest.date must be yyyy-mm-dd")
+    assert_non_empty_text(manifest["batch_id"], "manifest.batch_id")
     if not isinstance(manifest["facts"], list) or not manifest["facts"]:
         raise VerifyError("manifest.facts must be a non-empty array")
+    if not isinstance(manifest["leaf_hashes"], list):
+        raise VerifyError("manifest.leaf_hashes must be an array")
+    for field in (
+        "block_header_path",
+        "day_record_json_path",
+        "day_record_cbor_path",
+    ):
+        assert_portable_path(manifest[field], f"manifest.{field}")
     for item in manifest["leaf_hashes"]:
         assert_hex64(item, "manifest.leaf_hashes[]")
     assert_hex64(manifest["merkle_root"], "manifest.merkle_root")
@@ -488,15 +568,14 @@ def validate_verification_manifest(manifest: Any) -> None:
     unknown = sorted(set(manifest) - allowed_fields)
     if unknown:
         raise VerifyError(f"verification manifest has unknown fields: {unknown}")
-    assert_equal(manifest["version"], 1, "verification manifest version")
+    if manifest["version"] != 1 or isinstance(manifest["version"], bool):
+        raise VerifyError("verification manifest version must be 1")
     if not isinstance(manifest["date"], str) or not UTC_DAY_RE.fullmatch(
         manifest["date"]
     ):
         raise VerifyError("verification manifest date must be yyyy-mm-dd")
-    if not isinstance(manifest["site"], str) or not manifest["site"]:
-        raise VerifyError("verification manifest site must be non-empty text")
-    if not isinstance(manifest["device_id"], str) or not manifest["device_id"]:
-        raise VerifyError("verification manifest device_id must be non-empty text")
+    assert_non_empty_text(manifest["site"], "verification manifest site")
+    assert_non_empty_text(manifest["device_id"], "verification manifest device_id")
     if (
         not isinstance(manifest["frame_count"], int)
         or isinstance(manifest["frame_count"], bool)
@@ -515,6 +594,11 @@ def validate_verification_manifest(manifest: Any) -> None:
         raise VerifyError(
             f"verification manifest missing artifacts: {missing_artifacts}"
         )
+    unknown_artifacts = sorted(set(artifacts) - BUNDLE_ARTIFACTS)
+    if unknown_artifacts:
+        raise VerifyError(
+            f"verification manifest has unknown artifacts: {unknown_artifacts}"
+        )
     for name, artifact in artifacts.items():
         if not isinstance(artifact, dict) or set(artifact) != {"path", "sha256"}:
             raise VerifyError(f"artifact {name!r} must contain path and sha256 only")
@@ -524,18 +608,37 @@ def validate_verification_manifest(manifest: Any) -> None:
     bundle = manifest["verification_bundle"]
     if not isinstance(bundle, dict):
         raise VerifyError("verification_bundle must be an object")
+    expected_bundle_fields = {
+        "disclosure_class",
+        "commitment_profile_id",
+        "checks_executed",
+        "checks_skipped",
+    }
+    if set(bundle) != expected_bundle_fields:
+        raise VerifyError("verification_bundle fields do not match public contract")
     if bundle.get("commitment_profile_id") != COMMITMENT_PROFILE_ID:
         raise VerifyError("unsupported commitment_profile_id")
     if bundle.get("disclosure_class") != "A":
         raise VerifyError("independent bundle verifier requires disclosure_class A")
     checks_executed = bundle.get("checks_executed")
     checks_skipped = bundle.get("checks_skipped")
-    if not isinstance(checks_executed, list) or not all(
-        isinstance(item, str) and item for item in checks_executed
+    if (
+        not isinstance(checks_executed, list)
+        or not checks_executed
+        or not all(isinstance(item, str) and item for item in checks_executed)
     ):
         raise VerifyError("checks_executed must be a non-empty string array")
     if not isinstance(checks_skipped, list):
         raise VerifyError("checks_skipped must be an array")
+    for index, item in enumerate(checks_skipped):
+        if not isinstance(item, dict) or set(item) != {"check", "reason"}:
+            raise VerifyError(
+                f"checks_skipped[{index}] must contain check and reason only"
+            )
+        if not isinstance(item["check"], str) or not item["check"]:
+            raise VerifyError(f"checks_skipped[{index}].check must be non-empty text")
+        if not isinstance(item["reason"], str) or not item["reason"]:
+            raise VerifyError(f"checks_skipped[{index}].reason must be non-empty text")
 
 
 def verify_artifact_refs(
@@ -559,18 +662,29 @@ def read_declared_sha256(path: Path) -> str:
     return digest
 
 
+def validate_vector_entry(vector: Any, label: str) -> None:
+    if not isinstance(vector, dict) or set(vector) != VECTOR_ENTRY_FIELDS:
+        raise VerifyError(f"{label} fields do not match public contract")
+    assert_non_empty_text(vector["name"], f"{label}.name")
+    assert_portable_path(vector["json_path"], f"{label}.json_path")
+    assert_portable_path(vector["cbor_path"], f"{label}.cbor_path")
+    assert_hex64(vector["cbor_sha256"], f"{label}.cbor_sha256")
+
+
 def verify_vector_dir(vector_dir: Path) -> dict[str, Any]:
     manifest = read_json(vector_dir / "manifest.json")
     validate_manifest(manifest)
 
     computed_leaf_hashes: list[str] = []
-    for vector in manifest["facts"]:
-        for field in ("name", "json_path", "cbor_path", "cbor_sha256"):
-            if field not in vector:
-                raise VerifyError(f"fact vector missing {field}")
-        fact_json = read_json(vector_dir / vector["json_path"])
+    for index, vector in enumerate(manifest["facts"]):
+        validate_vector_entry(vector, f"manifest.facts[{index}]")
+        fact_json = read_json(
+            resolve_portable(vector_dir, vector["json_path"], f"{vector['name']} json")
+        )
         validate_fact(fact_json, vector["name"])
-        fact_cbor_path = vector_dir / vector["cbor_path"]
+        fact_cbor_path = resolve_portable(
+            vector_dir, vector["cbor_path"], f"{vector['name']} cbor"
+        )
         fact_cbor_bytes = fact_cbor_path.read_bytes()
         fact_sha = sha256_hex(fact_cbor_bytes)
         assert_equal(fact_sha, vector["cbor_sha256"], f"{vector['name']} cbor sha")
@@ -584,20 +698,25 @@ def verify_vector_dir(vector_dir: Path) -> dict[str, Any]:
         merkle_root(computed_leaf_hashes), manifest["merkle_root"], "merkle root"
     )
 
-    block = read_json(vector_dir / manifest["block_header_path"])
+    block = read_json(
+        resolve_portable(vector_dir, manifest["block_header_path"], "block header")
+    )
     validate_block(block, "block header")
     assert_equal(block["leaf_hashes"], expected_leaf_hashes, "block leaf_hashes")
     assert_equal(block["merkle_root"], manifest["merkle_root"], "block merkle_root")
 
-    day_json = read_json(vector_dir / manifest["day_record_json_path"])
+    day_json = read_json(
+        resolve_portable(vector_dir, manifest["day_record_json_path"], "day json")
+    )
     validate_day(day_json, "day record")
-    decoded_day = decode_cbor(vector_dir / manifest["day_record_cbor_path"])
+    day_cbor_path = resolve_portable(
+        vector_dir, manifest["day_record_cbor_path"], "day cbor"
+    )
+    decoded_day = decode_cbor(day_cbor_path)
     assert_equal(decoded_day, day_json, "day CBOR decode")
     assert_equal(day_json["day_root"], manifest["merkle_root"], "day_root")
     assert_equal(day_json["prev_day_root"], manifest["prev_day_root"], "prev_day_root")
-    day_cbor_sha = sha256_hex(
-        (vector_dir / manifest["day_record_cbor_path"]).read_bytes()
-    )
+    day_cbor_sha = sha256_hex(day_cbor_path.read_bytes())
     assert_equal(day_cbor_sha, manifest["day_cbor_sha256"], "day cbor sha")
 
     return {
@@ -639,6 +758,8 @@ def verify_bundle_dir(bundle_root: Path) -> dict[str, Any]:
             fact_json = read_json(json_path)
             validate_bundle_fact(fact_json, json_path.name)
             assert_equal(decoded_fact, fact_json, f"{fact_path.name} CBOR decode")
+        else:
+            validate_bundle_fact(decoded_fact, fact_path.name)
         leaf_hashes.append(fact_sha)
 
     expected_leaf_hashes = sorted(leaf_hashes)
