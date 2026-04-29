@@ -7,6 +7,7 @@ members = [
     "crates/trackone-pod-fw",
     "crates/trackone-constants",
     "crates/trackone-ledger",
+    "crates/trackone-sensorthings",
 ]
 
 [workspace.package]
@@ -38,6 +39,7 @@ trackone-core = { path = "crates/trackone-core", version = "0.1.0-alpha.17", def
 trackone-ingest = { path = "crates/trackone-ingest", version = "0.1.0-alpha.17", default-features = false }
 trackone-ledger = { path = "crates/trackone-ledger", version = "0.1.0-alpha.17" }
 trackone-constants = { path = "crates/trackone-constants", version = "0.1.0-alpha.17" }
+trackone-sensorthings = { path = "crates/trackone-sensorthings", version = "0.1.0-alpha.17" }
 
 [profile.release]
 lto = true

@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Added `trackone-sensorthings` as the Rust home for deterministic read-only
+  SensorThings projection semantics, leaving `trackone-gateway` as the PyO3
+  export boundary for that surface.
+
 ## [0.1.0-alpha.17] - 2026-04-29
 
 ### Added

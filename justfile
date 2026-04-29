@@ -30,6 +30,7 @@ bench: setup-dev
 test:
     cargo test --package trackone-core --features std,postcard,dummy-aead
     cargo test --package trackone-ingest --features std,xchacha
+    cargo test --package trackone-sensorthings
     cargo test --package trackone-pod-fw --features std
     cargo test --package trackone-gateway
 
@@ -37,6 +38,7 @@ test:
 clippy:
     cargo clippy --package trackone-core --features std,postcard,dummy-aead -- -D warnings
     cargo clippy --package trackone-ingest --features std,xchacha -- -D warnings
+    cargo clippy --package trackone-sensorthings -- -D warnings
     cargo clippy --package trackone-pod-fw --features std -- -D warnings
     cargo clippy --package trackone-gateway -- -D warnings
     cargo clippy --package trackone-gateway --no-default-features -- -D warnings

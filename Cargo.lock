@@ -1312,6 +1312,7 @@ dependencies = [
  "trackone-core",
  "trackone-ingest",
  "trackone-ledger",
+ "trackone-sensorthings",
 ]
 
 [[package]]
@@ -1342,6 +1343,15 @@ version = "0.1.0-alpha.17"
 dependencies = [
  "trackone-core",
  "trackone-ingest",
+]
+
+[[package]]
+name = "trackone-sensorthings"
+version = "0.1.0-alpha.17"
+dependencies = [
+ "serde_json",
+ "trackone-core",
+ "trackone-ledger",
 ]
 
 [[package]]
