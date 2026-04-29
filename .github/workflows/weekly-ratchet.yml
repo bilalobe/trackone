@@ -12,6 +12,10 @@ permissions:
   id-token: write
   packages: write
 
+concurrency:
+  group: weekly-ratchet-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}/ots-calendar
@@ -94,15 +98,38 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Compute calendar image tags
+        id: calendar_tags
+        run: |
+          set -euo pipefail
+          image="${REGISTRY}/${IMAGE_NAME}"
+          {
+            echo "tags<<EOF"
+            echo "${image}:${GITHUB_SHA}"
+            if [ "${GITHUB_REF}" = "refs/heads/main" ]; then
+              echo "${image}:latest"
+            fi
+            echo "EOF"
+          } >> "${GITHUB_OUTPUT}"
+
+          {
+            echo "## Calendar image"
+            echo "- Immutable tag: \`${image}:${GITHUB_SHA}\`"
+            if [ "${GITHUB_REF}" = "refs/heads/main" ]; then
+              echo "- Convenience tag: \`${image}:latest\`"
+            else
+              echo "- Convenience tag: not updated outside \`main\`"
+            fi
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Build and push stationary calendar image
         id: build_calendar
         uses: docker/build-push-action@v7
         with:
           context: deploy/docker/calendar
           push: true
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          tags: ${{ steps.calendar_tags.outputs.tags }}
 
       - name: Attest calendar image provenance
         if: github.repository_owner_type == 'Organization' || github.event.repository.private == false
