@@ -54,6 +54,147 @@ jobs:
           owner="${GITHUB_REPOSITORY_OWNER,,}"
           helm push "dist/trackone-${version}.tgz" "oci://ghcr.io/${owner}/trackone/charts"
 
+  # Final release state: mint a tag-addressed evidence artifact only after the
+  # software artifacts have published successfully.
+  publish-release-evidence:
+    runs-on: ubuntu-latest
+    needs: [publish-helm, publish-wheel]
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Download self-contained archive bundle
+        uses: actions/download-artifact@v8
+        with:
+          name: archive-evidence-bundle
+          path: archive-evidence-bundle
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+
+      - name: Set up ORAS
+        uses: oras-project/setup-oras@v2
+
+      - name: Log in to GHCR
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "${GHCR_TOKEN}" | oras login ghcr.io \
+            --username "${GITHUB_ACTOR}" \
+            --password-stdin
+
+      - name: Publish release evidence archive to GHCR OCI
+        env:
+          ARCHIVE_OCI_REF: ghcr.io/${{ github.repository }}/evidence-archive:${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          bundle="$(ls archive-evidence-bundle/*.tar.gz)"
+          sha_file="${bundle}.sha256"
+          test -f "${sha_file}"
+
+          declared_sha="$(cut -d' ' -f1 "${sha_file}")"
+          actual_sha="$(sha256sum "${bundle}" | cut -d' ' -f1)"
+          if [ "${declared_sha}" != "${actual_sha}" ]; then
+            echo "::error::Release evidence tarball SHA-256 mismatch before OCI publish"
+            exit 1
+          fi
+
+          oras push "${ARCHIVE_OCI_REF}" \
+            --artifact-type application/vnd.trackone.evidence.archive.v1+tar \
+            --annotation org.opencontainers.image.source="https://github.com/${GITHUB_REPOSITORY}" \
+            --annotation org.opencontainers.image.revision="${GITHUB_SHA}" \
+            --annotation org.opencontainers.image.version="${GITHUB_REF_NAME}" \
+            --annotation org.opencontainers.image.title="TrackOne release evidence archive bundle" \
+            "${bundle}:application/gzip"
+          oras resolve "${ARCHIVE_OCI_REF}" | tee release-evidence-oci-digest.txt
+
+      - name: Pull release evidence archive back from GHCR
+        env:
+          ARCHIVE_OCI_REF: ghcr.io/${{ github.repository }}/evidence-archive:${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          mkdir -p pulled-release-evidence
+          oras pull --output pulled-release-evidence "${ARCHIVE_OCI_REF}"
+
+          expected_bundle="$(ls archive-evidence-bundle/*.tar.gz)"
+          expected_name="$(basename "${expected_bundle}")"
+          pulled="$(find pulled-release-evidence -type f -name "${expected_name}" -print -quit)"
+          if [ -z "${pulled}" ]; then
+            echo "::error::Pulled release evidence archive not found: ${expected_name}"
+            find pulled-release-evidence -maxdepth 5 -type f -print
+            exit 1
+          fi
+
+          expected_sha="$(cut -d' ' -f1 "${expected_bundle}.sha256")"
+          actual_sha="$(sha256sum "${pulled}" | cut -d' ' -f1)"
+          if [ "${expected_sha}" != "${actual_sha}" ]; then
+            echo "::error::Pulled release evidence archive SHA-256 mismatch"
+            echo "expected=${expected_sha}"
+            echo "actual=${actual_sha}"
+            exit 1
+          fi
+
+      - name: Verify pulled release evidence archive independently
+        run: |
+          set -euo pipefail
+
+          pulled="$(find pulled-release-evidence -type f -name '*.tar.gz' -print -quit)"
+          if [ -z "${pulled}" ]; then
+            echo "::error::Pulled release evidence archive tarball not found"
+            find pulled-release-evidence -maxdepth 5 -type f -print
+            exit 1
+          fi
+
+          rm -rf extracted-release-evidence
+          mkdir -p extracted-release-evidence
+          tar -xzf "${pulled}" -C extracted-release-evidence
+
+          archive_root="$(find extracted-release-evidence -mindepth 1 -maxdepth 1 -type d -print -quit)"
+          if [ -z "${archive_root}" ]; then
+            echo "::error::Extracted release evidence archive root not found"
+            find extracted-release-evidence -maxdepth 3 -type f -print
+            exit 1
+          fi
+
+          test -f "${archive_root}/SHA256SUMS"
+          test -f "${archive_root}/verifier/verify_vector_corpus.py"
+          test -d "${archive_root}/bundle"
+
+          (
+            cd "${archive_root}"
+            sha256sum -c SHA256SUMS
+            env -u PYTHONPATH python verifier/verify_vector_corpus.py \
+              --bundle-root bundle \
+              --output "${GITHUB_WORKSPACE}/release-evidence-oci-verification.json"
+          )
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          result = json.loads(
+              Path("release-evidence-oci-verification.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          if result.get("ok") is not True:
+              raise SystemExit("Release evidence verifier did not report ok=true")
+          print("Release evidence independent verifier ok=true")
+          PY
+
+      - name: Upload release evidence verification artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-evidence-oci-verification
+          path: |
+            release-evidence-oci-digest.txt
+            release-evidence-oci-verification.json
+          if-no-files-found: error
+          retention-days: 30
+
   publish-crates:
     runs-on: ubuntu-latest
     needs: ci
