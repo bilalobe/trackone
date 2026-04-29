@@ -113,7 +113,7 @@ def emit_fact(device_id: str, counter: int) -> dict[str, Any]:
         .isoformat()
         .replace("+00:00", "Z"),
         "pod_time": None,
-        "kind": "Custom",
+        "kind": "custom.raw",
         "payload": payload,
     }
 

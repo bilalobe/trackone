@@ -406,7 +406,7 @@ def project_fact(
         return []
 
     kind = str(fact.get("kind", ""))
-    if kind == "Env":
+    if kind in {"Env", "env.sample"}:
         env_projection = _project_env_payload(
             payload,
             device_id=device_id,
@@ -901,8 +901,12 @@ def _is_json_object(value: Any) -> bool:
 def _payload_from_fact(fact: dict[str, Any]) -> dict[str, Any] | None:
     payload = fact.get("payload")
     if isinstance(payload, dict):
+        if "custom.raw" in payload and isinstance(payload["custom.raw"], dict):
+            return payload["custom.raw"]
         if "Custom" in payload and isinstance(payload["Custom"], dict):
             return payload["Custom"]
+        if "env.sample" in payload and isinstance(payload["env.sample"], dict):
+            return payload["env.sample"]
         if "Env" in payload and isinstance(payload["Env"], dict):
             return payload["Env"]
         return payload

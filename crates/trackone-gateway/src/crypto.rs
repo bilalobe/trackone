@@ -281,10 +281,10 @@ fn decrypt_framed_from_py(
 
 fn kind_label(kind: FactKind) -> &'static str {
     match kind {
-        FactKind::Env => "Env",
-        FactKind::Pipeline => "Pipeline",
-        FactKind::Health => "Health",
-        FactKind::Custom => "Custom",
+        FactKind::Env => "env.sample",
+        FactKind::Pipeline => "pipeline.event",
+        FactKind::Health => "health.status",
+        FactKind::Custom => "custom.raw",
     }
 }
 
