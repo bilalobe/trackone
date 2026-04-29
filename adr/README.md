@@ -58,6 +58,7 @@ Each ADR captures context, the decision, consequences, and alternatives.
 - [ADR-051: Internal Dependency Boundaries and Feature Demotion](ADR-051-internal-dependency-boundaries-and-feature-demotion.md)
 - [ADR-052: Commitment Profile Identifier Binding Boundary](ADR-052-commitment-profile-identifier-binding-boundary.md)
 - [ADR-053: Beta Public Contract Spine](ADR-053-beta-public-contract-spine.md)
+- [ADR-054: Release-Bound Evidence Artifacts](ADR-054-release-bound-evidence-artifacts.md)
 
 ## Index Conventions
 
@@ -125,6 +126,10 @@ Entries list **Status** and **Summary**. Related references are grouped under **
 - **[ADR-053](ADR-053-beta-public-contract-spine.md): Beta public contract spine**
   **Status**: Accepted
   **Summary**: Freezes beta-bar migration rules for commitment-profile IDs, schema versions, artifact families, verifier tolerance, and projections; treats `day/<date>.verify.json` as public spine; defines disclosure classes by verifier behavior; and keeps rejection audit as schema-governed operator evidence unless promoted to a separate artifact family.
+
+- **[ADR-054](ADR-054-release-bound-evidence-artifacts.md): Release-bound evidence artifacts**
+  **Status**: Accepted
+  **Summary**: Makes tag-addressed release evidence a formal release artifact: reusable CI builds the self-contained bundle, software artifacts publish first, the release workflow publishes `evidence-archive:<release-tag>` to GHCR OCI, pulls it back, checks digests, and reruns the detached verifier; weekly ratchet remains vitality evidence rather than release evidence.
 
 - **[ADR-049](ADR-049-native-evidence-plane-crypto-boundary-and-pynacl-demotion.md): Native evidence-plane crypto boundary and PyNaCl demotion**
   **Status**: Accepted
