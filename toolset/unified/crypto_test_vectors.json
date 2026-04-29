@@ -36,10 +36,10 @@
         "ingest_time": 1759752000,
         "ingest_time_rfc3339_utc": "2025-10-06T12:00:00Z",
         "pod_time": null,
-        "kind": "Custom",
+        "kind": "custom.raw",
         "payload": {}
       },
-      "expected_canonical_json": "{\"fc\":1,\"ingest_time\":1759752000,\"ingest_time_rfc3339_utc\":\"2025-10-06T12:00:00Z\",\"kind\":\"Custom\",\"payload\":{},\"pod_id\":\"0000000000000001\",\"pod_time\":null}"
+      "expected_canonical_json": "{\"fc\":1,\"ingest_time\":1759752000,\"ingest_time_rfc3339_utc\":\"2025-10-06T12:00:00Z\",\"kind\":\"custom.raw\",\"payload\":{},\"pod_id\":\"0000000000000001\",\"pod_time\":null}"
     },
     {
       "description": "Nested payload with list and object",
@@ -49,10 +49,10 @@
         "ingest_time": 1759752001,
         "ingest_time_rfc3339_utc": "2025-10-06T12:00:01Z",
         "pod_time": null,
-        "kind": "Custom",
+        "kind": "custom.raw",
         "payload": {"a": 1, "b": [2, 1], "c": {"nested": true}}
       },
-      "expected_canonical_json": "{\"fc\":2,\"ingest_time\":1759752001,\"ingest_time_rfc3339_utc\":\"2025-10-06T12:00:01Z\",\"kind\":\"Custom\",\"payload\":{\"a\":1,\"b\":[2,1],\"c\":{\"nested\":true}},\"pod_id\":\"0000000000000002\",\"pod_time\":null}"
+      "expected_canonical_json": "{\"fc\":2,\"ingest_time\":1759752001,\"ingest_time_rfc3339_utc\":\"2025-10-06T12:00:01Z\",\"kind\":\"custom.raw\",\"payload\":{\"a\":1,\"b\":[2,1],\"c\":{\"nested\":true}},\"pod_id\":\"0000000000000002\",\"pod_time\":null}"
     },
     {
       "description": "Different payload structure for variety",
@@ -62,10 +62,10 @@
         "ingest_time": 1759752002,
         "ingest_time_rfc3339_utc": "2025-10-06T12:00:02Z",
         "pod_time": null,
-        "kind": "Custom",
+        "kind": "custom.raw",
         "payload": {"k": "v", "n": 2}
       },
-      "expected_canonical_json": "{\"fc\":3,\"ingest_time\":1759752002,\"ingest_time_rfc3339_utc\":\"2025-10-06T12:00:02Z\",\"kind\":\"Custom\",\"payload\":{\"k\":\"v\",\"n\":2},\"pod_id\":\"0000000000000003\",\"pod_time\":null}"
+      "expected_canonical_json": "{\"fc\":3,\"ingest_time\":1759752002,\"ingest_time_rfc3339_utc\":\"2025-10-06T12:00:02Z\",\"kind\":\"custom.raw\",\"payload\":{\"k\":\"v\",\"n\":2},\"pod_id\":\"0000000000000003\",\"pod_time\":null}"
     }
   ]
 }
