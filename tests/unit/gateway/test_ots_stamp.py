@@ -5,10 +5,13 @@ Tests for OTS stamp behavior (moved from test_ots_anchor.py)
 
 from __future__ import annotations
 
+import json
 import subprocess
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+from scripts.gateway.schema_validation import load_schema, validate_instance
 
 # Disable stationary stub mode for all tests in this module
 pytestmark = pytest.mark.usefixtures("disable_stationary_stub")
@@ -40,6 +43,11 @@ class TestOTSStamp:
         assert ots_path.exists()
         content = ots_path.read_text(encoding="utf-8")
         assert "OTS_PROOF_PLACEHOLDER" in content
+        meta = json.loads((tmp_path / "2025-10-07.ots.meta.json").read_text())
+        assert meta["bitcoin"] == {"status": "unavailable"}
+        schema = load_schema("ots_meta")
+        assert schema is not None
+        validate_instance(meta, schema)
 
     @patch("subprocess.run")
     def test_ots_stamp_calls_ots_command(self, mock_run, tmp_path, ots_anchor):
@@ -67,6 +75,9 @@ class TestOTSStamp:
             call_args[0][0][:2] == ["ots", "upgrade"]
             for call_args in mock_run.call_args_list
         )
+        meta = json.loads((tmp_path / "2025-10-07.ots.meta.json").read_text())
+        assert meta["bitcoin"]["status"] == "pending"
+        assert "merkleroot" not in meta["bitcoin"]
 
     @patch("subprocess.run")
     def test_ots_stamp_fallback_on_command_failure(
@@ -85,6 +96,8 @@ class TestOTSStamp:
         assert ots_path.exists()
         content = ots_path.read_text(encoding="utf-8")
         assert "OTS_PROOF_PLACEHOLDER" in content
+        meta = json.loads((tmp_path / "2025-10-07.ots.meta.json").read_text())
+        assert meta["bitcoin"] == {"status": "unavailable"}
 
     @patch("subprocess.run")
     def test_ots_stamp_creates_placeholder_if_ots_doesnt_create_file(
@@ -104,3 +117,5 @@ class TestOTSStamp:
         assert ots_path.exists()
         content = ots_path.read_text(encoding="utf-8")
         assert "OTS_PROOF_PLACEHOLDER" in content
+        meta = json.loads((tmp_path / "2025-10-07.ots.meta.json").read_text())
+        assert meta["bitcoin"] == {"status": "unavailable"}
