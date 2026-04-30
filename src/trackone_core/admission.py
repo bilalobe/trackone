@@ -62,6 +62,9 @@ class RejectionRecord:
     frame_sha256: str
     source: str
 
+    def __post_init__(self) -> None:
+        validate_rejection_record(self)
+
 
 @dataclass(slots=True, frozen=True)
 class AdmissionStateUpdate:
@@ -83,12 +86,23 @@ def audit_day_label(now: datetime | None = None) -> str:
 
 
 def rejection_record_to_dict(record: RejectionRecord) -> dict[str, Any]:
+    validate_rejection_record(record)
     return asdict(record)
 
 
 def emit_rejection(out_fh: TextIO, record: RejectionRecord) -> None:
+    validate_rejection_record(record)
     out_fh.write(json.dumps(rejection_record_to_dict(record), sort_keys=True) + "\n")
     out_fh.flush()
+
+
+def validate_rejection_record(record: RejectionRecord) -> None:
+    if record.source not in REJECTION_SOURCE_TAXONOMY:
+        raise ValueError(f"unknown rejection source: {record.source!r}")
+    if record.reason not in REJECTION_REASON_TAXONOMY:
+        raise ValueError(f"unknown rejection reason: {record.reason!r}")
+    if record.fc is not None and record.fc < 0:
+        raise ValueError("rejection frame counter must be non-negative or null")
 
 
 def admission_state_update(
@@ -145,4 +159,5 @@ __all__ = [
     "emit_rejection",
     "hash_rejected_line",
     "rejection_record_to_dict",
+    "validate_rejection_record",
 ]
