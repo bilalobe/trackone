@@ -263,7 +263,7 @@ End-to-end (see `scripts/gateway/run_pipeline_demo.py`):
 1. Gateway derives a read-only SensorThings projection from the verified fact set (`sensorthings_projection.py`).
 1. Facts are batched into a daily Merkle tree and persisted with headers (`merkle_batcher.py`).
 1. Day blob is anchored with OpenTimestamps (`ots_anchor.py`).
-1. Independent verification recomputes the Merkle root and checks the OTS proof (`verify_cli.py`).
+1. Independent verification recomputes the Merkle root, parses the OTS proof, and applies strict Bitcoin-header verification where configured (`verify_cli.py` / `ots-verify`).
 
 Outputs live under `out/site_demo/` by default:
 
@@ -471,7 +471,9 @@ tox wrappers.
 
 - Cryptographic randomness and nonce policy are documented in ADR-018; we standardize on OS-backed CSPRNGs.
 - AEAD is XChaCha20-Poly1305 with a 24-byte nonce (salt||fc||rand) per ADR-002.
-- OTS verification uses a validated full path to `ots` and avoids shells; tests include placeholder paths and mocks.
+- OTS proof parsing and artifact-hash binding run through `trackone_core.ots`;
+  strict Bitcoin-header verification still uses a validated full path to
+  upstream `ots verify` and avoids shells.
 - For production use, run security scans and audits:
 
 ```bash
