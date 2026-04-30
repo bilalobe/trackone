@@ -18,6 +18,9 @@ Adopt a two-tier verification policy:
 - Run bitcoind in headers-only/pruned mode (no full blocks) with low resource usage.
 - Persist the Bitcoin datadir between CI runs to reuse downloaded headers.
 - In CI, parse required block heights from .ots files and wait until headers reach the highest required height before running `ots verify`.
+  Current TrackOne builds may use the native `trackone_core.ots` parser to
+  extract `BitcoinBlockHeaderAttestation(<height>)` values, with `ots info` as
+  a compatibility fallback.
 
 2. Graceful fallback when headers are unavailable
 
@@ -28,7 +31,9 @@ Implementation notes
 
 - Start bitcoind with: `-listen=0 -blocksonly=1 -prune=550 -txindex=0 -dbcache=50`.
 - Cache `~/.bitcoin` between runs (CI cache key includes OS and Bitcoin Core version).
-- Extract required heights by parsing `ots info <file.ots>` for `BitcoinBlockHeaderAttestation(<height>)`.
+- Extract required heights by parsing detached OTS proofs for
+  `BitcoinBlockHeaderAttestation(<height>)`; `ots info <file.ots>` remains the
+  fallback when the native parser does not support a proof construct.
 - Poll `bitcoin-cli getblockchaininfo` until `headers >= max_required_height` or timeout.
 
 ## Consequences

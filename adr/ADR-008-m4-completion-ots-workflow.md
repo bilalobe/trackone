@@ -57,8 +57,12 @@ The verification CLI now handles both test and production scenarios:
 
 **Production Verification:**
 
-- Invokes `ots verify` for real binary OTS proofs
-- Validates against local Bitcoin Core node (headers-only mode per ADR-007)
+- Parses supported detached OTS proofs natively through `trackone_core.ots` for
+  artifact digest binding, proof-step replay, pending-attestation
+  classification, and Bitcoin attestation-height extraction
+- Retains `ots verify` against a local Bitcoin Core node (headers-only mode per
+  ADR-007) for full trustless Bitcoin-header validation and unsupported proof
+  constructs
 - Returns appropriate exit codes:
   - 0: Success (root matches and OTS verified)
   - 1: Block header not found or invalid
@@ -70,8 +74,10 @@ The verification CLI now handles both test and production scenarios:
 
 1. Recompute Merkle root from canonical fact files
 1. Compare against authoritative block header
-1. Verify OTS proof anchors the day.cbor artifact
-1. Confirm Bitcoin block header contains the attestation
+1. Verify that the OTS proof is bound to the expected `day.cbor` artifact hash
+1. Classify pending and Bitcoin-block-header attestations
+1. Confirm Bitcoin block headers through the strict `ots verify` lane when
+   trustless header validation is required
 
 ### 3. Git LFS for OTS Proofs
 
