@@ -30,6 +30,7 @@ from trackone_core.verification import (
     STATUS_SKIPPED,
     STATUS_VERIFIED,
     build_verifier_summary,
+    channel_from_result,
     record_executed_check,
     record_skipped_check,
     refresh_publicly_recomputable,
@@ -101,25 +102,6 @@ def merkle_root(leaves: Iterable[bytes]) -> str:
             "trackone_core native merkle helper failed during authoritative "
             "verification"
         ) from exc
-
-
-def _coerce_ots_status_name(result: Any) -> str:
-    status_name = getattr(result, "status_name", None)
-    if isinstance(status_name, str):
-        return status_name
-
-    status = getattr(result, "status", None)
-    if isinstance(status, str):
-        return status
-
-    value = getattr(status, "value", None)
-    if isinstance(value, str):
-        return value
-
-    text = str(status).strip().lower()
-    if text.startswith("otsstatus."):
-        return text.split(".", 1)[1]
-    return text or STATUS_FAILED
 
 
 def verify_ots_proof(
@@ -809,27 +791,14 @@ def main(argv: list[str] | None = None) -> int:
             )
             ots_ok = bool(getattr(ots_result, "ok", False))
             ots_reason = str(getattr(ots_result, "reason", "ots-verification-failed"))
-            ots_status = _coerce_ots_status_name(ots_result)
-            if ots_ok:
-                if ots_status not in {STATUS_VERIFIED, STATUS_PENDING}:
-                    ots_status = STATUS_VERIFIED
-                set_channel(
-                    summary,
-                    "ots",
-                    enabled=True,
-                    status=ots_status,
-                    reason=ots_reason,
-                )
-            else:
-                if ots_status not in {STATUS_FAILED, STATUS_MISSING}:
-                    ots_status = STATUS_FAILED
-                set_channel(
-                    summary,
-                    "ots",
-                    enabled=True,
-                    status=ots_status,
-                    reason=ots_reason,
-                )
+            summary["channels"]["ots"] = channel_from_result(
+                enabled=True,
+                result=ots_result,
+                success_statuses={STATUS_VERIFIED, STATUS_PENDING},
+                failure_statuses={STATUS_FAILED, STATUS_MISSING},
+                default_reason="ots-verification-failed",
+            )
+            if not ots_ok:
                 summary["overall"] = "failed"
                 _emit(summary, args.json)
                 if ots_reason == "ots-proof-not-found":
