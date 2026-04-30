@@ -59,10 +59,10 @@ fn hex_to_digest32(value: &str) -> Option<[u8; 32]> {
     }
 
     let mut out = [0u8; 32];
-    for idx in 0..32 {
+    for (idx, byte) in out.iter_mut().enumerate() {
         let hi = value.as_bytes()[idx * 2];
         let lo = value.as_bytes()[idx * 2 + 1];
-        out[idx] = (hex_nibble(hi)? << 4) | hex_nibble(lo)?;
+        *byte = (hex_nibble(hi)? << 4) | hex_nibble(lo)?;
     }
     Some(out)
 }
@@ -356,12 +356,12 @@ fn parse_detached_ots(
     let file_digest: [u8; 32] = file_digest
         .try_into()
         .map_err(|_| OtsInternalError::Invalid("ots-proof-parse-failed"))?;
-    if let Some(expected_digest) = expected_digest_for_ots(ots_path, expected_artifact_sha)? {
-        if file_digest != expected_digest {
-            return Err(OtsInternalError::Invalid(
-                "ots-proof-artifact-hash-mismatch",
-            ));
-        }
+    if let Some(expected_digest) = expected_digest_for_ots(ots_path, expected_artifact_sha)?
+        && file_digest != expected_digest
+    {
+        return Err(OtsInternalError::Invalid(
+            "ots-proof-artifact-hash-mismatch",
+        ));
     }
 
     let mut summary = OtsProofSummary::new(file_digest);
@@ -516,11 +516,9 @@ fn verify_detached_ots_proof(
 ) -> Result<OtsVerifyResult, OtsInternalError> {
     let summary = parse_detached_ots(raw, ots_path, expected_artifact_sha)?;
     if !summary.bitcoin_heights.is_empty() {
-        return Ok(OtsVerifyResult::success_with_heights(
-            OtsStatus::Verified,
-            "ots-bitcoin-attestation-present",
-            summary.bitcoin_heights,
-        ));
+        // Native parsing can confirm proof shape and artifact binding, but it
+        // does not validate inclusion against the referenced Bitcoin header.
+        return Err(OtsInternalError::Fallback);
     }
     if !summary.pending_uris.is_empty() {
         return Ok(OtsVerifyResult::success(
@@ -603,19 +601,6 @@ impl OtsVerifyResult {
 
     fn success(status: OtsStatus, reason: impl Into<String>) -> Self {
         Self::new(true, status, reason)
-    }
-
-    fn success_with_heights(
-        status: OtsStatus,
-        reason: impl Into<String>,
-        bitcoin_attestation_heights: Vec<u64>,
-    ) -> Self {
-        Self {
-            ok: true,
-            status,
-            reason: reason.into(),
-            bitcoin_attestation_heights,
-        }
     }
 
     fn failure(status: OtsStatus, reason: impl Into<String>) -> Self {
@@ -1098,7 +1083,7 @@ mod tests {
     }
 
     #[test]
-    fn verify_ots_proof_accepts_native_bitcoin_attestation_path() {
+    fn verify_ots_proof_requires_external_verifier_for_bitcoin_attestation() {
         let tmp = TestDir::new("native-bitcoin");
         let artifact_path = tmp.path().join("2025-10-07.cbor");
         let ots_path = artifact_path.with_extension("cbor.ots");
@@ -1115,10 +1100,10 @@ mod tests {
             default_verify_timeout(),
         );
 
-        assert!(result.ok);
-        assert_eq!(result.status, OtsStatus::Verified);
-        assert_eq!(result.reason, "ots-bitcoin-attestation-present");
-        assert_eq!(result.bitcoin_attestation_heights, vec![849_123]);
+        assert!(!result.ok);
+        assert_eq!(result.status, OtsStatus::Failed);
+        assert_eq!(result.reason, "ots-binary-not-found");
+        assert!(result.bitcoin_attestation_heights.is_empty());
 
         let summary = parse_detached_ots(&proof, &ots_path, Some(&hex_lower(&artifact_digest)))
             .expect("native OTS proof should parse");
