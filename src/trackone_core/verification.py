@@ -49,6 +49,54 @@ def verification_channel(
     return {"enabled": enabled, "status": status, "reason": reason}
 
 
+def coerce_channel_status_name(result: Any, *, default: str = STATUS_FAILED) -> str:
+    """Coerce native or Python channel result objects to shared status strings."""
+    status_name = getattr(result, "status_name", None)
+    if isinstance(status_name, str):
+        return status_name
+
+    status = getattr(result, "status", None)
+    if isinstance(status, str):
+        return status
+
+    value = getattr(status, "value", None)
+    if isinstance(value, str):
+        return value
+
+    if status is None:
+        return default
+
+    text = str(status).strip().lower()
+    if text.startswith("otsstatus."):
+        return text.split(".", 1)[1]
+    return text or default
+
+
+def channel_from_result(
+    *,
+    enabled: bool,
+    result: Any,
+    success_statuses: set[str] | frozenset[str],
+    failure_statuses: set[str] | frozenset[str],
+    default_success_status: str = STATUS_VERIFIED,
+    default_failure_status: str = STATUS_FAILED,
+    default_reason: str = "verification-failed",
+) -> dict[str, Any]:
+    """Reduce a native verifier result into the shared channel shape."""
+    ok = bool(getattr(result, "ok", False))
+    reason = str(getattr(result, "reason", default_reason))
+    status = coerce_channel_status_name(
+        result,
+        default=default_success_status if ok else default_failure_status,
+    )
+    if ok:
+        if status not in success_statuses:
+            status = default_success_status
+    elif status not in failure_statuses:
+        status = default_failure_status
+    return verification_channel(enabled, status, reason)
+
+
 def compute_publication_overall_status(
     *,
     policy_mode: str,
@@ -290,6 +338,8 @@ __all__ = [
     "STATUS_SKIPPED",
     "STATUS_VERIFIED",
     "build_verifier_summary",
+    "channel_from_result",
+    "coerce_channel_status_name",
     "compute_publication_overall_status",
     "local_verification_failure",
     "portable_verifier_summary",
