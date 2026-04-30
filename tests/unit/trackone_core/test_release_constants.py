@@ -254,3 +254,43 @@ def test_publication_channel_policy_and_manifest_env_overrides(
         "ANCHOR_TSA_ENABLED": "0",
         "ANCHOR_SCITT_ENABLED": "1",
     }
+
+
+def test_channel_result_reduction_uses_shared_status_vocabulary(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _clear_modules("trackone_core")
+    monkeypatch.setitem(sys.modules, "trackone_core._native", None)  # type: ignore[arg-type]
+
+    verification = importlib.import_module("trackone_core.verification")
+
+    class PendingResult:
+        ok = True
+        status_name = "pending"
+        reason = "ots-pending-attestation"
+
+    class UnknownFailure:
+        ok = False
+        status = "native-internal"
+        reason = "ots-verification-failed"
+
+    assert verification.channel_from_result(
+        enabled=True,
+        result=PendingResult(),
+        success_statuses={verification.STATUS_VERIFIED, verification.STATUS_PENDING},
+        failure_statuses={verification.STATUS_FAILED, verification.STATUS_MISSING},
+    ) == {
+        "enabled": True,
+        "status": verification.STATUS_PENDING,
+        "reason": "ots-pending-attestation",
+    }
+    assert verification.channel_from_result(
+        enabled=True,
+        result=UnknownFailure(),
+        success_statuses={verification.STATUS_VERIFIED, verification.STATUS_PENDING},
+        failure_statuses={verification.STATUS_FAILED, verification.STATUS_MISSING},
+    ) == {
+        "enabled": True,
+        "status": verification.STATUS_FAILED,
+        "reason": "ots-verification-failed",
+    }
