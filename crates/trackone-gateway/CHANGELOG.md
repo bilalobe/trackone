@@ -7,10 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `trackone_core.ots` now parses detached OpenTimestamps proofs natively for
+  SHA-256 proof paths using `append`, `prepend`, and `sha256`, and exposes
+  `describe_ots_proof(...)` for the corresponding proof-step trace.
+- `trackone_core.ots.OtsVerifyResult` now exposes
+  `bitcoin_attestation_heights` so callers can read attestation heights without
+  parsing proof text.
+
 ### Changed
 - SensorThings Rust domain logic now lives in `trackone-sensorthings`; this
   crate keeps only the PyO3 adapter that exposes the projection helpers to
   Python.
+- Native OTS verification now classifies real
+  `PendingAttestation(...)` leaves as pending and
+  `BitcoinBlockHeaderAttestation(<height>)` leaves as present attestation
+  paths,
+  falling back to the external `ots` binary only for unsupported proof
+  constructs.
 
 ## [0.1.0-alpha.17] - 2026-04-29
 

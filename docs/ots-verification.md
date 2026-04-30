@@ -254,10 +254,22 @@ given day:
   - ensures `artifact` and `ots_proof` paths point at the expected files;
   - passes `artifact_sha256` into `verify_ots` so that even stationary stubs
     must match the recorded artifact hash.
+  - parses standard detached OpenTimestamps proofs natively through
+    `trackone_core.ots` for SHA-256 paths containing `append`, `prepend`, and
+    `sha256` operations, including `PendingAttestation(...)` and
+    `BitcoinBlockHeaderAttestation(<height>)` leaves.
+  - can expose parsed Bitcoin attestation heights via
+    `OtsVerifyResult.bitcoin_attestation_heights` for downstream policy logic.
 
 This guarantees that mutating the OTS portion of the day evidence set does not
 change `day_root`, while mutating `*.cbor` will break verification — exactly
 the "Mutable Proof Trap" we wanted to avoid.
+
+The native parser verifies the detached OTS proof path and artifact digest
+binding. The CI `ots-verify` job remains the stricter Bitcoin-header ratchet:
+it waits for required block heights and runs the upstream `ots verify` flow
+against local Bitcoin headers where that full trustless header check is
+required.
 
 ## Troubleshooting
 
