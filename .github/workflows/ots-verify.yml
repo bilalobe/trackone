@@ -136,7 +136,7 @@ jobs:
           echo "run_bitcoind=$run" >> "$GITHUB_OUTPUT"
 
       - name: Restore bitcoin headers cache
-        if: steps.check_ots.outputs.found == 'true'
+        if: steps.check_ots.outputs.found == 'true' && steps.decide_run_bitcoind.outputs.run_bitcoind == '1'
         uses: actions/cache@v5
         with:
           path: ~/.bitcoin
@@ -146,7 +146,7 @@ jobs:
 
 
       - name: Install Bitcoin Core (bitcoind)
-        if: steps.check_ots.outputs.found == 'true'
+        if: steps.check_ots.outputs.found == 'true' && steps.decide_run_bitcoind.outputs.run_bitcoind == '1'
         run: |
           set -euo pipefail
           cd "$RUNNER_TEMP"
@@ -213,7 +213,7 @@ jobs:
           retention-days: 7
 
       - name: Upload Bitcoin logs (on failure)
-        if: failure() && steps.check_ots.outputs.found == 'true'
+        if: failure() && steps.check_ots.outputs.found == 'true' && steps.decide_run_bitcoind.outputs.run_bitcoind == '1'
         uses: actions/upload-artifact@v7
         with:
           name: bitcoin-logs
@@ -225,7 +225,7 @@ jobs:
           retention-days: 7
 
       - name: Save bitcoin headers cache
-        if: steps.check_ots.outputs.found == 'true'
+        if: steps.check_ots.outputs.found == 'true' && steps.decide_run_bitcoind.outputs.run_bitcoind == '1'
         uses: actions/cache@v5
         with:
           path: ~/.bitcoin
