@@ -5,12 +5,15 @@ import json
 from datetime import UTC, datetime
 
 from trackone_core.admission import (
+    REJECTION_REASON_TAXONOMY,
+    REJECTION_SOURCE_TAXONOMY,
     RejectionRecord,
     admission_state_update,
     apply_admission_state_update,
     audit_day_label,
     emit_rejection,
     hash_rejected_line,
+    validate_rejection_record,
 )
 
 
@@ -69,3 +72,48 @@ def test_hash_and_audit_day_are_stable() -> None:
         '{"hdr":{"dev_id":3}}\r\n'
     )
     assert audit_day_label(datetime(2026, 4, 25, 12, 0, tzinfo=UTC)) == "2026-04-25"
+
+
+def test_rejection_record_rejects_unknown_taxonomy_values() -> None:
+    assert "duplicate" in REJECTION_REASON_TAXONOMY
+    assert "replay" in REJECTION_SOURCE_TAXONOMY
+
+    try:
+        RejectionRecord(
+            device_id="pod-003",
+            fc=7,
+            reason="operator-note",
+            observed_at_utc="2026-04-25T12:00:00+00:00",
+            frame_sha256="a" * 64,
+            source="replay",
+        )
+    except ValueError as exc:
+        assert "unknown rejection reason" in str(exc)
+    else:  # pragma: no cover - assertion branch
+        raise AssertionError("invalid rejection reason was accepted")
+
+
+def test_rejection_record_rejects_negative_frame_counter() -> None:
+    record = RejectionRecord(
+        device_id="pod-003",
+        fc=None,
+        reason="duplicate",
+        observed_at_utc="2026-04-25T12:00:00+00:00",
+        frame_sha256="a" * 64,
+        source="replay",
+    )
+    validate_rejection_record(record)
+
+    try:
+        RejectionRecord(
+            device_id="pod-003",
+            fc=-1,
+            reason="duplicate",
+            observed_at_utc="2026-04-25T12:00:00+00:00",
+            frame_sha256="a" * 64,
+            source="replay",
+        )
+    except ValueError as exc:
+        assert "frame counter" in str(exc)
+    else:  # pragma: no cover - assertion branch
+        raise AssertionError("negative rejection frame counter was accepted")
