@@ -1,4 +1,6 @@
 #[cfg(feature = "python")]
+use pyo3::exceptions::PyValueError;
+#[cfg(feature = "python")]
 use pyo3::prelude::*;
 #[cfg(feature = "python")]
 use pyo3::types::PyBytes;
@@ -9,11 +11,26 @@ use std::process::{Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 use trackone_constants::OTS_VERIFY_TIMEOUT_SECS;
-use trackone_ledger::{sha256_digest, sha256_hex};
+use trackone_ledger::{hex_lower, sha256_digest, sha256_hex};
 
 const PLACEHOLDER_BYTES: &[u8] = b"OTS_PROOF_PLACEHOLDER";
 const STATIONARY_PREFIX: &[u8] = b"STATIONARY-OTS:";
 const OTS_VERIFY_POLL_INTERVAL: Duration = Duration::from_millis(25);
+const OTS_HEADER_MAGIC: &[u8] =
+    b"\x00OpenTimestamps\x00\x00Proof\x00\xbf\x89\xe2\xe8\x84\xe8\x92\x94";
+const OTS_MAJOR_VERSION: u64 = 1;
+const OTS_OP_SHA256: u8 = 0x08;
+const OTS_OP_APPEND: u8 = 0xf0;
+const OTS_OP_PREPEND: u8 = 0xf1;
+const OTS_TIMESTAMP_MORE: u8 = 0xff;
+const OTS_TIMESTAMP_ATTESTATION: u8 = 0x00;
+const OTS_PENDING_ATTESTATION_TAG: [u8; 8] = [0x83, 0xdf, 0xe3, 0x0d, 0x2e, 0xf9, 0x0c, 0x8e];
+const OTS_BITCOIN_BLOCK_HEADER_ATTESTATION_TAG: [u8; 8] =
+    [0x05, 0x88, 0x96, 0x0d, 0x73, 0xd7, 0x19, 0x01];
+const OTS_MAX_OP_RESULT_LEN: usize = 4096;
+const OTS_MAX_ATTESTATION_PAYLOAD_LEN: usize = 8192;
+const OTS_MAX_URI_LEN: usize = 1000;
+const OTS_MAX_RECURSION_DEPTH: u16 = 256;
 
 fn trim_ascii(input: &[u8]) -> &[u8] {
     let start = input
@@ -34,6 +51,29 @@ fn is_sha256_hex(value: &str) -> bool {
 
 fn normalize_hex(value: &str) -> String {
     value.to_ascii_lowercase()
+}
+
+fn hex_to_digest32(value: &str) -> Option<[u8; 32]> {
+    if !is_sha256_hex(value) {
+        return None;
+    }
+
+    let mut out = [0u8; 32];
+    for idx in 0..32 {
+        let hi = value.as_bytes()[idx * 2];
+        let lo = value.as_bytes()[idx * 2 + 1];
+        out[idx] = (hex_nibble(hi)? << 4) | hex_nibble(lo)?;
+    }
+    Some(out)
+}
+
+fn hex_nibble(byte: u8) -> Option<u8> {
+    match byte {
+        b'0'..=b'9' => Some(byte - b'0'),
+        b'a'..=b'f' => Some(byte - b'a' + 10),
+        b'A'..=b'F' => Some(byte - b'A' + 10),
+        _ => None,
+    }
 }
 
 /// Derive the artifact path from an OTS proof path by stripping the trailing
@@ -169,6 +209,340 @@ fn required_str_field<'a>(
     object.get(key)?.as_str()
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct OtsProofSummary {
+    file_digest: [u8; 32],
+    pending_uris: Vec<String>,
+    bitcoin_heights: Vec<u64>,
+    steps: Vec<String>,
+}
+
+impl OtsProofSummary {
+    fn new(file_digest: [u8; 32]) -> Self {
+        Self {
+            file_digest,
+            pending_uris: Vec::new(),
+            bitcoin_heights: Vec::new(),
+            steps: Vec::new(),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum OtsInternalError {
+    Fallback,
+    Invalid(&'static str),
+}
+
+struct OtsCursor<'a> {
+    raw: &'a [u8],
+    offset: usize,
+}
+
+impl<'a> OtsCursor<'a> {
+    fn new(raw: &'a [u8]) -> Self {
+        Self { raw, offset: 0 }
+    }
+
+    fn assert_magic(&mut self, magic: &[u8]) -> Result<(), OtsInternalError> {
+        let actual = self.read_bytes(magic.len())?;
+        if actual == magic {
+            Ok(())
+        } else {
+            Err(OtsInternalError::Fallback)
+        }
+    }
+
+    fn read_u8(&mut self) -> Result<u8, OtsInternalError> {
+        Ok(self.read_bytes(1)?[0])
+    }
+
+    fn read_bytes(&mut self, len: usize) -> Result<&'a [u8], OtsInternalError> {
+        let end = self
+            .offset
+            .checked_add(len)
+            .ok_or(OtsInternalError::Invalid("ots-proof-parse-failed"))?;
+        if end > self.raw.len() {
+            return Err(OtsInternalError::Invalid("ots-proof-parse-failed"));
+        }
+        let bytes = &self.raw[self.offset..end];
+        self.offset = end;
+        Ok(bytes)
+    }
+
+    fn read_varuint(&mut self) -> Result<u64, OtsInternalError> {
+        let mut value: u64 = 0;
+        let mut shift = 0u32;
+
+        loop {
+            if shift >= 64 {
+                return Err(OtsInternalError::Invalid("ots-proof-parse-failed"));
+            }
+            let byte = self.read_u8()?;
+            value |= u64::from(byte & 0x7f) << shift;
+            if byte & 0x80 == 0 {
+                return Ok(value);
+            }
+            shift += 7;
+        }
+    }
+
+    fn read_varbytes(
+        &mut self,
+        max_len: usize,
+        min_len: usize,
+    ) -> Result<&'a [u8], OtsInternalError> {
+        let len_u64 = self.read_varuint()?;
+        let len = usize::try_from(len_u64)
+            .map_err(|_| OtsInternalError::Invalid("ots-proof-parse-failed"))?;
+        if len < min_len || len > max_len {
+            return Err(OtsInternalError::Invalid("ots-proof-parse-failed"));
+        }
+        self.read_bytes(len)
+    }
+
+    fn assert_eof(&self) -> Result<(), OtsInternalError> {
+        if self.offset == self.raw.len() {
+            Ok(())
+        } else {
+            Err(OtsInternalError::Invalid("ots-proof-trailing-garbage"))
+        }
+    }
+}
+
+fn expected_digest_for_ots(
+    ots_path: &Path,
+    expected_artifact_sha: Option<&str>,
+) -> Result<Option<[u8; 32]>, OtsInternalError> {
+    if let Some(expected) = expected_artifact_sha {
+        return hex_to_digest32(expected)
+            .map(Some)
+            .ok_or(OtsInternalError::Invalid("ots-expected-hash-invalid"));
+    }
+
+    let Some(artifact_path) = artifact_path_for_ots(ots_path) else {
+        return Ok(None);
+    };
+    match fs::read(&artifact_path) {
+        Ok(bytes) => Ok(Some(sha256_digest(&bytes))),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(_) => Err(OtsInternalError::Invalid("ots-artifact-read-failed")),
+    }
+}
+
+fn parse_detached_ots(
+    raw: &[u8],
+    ots_path: &Path,
+    expected_artifact_sha: Option<&str>,
+) -> Result<OtsProofSummary, OtsInternalError> {
+    if !raw.starts_with(OTS_HEADER_MAGIC) {
+        return Err(OtsInternalError::Fallback);
+    }
+
+    let mut cursor = OtsCursor::new(raw);
+    cursor.assert_magic(OTS_HEADER_MAGIC)?;
+
+    let major = cursor.read_varuint()?;
+    if major != OTS_MAJOR_VERSION {
+        return Err(OtsInternalError::Invalid("ots-unsupported-version"));
+    }
+
+    let file_hash_op = cursor.read_u8()?;
+    if file_hash_op != OTS_OP_SHA256 {
+        return Err(OtsInternalError::Fallback);
+    }
+
+    let file_digest = cursor.read_bytes(32)?;
+    let file_digest: [u8; 32] = file_digest
+        .try_into()
+        .map_err(|_| OtsInternalError::Invalid("ots-proof-parse-failed"))?;
+    if let Some(expected_digest) = expected_digest_for_ots(ots_path, expected_artifact_sha)? {
+        if file_digest != expected_digest {
+            return Err(OtsInternalError::Invalid(
+                "ots-proof-artifact-hash-mismatch",
+            ));
+        }
+    }
+
+    let mut summary = OtsProofSummary::new(file_digest);
+    parse_timestamp(
+        &mut cursor,
+        file_digest.to_vec(),
+        OTS_MAX_RECURSION_DEPTH,
+        &mut summary,
+    )?;
+    cursor.assert_eof()?;
+    Ok(summary)
+}
+
+fn parse_timestamp(
+    cursor: &mut OtsCursor<'_>,
+    msg: Vec<u8>,
+    recursion_remaining: u16,
+    summary: &mut OtsProofSummary,
+) -> Result<(), OtsInternalError> {
+    if recursion_remaining == 0 {
+        return Err(OtsInternalError::Invalid("ots-proof-recursion-limit"));
+    }
+
+    let mut tag = cursor.read_u8()?;
+    while tag == OTS_TIMESTAMP_MORE {
+        let next = cursor.read_u8()?;
+        parse_timestamp_tag(cursor, next, &msg, recursion_remaining, summary)?;
+        tag = cursor.read_u8()?;
+    }
+
+    parse_timestamp_tag(cursor, tag, &msg, recursion_remaining, summary)
+}
+
+fn parse_timestamp_tag(
+    cursor: &mut OtsCursor<'_>,
+    tag: u8,
+    msg: &[u8],
+    recursion_remaining: u16,
+    summary: &mut OtsProofSummary,
+) -> Result<(), OtsInternalError> {
+    if tag == OTS_TIMESTAMP_ATTESTATION {
+        return parse_attestation(cursor, msg, summary);
+    }
+
+    let (step, result) = apply_ots_op(cursor, tag, msg)?;
+    summary.steps.push(step);
+    parse_timestamp(cursor, result, recursion_remaining - 1, summary)
+}
+
+fn apply_ots_op(
+    cursor: &mut OtsCursor<'_>,
+    tag: u8,
+    msg: &[u8],
+) -> Result<(String, Vec<u8>), OtsInternalError> {
+    if msg.len() > OTS_MAX_OP_RESULT_LEN {
+        return Err(OtsInternalError::Invalid("ots-proof-message-too-long"));
+    }
+
+    match tag {
+        OTS_OP_APPEND => {
+            let suffix = cursor.read_varbytes(OTS_MAX_OP_RESULT_LEN, 1)?;
+            let mut result = Vec::with_capacity(msg.len() + suffix.len());
+            result.extend_from_slice(msg);
+            result.extend_from_slice(suffix);
+            if result.len() > OTS_MAX_OP_RESULT_LEN {
+                return Err(OtsInternalError::Invalid("ots-proof-message-too-long"));
+            }
+            Ok((format!("append {}", hex_lower(suffix)), result))
+        }
+        OTS_OP_PREPEND => {
+            let prefix = cursor.read_varbytes(OTS_MAX_OP_RESULT_LEN, 1)?;
+            let mut result = Vec::with_capacity(prefix.len() + msg.len());
+            result.extend_from_slice(prefix);
+            result.extend_from_slice(msg);
+            if result.len() > OTS_MAX_OP_RESULT_LEN {
+                return Err(OtsInternalError::Invalid("ots-proof-message-too-long"));
+            }
+            Ok((format!("prepend {}", hex_lower(prefix)), result))
+        }
+        OTS_OP_SHA256 => Ok(("sha256".to_string(), sha256_digest(msg).to_vec())),
+        _ => Err(OtsInternalError::Fallback),
+    }
+}
+
+fn parse_attestation(
+    cursor: &mut OtsCursor<'_>,
+    msg: &[u8],
+    summary: &mut OtsProofSummary,
+) -> Result<(), OtsInternalError> {
+    let tag = cursor.read_bytes(8)?;
+    let payload = cursor.read_varbytes(OTS_MAX_ATTESTATION_PAYLOAD_LEN, 0)?;
+
+    if tag == OTS_PENDING_ATTESTATION_TAG {
+        let uri = parse_pending_attestation_uri(payload)?;
+        summary
+            .steps
+            .push(format!("verify PendingAttestation({uri})"));
+        summary.pending_uris.push(uri);
+        return Ok(());
+    }
+
+    if tag == OTS_BITCOIN_BLOCK_HEADER_ATTESTATION_TAG {
+        if msg.len() != 32 {
+            return Err(OtsInternalError::Invalid("ots-bitcoin-digest-invalid"));
+        }
+        let height = parse_bitcoin_block_header_attestation_height(payload)?;
+        summary
+            .steps
+            .push(format!("verify BitcoinBlockHeaderAttestation({height})"));
+        summary.bitcoin_heights.push(height);
+        return Ok(());
+    }
+
+    Err(OtsInternalError::Fallback)
+}
+
+fn parse_pending_attestation_uri(payload: &[u8]) -> Result<String, OtsInternalError> {
+    let mut payload_cursor = OtsCursor::new(payload);
+    let uri = payload_cursor.read_varbytes(OTS_MAX_URI_LEN, 0)?;
+    payload_cursor.assert_eof()?;
+    if !uri.iter().all(|byte| {
+        matches!(
+            byte,
+            b'A'..=b'Z'
+                | b'a'..=b'z'
+                | b'0'..=b'9'
+                | b'-'
+                | b'.'
+                | b'_'
+                | b'/'
+                | b':'
+        )
+    }) {
+        return Err(OtsInternalError::Invalid("ots-pending-uri-invalid"));
+    }
+    let uri = core::str::from_utf8(uri)
+        .map_err(|_| OtsInternalError::Invalid("ots-pending-uri-invalid"))?;
+    Ok(uri.to_string())
+}
+
+fn parse_bitcoin_block_header_attestation_height(payload: &[u8]) -> Result<u64, OtsInternalError> {
+    let mut payload_cursor = OtsCursor::new(payload);
+    let height = payload_cursor.read_varuint()?;
+    payload_cursor.assert_eof()?;
+    Ok(height)
+}
+
+fn verify_detached_ots_proof(
+    raw: &[u8],
+    ots_path: &Path,
+    expected_artifact_sha: Option<&str>,
+) -> Result<OtsVerifyResult, OtsInternalError> {
+    let summary = parse_detached_ots(raw, ots_path, expected_artifact_sha)?;
+    if !summary.bitcoin_heights.is_empty() {
+        return Ok(OtsVerifyResult::success_with_heights(
+            OtsStatus::Verified,
+            "ots-bitcoin-attestation-present",
+            summary.bitcoin_heights,
+        ));
+    }
+    if !summary.pending_uris.is_empty() {
+        return Ok(OtsVerifyResult::success(
+            OtsStatus::Pending,
+            "ots-pending-attestation",
+        ));
+    }
+    Err(OtsInternalError::Fallback)
+}
+
+fn describe_detached_ots_proof_impl(
+    ots_path: &Path,
+    expected_artifact_sha: Option<&str>,
+) -> Result<Vec<String>, OtsInternalError> {
+    let raw = fs::read(ots_path).map_err(|_| OtsInternalError::Invalid("ots-proof-read-failed"))?;
+    let summary = parse_detached_ots(&raw, ots_path, expected_artifact_sha)?;
+    let mut description = Vec::with_capacity(summary.steps.len() + 1);
+    description.push(format!("file sha256 {}", hex_lower(&summary.file_digest)));
+    description.extend(summary.steps);
+    Ok(description)
+}
+
 #[cfg_attr(feature = "python", pyclass(eq, eq_int, skip_from_py_object))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum OtsStatus {
@@ -214,6 +588,7 @@ struct OtsVerifyResult {
     ok: bool,
     status: OtsStatus,
     reason: String,
+    bitcoin_attestation_heights: Vec<u64>,
 }
 
 impl OtsVerifyResult {
@@ -222,11 +597,25 @@ impl OtsVerifyResult {
             ok,
             status,
             reason: reason.into(),
+            bitcoin_attestation_heights: Vec::new(),
         }
     }
 
     fn success(status: OtsStatus, reason: impl Into<String>) -> Self {
         Self::new(true, status, reason)
+    }
+
+    fn success_with_heights(
+        status: OtsStatus,
+        reason: impl Into<String>,
+        bitcoin_attestation_heights: Vec<u64>,
+    ) -> Self {
+        Self {
+            ok: true,
+            status,
+            reason: reason.into(),
+            bitcoin_attestation_heights,
+        }
     }
 
     fn failure(status: OtsStatus, reason: impl Into<String>) -> Self {
@@ -255,6 +644,11 @@ impl OtsVerifyResult {
     #[getter]
     fn reason(&self) -> String {
         self.reason.clone()
+    }
+
+    #[getter]
+    fn bitcoin_attestation_heights(&self) -> Vec<u64> {
+        self.bitcoin_attestation_heights.clone()
     }
 
     fn __bool__(&self) -> bool {
@@ -329,6 +723,14 @@ fn verify_ots_proof_impl(
         } else {
             OtsVerifyResult::failure(OtsStatus::Failed, "placeholder-not-allowed")
         };
+    }
+
+    match verify_detached_ots_proof(&raw, ots_path, expected_artifact_sha) {
+        Ok(result) => return result,
+        Err(OtsInternalError::Invalid(reason)) => {
+            return OtsVerifyResult::failure(OtsStatus::Failed, reason);
+        }
+        Err(OtsInternalError::Fallback) => {}
     }
 
     let binary = match ots_binary
@@ -507,6 +909,22 @@ fn verify_ots_proof(
 }
 
 #[cfg(feature = "python")]
+#[pyfunction(signature = (ots_path, expected_artifact_sha = None))]
+fn describe_ots_proof(
+    ots_path: String,
+    expected_artifact_sha: Option<String>,
+) -> PyResult<Vec<String>> {
+    describe_detached_ots_proof_impl(Path::new(&ots_path), expected_artifact_sha.as_deref())
+        .map_err(|err| {
+            let reason = match err {
+                OtsInternalError::Fallback => "ots-proof-unsupported",
+                OtsInternalError::Invalid(reason) => reason,
+            };
+            PyValueError::new_err(reason)
+        })
+}
+
+#[cfg(feature = "python")]
 #[pyfunction]
 fn validate_meta_sidecar(
     meta_path: String,
@@ -529,6 +947,7 @@ pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
     sub.add_class::<OtsVerifyResult>()?;
     sub.add_function(wrap_pyfunction!(hash_for_ots, &sub)?)?;
     sub.add_function(wrap_pyfunction!(verify_ots_proof, &sub)?)?;
+    sub.add_function(wrap_pyfunction!(describe_ots_proof, &sub)?)?;
     sub.add_function(wrap_pyfunction!(validate_meta_sidecar, &sub)?)?;
     parent.add_submodule(&sub)?;
     Ok(())
@@ -591,6 +1010,80 @@ mod tests {
         fs::write(path, serde_json::to_vec(&meta).unwrap()).unwrap();
     }
 
+    fn write_varuint(out: &mut Vec<u8>, mut value: u64) {
+        if value == 0 {
+            out.push(0);
+            return;
+        }
+
+        while value != 0 {
+            let mut byte = (value & 0x7f) as u8;
+            value >>= 7;
+            if value != 0 {
+                byte |= 0x80;
+            }
+            out.push(byte);
+        }
+    }
+
+    fn write_varbytes(out: &mut Vec<u8>, bytes: &[u8]) {
+        write_varuint(out, bytes.len() as u64);
+        out.extend_from_slice(bytes);
+    }
+
+    fn write_attestation(out: &mut Vec<u8>, tag: &[u8; 8], payload: &[u8]) {
+        out.push(OTS_TIMESTAMP_ATTESTATION);
+        out.extend_from_slice(tag);
+        write_varbytes(out, payload);
+    }
+
+    fn bitcoin_attestation_payload(height: u64) -> Vec<u8> {
+        let mut payload = Vec::new();
+        write_varuint(&mut payload, height);
+        payload
+    }
+
+    fn pending_attestation_payload(uri: &str) -> Vec<u8> {
+        let mut payload = Vec::new();
+        write_varbytes(&mut payload, uri.as_bytes());
+        payload
+    }
+
+    fn detached_ots(file_digest: &[u8; 32], timestamp: &[u8]) -> Vec<u8> {
+        let mut proof = Vec::new();
+        proof.extend_from_slice(OTS_HEADER_MAGIC);
+        write_varuint(&mut proof, OTS_MAJOR_VERSION);
+        proof.push(OTS_OP_SHA256);
+        proof.extend_from_slice(file_digest);
+        proof.extend_from_slice(timestamp);
+        proof
+    }
+
+    fn append_prepend_sha256_bitcoin_proof(file_digest: &[u8; 32], height: u64) -> Vec<u8> {
+        let mut timestamp = Vec::new();
+        timestamp.push(OTS_OP_APPEND);
+        write_varbytes(&mut timestamp, &[0xaa, 0xbb]);
+        timestamp.push(OTS_OP_PREPEND);
+        write_varbytes(&mut timestamp, &[0x01, 0x02, 0x03]);
+        timestamp.push(OTS_OP_SHA256);
+        write_attestation(
+            &mut timestamp,
+            &OTS_BITCOIN_BLOCK_HEADER_ATTESTATION_TAG,
+            &bitcoin_attestation_payload(height),
+        );
+        detached_ots(file_digest, &timestamp)
+    }
+
+    fn pending_proof(file_digest: &[u8; 32], uri: &str) -> Vec<u8> {
+        let mut timestamp = Vec::new();
+        write_attestation(
+            &mut timestamp,
+            &OTS_PENDING_ATTESTATION_TAG,
+            &pending_attestation_payload(uri),
+        );
+        detached_ots(file_digest, &timestamp)
+    }
+
     #[test]
     fn verify_ots_proof_accepts_placeholder() {
         let tmp = TestDir::new("placeholder");
@@ -602,6 +1095,96 @@ mod tests {
         assert!(result.ok);
         assert_eq!(result.status, OtsStatus::Pending);
         assert_eq!(result.reason, "placeholder-accepted");
+    }
+
+    #[test]
+    fn verify_ots_proof_accepts_native_bitcoin_attestation_path() {
+        let tmp = TestDir::new("native-bitcoin");
+        let artifact_path = tmp.path().join("2025-10-07.cbor");
+        let ots_path = artifact_path.with_extension("cbor.ots");
+        fs::write(&artifact_path, b"day-bytes").unwrap();
+        let artifact_digest = sha256_digest(b"day-bytes");
+        let proof = append_prepend_sha256_bitcoin_proof(&artifact_digest, 849_123);
+        fs::write(&ots_path, &proof).unwrap();
+
+        let result = verify_ots_proof_impl(
+            &ots_path,
+            false,
+            Some(&hex_lower(&artifact_digest)),
+            None,
+            default_verify_timeout(),
+        );
+
+        assert!(result.ok);
+        assert_eq!(result.status, OtsStatus::Verified);
+        assert_eq!(result.reason, "ots-bitcoin-attestation-present");
+        assert_eq!(result.bitcoin_attestation_heights, vec![849_123]);
+
+        let summary = parse_detached_ots(&proof, &ots_path, Some(&hex_lower(&artifact_digest)))
+            .expect("native OTS proof should parse");
+        assert_eq!(summary.file_digest, artifact_digest);
+        assert_eq!(summary.bitcoin_heights, vec![849_123]);
+        assert_eq!(
+            summary.steps,
+            vec![
+                "append aabb".to_string(),
+                "prepend 010203".to_string(),
+                "sha256".to_string(),
+                "verify BitcoinBlockHeaderAttestation(849123)".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn verify_ots_proof_reports_native_pending_attestation() {
+        let tmp = TestDir::new("native-pending");
+        let artifact_path = tmp.path().join("2025-10-07.cbor");
+        let ots_path = artifact_path.with_extension("cbor.ots");
+        fs::write(&artifact_path, b"day-bytes").unwrap();
+        let artifact_digest = sha256_digest(b"day-bytes");
+        fs::write(
+            &ots_path,
+            pending_proof(&artifact_digest, "https://calendar.example"),
+        )
+        .unwrap();
+
+        let result = verify_ots_proof_impl(
+            &ots_path,
+            false,
+            Some(&hex_lower(&artifact_digest)),
+            None,
+            default_verify_timeout(),
+        );
+
+        assert!(result.ok);
+        assert_eq!(result.status, OtsStatus::Pending);
+        assert_eq!(result.reason, "ots-pending-attestation");
+    }
+
+    #[test]
+    fn verify_ots_proof_rejects_native_artifact_hash_mismatch() {
+        let tmp = TestDir::new("native-mismatch");
+        let artifact_path = tmp.path().join("2025-10-07.cbor");
+        let ots_path = artifact_path.with_extension("cbor.ots");
+        fs::write(&artifact_path, b"day-bytes").unwrap();
+        let proof_digest = sha256_digest(b"different-day-bytes");
+        fs::write(
+            &ots_path,
+            append_prepend_sha256_bitcoin_proof(&proof_digest, 849_123),
+        )
+        .unwrap();
+
+        let result = verify_ots_proof_impl(
+            &ots_path,
+            false,
+            Some(&sha256_hex(b"day-bytes")),
+            None,
+            default_verify_timeout(),
+        );
+
+        assert!(!result.ok);
+        assert_eq!(result.status, OtsStatus::Failed);
+        assert_eq!(result.reason, "ots-proof-artifact-hash-mismatch");
     }
 
     #[test]
