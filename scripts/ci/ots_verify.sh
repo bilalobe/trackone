@@ -5,6 +5,10 @@
 set -euo pipefail
 
 ROOT_DIR="${1:-.}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ ! -e "$ROOT_DIR" ]; then
+  mkdir -p "$ROOT_DIR"
+fi
 DATADIR="${DATADIR:-$HOME/.bitcoin}"
 # Do not wrap defaults in quotes; pass to bitcoind via an array to preserve arguments safely.
 BITCOIND_EXTRA_ARGS="${BITCOIND_EXTRA_ARGS:--listen=0 -blocksonly=1 -prune=550 -txindex=0 -dbcache=50 -maxconnections=8 -disablewallet=1}"
@@ -19,6 +23,8 @@ EXPLORER_BASE="${EXPLORER_BASE:-https://mempool.space}"
 EXPLORER_HASH_BASE="${EXPLORER_HASH_BASE:-https://www.blockchain.com/btc/block}"
 OUTPUT_SUMMARY="${OUTPUT_SUMMARY:-$ROOT_DIR/ots_verify_summary.txt}"
 OUTPUT_JSON_SUMMARY="${OUTPUT_JSON_SUMMARY:-$ROOT_DIR/ots_verify_summary.json}"
+NATIVE_OTS_INSPECT="${NATIVE_OTS_INSPECT:-$SCRIPT_DIR/native_ots_inspect.py}"
+NATIVE_OTS_PYTHON="${NATIVE_OTS_PYTHON:-python}"
 
 # Declare arrays and associative maps
 declare -a heights=()
@@ -26,6 +32,8 @@ declare -a block_hashes=()
 declare -A file_stage
 declare -A file_next_trigger
 declare -A file_status
+NATIVE_OTS_OUT=""
+NATIVE_OTS_OUT_READY=0
 
 classify_verify_failure_output() {
   local output="$1"
@@ -57,9 +65,28 @@ record_verify_failure() {
   esac
 }
 
-mkdir -p "$DATADIR"
+run_native_ots_inspect() {
+  if [ "$NATIVE_OTS_OUT_READY" = "1" ]; then
+    printf '%s\n' "$NATIVE_OTS_OUT"
+    return 0
+  fi
+  [ -f "$NATIVE_OTS_INSPECT" ] || return 1
+  if NATIVE_OTS_OUT=$("$NATIVE_OTS_PYTHON" "$NATIVE_OTS_INSPECT" "$ROOT_DIR" --shell 2>/dev/null); then
+    NATIVE_OTS_OUT_READY=1
+    printf '%s\n' "$NATIVE_OTS_OUT"
+    return 0
+  fi
+  NATIVE_OTS_OUT=""
+  NATIVE_OTS_OUT_READY=1
+  return 1
+}
 
-if [ "$RUN_BITCOIND" = "1" ]; then
+start_bitcoind_if_enabled() {
+  if [ "$RUN_BITCOIND" != "1" ]; then
+    echo "RUN_BITCOIND=0: Skipping bitcoind startup; proceeding with best-effort verification."
+    return 0
+  fi
+
   if ! command -v bitcoind >/dev/null 2>&1; then
     echo "bitcoind is not installed; cannot run trustless OTS verification."
     if [ "$STRICT_VERIFY" = "1" ]; then
@@ -78,7 +105,30 @@ if [ "$RUN_BITCOIND" = "1" ]; then
     echo "Non-strict mode: skipping trustless OTS verification."
     exit 0
   fi
-fi
+
+  mkdir -p "$DATADIR"
+  # shellcheck disable=SC2206
+  BITCOIND_ARGS=( $BITCOIND_EXTRA_ARGS )
+  echo "Starting bitcoind (datadir=$DATADIR) with args: ${BITCOIND_ARGS[*]}"
+  bitcoind -datadir="$DATADIR" -daemon "${BITCOIND_ARGS[@]}"
+
+  cleanup() {
+    echo "Shutting down bitcoind..."
+    bitcoin-cli -datadir="$DATADIR" stop >/dev/null 2>&1 || true
+  }
+  trap cleanup EXIT
+
+  # Wait for RPC to become available (up to ~30s)
+  for i in {1..30}; do
+    if bitcoin-cli -datadir="$DATADIR" -rpcwait -rpcwaittimeout=1 getblockchaininfo >/dev/null 2>&1; then
+      break
+    fi
+    sleep 1
+    if [ "$i" -eq 30 ]; then
+      echo "bitcoin-cli RPC did not become ready; continuing anyway"
+    fi
+  done
+}
 
 # Helper: upgrade all OTS files once (best-effort)
 upgrade_all_once() {
@@ -90,6 +140,10 @@ upgrade_all_once() {
     echo "Upgrading proof: $f"
     ots upgrade "$f" || true
   done
+  if [ "$any" -eq 1 ]; then
+    NATIVE_OTS_OUT=""
+    NATIVE_OTS_OUT_READY=0
+  fi
   if [ "$any" -eq 0 ]; then
     echo "No OTS files to upgrade in $ROOT_DIR"
   fi
@@ -98,6 +152,19 @@ upgrade_all_once() {
 # Helper: parse heights into a global array variable 'heights'
 parse_heights() {
   heights=()
+  local native_out
+  if native_out=$(run_native_ots_inspect); then
+    while IFS= read -r line; do
+      if [[ $line =~ ^height=([0-9]+)$ ]]; then
+        heights+=("${BASH_REMATCH[1]}")
+      fi
+    done <<< "$native_out"
+    if [ ${#heights[@]} -gt 0 ]; then
+      readarray -t heights < <(printf '%s\n' "${heights[@]}" | sort -n | uniq)
+      return 0
+    fi
+  fi
+
   if ! command -v ots >/dev/null 2>&1; then
     return 0
   fi
@@ -151,11 +218,49 @@ classify_stage_for_file() {
   file_next_trigger["$f"]="$next"
 }
 
+classify_stage_for_file_native_first() {
+  local target="$1"
+  local native_out
+  if native_out=$(run_native_ots_inspect); then
+    while IFS=$'\t' read -r kind file status stage next; do
+      if [ "$kind" = "file" ] && [ "$file" = "$target" ] && [ "$status" = "native_parsed" ]; then
+        file_stage["$file"]="$stage"
+        file_next_trigger["$file"]="$next"
+        return 0
+      fi
+    done <<< "$native_out"
+  fi
+
+  if command -v ots >/dev/null 2>&1; then
+    local info_out
+    info_out=$(ots info "$target" 2>/dev/null || true)
+    classify_stage_for_file "$target" "$info_out"
+  fi
+}
+
 # Helper: harvest stage info for all .ots files
 harvest_stages() {
   shopt -s nullglob
+  local native_out
+  if native_out=$(run_native_ots_inspect); then
+    while IFS=$'\t' read -r kind file status stage next; do
+      if [ "$kind" = "file" ] && [ "$status" = "native_parsed" ]; then
+        file_stage["$file"]="$stage"
+        file_next_trigger["$file"]="$next"
+      fi
+    done <<< "$native_out"
+  fi
+
   for f in "$ROOT_DIR"/*.ots; do
     [ -f "$f" ] || continue
+    if [ -n "${file_stage[$f]:-}" ]; then
+      continue
+    fi
+    if ! command -v ots >/dev/null 2>&1; then
+      file_stage["$f"]="${file_stage[$f]:-unknown}"
+      file_next_trigger["$f"]="${file_next_trigger[$f]:-ots-info}"
+      continue
+    fi
     local info_out
     info_out=$(ots info "$f" 2>/dev/null || true)
     classify_stage_for_file "$f" "$info_out"
@@ -166,6 +271,7 @@ harvest_stages() {
 write_summary_file() {
   # Per-file statuses are available via file_status associative array if populated
   # Heights list from global 'heights'
+  mkdir -p "$(dirname "$OUTPUT_SUMMARY")"
   {
     echo "explorer_base=$EXPLORER_BASE"
     echo "explorer_hash_base=$EXPLORER_HASH_BASE"
@@ -208,6 +314,7 @@ write_summary_file() {
 
 # Helper: write JSON summary (heights, URLs, per-file statuses)
 write_json_summary_file() {
+  mkdir -p "$(dirname "$OUTPUT_JSON_SUMMARY")"
   {
     echo "{"
     printf '  "explorer_base": "%s",\n' "$EXPLORER_BASE"
@@ -257,35 +364,23 @@ write_json_summary_file() {
   echo "Wrote JSON summary: $OUTPUT_JSON_SUMMARY"
 }
 
-# Start bitcoind in background (if enabled)
-if [ "$RUN_BITCOIND" = "1" ]; then
-  # shellcheck disable=SC2206
-  BITCOIND_ARGS=( $BITCOIND_EXTRA_ARGS )
-  echo "Starting bitcoind (datadir=$DATADIR) with args: ${BITCOIND_ARGS[*]}"
-  bitcoind -datadir="$DATADIR" -daemon "${BITCOIND_ARGS[@]}"
-
-  cleanup() {
-    echo "Shutting down bitcoind..."
-    bitcoin-cli -datadir="$DATADIR" stop >/dev/null 2>&1 || true
-  }
-  trap cleanup EXIT
-
-  # Wait for RPC to become available (up to ~30s)
-  for i in {1..30}; do
-    if bitcoin-cli -datadir="$DATADIR" -rpcwait -rpcwaittimeout=1 getblockchaininfo >/dev/null 2>&1; then
-      break
-    fi
-    sleep 1
-    if [ "$i" -eq 30 ]; then
-      echo "bitcoin-cli RPC did not become ready; continuing anyway"
-    fi
-  done
-else
-  echo "RUN_BITCOIND=0: Skipping bitcoind startup; proceeding with best-effort verification."
-fi
-
 # Initial stage harvest (may show calendar pending before upgrade attempts)
 harvest_stages
+
+shopt -s nullglob
+ots_files=("$ROOT_DIR"/*.ots)
+if [ ${#ots_files[@]} -eq 0 ]; then
+  echo "No .ots files found in $ROOT_DIR."
+  write_summary_file
+  write_json_summary_file
+  if [ "$STRICT_VERIFY" = "1" ]; then
+    echo "STRICT_VERIFY=1: failing because no OTS proofs were found."
+    exit 2
+  fi
+  exit 0
+fi
+
+start_bitcoind_if_enabled
 
 # Collect or upgrade to collect heights
 heights=()
@@ -487,9 +582,8 @@ for f in "$ROOT_DIR"/*.ots; do
     echo "Skipping ots verify for $f (ots not installed)."
     file_status["$f"]=skipped
   fi
-  # Refresh stage after verify attempt
-  info_out=$(ots info "$f" 2>/dev/null || true)
-  classify_stage_for_file "$f" "$info_out"
+  # Refresh stage after verify attempt, native-first with ots-info fallback.
+  classify_stage_for_file_native_first "$f"
 done
 
 # If failures and upgrade-on-pending: try one last upgrade+re-verify pass
@@ -526,9 +620,8 @@ if [ "$failed" -gt 0 ] && [ "$UPGRADE_ON_PENDING" = "1" ] && command -v ots >/de
           ;;
       esac
     fi
-    # Refresh stage after verify attempt
-    info_out=$(ots info "$f" 2>/dev/null || true)
-    classify_stage_for_file "$f" "$info_out"
+    # Refresh stage after verify attempt, native-first with ots-info fallback.
+    classify_stage_for_file_native_first "$f"
   done
   # replace statuses
   file_status=()
