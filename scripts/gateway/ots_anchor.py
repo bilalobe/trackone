@@ -30,6 +30,7 @@ import argparse
 import contextlib
 import json
 import os
+import re
 import subprocess  # nosec B404
 
 # Reason: invoking a vetted external tool via validated args.
@@ -39,6 +40,37 @@ from pathlib import Path
 from typing import Any
 
 OTS_PROOF_PLACEHOLDER = "OTS_PROOF_PLACEHOLDER\n"
+_BITCOIN_HEIGHT_RE = re.compile(r"BitcoinBlockHeaderAttestation\((\d+)\)")
+
+
+def _bitcoin_metadata_for_proof(ots_path: Path) -> dict[str, Any]:
+    """Return truthful Bitcoin-attestation metadata for the local proof state."""
+    try:
+        raw = ots_path.read_bytes()
+    except OSError:
+        return {"status": "unavailable"}
+
+    stripped = raw.strip()
+    if stripped == OTS_PROOF_PLACEHOLDER.strip().encode() or stripped.startswith(
+        b"STATIONARY-OTS:"
+    ):
+        return {"status": "unavailable"}
+
+    try:
+        from trackone_core import ots as native_ots
+
+        steps = native_ots.describe_ots_proof(str(ots_path))
+    except (ImportError, AttributeError, RuntimeError, TypeError, ValueError):
+        return {"status": "pending"}
+
+    heights: set[int] = set()
+    for step in steps:
+        match = _BITCOIN_HEIGHT_RE.search(step)
+        if match:
+            heights.add(int(match.group(1)))
+    if heights:
+        return {"status": "attested", "attestation_heights": sorted(heights)}
+    return {"status": "pending"}
 
 
 def _run_ots(args: list[str]) -> subprocess.CompletedProcess[bytes]:
@@ -117,12 +149,7 @@ def _write_meta_for_day(
         "artifact_sha256": artifact_sha,
         "ots_proof": ots_field,
         "ots_client_version": _ots_client_version() or "unknown",
-        "bitcoin": {
-            "height": 0,
-            "blockhash": "0" * 64,
-            # store the artifact sha as a stand-in for merkleroot for now
-            "merkleroot": artifact_sha,
-        },
+        "bitcoin": _bitcoin_metadata_for_proof(ots_path),
         "verified_at_utc": datetime.now(UTC).isoformat(),
     }
 
