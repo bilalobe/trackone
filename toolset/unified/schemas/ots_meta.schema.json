@@ -30,22 +30,40 @@
     },
     "bitcoin": {
       "type": "object",
-      "description": "Bitcoin anchoring details derived from the OTS proof.",
+      "description": "Bitcoin anchoring details derived from the OTS proof. Placeholder, stationary, or calendar-pending proofs MUST NOT fabricate block data.",
       "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "unavailable",
+            "pending",
+            "attested"
+          ],
+          "description": "Whether the proof currently has no Bitcoin attestation, is pending calendar attestation, or contains Bitcoin attestation leaves."
+        },
+        "attestation_heights": {
+          "type": "array",
+          "items": {
+            "$ref": "https://example.org/schemas/common.schema.json#/$defs/non_negative_integer"
+          },
+          "uniqueItems": true,
+          "description": "Bitcoin block heights parsed from BitcoinBlockHeaderAttestation leaves when present."
+        },
         "height": {
-          "$ref": "https://example.org/schemas/common.schema.json#/$defs/non_negative_integer"
+          "$ref": "https://example.org/schemas/common.schema.json#/$defs/non_negative_integer",
+          "description": "Legacy single Bitcoin height field; omit unless a real attestation is present."
         },
         "blockhash": {
-          "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex64_lower"
+          "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex64_lower",
+          "description": "Optional block hash supplied by a trustless verification lane; never use a zero placeholder."
         },
         "merkleroot": {
-          "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex64_lower"
+          "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex64_lower",
+          "description": "Optional Bitcoin block Merkle root supplied by a trustless verification lane; never use the artifact digest as a stand-in."
         }
       },
       "required": [
-        "height",
-        "blockhash",
-        "merkleroot"
+        "status"
       ],
       "additionalProperties": false
     },
