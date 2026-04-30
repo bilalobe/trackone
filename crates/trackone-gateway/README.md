@@ -26,11 +26,13 @@ Current Python-facing modules include:
 - `trackone_core.merkle`
   - Merkle root and leaf-hash helpers
 - `trackone_core.ots`
-  - OTS proof hashing and verification helpers
+  - OTS proof hashing, parsing, and classification helpers
   - native detached OpenTimestamps parsing for SHA-256 proofs using
     `append`, `prepend`, and `sha256` operations
   - native inspection of `PendingAttestation(...)` and
     `BitcoinBlockHeaderAttestation(<height>)` proof leaves
+  - Bitcoin attestation height extraction for policy layers; full trustless
+    Bitcoin-header validation remains in the external `ots verify` lane
 - release/disclosure constants re-exported from workspace crates
 - `trackone_core.crypto`
   - Rust Postcard framed fixture emission
