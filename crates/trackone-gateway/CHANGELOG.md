@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-alpha.18] - 2026-05-05
+
 ### Added
 - `trackone_core.ots` now parses detached OpenTimestamps proofs natively for
   SHA-256 proof paths using `append`, `prepend`, and `sha256`, and exposes

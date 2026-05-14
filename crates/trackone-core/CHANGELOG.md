@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-alpha.18] - 2026-05-05
+
+### Changed
+- `trackone-core::VERSION` now reports `0.1.0-alpha.18` to match the
+  workspace release.
+- Crate docs now point deterministic SensorThings projection users at the new
+  `trackone-sensorthings` crate while keeping core focused on protocol,
+  identity, constants, and CBOR commitment surfaces.
+
 ## [0.1.0-alpha.17] - 2026-04-29
 
 ### Changed

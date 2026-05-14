@@ -319,8 +319,20 @@ Machine-readable contract split:
 
 ## Current release line
 
-The latest tagged release is `0.1.0-alpha.17`.
-The current `main` branch is tracking `alpha.18` follow-on work; release detail for `alpha.17` lives in [`CHANGELOG.md`](CHANGELOG.md), and `Unreleased` tracks the next release work.
+The latest tagged release is `0.1.0-alpha.18`.
+The current `main` branch is tracking `alpha.19` follow-on work; release detail for `alpha.18` lives in [`CHANGELOG.md`](CHANGELOG.md), and `Unreleased` tracks the next release work.
+
+- `alpha.18` moved deterministic SensorThings domain logic into a dedicated
+  crate and hardened native OTS verification:
+
+  - `trackone-sensorthings` now owns deterministic read-only SensorThings
+    projection semantics
+  - native OTS parsing handles SHA-256 proof paths, pending attestations, and
+    Bitcoin block-header attestation heights before falling back to the
+    external verifier for unsupported proof constructs
+  - release-bound evidence, OTS proof-state metadata, publication-channel
+    status, rejection-audit, and independent-verifier negative-fixture
+    workflows are now captured in accepted ADRs
 
 - `alpha.17` continued admitted-telemetry hardening:
 
@@ -348,7 +360,8 @@ The current `main` branch is tracking `alpha.18` follow-on work; release detail 
   - SCITT statement payload contracts and examples
   - sealed trust-root boundary documentation in [`ADR-046`](adr/ADR-046-sealed-trust-root-boundary-and-deferring-trackone-seal.md)
 
-- `alpha.18` is currently focused on follow-on hardening beyond the current admitted-telemetry cut.
+- `alpha.19` is currently focused on follow-on hardening beyond the native OTS
+  and SensorThings crate cut.
 
 For release-level detail, use [`CHANGELOG.md`](CHANGELOG.md) rather than this README.
 

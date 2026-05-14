@@ -7,10 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-alpha.18] - 2026-05-05
+
+### Added
+- Native detached OpenTimestamps proof parsing now handles SHA-256 proof paths
+  using `append`, `prepend`, and `sha256`, exposes proof-step traces through
+  `describe_ots_proof(...)`, and reports Bitcoin attestation heights through
+  `OtsVerifyResult.bitcoin_attestation_heights`.
+- Release-bound evidence artifacts, OTS proof-state metadata, publication
+  channel status/export refusal policy, admission-state/rejection-audit
+  contracts, and independent-verifier negative-fixture workflow expectations
+  are now captured in accepted ADRs.
+- Native OTS CI now includes an inspection helper and stricter metadata checks
+  for pending attestations and Bitcoin block-header attestations.
+
 ### Changed
 - Added `trackone-sensorthings` as the Rust home for deterministic read-only
   SensorThings projection semantics, leaving `trackone-gateway` as the PyO3
   export boundary for that surface.
+- The release workflow now includes `trackone-sensorthings` in the crate
+  publish matrix and can publish release-bound evidence archive artifacts.
+- Weekly ratchet and OTS verification workflows now have clearer concurrency,
+  tag selection, native-first inspection, and Bitcoin-header verification
+  behavior.
 
 ## [0.1.0-alpha.17] - 2026-04-29
 
