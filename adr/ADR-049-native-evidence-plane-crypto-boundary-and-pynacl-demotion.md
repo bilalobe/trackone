@@ -1,8 +1,15 @@
 # ADR-049: Native Evidence-Plane Crypto Boundary and PyNaCl Demotion
 
-**Status**: Accepted
+**Status**: Superseded for beta.1
 **Date**: 2026-04-19
+**Updated**: 2026-05-16
 **Supersedes**: [ADR-005](ADR-005-pynacl-migration.md)
+
+> Beta.1 note: this ADR is preserved as the alpha migration step that demoted
+> Python crypto and moved authority into Rust-backed helpers. Beta.1 removes the
+> Python package/script surface from the supported product boundary; the current
+> supported authority is the Rust-native VTL/evidence spine and
+> `trackone-evidence` verify/export.
 
 ## Related ADRs
 

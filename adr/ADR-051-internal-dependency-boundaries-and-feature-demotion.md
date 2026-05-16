@@ -146,7 +146,7 @@ In practice, that means pure Rust logic currently living under
 
 This keeps the workspace smaller while still allowing:
 
-- pure Rust compilation paths without Python bindings; and
+- pure Rust compilation paths with optional bindings kept out of the default build; and
 - later extraction if more than one stable consumer emerges.
 
 ## Consequences
@@ -188,8 +188,8 @@ This ADR records the pattern behind the current cleanup pass, including:
 - promoting stable ingest profile labels into `trackone-constants`;
 - gating Postcard support in `trackone-core` behind an explicit feature;
 - removing `serde-big-array` in favor of a local wire-compatible helper; and
-- making the PyO3 surface in `trackone-gateway` optional so pure Rust builds can
-  compile without Python bindings.
+- making the PyO3 surface in `trackone-gateway` optional so pure Rust builds keep
+  the bindings out of the default compile path.
 
 These examples are illustrative, not exhaustive. Future dependency cleanup
 should follow the same boundary logic even when the concrete crates differ.

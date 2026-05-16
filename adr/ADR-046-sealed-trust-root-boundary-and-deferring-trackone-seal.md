@@ -159,7 +159,9 @@ That threshold is met only if all of the following become true:
   - verification of sealed input state across exported bundle boundaries.
 
 Until those conditions are met, TrackOne keeps the seal contract split across
-`trackone-ledger`, `trackone-gateway`, and Python orchestration.
+`trackone-ledger`, `trackone-gateway`, and out-of-profile operator tooling. The
+beta VTL/evidence surface does not treat Python orchestration as supported
+product authority.
 
 ## Consequences
 
@@ -168,8 +170,9 @@ Until those conditions are met, TrackOne keeps the seal contract split across
 - Gives the threat model and implementation a single named integrity boundary
   around mutable trust-root state and publication gating.
 - Avoids premature crate proliferation and a weak package boundary.
-- Keeps deterministic primitives single-sourced in Rust while preserving Python
-  control of workflow policy.
+- Keeps deterministic primitives single-sourced in Rust while leaving workflow
+  policy outside the beta VTL/evidence profile unless it has a Rust-native
+  owner.
 - Makes future refactoring easier because the condition for a new crate is now
   explicit instead of implicit.
 - Reduces the risk of treating mutable local runtime state as if it were already
@@ -179,8 +182,9 @@ Until those conditions are met, TrackOne keeps the seal contract split across
 
 - The seal boundary remains partly conceptual and partly operational rather than
   embodied in one library surface.
-- Python still owns important security-relevant choreography around sidecars,
-  manifests, and export gates.
+- Some security-relevant choreography around sidecars, manifests, and export
+  gates remains outside the beta VTL/evidence profile until it has a Rust-native
+  owner.
 - The current sidecar-based seal is tamper-evident and drift-detecting, not a
   separate trust root against full host compromise.
 

@@ -1,8 +1,13 @@
 # ADR-038: Surface Tooling Boundaries and `abi3` Wheel Strategy
 
-**Status**: Accepted
+**Status**: Superseded for beta.1
 **Date**: 2026-02-07
-**Updated**: 2026-02-25
+**Updated**: 2026-05-16
+
+> Beta.1 note: this ADR is preserved as alpha history. The supported beta
+> product surface no longer publishes Python wheels or carries Python package,
+> tox, script, or Python-test support. The Rust-native VTL/evidence spine is the
+> supported surface.
 
 ## Related ADRs
 

@@ -19,7 +19,7 @@
 TrackOne already distinguishes software release artifacts from verifier-visible
 evidence artifacts:
 
-- crates, wheels, and Helm charts publish the software release;
+- crates and Helm charts publish the beta software release;
 - `day/<date>.verify.json`, canonical CBOR day artifacts, digests, and
   disclosure metadata define verifier-visible evidence;
 - self-contained archive bundles prove that the evidence can be verified
@@ -43,9 +43,9 @@ verify the artifact after retrieval from its publication carrier.
 For a version tag release, TrackOne MUST publish a release-bound evidence
 archive when the release workflow succeeds.
 
-The release-bound evidence archive is not a replacement for crates, wheels, or
-Helm charts. It is the verifier-facing evidence artifact associated with the
-release tag.
+The release-bound evidence archive is not a replacement for crates or Helm
+charts. It is the verifier-facing evidence artifact associated with the release
+tag.
 
 The current publication unit is:
 
@@ -69,7 +69,6 @@ tag pushed
   -> archive-evidence-bundle exists
   -> Helm chart publishes
   -> crates publish
-  -> wheel publishes
   -> release evidence archive publishes
   -> release evidence archive is pulled back
   -> release evidence archive is independently verified
@@ -77,9 +76,9 @@ tag pushed
 ```
 
 The release evidence transition MUST NOT run before software publication has
-succeeded. Publishing release evidence before crates, wheels, or Helm complete
-would create a tag-addressed evidence artifact for a release that did not
-actually finish.
+succeeded. Publishing release evidence before crates or Helm complete would
+create a tag-addressed evidence artifact for a release that did not actually
+finish.
 
 ### Release evidence reuses the CI-built self-contained bundle
 
@@ -111,7 +110,9 @@ The workflow MUST:
 - compare the pulled tarball digest against the pre-publish digest;
 - extract the pulled archive;
 - check `SHA256SUMS`; and
-- rerun the detached verifier with repository-specific import paths disabled.
+- rerun the Rust-native verifier appropriate to the pulled archive contents:
+  canonical-CBOR vector replay for the release archive and
+  `trackone-evidence verify` for any included day evidence bundle.
 
 The release evidence result is a publication claim only after the pulled
 artifact verifies.
@@ -209,7 +210,7 @@ They should not share release semantics.
 ### Negative
 
 - Release runs do more work and have another GHCR write dependency.
-- A release can now fail after crates, wheel, and chart publication if
+- A release can now fail after crates and chart publication if
   release-bound evidence publication or pull-back verification fails.
 - Retrying a release tag needs careful handling of already-published software
   artifacts and the release evidence OCI reference.

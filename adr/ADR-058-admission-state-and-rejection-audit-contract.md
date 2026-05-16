@@ -14,9 +14,8 @@
 ## Context
 
 Rust now owns the supported framed-ingest hot path for validation, frame/fact
-binding, replay checks, decrypt/admit behavior, and canonical accepted-fact
-shaping. Python still owns workflow orchestration, file lifecycle, device-table
-persistence, and wrapper-level audit emission.
+binding, replay checks, decrypt/admit behavior, canonical accepted-fact shaping,
+and the beta rejection-audit helper shapes.
 
 The beta boundary needs to be explicit: accepted telemetry becomes commitment
 material, while rejected input becomes operator-audit evidence.
@@ -33,7 +32,7 @@ Rust/native owners:
 - decrypt/admit error classification; and
 - canonical accepted-fact shaping for the supported path.
 
-Python/package wrapper owners:
+Out-of-profile operator/tooling owners:
 
 - device-table file loading and persistence;
 - replay-state persistence across workflow runs;
@@ -43,9 +42,8 @@ Python/package wrapper owners:
 
 The public rejection-audit contract remains operator-audit evidence, not a day
 commitment artifact. The JSON Schema is the authoritative machine-readable
-contract for the record shape, and the package taxonomies are authoritative for
-the allowed `reason` and `source` values that the schema must encode. The beta
-record shape is:
+contract for the record shape, and `trackone-ingest` owns the allowed `reason`
+and `source` values that the schema must encode. The beta record shape is:
 
 - `device_id`
 - `fc`
@@ -57,28 +55,28 @@ record shape is:
 The beta record shape is additive-only. Removing fields, renaming fields, or
 changing field semantics requires a new ADR or an explicit ADR update.
 
-The source and reason taxonomies are closed package-level values and must match
+The source and reason taxonomies are closed Rust-native values and must match
 the JSON Schema exactly. Unknown source/reason values and invalid frame
 counters must fail closed before emission.
 
 Device-table updates must preserve the accepted replay high-water mark,
 `last_seen`, `msg_type`, and `flags` for the admitted device entry. File I/O
-may remain Python-owned, but the update shape must be stable and tested at the
-package boundary.
+is outside the beta VTL profile, but the update shape must be stable and tested
+at the Rust crate boundary when surfaced by TrackOne helpers.
 
 ## Consequences
 
 ### Positive
 
-- The repo stays honest about Rust owning admission semantics while Python owns
-  persistence and orchestration.
+- The repo stays honest about Rust owning admission semantics while persistence
+  and orchestration remain outside the beta VTL profile.
 - Rejection audit records become stable enough for operator review without
   becoming hidden commitment material.
 - Tests can lock the boundary without requiring a Rust workflow executor.
 
 ### Negative
 
-- Rejection taxonomy changes now require package, schema, and test updates
+- Rejection taxonomy changes now require crate, schema, and test updates
   together.
 - Promoting rejection audit to public commitment evidence later would require a
   new artifact-family decision under ADR-053.

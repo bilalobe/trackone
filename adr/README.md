@@ -148,12 +148,12 @@ Entries list **Status** and **Summary**. Related references are grouped under **
   **Summary**: Centralizes channel-state reduction in package helpers, fixes the shared status vocabulary to `verified|pending|missing|failed|skipped`, and defines warning vs strict export gates around fresh local verification plus enabled publication-channel requirements.
 
 - **[ADR-058](ADR-058-admission-state-and-rejection-audit-contract.md): Admission state and rejection audit contract**
-  **Status**: Accepted, Updated 2026-05-05
-  **Summary**: Freezes the beta admission split between Rust-owned admit semantics and Python-owned persistence/orchestration, keeps rejection audit as operator evidence rather than commitment material, and makes the beta rejection-record shape additive-only under schema and package taxonomy control.
+  **Status**: Accepted, Updated 2026-05-16
+  **Summary**: Freezes the beta admission split around Rust-owned admit semantics and Rust-native rejection-audit helper shapes, keeps rejection audit as operator evidence rather than commitment material, and makes the beta rejection-record shape additive-only under schema and crate taxonomy control.
 
 - **[ADR-049](ADR-049-native-evidence-plane-crypto-boundary-and-pynacl-demotion.md): Native evidence-plane crypto boundary and PyNaCl demotion**
-  **Status**: Accepted
-  **Summary**: Makes `trackone_core` the stable Python-facing authority for supported evidence-plane crypto/admission and commitment paths, demotes PyNaCl from base runtime dependency to optional/tooling scope, and keeps Python scripts as orchestration.
+  **Status**: Superseded for beta.1
+  **Summary**: Preserves the alpha migration step that demoted Python crypto in favor of Rust-backed authority; beta.1 removes the Python package/script surface from the supported product boundary and treats the Rust-native VTL/evidence spine as the supported surface.
 
 ### Policy & Process
 
@@ -163,8 +163,8 @@ Entries list **Status** and **Summary**. Related references are grouped under **
   the current milestone schema is the only valid runtime format. Older milestones are archived as references only.
 
 - **[ADR-038](ADR-038-surface-tooling-and-abi3-wheel-strategy.md): Surface tooling boundaries and `abi3` wheel strategy**
-  **Status**: Accepted
-  **Summary**: Defines which Python components are surface tooling vs protocol-critical, keeps `trackone_core` as the stable native module name, targets `abi3` wheels to reduce the wheel matrix, and adopts two wheel test modes (locked required, pip-resolve gated).
+  **Status**: Superseded for beta.1
+  **Summary**: Preserves the alpha wheel/tooling strategy as history; beta.1 no longer carries Python package, wheel, tox, script, or Python-test support as product surface.
 
 - **[ADR-010](ADR-010-test-suite-refactor-structure-naming.md): Test suite refactor (structure and naming)**
   **Status**: Accepted
@@ -173,8 +173,8 @@ Entries list **Status** and **Summary**. Related references are grouped under **
   - **See also**: [ADR-021](ADR-021-safety-net-ots-pipeline-verification.md)
 
 - **[ADR-013](ADR-013-python-version-support-policy.md): Python Version Support Policy (Last Three Minors)**
-  **Status**: Accepted
-  **Summary**: Always support the last three CPython minors in CI/tox (currently 3.12, 3.13, 3.14); drop the oldest from defaults when a new minor releases; keep a dedicated env for explicit checks.
+  **Status**: Superseded for beta.1
+  **Summary**: Preserves the alpha CPython support policy as history; beta.1 has no supported Python package, wheel, tox, scripts, or Python tests.
 
 - **[ADR-016](ADR-016-changelog-policy-git-cliff.md): Changelog Policy and Automation with git-cliff**
   **Status**: Rejected
@@ -398,8 +398,8 @@ Entries list **Status** and **Summary**. Related references are grouped under **
 ### Future Roadmap
 
 - **[ADR-017](ADR-017-rust-core-and-pyo3-integration.md): Rust Core and PyO3 Integration Strategy**
-  **Status**: Accepted
-  **Summary**: Introduce a Rust core crate with PyO3 bindings for canonicalization, hashing, Merkle, and eventually AEAD/signatures; ship wheels with `maturin`, keep Python API stable with fallbacks, and roll out in phases post-0.1.0.
+  **Status**: Superseded for beta.1
+  **Summary**: Preserves the alpha migration path that introduced Rust crates through Python/PyO3 packaging; beta.1 supports the Rust-native VTL/evidence spine directly and does not carry Python package, wheel, tox, script, or Python-test surfaces.
 
 - **[ADR-036](ADR-036-post-quantum-kem.md): Post-Quantum Hybrid Provisioning (X25519 + ML-KEM/Kyber)**
   **Status**: Proposed

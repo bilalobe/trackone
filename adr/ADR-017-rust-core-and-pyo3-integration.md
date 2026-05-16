@@ -1,8 +1,13 @@
 # ADR-017: Rust Core and PyO3 Integration Strategy
 
-**Status**: Accepted
+**Status**: Superseded for beta.1
 **Date**: 2025-11-06
-**Updated**: 2026-04-19
+**Updated**: 2026-05-16
+
+> Beta.1 note: this ADR is preserved as the alpha migration plan that introduced
+> Rust crates through a Python/PyO3 route. The current beta support boundary is
+> Rust-native: alpha package, wheel, tox, script, and test surfaces remain
+> historical compatibility surfaces instead of supported beta product behavior.
 
 ## Related ADRs
 
@@ -95,7 +100,7 @@ Python remains the orchestrator (I/O, OTS/TSA, CLI), and the Rust crates are use
 - Phase 3 (default on): Use the Rust path by default. For supported
   evidence-plane paths this phase is now refined by ADR-049: missing native
   authority is a configuration failure, not a fallback trigger.
-- Phase 4 (optional): Publish a small Rust CLI verifier for auditors (no Python runtime).
+- Phase 4 (optional): Publish a small Rust CLI verifier for auditors.
 
 ## Implementation Notes
 

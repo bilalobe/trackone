@@ -2,6 +2,11 @@
 
 **Status**: Accepted
 **Date**: 2026-01-22
+**Updated**: 2026-05-16
+
+> Beta.1 note: the workspace-versioning policy remains current for Rust crates
+> and retained deployment artifacts. Python-facing wheel artifacts were alpha
+> release surfaces and are not part of the supported beta product boundary.
 
 ## Related ADRs
 
@@ -10,10 +15,12 @@
 
 ## Context
 
-TrackOne is a multi-crate Rust workspace (and a mixed Rust/Python repo). We are already producing multiple artifacts:
+TrackOne is a multi-crate Rust workspace. Earlier alpha releases also produced
+Python-facing artifacts, but beta.1 narrows the supported product surface to the
+Rust-native VTL/evidence spine and retained deployment artifacts. We are
+already producing multiple artifacts:
 
 - Rust crates (`trackone-core`, `trackone-ledger`, `trackone-gateway`, `trackone-pod-fw`, `trackone-constants`).
-- A Python-facing artifact built via `maturin` for `trackone-gateway`.
 - A container image (`ots-calendar`) used in CI and local Kubernetes.
 
 This creates a practical problem: how to communicate “what shipped” in a way that is:

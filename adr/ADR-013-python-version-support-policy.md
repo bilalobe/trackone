@@ -1,8 +1,13 @@
 # ADR-013: Python Version Support Policy (Last Three Minors)
 
-**Status**: Accepted
+**Status**: Superseded for beta.1
 **Date**: 2025-11-02
-**Updated**: 2026-04-19
+**Updated**: 2026-05-16
+
+> Beta.1 note: this policy is preserved as alpha history. The supported beta
+> product surface no longer ships a Python package, wheel, tox matrix, Python
+> scripts, or Python tests, so CPython minor-version support is no longer a
+> beta support obligation.
 
 ## Context
 

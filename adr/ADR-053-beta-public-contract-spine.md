@@ -102,7 +102,7 @@ The current shape is still schema-governed because auditors may inspect it:
   and `source`;
 - source taxonomy: `parse`, `decrypt`, `replay`; and
 - reason taxonomy: the closed parse/native/replay rejection vocabulary in the
-  schema and `trackone_core.admission.REJECTION_REASON_TAXONOMY`.
+  schema and `trackone-ingest` rejection-audit helpers.
 
 Those records explain why input frames were not admitted. They are not Merkle
 leaves, not day-record fields, and not required for a Class A public
