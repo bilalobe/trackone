@@ -8,7 +8,7 @@ References: ADR-003 (anchoring policy), ADR-007 (CI headers policy), ADR-015 (pa
 
 Prerequisites:
 
-- OpenTimestamps client: `pip install opentimestamps-client`
+- External `ots` CLI available on PATH, or provided through `OTS_BIN`
 - Bitcoin Core (bitcoind/bitcoin-cli) installed and on PATH
 
 Start headers-only/pruned node and verify:

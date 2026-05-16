@@ -26,7 +26,7 @@ class HealthHandler(http.server.SimpleHTTPRequestHandler):
 
 
 def main() -> int:
-    """Run a long-lived helper around opentimestamps-client.
+    """Run a long-lived helper around an external ots CLI.
 
     This does *not* implement a full OTS calendar server (that would
     require upstream calendar code), but it exercises the same client
@@ -35,8 +35,8 @@ def main() -> int:
     Conceptually:
     - Keep a long-lived process running so that `ots-cal` can treat this
       container as the "OTS sidecar" for integration tests.
-    - Periodically run a harmless `opentimestamps-client` command
-      (e.g. `opentimestamps --help`) to ensure the binary/libs are wired.
+    - Periodically run a harmless `ots` command to ensure the binary/libs are
+      wired inside this deploy image.
 
     This keeps the container alive and validates the OTS tooling
     end-to-end without pretending to be an actual HTTP calendar.

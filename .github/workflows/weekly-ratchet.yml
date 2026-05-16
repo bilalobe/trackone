@@ -263,7 +263,7 @@ jobs:
 
           # Guard against missing ots binary skip reason
           if grep -F "'ots' binary not found on PATH" "${logs[@]}" >/dev/null; then
-            echo "::error::Real OTS tests were skipped because no 'ots' binary was found on PATH. Ensure opentimestamps-client is installed and available."
+            echo "::error::Real OTS tests were skipped because no external 'ots' binary was found on PATH."
             [ "${STRICT_REAL_OTS:-0}" = "1" ] && exit 1 || echo '::warning::Continuing because STRICT_REAL_OTS!=1'
           fi
 
