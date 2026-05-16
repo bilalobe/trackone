@@ -93,6 +93,13 @@ fn run_verify(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
             summary["manifest"]["source"].as_str().unwrap_or("n/a"),
         );
     }
+    if summary["overall"].as_str() != Some("success") {
+        return Err(format!(
+            "verification summary overall={}",
+            summary["overall"].as_str().unwrap_or("failed")
+        )
+        .into());
+    }
     Ok(())
 }
 

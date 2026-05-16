@@ -55,6 +55,10 @@ fn init_git_repo(repo: &Path) {
     run_git(repo, &["config", "user.email", "tests@example.invalid"]);
 }
 
+fn trackone_evidence_bin() -> PathBuf {
+    PathBuf::from(std::env::var("CARGO_BIN_EXE_trackone-evidence").unwrap())
+}
+
 fn artifact_ref(root: &Path, path: &Path) -> Value {
     json!({
         "path": path.strip_prefix(root).unwrap().to_string_lossy(),
@@ -248,6 +252,54 @@ fn rust_export_writes_detached_bundle_and_reverifies() {
 }
 
 #[test]
+fn rust_export_honors_manifest_strict_policy() {
+    let root = temp_dir("export-strict-source");
+    let evidence_repo = temp_dir("export-strict-dest");
+    write_bundle(&root);
+
+    let manifest_path = root.join("day/2025-10-07.verify.json");
+    let mut manifest = read_json(&manifest_path);
+    manifest["anchoring"]["policy"]["mode"] = json!("strict");
+    write_json(&manifest_path, &manifest);
+    fs::write(
+        root.join("day/2025-10-07.cbor.ots"),
+        b"OTS_PROOF_PLACEHOLDER\n",
+    )
+    .unwrap();
+
+    let verifier_summary = verify_bundle(&VerifyOptions {
+        root: root.clone(),
+        facts: root.join("facts"),
+        policy_mode: PolicyMode::Strict,
+        disclosure_class: "A".to_string(),
+        commitment_profile_id: "trackone-canonical-cbor-v1".to_string(),
+        require_ots: false,
+        allow_placeholder: true,
+    })
+    .unwrap();
+    assert_eq!(verifier_summary["overall"], "failed");
+
+    let err = export_bundle(&ExportOptions {
+        pipeline_dir: root,
+        evidence_repo,
+        site: "test-site".to_string(),
+        day: "2025-10-07".to_string(),
+        include_frames: false,
+        git_commit: false,
+        sign: false,
+        tag: false,
+        tag_name: None,
+        bundle_out: None,
+    })
+    .unwrap_err();
+
+    assert!(
+        err.to_string()
+            .contains("fresh verification failed; refusing to export unverified evidence")
+    );
+}
+
+#[test]
 fn rust_export_finds_parent_proofs_meta_sidecar() {
     let root = temp_dir("export-parent-proof-source");
     let pipeline_dir = root.join("runs/2025-10-07/output");
@@ -312,6 +364,35 @@ fn rust_export_creates_bundle_output_parent_dirs() {
     .unwrap();
 
     assert!(bundle_out.exists());
+}
+
+#[test]
+fn rust_cli_verify_exits_nonzero_for_failed_overall_summary() {
+    let root = temp_dir("cli-strict-source");
+    write_bundle(&root);
+    fs::write(
+        root.join("day/2025-10-07.cbor.ots"),
+        b"OTS_PROOF_PLACEHOLDER\n",
+    )
+    .unwrap();
+
+    let output = Command::new(trackone_evidence_bin())
+        .args([
+            "verify",
+            "--root",
+            root.to_str().unwrap(),
+            "--facts",
+            root.join("facts").to_str().unwrap(),
+            "--policy-mode",
+            "strict",
+            "--json",
+        ])
+        .output()
+        .unwrap();
+
+    assert!(!output.status.success());
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(stdout.contains("\"overall\": \"failed\""));
 }
 
 #[test]

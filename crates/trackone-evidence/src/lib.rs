@@ -199,6 +199,15 @@ fn resolve_bundle_path(root: &Path, rel: &str) -> Result<PathBuf> {
     Ok(root.join(rel_path))
 }
 
+fn manifest_policy_mode(manifest: &VerifyManifest) -> Result<PolicyMode> {
+    let mode = manifest
+        .anchoring
+        .pointer("/policy/mode")
+        .and_then(Value::as_str)
+        .unwrap_or(PolicyMode::Warn.as_str());
+    PolicyMode::parse(mode)
+}
+
 fn manifest_artifact_path(root: &Path, manifest: &VerifyManifest, name: &str) -> Result<PathBuf> {
     let artifact = manifest
         .artifacts
@@ -593,10 +602,11 @@ pub fn export_bundle(options: &ExportOptions) -> Result<PathBuf> {
             "verification manifest site/day mismatch".to_string(),
         ));
     }
+    let policy_mode = manifest_policy_mode(&manifest)?;
     let verify_options = VerifyOptions {
         root: options.pipeline_dir.clone(),
         facts: options.pipeline_dir.join(&manifest.facts_dir),
-        policy_mode: PolicyMode::Warn,
+        policy_mode,
         disclosure_class: manifest.verification_bundle.disclosure_class.clone(),
         commitment_profile_id: manifest.verification_bundle.commitment_profile_id.clone(),
         require_ots: false,
@@ -610,6 +620,12 @@ pub fn export_bundle(options: &ExportOptions) -> Result<PathBuf> {
     if let Some(reason) = local_verification_failure(&verifier_summary) {
         return Err(EvidenceError::VerificationFailed(format!(
             "fresh verification failed; refusing to export unverified evidence: {reason}"
+        )));
+    }
+    if verifier_summary["overall"].as_str() != Some("success") {
+        return Err(EvidenceError::VerificationFailed(format!(
+            "fresh verification failed; refusing to export unverified evidence: overall-{}",
+            verifier_summary["overall"].as_str().unwrap_or("failed")
         )));
     }
 
