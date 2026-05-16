@@ -1,36 +1,54 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
-import pytest
 
-
-def test_rewrite_meta_sidecar_requires_jsonschema(tmp_path: Path, load_module) -> None:
+def test_export_release_wrapper_routes_to_rust_contract(
+    tmp_path: Path, load_module, monkeypatch
+) -> None:
     module = load_module(
-        "export_release_under_test",
+        "export_release_wrapper_under_test",
         Path("scripts/evidence/export_release.py"),
     )
-    source_meta = tmp_path / "2025-10-07.ots.meta.json"
-    source_meta.write_text(
-        json.dumps(
-            {
-                "artifact": "day/2025-10-07.cbor",
-                "ots_proof": "day/2025-10-07.cbor.ots",
-            }
-        ),
-        encoding="utf-8",
+    captured: dict[str, object] = {}
+
+    def fake_run(cmd, *, cwd, check, capture_output, text):
+        captured["cmd"] = cmd
+        captured["cwd"] = cwd
+        captured["check"] = check
+        captured["capture_output"] = capture_output
+        captured["text"] = text
+
+        class Proc:
+            returncode = 0
+            stdout = str(tmp_path / "evidence/site/test/day/2025-10-07") + "\n"
+            stderr = ""
+
+        return Proc()
+
+    monkeypatch.setattr(module.subprocess, "run", fake_run)
+
+    out = module.export_release(
+        tmp_path / "pipeline",
+        tmp_path / "evidence",
+        site="test",
+        day="2025-10-07",
+        include_frames=True,
     )
 
-    module.require_schema_validation = lambda *_args, **_kwargs: (_ for _ in ()).throw(
-        RuntimeError("jsonschema is required for OTS metadata validation")
-    )
-
-    with pytest.raises(
-        RuntimeError, match="jsonschema is required for OTS metadata validation"
-    ):
-        module._rewrite_meta_sidecar(
-            source_meta,
-            dest_root=tmp_path / "dest",
-            day="2025-10-07",
-        )
+    assert out == tmp_path / "evidence/site/test/day/2025-10-07"
+    cmd = captured["cmd"]
+    assert cmd[:7] == [
+        "cargo",
+        "run",
+        "--quiet",
+        "--package",
+        "trackone-evidence",
+        "--",
+        "export",
+    ]
+    assert "--include-frames" in cmd
+    assert captured["cwd"] == module.REPO_ROOT
+    assert captured["check"] is False
+    assert captured["capture_output"] is True
+    assert captured["text"] is True

@@ -4,10 +4,17 @@
 from __future__ import annotations
 
 import importlib
+import subprocess
 import sys
 import types
+from pathlib import Path
 
 import pytest
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+SRC_ROOT = REPO_ROOT / "src"
+if str(SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(SRC_ROOT))
 
 
 def _clear_modules(prefix: str) -> None:
@@ -40,19 +47,6 @@ def test_release_constants_have_safe_python_fallbacks(
         "C": "anchor-only-evidence",
     }
     assert release.disclosure_label("B") == "partner-audit"
-    assert (
-        release.publicly_recomputable("A", artifact_valid=True, root_match=True) is True
-    )
-    assert (
-        release.publicly_recomputable("B", artifact_valid=True, root_match=True)
-        is False
-    )
-    assert release.verification_bundle_from_summary(None) == {
-        "disclosure_class": "A",
-        "commitment_profile_id": "trackone-canonical-cbor-v1",
-        "checks_executed": [],
-        "checks_skipped": [],
-    }
 
 
 def test_release_constants_prefer_native_exports(
@@ -78,219 +72,14 @@ def test_release_constants_prefer_native_exports(
     assert release.DISCLOSURE_CLASS_LABELS["C"] == "anchor-only-evidence"
 
 
-def test_verification_bundle_from_summary_prefers_verifier_summary_fields(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _clear_modules("trackone_core")
-    monkeypatch.setitem(sys.modules, "trackone_core._native", None)  # type: ignore[arg-type]
-
-    release = importlib.import_module("trackone_core.release")
-
-    bundle = release.verification_bundle_from_summary(
-        {
-            "verification": {
-                "disclosure_class": "C",
-                "commitment_profile_id": "trackone-canonical-cbor-v2",
-            },
-            "checks_executed": ["day_artifact_validation"],
-            "checks_skipped": [{"check": "fact_level_recompute", "reason": "demo"}],
-        },
-        disclosure_class="A",
-        commitment_profile_id="trackone-canonical-cbor-v1",
+def test_verifier_export_policy_lives_in_rust_contract() -> None:
+    subprocess.run(
+        [
+            "cargo",
+            "test",
+            "--package",
+            "trackone-evidence",
+            "rust_verifier_accepts_bundle_without_python_runtime",
+        ],
+        check=True,
     )
-
-    assert bundle == {
-        "disclosure_class": "C",
-        "commitment_profile_id": "trackone-canonical-cbor-v2",
-        "checks_executed": ["day_artifact_validation"],
-        "checks_skipped": [{"check": "fact_level_recompute", "reason": "demo"}],
-    }
-
-
-def test_verification_helpers_build_and_update_summary(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _clear_modules("trackone_core")
-    monkeypatch.setitem(sys.modules, "trackone_core._native", None)  # type: ignore[arg-type]
-
-    verification = importlib.import_module("trackone_core.verification")
-
-    summary = verification.build_verifier_summary(
-        policy_mode="warn",
-        disclosure_class="A",
-        commitment_profile_id="trackone-canonical-cbor-v1",
-        manifest_schema="verify_manifest",
-        block_path=__import__("pathlib").Path("/tmp/block.json"),
-        day_artifact=__import__("pathlib").Path("/tmp/day.cbor"),
-        ots_path=__import__("pathlib").Path("/tmp/day.cbor.ots"),
-        manifest_path=__import__("pathlib").Path("/tmp/day.verify.json"),
-        ots_enabled=True,
-        tsa_enabled=False,
-        peers_enabled=False,
-    )
-
-    verification.record_executed_check(summary, verification.CHECK_DAY_ARTIFACT)
-    verification.record_skipped_check(summary, verification.CHECK_TSA, "disabled")
-    verification.set_manifest_status(
-        summary,
-        status="present",
-        source="day.verify.json",
-        schema="verify_manifest",
-    )
-    summary["checks"]["artifact_valid"] = True
-    summary["checks"]["root_match"] = True
-    verification.refresh_publicly_recomputable(summary)
-    verification.set_channel(
-        summary,
-        "ots",
-        enabled=True,
-        status=verification.STATUS_VERIFIED,
-        reason="ots-verified",
-    )
-
-    assert summary["verification"]["disclosure_label"] == "public-recompute"
-    assert summary["verification"]["publicly_recomputable"] is True
-    assert summary["checks_executed"] == ["day_artifact_validation"]
-    assert summary["checks_skipped"] == [
-        {"check": "tsa_verification", "reason": "disabled"}
-    ]
-    assert summary["manifest"]["status"] == "present"
-    assert summary["channels"]["ots"] == {
-        "enabled": True,
-        "status": "verified",
-        "reason": "ots-verified",
-    }
-
-
-def test_portable_verifier_summary_keeps_shared_fields_only(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _clear_modules("trackone_core")
-    monkeypatch.setitem(sys.modules, "trackone_core._native", None)  # type: ignore[arg-type]
-
-    verification = importlib.import_module("trackone_core.verification")
-
-    summary = {
-        "policy": {"mode": "warn"},
-        "verification": {"disclosure_class": "A"},
-        "checks": {"root_match": True},
-        "verification_scope_exercised": ["day_artifact_validation"],
-        "checks_executed": ["day_artifact_validation"],
-        "checks_skipped": [{"check": "ots_verification", "reason": "disabled"}],
-        "channels": {
-            "ots": {"enabled": False, "status": "skipped", "reason": "disabled"}
-        },
-        "manifest": {"status": "missing", "source": None, "schema": "verify_manifest"},
-        "overall": "verified",
-        "artifacts": {"block": "/tmp/block.json"},
-    }
-
-    assert verification.portable_verifier_summary(summary) == {
-        "policy": {"mode": "warn"},
-        "verification": {"disclosure_class": "A"},
-        "checks": {"root_match": True},
-        "verification_scope_exercised": ["day_artifact_validation"],
-        "checks_executed": ["day_artifact_validation"],
-        "checks_skipped": [{"check": "ots_verification", "reason": "disabled"}],
-        "channels": {
-            "ots": {"enabled": False, "status": "skipped", "reason": "disabled"}
-        },
-        "manifest": {"status": "missing", "source": None, "schema": "verify_manifest"},
-        "overall": "verified",
-    }
-
-
-def test_publication_channel_policy_and_manifest_env_overrides(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _clear_modules("trackone_core")
-    monkeypatch.setitem(sys.modules, "trackone_core._native", None)  # type: ignore[arg-type]
-
-    verification = importlib.import_module("trackone_core.verification")
-
-    channels = {
-        verification.CHANNEL_OTS: {
-            "enabled": True,
-            "status": verification.STATUS_VERIFIED,
-        },
-        verification.CHANNEL_TSA: {
-            "enabled": True,
-            "status": verification.STATUS_MISSING,
-        },
-        verification.CHANNEL_PEERS: {
-            "enabled": True,
-            "status": verification.STATUS_FAILED,
-        },
-        verification.CHANNEL_SCITT: {
-            "enabled": False,
-            "status": verification.STATUS_SKIPPED,
-        },
-    }
-
-    assert (
-        verification.compute_publication_overall_status(
-            policy_mode="warn",
-            channels=channels,
-        )
-        == "success"
-    )
-    assert (
-        verification.compute_publication_overall_status(
-            policy_mode="strict",
-            channels=channels,
-        )
-        == "failed"
-    )
-    assert verification.publication_channel_env_overrides(
-        {
-            "channels": {
-                verification.CHANNEL_OTS: {"enabled": True},
-                verification.CHANNEL_TSA: {"enabled": False},
-                verification.CHANNEL_SCITT: {"enabled": True},
-            }
-        }
-    ) == {
-        "ANCHOR_OTS_ENABLED": "1",
-        "ANCHOR_TSA_ENABLED": "0",
-        "ANCHOR_SCITT_ENABLED": "1",
-    }
-
-
-def test_channel_result_reduction_uses_shared_status_vocabulary(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _clear_modules("trackone_core")
-    monkeypatch.setitem(sys.modules, "trackone_core._native", None)  # type: ignore[arg-type]
-
-    verification = importlib.import_module("trackone_core.verification")
-
-    class PendingResult:
-        ok = True
-        status_name = "pending"
-        reason = "ots-pending-attestation"
-
-    class UnknownFailure:
-        ok = False
-        status = "native-internal"
-        reason = "ots-verification-failed"
-
-    assert verification.channel_from_result(
-        enabled=True,
-        result=PendingResult(),
-        success_statuses={verification.STATUS_VERIFIED, verification.STATUS_PENDING},
-        failure_statuses={verification.STATUS_FAILED, verification.STATUS_MISSING},
-    ) == {
-        "enabled": True,
-        "status": verification.STATUS_PENDING,
-        "reason": "ots-pending-attestation",
-    }
-    assert verification.channel_from_result(
-        enabled=True,
-        result=UnknownFailure(),
-        success_statuses={verification.STATUS_VERIFIED, verification.STATUS_PENDING},
-        failure_statuses={verification.STATUS_FAILED, verification.STATUS_MISSING},
-    ) == {
-        "enabled": True,
-        "status": verification.STATUS_FAILED,
-        "reason": "ots-verification-failed",
-    }

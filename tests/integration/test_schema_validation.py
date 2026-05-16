@@ -2,27 +2,34 @@
 """
 Schema loading and validation tests extracted from test_gateway_pipeline.py
 """
+# ruff: noqa: E402,I001
 
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+SRC_ROOT = REPO_ROOT / "src"
+if str(SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(SRC_ROOT))
+
 # Import helpers from the actual implementation so tests can reuse them.
-from scripts.gateway.merkle_batcher import load_schemas, validate_against_schema
+from scripts.gateway.merkle_batcher import (  # noqa: E402
+    load_schemas,
+    validate_against_schema,
+)
 from scripts.gateway.schema_validation import (
     SCHEMA_VALIDATION_EXCEPTIONS,
     load_all_schemas,
     load_schema,
     validate_instance,
     validate_schema_document,
-)
-from trackone_core.admission import (
-    REJECTION_REASON_TAXONOMY,
-    REJECTION_SOURCE_TAXONOMY,
-)
+)  # noqa: E402
 
 
 class TestSchemaValidation:
@@ -205,25 +212,13 @@ class TestSchemaValidation:
             validate_instance(manifest, schema)
 
     def test_rejection_audit_schema_matches_operator_taxonomy(self):
-        schema = load_schema("rejection_audit")
-        assert schema is not None
-        assert (
-            tuple(schema["properties"]["reason"]["enum"]) == REJECTION_REASON_TAXONOMY
+        subprocess.run(
+            [
+                "cargo",
+                "test",
+                "--package",
+                "trackone-evidence",
+                "rust_rejection_audit_schema_matches_taxonomy",
+            ],
+            check=True,
         )
-        assert (
-            tuple(schema["properties"]["source"]["enum"]) == REJECTION_SOURCE_TAXONOMY
-        )
-
-        record = {
-            "device_id": "pod-001",
-            "fc": 7,
-            "reason": "duplicate",
-            "observed_at_utc": "2026-04-25T12:00:00+00:00",
-            "frame_sha256": "a" * 64,
-            "source": "replay",
-        }
-        validate_instance(record, schema)
-
-        record["reason"] = "operator-note"
-        with pytest.raises(SCHEMA_VALIDATION_EXCEPTIONS):
-            validate_instance(record, schema)
