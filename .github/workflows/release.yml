@@ -1,0 +1,315 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+      packages: write
+
+  publish-crates:
+    runs-on: ubuntu-latest
+    needs: ci
+    environment: crates-io
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-release-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-release-
+            ${{ runner.os }}-cargo-
+
+      - name: Package crates for release evidence
+        run: cargo package --workspace --locked
+
+      - name: Upload packaged crates
+        uses: actions/upload-artifact@v7
+        with:
+          name: crates-packages
+          path: target/package/*.crate
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish crates
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          set -euo pipefail
+          crates=(
+            trackone-constants
+            trackone-ledger
+            trackone-core
+            trackone-ingest
+            trackone-sensorthings
+            trackone-pod-fw
+            trackone-gateway
+            trackone-evidence
+          )
+
+          for crate in "${crates[@]}"; do
+            echo "::group::Publishing ${crate}"
+            rc=0
+            for attempt in 1 2 3; do
+              set +e
+              cargo publish -p "${crate}" --locked 2>&1 | tee /tmp/publish-out.txt
+              rc=${PIPESTATUS[0]}
+              set -e
+
+              if [ "${rc}" -eq 0 ]; then
+                break
+              fi
+
+              if grep -qi "already exists" /tmp/publish-out.txt; then
+                break
+              fi
+
+              if grep -qi "no matching package named" /tmp/publish-out.txt && [ "${attempt}" -lt 3 ]; then
+                echo "Retrying ${crate} after crates.io index propagation delay..."
+                sleep 20
+                continue
+              fi
+
+              break
+            done
+
+            if [ "${rc}" -ne 0 ]; then
+              if grep -qi "already exists" /tmp/publish-out.txt; then
+                echo "Skipping ${crate}; already published."
+              else
+                echo "Failed to publish ${crate} (exit ${rc})."
+                exit "${rc}"
+              fi
+            else
+              echo "Published ${crate}."
+            fi
+            echo "::endgroup::"
+          done
+
+  publish-helm:
+    runs-on: ubuntu-latest
+    needs: ci
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v5
+
+      - name: Package chart for release tag
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          mkdir -p dist
+          helm lint deploy/helm/trackone
+          helm package deploy/helm/trackone \
+            --version "${version}" \
+            --app-version "${version}" \
+            --destination dist
+
+      - name: Upload Helm chart
+        uses: actions/upload-artifact@v7
+        with:
+          name: helm-chart
+          path: dist/*.tgz
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Log in to GHCR
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          echo "${GHCR_TOKEN}" | helm registry login ghcr.io \
+            --username "${owner}" \
+            --password-stdin
+
+      - name: Push OCI chart artifact
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          helm push "dist/trackone-${version}.tgz" "oci://ghcr.io/${owner}/trackone/charts"
+
+  publish-release-evidence:
+    runs-on: ubuntu-latest
+    needs: [publish-crates, publish-helm]
+    permissions:
+      contents: read
+      packages: write
+    env:
+      ARCHIVE_OCI_REF: ghcr.io/${{ github.repository }}/evidence-archive:${{ github.ref_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Download packaged crates
+        uses: actions/download-artifact@v8
+        with:
+          name: crates-packages
+          path: release-input/crates
+
+      - name: Download Helm chart
+        uses: actions/download-artifact@v8
+        with:
+          name: helm-chart
+          path: release-input/helm
+
+      - name: Build release evidence archive
+        run: |
+          set -euo pipefail
+          archive_root="release-evidence-${GITHUB_REF_NAME}"
+          rm -rf "${archive_root}" release-evidence.tar.gz release-evidence.tar.gz.sha256
+          mkdir -p \
+            "${archive_root}/bundle/toolset" \
+            "${archive_root}/release/crates" \
+            "${archive_root}/release/helm" \
+            "${archive_root}/verifier"
+
+          cp -R toolset/unified "${archive_root}/bundle/toolset/unified"
+          cp -R toolset/vectors "${archive_root}/bundle/toolset/vectors"
+          cp release-input/crates/*.crate "${archive_root}/release/crates/"
+          cp release-input/helm/*.tgz "${archive_root}/release/helm/"
+          cp crates/trackone-evidence/README.md "${archive_root}/verifier/trackone-evidence.README.md"
+
+          cat > "${archive_root}/release-manifest.json" <<EOF
+          {
+            "schema": "trackone-release-evidence-v1",
+            "release_tag": "${GITHUB_REF_NAME}",
+            "git_commit": "${GITHUB_SHA}",
+            "repository": "${GITHUB_REPOSITORY}",
+            "evidence_carrier": "${ARCHIVE_OCI_REF}",
+            "software_artifacts": {
+              "crates": "release/crates",
+              "helm": "release/helm"
+            },
+            "public_evidence": {
+              "schemas": "bundle/toolset/unified/schemas",
+              "cddl": "bundle/toolset/unified/cddl",
+              "commitment_vectors": "bundle/toolset/vectors/trackone-canonical-cbor-v1"
+            },
+            "verifier": {
+              "crate": "trackone-evidence",
+              "entrypoint": "cargo run -p trackone-evidence -- verify"
+            }
+          }
+          EOF
+
+          (
+            cd "${archive_root}"
+            find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
+          )
+          tar -czf release-evidence.tar.gz "${archive_root}"
+          sha256sum release-evidence.tar.gz > release-evidence.tar.gz.sha256
+
+      - name: Set up ORAS
+        uses: oras-project/setup-oras@v2
+
+      - name: Log in to GHCR
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "${GHCR_TOKEN}" | oras login ghcr.io \
+            --username "${GITHUB_ACTOR}" \
+            --password-stdin
+
+      - name: Publish release evidence archive to GHCR OCI
+        run: |
+          set -euo pipefail
+          declared_sha="$(cut -d' ' -f1 release-evidence.tar.gz.sha256)"
+          actual_sha="$(sha256sum release-evidence.tar.gz | cut -d' ' -f1)"
+          if [ "${declared_sha}" != "${actual_sha}" ]; then
+            echo "::error::Release evidence tarball SHA-256 mismatch before OCI publish"
+            exit 1
+          fi
+
+          oras push "${ARCHIVE_OCI_REF}" \
+            --artifact-type application/vnd.trackone.evidence.archive.v1+tar \
+            --annotation org.opencontainers.image.source="https://github.com/${GITHUB_REPOSITORY}" \
+            --annotation org.opencontainers.image.revision="${GITHUB_SHA}" \
+            --annotation org.opencontainers.image.version="${GITHUB_REF_NAME}" \
+            --annotation org.opencontainers.image.title="TrackOne release evidence archive bundle" \
+            "release-evidence.tar.gz:application/gzip"
+          oras resolve "${ARCHIVE_OCI_REF}" | tee release-evidence-oci-digest.txt
+
+      - name: Pull release evidence archive back from GHCR
+        run: |
+          set -euo pipefail
+          rm -rf pulled-release-evidence extracted-release-evidence
+          mkdir -p pulled-release-evidence extracted-release-evidence
+          oras pull --output pulled-release-evidence "${ARCHIVE_OCI_REF}"
+
+          pulled="pulled-release-evidence/release-evidence.tar.gz"
+          test -f "${pulled}"
+          expected_sha="$(cut -d' ' -f1 release-evidence.tar.gz.sha256)"
+          actual_sha="$(sha256sum "${pulled}" | cut -d' ' -f1)"
+          if [ "${expected_sha}" != "${actual_sha}" ]; then
+            echo "::error::Pulled release evidence archive SHA-256 mismatch"
+            echo "expected=${expected_sha}"
+            echo "actual=${actual_sha}"
+            exit 1
+          fi
+
+      - name: Verify pulled release evidence archive
+        run: |
+          set -euo pipefail
+          tar -xzf pulled-release-evidence/release-evidence.tar.gz -C extracted-release-evidence
+          archive_root="$(find extracted-release-evidence -mindepth 1 -maxdepth 1 -type d -print -quit)"
+          test -n "${archive_root}"
+          test -f "${archive_root}/SHA256SUMS"
+          test -f "${archive_root}/release-manifest.json"
+          test -d "${archive_root}/bundle/toolset/vectors/trackone-canonical-cbor-v1"
+          test -d "${archive_root}/bundle/toolset/unified/schemas"
+          test -d "${archive_root}/release/crates"
+          test -d "${archive_root}/release/helm"
+
+          (
+            cd "${archive_root}"
+            sha256sum -c SHA256SUMS
+          )
+
+          cat > release-evidence-oci-verification.json <<EOF
+          {
+            "ok": true,
+            "release_tag": "${GITHUB_REF_NAME}",
+            "git_commit": "${GITHUB_SHA}",
+            "evidence_carrier": "${ARCHIVE_OCI_REF}",
+            "archive_sha256": "$(cut -d' ' -f1 release-evidence.tar.gz.sha256)",
+            "oci_digest_file": "release-evidence-oci-digest.txt"
+          }
+          EOF
+
+      - name: Upload release evidence verification artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-evidence-oci-verification
+          path: |
+            release-evidence-oci-digest.txt
+            release-evidence-oci-verification.json
+            release-evidence.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 30
