@@ -12,7 +12,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.0-alpha.18"
+version = "0.1.0-alpha.19"
 edition = "2024"
 rust-version = "1.88"
 publish = true
@@ -36,12 +36,12 @@ zeroize = { version = "1.8.2", default-features = false, features = ["derive"] }
 serde_json_canonicalizer = "0.3.2"
 
 # Internal crates (workspace path + pinned version for publish compatibility)
-trackone-core = { path = "crates/trackone-core", version = "0.1.0-alpha.18", default-features = false }
-trackone-ingest = { path = "crates/trackone-ingest", version = "0.1.0-alpha.18", default-features = false }
-trackone-ledger = { path = "crates/trackone-ledger", version = "0.1.0-alpha.18" }
-trackone-constants = { path = "crates/trackone-constants", version = "0.1.0-alpha.18" }
-trackone-sensorthings = { path = "crates/trackone-sensorthings", version = "0.1.0-alpha.18" }
-trackone-gateway = { path = "crates/trackone-gateway", version = "0.1.0-alpha.18", default-features = false }
+trackone-core = { path = "crates/trackone-core", version = "0.1.0-alpha.19", default-features = false }
+trackone-ingest = { path = "crates/trackone-ingest", version = "0.1.0-alpha.19", default-features = false }
+trackone-ledger = { path = "crates/trackone-ledger", version = "0.1.0-alpha.19" }
+trackone-constants = { path = "crates/trackone-constants", version = "0.1.0-alpha.19" }
+trackone-sensorthings = { path = "crates/trackone-sensorthings", version = "0.1.0-alpha.19" }
+trackone-gateway = { path = "crates/trackone-gateway", version = "0.1.0-alpha.19", default-features = false }
 
 [profile.release]
 lto = true

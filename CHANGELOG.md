@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-alpha.19] - 2026-05-16
+
+### Added
+- Added the `trackone-evidence` Rust crate as the native verifier/export
+  runner for TrackOne evidence bundles, plus workspace test/clippy coverage and
+  release-publish workflow inclusion for that crate.
+- `trackone-ingest` now exposes ADR-058 rejection-audit and admission-state
+  shapes, rejection-source/reason validation, and rejected-line hashing for
+  operator-audit records.
+
+### Changed
+- `scripts/evidence/export_release.py` is now a Python wrapper around the
+  Rust-native `trackone-evidence export` command, preserving the CLI contract
+  while moving evidence export and fresh verification policy into Rust.
+- Evidence verification/export tests now validate Rust-native contract behavior
+  instead of duplicating those policies in Python helper code.
+- `trackone-gateway` now exposes native OTS verification and metadata-sidecar
+  validation helpers to Rust callers, and OTS tooling/docs now refer to the
+  external `ots` CLI rather than the Python `opentimestamps-client` package.
+- The workspace dependency baseline now uses `heapless` 0.9.3.
+
 ## [0.1.0-alpha.18] - 2026-05-05
 
 ### Added

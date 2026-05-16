@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-alpha.19] - 2026-05-16
+
+### Added
+- Added std-gated ADR-058 rejection-audit helpers: `RejectionSource`,
+  `RejectionRecord`, `AdmissionStateUpdate`, rejection source/reason
+  allow-lists, `hash_rejected_line(...)`, and `validate_rejection_record(...)`.
+
 ## [0.1.0-alpha.18] - 2026-05-05
 
 ### Notes

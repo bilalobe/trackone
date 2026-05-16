@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-alpha.19] - 2026-05-16
+
+### Notes
+- No new constant values landed in this release; `trackone-constants` remains
+  the shared no-std release-contract surface for the workspace
+  `0.1.0-alpha.19` line.
+
 ## [0.1.0-alpha.18] - 2026-05-05
 
 ### Notes

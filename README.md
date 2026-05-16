@@ -319,8 +319,19 @@ Machine-readable contract split:
 
 ## Current release line
 
-The latest tagged release is `0.1.0-alpha.18`.
-The current `main` branch is tracking `alpha.19` follow-on work; release detail for `alpha.18` lives in [`CHANGELOG.md`](CHANGELOG.md), and `Unreleased` tracks the next release work.
+The latest tagged release is `0.1.0-alpha.19`.
+The current `main` branch is tracking post-`alpha.19` follow-on work; release detail for `alpha.19` lives in [`CHANGELOG.md`](CHANGELOG.md), and `Unreleased` tracks the next release work.
+
+- `alpha.19` moved release evidence export and verification onto a native Rust
+  runner while preserving the Python wrapper entrypoint:
+
+  - `trackone-evidence` now owns the Rust-native evidence bundle verifier and
+    export runner
+  - `scripts/evidence/export_release.py` shells out to `trackone-evidence export` instead of duplicating release-export policy in Python
+  - `trackone-ingest` exposes ADR-058 rejection-audit helpers for framed
+    non-admission records
+  - `trackone-gateway` exposes native OTS proof and metadata-sidecar validation
+    helpers to Rust callers
 
 - `alpha.18` moved deterministic SensorThings domain logic into a dedicated
   crate and hardened native OTS verification:
@@ -359,9 +370,6 @@ The current `main` branch is tracking `alpha.19` follow-on work; release detail 
   - shared Rust/Python release constants for `commitment_profile_id` and disclosure classes
   - SCITT statement payload contracts and examples
   - sealed trust-root boundary documentation in [`ADR-046`](adr/ADR-046-sealed-trust-root-boundary-and-deferring-trackone-seal.md)
-
-- `alpha.19` is currently focused on follow-on hardening beyond the native OTS
-  and SensorThings crate cut.
 
 For release-level detail, use [`CHANGELOG.md`](CHANGELOG.md) rather than this README.
 
