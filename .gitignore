@@ -1,67 +1,9 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
-.venv/
-venv/
-ENV/
-env/
-
-# Testing
-.pytest_cache/
-.hypothesis/
-.coverage
-coverage.xml
-htmlcov/
-.tox/
-
 # IDEs
 .idea/
 .vscode/
 *.swp
 *.swo
 *~
-
-# Project specific
-out/
-!out/site_demo/day/*.ots
-facts/
-!toolset/vectors/trackone-canonical-cbor-v1/facts/
-!toolset/vectors/trackone-canonical-cbor-v1/facts/*.json
-!toolset/vectors/trackone-canonical-cbor-v1/facts/*.cbor
-frames.ndjson
-device_table.json
-*.bin
-*.bin.sha256
-proofs/
-
-# LaTeX
-*.aux
-*.log
-*.out
-*.toc
-*.fdb_latexmk
-*.fls
-*.synctex.gz
-texput.log
 
 # OS
 .DS_Store
