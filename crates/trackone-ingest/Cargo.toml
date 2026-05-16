@@ -12,7 +12,7 @@ readme = "README.md"
 [features]
 # Keep the base crate no_std-first; host builds opt into std + XChaCha helpers.
 default = []
-std = ["trackone-core/std"]
+std = ["trackone-core/std", "dep:trackone-ledger"]
 xchacha = ["dep:chacha20poly1305", "std"]
 
 [dependencies]
@@ -22,6 +22,7 @@ postcard.workspace = true
 serde.workspace = true
 trackone-constants.workspace = true
 trackone-core.workspace = true
+trackone-ledger = { workspace = true, optional = true }
 
 [dev-dependencies]
 trackone-core = { workspace = true, features = ["dummy-aead"] }

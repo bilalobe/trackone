@@ -11,11 +11,15 @@ use core::fmt;
 
 use heapless::Vec as HVec;
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "std")]
+use std::string::String;
 use trackone_core::crypto::{AeadDecrypt, AeadEncrypt};
 use trackone_core::{
     AEAD_NONCE_LEN, AEAD_TAG_LEN, CoreResult, Error, Fact, FactKind, FactPayload, FrameCounter,
     MAX_FACT_LEN, PodId,
 };
+#[cfg(feature = "std")]
+use trackone_ledger::sha256_hex;
 
 #[cfg(feature = "xchacha")]
 use chacha20poly1305::{
@@ -110,6 +114,164 @@ impl fmt::Display for RejectReason {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.as_str())
     }
+}
+
+/// Source bucket for rejected framed input in the operator-audit contract.
+#[cfg(feature = "std")]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum RejectionSource {
+    Parse,
+    Decrypt,
+    Replay,
+}
+
+#[cfg(feature = "std")]
+impl RejectionSource {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Parse => "parse",
+            Self::Decrypt => "decrypt",
+            Self::Replay => "replay",
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl fmt::Display for RejectionSource {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// Additive-only rejection-audit shape from ADR-058.
+#[cfg(feature = "std")]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RejectionRecord {
+    pub device_id: String,
+    pub fc: Option<u64>,
+    pub reason: String,
+    pub observed_at_utc: String,
+    pub frame_sha256: String,
+    pub source: String,
+}
+
+#[cfg(feature = "std")]
+impl RejectionRecord {
+    pub fn new(
+        device_id: impl Into<String>,
+        fc: Option<u64>,
+        reason: impl Into<String>,
+        observed_at_utc: impl Into<String>,
+        frame_sha256: impl Into<String>,
+        source: RejectionSource,
+    ) -> Result<Self, RejectionAuditError> {
+        let record = Self {
+            device_id: device_id.into(),
+            fc,
+            reason: reason.into(),
+            observed_at_utc: observed_at_utc.into(),
+            frame_sha256: frame_sha256.into(),
+            source: source.as_str().to_string(),
+        };
+        validate_rejection_record(&record)?;
+        Ok(record)
+    }
+}
+
+/// Stable accepted-frame state update shape from ADR-058.
+#[cfg(feature = "std")]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AdmissionStateUpdate {
+    pub device_key: String,
+    pub highest_fc_seen: u64,
+    pub last_seen: String,
+    pub msg_type: u8,
+    pub flags: u8,
+}
+
+#[cfg(feature = "std")]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum RejectionAuditError {
+    UnknownSource,
+    UnknownReason,
+    InvalidFrameHash,
+}
+
+#[cfg(feature = "std")]
+impl fmt::Display for RejectionAuditError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UnknownSource => f.write_str("unknown rejection source"),
+            Self::UnknownReason => f.write_str("unknown rejection reason"),
+            Self::InvalidFrameHash => f.write_str("invalid rejection frame hash"),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for RejectionAuditError {}
+
+#[cfg(feature = "std")]
+pub const REJECTION_SOURCES: &[&str] = &["parse", "decrypt", "replay"];
+
+#[cfg(feature = "std")]
+pub const REJECTION_REASONS: &[&str] = &[
+    "line_too_long",
+    "invalid_json",
+    "not_dict",
+    "missing_frame_fields",
+    "unexpected_frame_fields",
+    "invalid_hdr",
+    "invalid_frame_types",
+    "missing_hdr_fields",
+    "unexpected_hdr_fields",
+    "invalid_hdr_types",
+    "dev_id_range",
+    "msg_type_range",
+    "fc_range",
+    "flags_range",
+    "invalid_ingest_profile",
+    "unsupported_flags",
+    "unknown_device",
+    "missing_salt8",
+    "invalid_base64",
+    "salt8_length",
+    "ck_up_length",
+    "nonce_length",
+    "tag_length",
+    "empty_ciphertext",
+    "ciphertext_too_large",
+    "nonce_salt_mismatch",
+    "nonce_fc_mismatch",
+    "decrypt_failed",
+    "postcard_pod_id_mismatch",
+    "postcard_fc_mismatch",
+    "duplicate",
+    "out_of_window",
+];
+
+#[cfg(feature = "std")]
+pub fn hash_rejected_line(raw_line: &str) -> String {
+    sha256_hex(raw_line.trim_end_matches(['\r', '\n']).as_bytes())
+}
+
+#[cfg(feature = "std")]
+pub fn validate_rejection_record(record: &RejectionRecord) -> Result<(), RejectionAuditError> {
+    if !REJECTION_SOURCES.contains(&record.source.as_str()) {
+        return Err(RejectionAuditError::UnknownSource);
+    }
+    if !REJECTION_REASONS.contains(&record.reason.as_str()) {
+        return Err(RejectionAuditError::UnknownReason);
+    }
+    if record.frame_sha256.len() != 64
+        || !record
+            .frame_sha256
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+    {
+        return Err(RejectionAuditError::InvalidFrameHash);
+    }
+    Ok(())
 }
 
 /// Framed header fields that participate in admission.
