@@ -699,7 +699,7 @@ fn verify_ots_proof_impl(
         };
 
         if stub_hex == expected {
-            return OtsVerifyResult::success(OtsStatus::Verified, "stationary-stub-verified");
+            return OtsVerifyResult::success(OtsStatus::Pending, "stationary-stub-accepted");
         }
         return OtsVerifyResult::failure(OtsStatus::Failed, "stationary-stub-hash-mismatch");
     }
@@ -1222,8 +1222,8 @@ mod tests {
         );
 
         assert!(result.ok);
-        assert_eq!(result.status, OtsStatus::Verified);
-        assert_eq!(result.reason, "stationary-stub-verified");
+        assert_eq!(result.status, OtsStatus::Pending);
+        assert_eq!(result.reason, "stationary-stub-accepted");
     }
 
     #[test]
