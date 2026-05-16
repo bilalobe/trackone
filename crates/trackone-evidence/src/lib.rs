@@ -5,6 +5,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use trackone::ots::{validate_meta_sidecar_native, verify_ots_proof_native};
+use trackone_ingest::{RejectionRecord, validate_rejection_record};
 use trackone_ledger::{canonical_cbor, merkle, normalize_hex64, sha256_hex};
 
 pub const STATUS_VERIFIED: &str = "verified";
@@ -17,6 +18,7 @@ pub const CHECK_DAY_ARTIFACT: &str = "day_artifact_validation";
 pub const CHECK_FACT_RECOMPUTE: &str = "fact_level_recompute";
 pub const CHECK_MANIFEST: &str = "verification_manifest_validation";
 pub const CHECK_BATCH_METADATA: &str = "batch_metadata_validation";
+pub const CHECK_REJECTION_AUDIT: &str = "rejection_audit_validation";
 pub const CHECK_OTS: &str = "ots_verification";
 
 #[derive(Debug)]
@@ -224,6 +226,182 @@ fn manifest_artifact_path(root: &Path, manifest: &VerifyManifest, name: &str) ->
     Ok(path)
 }
 
+fn read_cbor_uint(data: &[u8], pos: &mut usize, ai: u8) -> Result<u64> {
+    match ai {
+        n @ 0..=23 => Ok(n as u64),
+        24 => {
+            let value = *data
+                .get(*pos)
+                .ok_or_else(|| EvidenceError::Invalid("truncated CBOR".to_string()))?
+                as u64;
+            *pos += 1;
+            if value < 24 {
+                return Err(EvidenceError::Invalid(
+                    "CBOR integer is not shortest-form".to_string(),
+                ));
+            }
+            Ok(value)
+        }
+        25 => {
+            let bytes = data
+                .get(*pos..*pos + 2)
+                .ok_or_else(|| EvidenceError::Invalid("truncated CBOR".to_string()))?;
+            *pos += 2;
+            let value = u16::from_be_bytes([bytes[0], bytes[1]]) as u64;
+            if value <= u8::MAX as u64 {
+                return Err(EvidenceError::Invalid(
+                    "CBOR integer is not shortest-form".to_string(),
+                ));
+            }
+            Ok(value)
+        }
+        26 => {
+            let bytes = data
+                .get(*pos..*pos + 4)
+                .ok_or_else(|| EvidenceError::Invalid("truncated CBOR".to_string()))?;
+            *pos += 4;
+            let value = u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) as u64;
+            if value <= u16::MAX as u64 {
+                return Err(EvidenceError::Invalid(
+                    "CBOR integer is not shortest-form".to_string(),
+                ));
+            }
+            Ok(value)
+        }
+        27 => {
+            let bytes = data
+                .get(*pos..*pos + 8)
+                .ok_or_else(|| EvidenceError::Invalid("truncated CBOR".to_string()))?;
+            *pos += 8;
+            let value = u64::from_be_bytes([
+                bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
+            ]);
+            if value <= u32::MAX as u64 {
+                return Err(EvidenceError::Invalid(
+                    "CBOR integer is not shortest-form".to_string(),
+                ));
+            }
+            Ok(value)
+        }
+        _ => Err(EvidenceError::Invalid(
+            "indefinite or reserved CBOR additional information".to_string(),
+        )),
+    }
+}
+
+fn parse_canonical_cbor_value(data: &[u8], pos: &mut usize) -> Result<()> {
+    let initial = *data
+        .get(*pos)
+        .ok_or_else(|| EvidenceError::Invalid("empty CBOR value".to_string()))?;
+    *pos += 1;
+    let major = initial >> 5;
+    let ai = initial & 0x1f;
+
+    match major {
+        0 | 1 => {
+            let _ = read_cbor_uint(data, pos, ai)?;
+        }
+        2 | 3 => {
+            let len = read_cbor_uint(data, pos, ai)? as usize;
+            let end = pos
+                .checked_add(len)
+                .filter(|end| *end <= data.len())
+                .ok_or_else(|| EvidenceError::Invalid("truncated CBOR bytes/text".to_string()))?;
+            if major == 3 {
+                std::str::from_utf8(&data[*pos..end])
+                    .map_err(|_| EvidenceError::Invalid("CBOR text is not UTF-8".to_string()))?;
+            }
+            *pos = end;
+        }
+        4 => {
+            let len = read_cbor_uint(data, pos, ai)? as usize;
+            for _ in 0..len {
+                parse_canonical_cbor_value(data, pos)?;
+            }
+        }
+        5 => {
+            let len = read_cbor_uint(data, pos, ai)? as usize;
+            let mut previous_key: Option<Vec<u8>> = None;
+            for _ in 0..len {
+                let key_start = *pos;
+                parse_canonical_cbor_value(data, pos)?;
+                let key = data[key_start..*pos].to_vec();
+                if let Some(previous) = previous_key.as_ref()
+                    && (previous.len() > key.len()
+                        || (previous.len() == key.len() && previous.as_slice() >= key.as_slice()))
+                {
+                    return Err(EvidenceError::Invalid(
+                        "CBOR map keys are not canonical-order".to_string(),
+                    ));
+                }
+                previous_key = Some(key);
+                parse_canonical_cbor_value(data, pos)?;
+            }
+        }
+        6 => {
+            return Err(EvidenceError::Invalid(
+                "CBOR tags are outside the beta fact contract".to_string(),
+            ));
+        }
+        7 => match ai {
+            20..=23 => {}
+            24 => {
+                let simple = *data
+                    .get(*pos)
+                    .ok_or_else(|| EvidenceError::Invalid("truncated CBOR simple".to_string()))?;
+                *pos += 1;
+                if simple < 32 {
+                    return Err(EvidenceError::Invalid(
+                        "CBOR simple value is not shortest-form".to_string(),
+                    ));
+                }
+            }
+            _ => {
+                return Err(EvidenceError::Invalid(
+                    "CBOR simple/float value is outside the beta fact contract".to_string(),
+                ));
+            }
+        },
+        _ => unreachable!(),
+    }
+    Ok(())
+}
+
+fn validate_canonical_cbor_fact(bytes: &[u8]) -> Result<()> {
+    let mut pos = 0;
+    parse_canonical_cbor_value(bytes, &mut pos)?;
+    if pos != bytes.len() {
+        return Err(EvidenceError::Invalid(
+            "CBOR fact has trailing bytes".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_rejection_audit(path: &Path) -> Result<usize> {
+    let text = fs::read_to_string(path)?;
+    let mut count = 0usize;
+    for (idx, line) in text.lines().enumerate() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        let record: RejectionRecord = serde_json::from_str(line).map_err(|err| {
+            EvidenceError::Invalid(format!(
+                "rejection audit line {} invalid JSON: {err}",
+                idx + 1
+            ))
+        })?;
+        validate_rejection_record(&record).map_err(|err| {
+            EvidenceError::Invalid(format!(
+                "rejection audit line {} invalid record: {err}",
+                idx + 1
+            ))
+        })?;
+        count += 1;
+    }
+    Ok(count)
+}
+
 fn find_block(root: &Path) -> Result<PathBuf> {
     let mut entries = fs::read_dir(root.join("blocks"))?
         .filter_map(|entry| entry.ok().map(|item| item.path()))
@@ -367,6 +545,7 @@ fn portable_summary(summary: &Value) -> Value {
         "checks_skipped",
         "channels",
         "manifest",
+        "operator_audit",
         "overall",
     ] {
         if !summary[key].is_null() {
@@ -416,7 +595,16 @@ pub fn verify_bundle(options: &VerifyOptions) -> Result<Value> {
             "day_ots": ots_path.to_string_lossy(),
             "verification_manifest": manifest_path.to_string_lossy(),
         },
-        "checks": {"root_match": Value::Null, "artifact_valid": false, "meta_valid": true},
+        "checks": {
+            "root_match": Value::Null,
+            "artifact_valid": false,
+            "meta_valid": true,
+            "rejection_audit_valid": Value::Null,
+        },
+        "operator_audit": {
+            "rejection_records": 0,
+            "commitment_material": false,
+        },
         "verification_scope_exercised": [],
         "checks_executed": [],
         "checks_skipped": [],
@@ -449,6 +637,23 @@ pub fn verify_bundle(options: &VerifyOptions) -> Result<Value> {
     for required in ["block", "day_cbor"] {
         let _ = manifest_artifact_path(root, &manifest, required)?;
     }
+    if manifest.artifacts.contains_key("rejection_audit") {
+        let audit_path = manifest_artifact_path(root, &manifest, "rejection_audit")?;
+        if audit_path
+            .strip_prefix(root)
+            .ok()
+            .and_then(|rel| rel.components().next())
+            .is_some_and(|component| component.as_os_str() == "facts")
+        {
+            return Err(EvidenceError::Invalid(
+                "rejection audit must not be commitment material".to_string(),
+            ));
+        }
+        record_executed(&mut summary, CHECK_REJECTION_AUDIT);
+        let count = validate_rejection_audit(&audit_path)?;
+        summary["checks"]["rejection_audit_valid"] = json!(true);
+        summary["operator_audit"]["rejection_records"] = json!(count);
+    }
     summary["manifest"] = json!({"status": "present", "source": manifest_path.file_name().and_then(|v| v.to_str()), "schema": "verify_manifest"});
     for name in ["tsa", "peers"] {
         let (enabled, status, reason) = manifest_channel(&manifest, name);
@@ -470,6 +675,14 @@ pub fn verify_bundle(options: &VerifyOptions) -> Result<Value> {
     {
         return Err(EvidenceError::Invalid(
             "day projection does not match block header".to_string(),
+        ));
+    }
+    let batches = day_record["batches"]
+        .as_array()
+        .ok_or_else(|| EvidenceError::Invalid("day projection batches missing".to_string()))?;
+    if batches.len() != 1 {
+        return Err(EvidenceError::Invalid(
+            "day projection must contain exactly one batch for current manifest".to_string(),
         ));
     }
     summary["checks"]["artifact_valid"] = json!(true);
@@ -500,8 +713,17 @@ pub fn verify_bundle(options: &VerifyOptions) -> Result<Value> {
         }
         let leaves = fact_files
             .iter()
-            .map(fs::read)
-            .collect::<std::result::Result<Vec<_>, _>>()?;
+            .map(|path| {
+                let bytes = fs::read(path)?;
+                validate_canonical_cbor_fact(&bytes).map_err(|err| {
+                    EvidenceError::Invalid(format!(
+                        "fact artifact is not canonical CBOR: {}: {err}",
+                        path.display()
+                    ))
+                })?;
+                Ok(bytes)
+            })
+            .collect::<Result<Vec<_>>>()?;
         let recomputed = merkle::merkle_root_from_leaves(&leaves).root_hex();
         summary["checks"]["root_match"] = json!(recomputed == block.merkle_root);
         if recomputed != block.merkle_root {
