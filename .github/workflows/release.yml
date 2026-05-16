@@ -210,11 +210,13 @@ jobs:
             "public_evidence": {
               "schemas": "bundle/toolset/unified/schemas",
               "cddl": "bundle/toolset/unified/cddl",
-              "commitment_vectors": "bundle/toolset/vectors/trackone-canonical-cbor-v1"
+              "commitment_vectors": "bundle/toolset/vectors/trackone-canonical-cbor-v1",
+              "negative_fixtures": "bundle/toolset/vectors/trackone-beta-negative-v1"
             },
-            "verifier": {
-              "crate": "trackone-evidence",
-              "entrypoint": "cargo run -p trackone-evidence -- verify"
+            "pull_back_verification": {
+              "integrity": "sha256sum -c SHA256SUMS",
+              "commitment_vectors": "cargo test --locked -p trackone-ledger --test vector_corpus -- --ignored rust_reproduces_published_commitment_vectors",
+              "negative_fixtures": "cargo test --locked -p trackone-evidence --test detached_negative_fixtures public_beta_negative_fixture_corpus_is_cli_runnable"
             }
           }
           EOF
@@ -283,6 +285,7 @@ jobs:
           test -f "${archive_root}/SHA256SUMS"
           test -f "${archive_root}/release-manifest.json"
           test -d "${archive_root}/bundle/toolset/vectors/trackone-canonical-cbor-v1"
+          test -d "${archive_root}/bundle/toolset/vectors/trackone-beta-negative-v1"
           test -d "${archive_root}/bundle/toolset/unified/schemas"
           test -d "${archive_root}/release/crates"
           test -d "${archive_root}/release/helm"
@@ -291,6 +294,21 @@ jobs:
             cd "${archive_root}"
             sha256sum -c SHA256SUMS
           )
+
+          rm -rf \
+            toolset/vectors/trackone-canonical-cbor-v1 \
+            toolset/vectors/trackone-beta-negative-v1
+          mkdir -p toolset/vectors
+          cp -R \
+            "${archive_root}/bundle/toolset/vectors/trackone-canonical-cbor-v1" \
+            "toolset/vectors/trackone-canonical-cbor-v1"
+          cp -R \
+            "${archive_root}/bundle/toolset/vectors/trackone-beta-negative-v1" \
+            "toolset/vectors/trackone-beta-negative-v1"
+          cargo test --locked -p trackone-ledger --test vector_corpus -- \
+            --ignored rust_reproduces_published_commitment_vectors
+          cargo test --locked -p trackone-evidence --test detached_negative_fixtures \
+            public_beta_negative_fixture_corpus_is_cli_runnable
 
           cat > release-evidence-oci-verification.json <<EOF
           {
