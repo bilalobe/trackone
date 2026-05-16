@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
     "crates/trackone-core",
+    "crates/trackone-evidence",
     "crates/trackone-gateway",
     "crates/trackone-ingest",
     "crates/trackone-pod-fw",
@@ -40,6 +41,7 @@ trackone-ingest = { path = "crates/trackone-ingest", version = "0.1.0-alpha.18",
 trackone-ledger = { path = "crates/trackone-ledger", version = "0.1.0-alpha.18" }
 trackone-constants = { path = "crates/trackone-constants", version = "0.1.0-alpha.18" }
 trackone-sensorthings = { path = "crates/trackone-sensorthings", version = "0.1.0-alpha.18" }
+trackone-gateway = { path = "crates/trackone-gateway", version = "0.1.0-alpha.18", default-features = false }
 
 [profile.release]
 lto = true

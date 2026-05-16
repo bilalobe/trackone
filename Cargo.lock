@@ -1302,6 +1302,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "trackone-evidence"
+version = "0.1.0-alpha.17"
+dependencies = [
+ "serde",
+ "serde_json",
+ "trackone-constants",
+ "trackone-gateway",
+ "trackone-ingest",
+ "trackone-ledger",
+]
+
+[[package]]
 name = "trackone-gateway"
 version = "0.1.0-alpha.18"
 dependencies = [
@@ -1325,6 +1337,7 @@ dependencies = [
  "serde",
  "trackone-constants",
  "trackone-core",
+ "trackone-ledger",
 ]
 
 [[package]]

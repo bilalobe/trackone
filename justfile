@@ -29,6 +29,7 @@ bench: setup-dev
 # Run all tests with correct feature combinations
 test:
     cargo test --package trackone-core --features std,postcard,dummy-aead
+    cargo test --package trackone-evidence
     cargo test --package trackone-ingest --features std,xchacha
     cargo test --package trackone-sensorthings
     cargo test --package trackone-pod-fw --features std
@@ -37,6 +38,7 @@ test:
 # Run clippy with correct features (avoid --all-features due to production+dummy-aead conflict)
 clippy:
     cargo clippy --package trackone-core --features std,postcard,dummy-aead -- -D warnings
+    cargo clippy --package trackone-evidence -- -D warnings
     cargo clippy --package trackone-ingest --features std,xchacha -- -D warnings
     cargo clippy --package trackone-sensorthings -- -D warnings
     cargo clippy --package trackone-pod-fw --features std -- -D warnings

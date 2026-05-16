@@ -237,6 +237,7 @@ jobs:
             trackone-sensorthings
             trackone-pod-fw
             trackone-gateway
+            trackone-evidence
           )
 
           for crate in "${crates[@]}"; do
