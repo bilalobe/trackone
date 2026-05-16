@@ -521,6 +521,28 @@ fn rust_verifier_rejects_empty_class_a_fact_disclosure() {
 }
 
 #[test]
+fn rust_verifier_rejects_missing_class_a_fact_dir_as_empty_disclosure() {
+    let root = temp_dir("missing-class-a-facts");
+    write_bundle(&root);
+    fs::remove_dir_all(root.join("facts")).unwrap();
+
+    let err = verify_bundle(&VerifyOptions {
+        root: root.clone(),
+        facts: root.join("facts"),
+        policy_mode: PolicyMode::Warn,
+        disclosure_class: "A".to_string(),
+        commitment_profile_id: "trackone-canonical-cbor-v1".to_string(),
+        require_ots: false,
+        allow_placeholder: true,
+    })
+    .unwrap_err();
+    assert!(
+        err.to_string()
+            .contains("CBOR facts are required for Class A verification")
+    );
+}
+
+#[test]
 fn rust_verifier_reports_class_b_as_not_publicly_recomputable() {
     let root = temp_dir("class-b");
     write_bundle(&root);

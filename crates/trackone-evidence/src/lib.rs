@@ -701,10 +701,14 @@ pub fn verify_bundle(options: &VerifyOptions) -> Result<Value> {
 
     if options.disclosure_class == "A" {
         record_executed(&mut summary, CHECK_FACT_RECOMPUTE);
-        let mut fact_files = fs::read_dir(&options.facts)?
-            .filter_map(|entry| entry.ok().map(|item| item.path()))
-            .filter(|path| path.extension().and_then(|ext| ext.to_str()) == Some("cbor"))
-            .collect::<Vec<_>>();
+        let mut fact_files = match fs::read_dir(&options.facts) {
+            Ok(entries) => entries
+                .filter_map(|entry| entry.ok().map(|item| item.path()))
+                .filter(|path| path.extension().and_then(|ext| ext.to_str()) == Some("cbor"))
+                .collect::<Vec<_>>(),
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+            Err(err) => return Err(err.into()),
+        };
         fact_files.sort();
         if fact_files.is_empty() {
             return Err(EvidenceError::Invalid(
