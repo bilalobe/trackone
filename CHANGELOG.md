@@ -13,10 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   entrypoints, wheel publication plumbing, and Python-only OTS helper workflows.
   The earlier alpha tags remain the compatibility snapshots for that surface.
 - Removed the alpha-era release, weekly-ratchet, OTS calendar, and OTS
-  verification GitHub Actions workflows from this branch. The remaining
-  supported workflow is the Rust-only `ci.yml` gate; release-bound evidence and
-  publication automation must be reintroduced as Rust-native beta release
-  automation before cutting a public beta release.
+  verification GitHub Actions workflows from this branch. The supported
+  workflows are now the Rust-only `ci.yml` gate and a Rust-native tag release
+  workflow; removed Python, wheel, and Python verifier jobs are not carried
+  forward as beta compatibility obligations.
 
 ### Changed
 - Reframed the supported TrackOne surface as a Rust-native VTL/evidence spine:
@@ -31,9 +31,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   responses plus peer signatures as optional parallel timestamp/evidence
   channels.
 - Made the CI contract match the new support boundary. `cargo fmt`, clippy,
-  workspace tests, and package verification are now the required health checks;
-  removed Python and wheel jobs are not silent compatibility regressions because
-  the beta surface no longer promises a Python runtime API.
+  workspace tests, public vector-corpus replay, and package verification are now
+  the required health checks; removed Python and wheel jobs are not silent
+  compatibility regressions because the beta surface no longer promises a
+  Python runtime API.
+- Reintroduced tag release automation without Python: crates publish in
+  dependency order, the Helm chart publishes to GHCR OCI, and the release
+  evidence archive publishes to GHCR OCI only after those software artifacts
+  complete and the pulled archive copy verifies against its digest manifest.
 
 ## [0.1.0-alpha.19] - 2026-05-16
 
