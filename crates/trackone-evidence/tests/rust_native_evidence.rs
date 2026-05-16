@@ -7,7 +7,9 @@ use trackone_ingest::{
     AdmissionStateUpdate, REJECTION_REASONS, REJECTION_SOURCES, RejectionRecord, RejectionSource,
     hash_rejected_line, validate_rejection_record,
 };
-use trackone_ledger::types::{block_header_v1_from_canonical_leaves, day_record_v1_single_batch};
+use trackone_ledger::types::{
+    BlockHeaderV1, block_header_v1_from_canonical_leaves, day_record_v1_single_batch,
+};
 use trackone_ledger::{canonical_cbor, sha256_hex};
 
 fn temp_dir(name: &str) -> PathBuf {
@@ -399,7 +401,14 @@ fn rust_cli_verify_exits_nonzero_for_failed_overall_summary() {
 fn rust_verifier_rejects_tampered_fact_root() {
     let root = temp_dir("tamper");
     write_bundle(&root);
-    fs::write(root.join("facts/pod-001-00000002.cbor"), b"tampered").unwrap();
+    fs::write(
+        root.join("facts/pod-001-00000002.cbor"),
+        canonical_cbor::canonicalize_json_bytes_to_cbor(
+            br#"{"fc":999,"kind":"env.sample","pod_id":"pod-001"}"#,
+        )
+        .unwrap(),
+    )
+    .unwrap();
     let err = verify_bundle(&VerifyOptions {
         root: root.clone(),
         facts: root.join("facts"),
@@ -411,6 +420,231 @@ fn rust_verifier_rejects_tampered_fact_root() {
     })
     .unwrap_err();
     assert!(err.to_string().contains("fact-root-mismatch"));
+}
+
+#[test]
+fn rust_verifier_rejects_manifest_digest_mismatch() {
+    let root = temp_dir("bad-manifest-digest");
+    write_bundle(&root);
+    let manifest_path = root.join("day/2025-10-07.verify.json");
+    let mut manifest = read_json(&manifest_path);
+    manifest["artifacts"]["day_cbor"]["sha256"] =
+        json!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    write_json(&manifest_path, &manifest);
+
+    let err = verify_bundle(&VerifyOptions {
+        root: root.clone(),
+        facts: root.join("facts"),
+        policy_mode: PolicyMode::Warn,
+        disclosure_class: "A".to_string(),
+        commitment_profile_id: "trackone-canonical-cbor-v1".to_string(),
+        require_ots: false,
+        allow_placeholder: true,
+    })
+    .unwrap_err();
+    assert!(err.to_string().contains("artifact sha256 mismatch"));
+}
+
+#[test]
+fn rust_verifier_rejects_nonportable_manifest_artifact_path() {
+    let root = temp_dir("nonportable-path");
+    write_bundle(&root);
+    let manifest_path = root.join("day/2025-10-07.verify.json");
+    let mut manifest = read_json(&manifest_path);
+    manifest["artifacts"]["day_cbor"]["path"] = json!("../day/2025-10-07.cbor");
+    write_json(&manifest_path, &manifest);
+
+    let err = verify_bundle(&VerifyOptions {
+        root: root.clone(),
+        facts: root.join("facts"),
+        policy_mode: PolicyMode::Warn,
+        disclosure_class: "A".to_string(),
+        commitment_profile_id: "trackone-canonical-cbor-v1".to_string(),
+        require_ots: false,
+        allow_placeholder: true,
+    })
+    .unwrap_err();
+    assert!(
+        err.to_string()
+            .contains("manifest artifact path escapes root")
+    );
+}
+
+#[test]
+fn rust_verifier_rejects_noncanonical_day_cbor() {
+    let root = temp_dir("noncanonical-day-cbor");
+    write_bundle(&root);
+    fs::write(root.join("day/2025-10-07.cbor"), b"not-canonical-cbor").unwrap();
+    let manifest_path = root.join("day/2025-10-07.verify.json");
+    let mut manifest = read_json(&manifest_path);
+    manifest["artifacts"]["day_cbor"] = artifact_ref(&root, &root.join("day/2025-10-07.cbor"));
+    write_json(&manifest_path, &manifest);
+
+    let err = verify_bundle(&VerifyOptions {
+        root: root.clone(),
+        facts: root.join("facts"),
+        policy_mode: PolicyMode::Warn,
+        disclosure_class: "A".to_string(),
+        commitment_profile_id: "trackone-canonical-cbor-v1".to_string(),
+        require_ots: false,
+        allow_placeholder: true,
+    })
+    .unwrap_err();
+    assert!(
+        err.to_string()
+            .contains("day artifact is not canonical commitment bytes")
+    );
+}
+
+#[test]
+fn rust_verifier_rejects_empty_class_a_fact_disclosure() {
+    let root = temp_dir("empty-class-a");
+    write_bundle(&root);
+    for entry in fs::read_dir(root.join("facts")).unwrap() {
+        fs::remove_file(entry.unwrap().path()).unwrap();
+    }
+
+    let err = verify_bundle(&VerifyOptions {
+        root: root.clone(),
+        facts: root.join("facts"),
+        policy_mode: PolicyMode::Warn,
+        disclosure_class: "A".to_string(),
+        commitment_profile_id: "trackone-canonical-cbor-v1".to_string(),
+        require_ots: false,
+        allow_placeholder: true,
+    })
+    .unwrap_err();
+    assert!(
+        err.to_string()
+            .contains("CBOR facts are required for Class A verification")
+    );
+}
+
+#[test]
+fn rust_verifier_reports_class_b_as_not_publicly_recomputable() {
+    let root = temp_dir("class-b");
+    write_bundle(&root);
+    let manifest_path = root.join("day/2025-10-07.verify.json");
+    let mut manifest = read_json(&manifest_path);
+    manifest["verification_bundle"]["disclosure_class"] = json!("B");
+    write_json(&manifest_path, &manifest);
+
+    let summary = verify_bundle(&VerifyOptions {
+        root: root.clone(),
+        facts: root.join("facts"),
+        policy_mode: PolicyMode::Warn,
+        disclosure_class: "B".to_string(),
+        commitment_profile_id: "trackone-canonical-cbor-v1".to_string(),
+        require_ots: false,
+        allow_placeholder: true,
+    })
+    .unwrap();
+    assert_eq!(summary["overall"], "success");
+    assert_eq!(summary["verification"]["publicly_recomputable"], false);
+    assert!(
+        summary["checks_skipped"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|entry| entry["check"] == "fact_level_recompute"
+                && entry["reason"] == "disclosure-class-b")
+    );
+}
+
+#[test]
+fn rust_verifier_accepts_nonzero_previous_day_root_chain_input() {
+    let root = temp_dir("nonzero-prev-day-root");
+    write_bundle(&root);
+    let day = "2025-10-07";
+    let block: BlockHeaderV1 =
+        serde_json::from_value(read_json(&root.join("blocks/2025-10-07-00.block.json"))).unwrap();
+    let day_record = day_record_v1_single_batch("test-site", day, "11".repeat(32), block);
+    let day_json_path = root.join(format!("day/{day}.json"));
+    let day_cbor_path = root.join(format!("day/{day}.cbor"));
+    let day_sha_path = root.join(format!("day/{day}.cbor.sha256"));
+    let ots_path = root.join(format!("day/{day}.cbor.ots"));
+    let meta_path = root.join(format!("day/{day}.ots.meta.json"));
+    write_json(&day_json_path, &serde_json::to_value(&day_record).unwrap());
+    fs::write(&day_cbor_path, day_record.canonical_cbor_bytes().unwrap()).unwrap();
+    let day_sha = sha256_hex(&fs::read(&day_cbor_path).unwrap());
+    fs::write(&day_sha_path, format!("{day_sha}\n")).unwrap();
+    fs::write(&ots_path, format!("STATIONARY-OTS:{day_sha}\n")).unwrap();
+    write_json(
+        &meta_path,
+        &json!({
+            "day": day,
+            "artifact": format!("day/{day}.cbor"),
+            "artifact_sha256": day_sha,
+            "ots_proof": format!("day/{day}.cbor.ots")
+        }),
+    );
+
+    let manifest_path = root.join(format!("day/{day}.verify.json"));
+    let mut manifest = read_json(&manifest_path);
+    manifest["artifacts"]["day_json"] = artifact_ref(&root, &day_json_path);
+    manifest["artifacts"]["day_cbor"] = artifact_ref(&root, &day_cbor_path);
+    manifest["artifacts"]["day_sha256"] = artifact_ref(&root, &day_sha_path);
+    manifest["artifacts"]["day_ots"] = artifact_ref(&root, &ots_path);
+    manifest["artifacts"]["day_ots_meta"] = artifact_ref(&root, &meta_path);
+    write_json(&manifest_path, &manifest);
+
+    let summary = verify_bundle(&VerifyOptions {
+        root: root.clone(),
+        facts: root.join("facts"),
+        policy_mode: PolicyMode::Warn,
+        disclosure_class: "A".to_string(),
+        commitment_profile_id: "trackone-canonical-cbor-v1".to_string(),
+        require_ots: false,
+        allow_placeholder: true,
+    })
+    .unwrap();
+    assert_eq!(summary["overall"], "success");
+}
+
+#[test]
+fn rust_verifier_rejects_multi_batch_day_projection_for_current_manifest() {
+    let root = temp_dir("multi-batch-day");
+    write_bundle(&root);
+    let day_json_path = root.join("day/2025-10-07.json");
+    let day_cbor_path = root.join("day/2025-10-07.cbor");
+    let mut day_record = read_json(&day_json_path);
+    let first_batch = day_record["batches"][0].clone();
+    day_record["batches"]
+        .as_array_mut()
+        .unwrap()
+        .push(first_batch);
+    fs::write(
+        &day_json_path,
+        serde_json::to_vec_pretty(&day_record).unwrap(),
+    )
+    .unwrap();
+    fs::write(
+        &day_cbor_path,
+        canonical_cbor::canonicalize_json_bytes_to_cbor(&fs::read(&day_json_path).unwrap())
+            .unwrap(),
+    )
+    .unwrap();
+
+    let manifest_path = root.join("day/2025-10-07.verify.json");
+    let mut manifest = read_json(&manifest_path);
+    manifest["artifacts"]["day_json"] = artifact_ref(&root, &day_json_path);
+    manifest["artifacts"]["day_cbor"] = artifact_ref(&root, &day_cbor_path);
+    write_json(&manifest_path, &manifest);
+
+    let err = verify_bundle(&VerifyOptions {
+        root: root.clone(),
+        facts: root.join("facts"),
+        policy_mode: PolicyMode::Warn,
+        disclosure_class: "A".to_string(),
+        commitment_profile_id: "trackone-canonical-cbor-v1".to_string(),
+        require_ots: false,
+        allow_placeholder: true,
+    })
+    .unwrap_err();
+    assert!(
+        err.to_string()
+            .contains("day projection must contain exactly one batch")
+    );
 }
 
 #[test]
