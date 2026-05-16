@@ -7,23 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Added the ADR-055 beta negative fixture corpus under
+  `toolset/vectors/trackone-beta-negative-v1`, with detached CLI cases for
+  verifier-manifest refusal, disclosure-class behavior, replay/admission
+  rejection audit records, malformed-frame audit records, batch-shape refusal,
+  previous-day-root chaining input, and canonical-CBOR/decoded fact refusal.
+
 ### Removed
-- Removed the legacy Python product surface: Python package shims, gateway/demo
-  scripts, Python test suites, tox/uv packaging state, Python container
-  entrypoints, wheel publication plumbing, and Python-only OTS helper workflows.
-  The earlier alpha tags remain the compatibility snapshots for that surface.
+- Removed the legacy alpha package/tooling product surface: package shims,
+  gateway/demo scripts, tox/uv packaging state, container entrypoints, wheel
+  publication plumbing, and OTS helper workflows outside the Rust-native beta
+  spine. The earlier alpha tags remain the compatibility snapshots for that
+  surface.
 - Removed the alpha-era release, weekly-ratchet, OTS calendar, and OTS
   verification GitHub Actions workflows from this branch. The supported
   workflows are now the Rust-only `ci.yml` gate and a Rust-native tag release
-  workflow; removed Python, wheel, and Python verifier jobs are not carried
+  workflow; removed package, wheel, and legacy verifier jobs are not carried
   forward as beta compatibility obligations.
 
 ### Changed
 - Reframed the supported TrackOne surface as a Rust-native VTL/evidence spine:
   framed ingest, replay/admission contracts, canonical CBOR/day artifacts,
   deterministic SensorThings projection semantics, verifier manifests, and
-  `trackone-evidence` verify/export behavior run through Cargo and Rust crates
-  without Python.
+  `trackone-evidence` verify/export behavior run through Cargo and Rust crates.
 - Aligned the beta direction with
   `draft-elkhatabi-verifiable-telemetry-ledgers-04`: TrackOne starts at
   accepted telemetry, keeps lifecycle/control-plane decisions outside the VTL
@@ -32,13 +39,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   channels.
 - Made the CI contract match the new support boundary. `cargo fmt`, clippy,
   workspace tests, public vector-corpus replay, and package verification are now
-  the required health checks; removed Python and wheel jobs are not silent
-  compatibility regressions because the beta surface no longer promises a
-  Python runtime API.
-- Reintroduced tag release automation without Python: crates publish in
-  dependency order, the Helm chart publishes to GHCR OCI, and the release
-  evidence archive publishes to GHCR OCI only after those software artifacts
-  complete and the pulled archive copy verifies against its digest manifest.
+  the required health checks; removed package and wheel jobs are not silent
+  compatibility regressions because the beta surface is the Rust-native
+  VTL/evidence spine.
+- Reintroduced tag release automation for the Rust-native beta surface: crates
+  publish in dependency order, the Helm chart publishes to GHCR OCI, and the
+  release evidence archive publishes to GHCR OCI only after those software
+  artifacts complete and the pulled archive copy verifies against its digest
+  manifest.
 
 ## [0.1.0-alpha.19] - 2026-05-16
 
@@ -513,7 +521,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Upgraded PyO3 to `0.27` and updated PyO3/PyO3-macros usage in `crates/trackone-gateway` to match the newer API surface (pymodule/submodule registration). This enables building the extension against Python 3.14 while still treating the Rust layer as an internal implementation detail.
 - CI: standardized jobs that build or install the Rust extension (`lint`, `pipeline`, and `build-wheel`) to use Python 3.14 so tox envs and maturin build steps run consistently across the matrix.
 Confirmed that we remain in the 0.0.x pre-release era: 0.0.1-m6 formalizes the Rust workspace, PyO3 0.27, and Python 3.14 CI as internal scaffolding; CLI/API behavior is unchanged.
-- Updated README and ADR-017 to document the Rust workspace layout, crates, and phased migration plan from Python-only implementations to Rust-backed primitives.
+- Updated README and ADR-017 to document the Rust workspace layout, crates, and
+  phased migration plan from legacy implementations to Rust-backed primitives.
 
 
 ## [0.0.1-m5.1] - 2025-11-28
