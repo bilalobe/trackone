@@ -1,0 +1,141 @@
+{
+  "cases": [
+    {
+      "disclosure_class": "A",
+      "expect_contains": "\"overall\": \"success\"",
+      "expect_success": true,
+      "id": "baseline-good-class-a",
+      "path": "fixtures/baseline-good-class-a",
+      "policy_mode": "warn"
+    },
+    {
+      "disclosure_class": "A",
+      "expect_contains": "missing field",
+      "expect_success": false,
+      "id": "manifest-missing-required-field",
+      "path": "fixtures/manifest-missing-required-field",
+      "policy_mode": "warn"
+    },
+    {
+      "disclosure_class": "A",
+      "expect_contains": "manifest artifact path escapes root",
+      "expect_success": false,
+      "id": "manifest-nonportable-path",
+      "path": "fixtures/manifest-nonportable-path",
+      "policy_mode": "warn"
+    },
+    {
+      "disclosure_class": "A",
+      "expect_contains": "manifest artifact sha256 mismatch",
+      "expect_success": false,
+      "id": "manifest-digest-mismatch",
+      "path": "fixtures/manifest-digest-mismatch",
+      "policy_mode": "warn"
+    },
+    {
+      "disclosure_class": "A",
+      "expect_contains": "commitment_profile_id",
+      "expect_success": false,
+      "id": "manifest-malformed-verification-bundle",
+      "path": "fixtures/manifest-malformed-verification-bundle",
+      "policy_mode": "warn"
+    },
+    {
+      "disclosure_class": "A",
+      "expect_contains": "CBOR facts are required",
+      "expect_success": false,
+      "id": "disclosure-class-a-empty-facts",
+      "path": "fixtures/disclosure-class-a-empty-facts",
+      "policy_mode": "warn"
+    },
+    {
+      "disclosure_class": "B",
+      "expect_contains": "disclosure-class-b",
+      "expect_success": true,
+      "id": "disclosure-class-b-skips-recompute",
+      "path": "fixtures/disclosure-class-b-skips-recompute",
+      "policy_mode": "warn"
+    },
+    {
+      "disclosure_class": "C",
+      "expect_contains": "disclosure-class-c",
+      "expect_success": true,
+      "id": "disclosure-class-c-skips-recompute",
+      "path": "fixtures/disclosure-class-c-skips-recompute",
+      "policy_mode": "warn"
+    },
+    {
+      "disclosure_class": "A",
+      "expect_contains": "\"rejection_records\": 1",
+      "expect_success": true,
+      "id": "replay-duplicate-rejection-audit",
+      "path": "fixtures/replay-duplicate-rejection-audit",
+      "policy_mode": "warn"
+    },
+    {
+      "disclosure_class": "A",
+      "expect_contains": "\"rejection_records\": 1",
+      "expect_success": true,
+      "id": "replay-out-of-window-rejection-audit",
+      "path": "fixtures/replay-out-of-window-rejection-audit",
+      "policy_mode": "warn"
+    },
+    {
+      "disclosure_class": "A",
+      "expect_contains": "\"commitment_material\": false",
+      "expect_success": true,
+      "id": "malformed-frame-rejection-audit",
+      "path": "fixtures/malformed-frame-rejection-audit",
+      "policy_mode": "warn"
+    },
+    {
+      "disclosure_class": "A",
+      "expect_contains": "rejection audit must not be commitment material",
+      "expect_success": false,
+      "id": "rejection-audit-as-commitment-material",
+      "path": "fixtures/rejection-audit-as-commitment-material",
+      "policy_mode": "warn"
+    },
+    {
+      "disclosure_class": "A",
+      "expect_contains": "exactly one batch",
+      "expect_success": false,
+      "id": "empty-batch-day",
+      "path": "fixtures/empty-batch-day",
+      "policy_mode": "warn"
+    },
+    {
+      "disclosure_class": "A",
+      "expect_contains": "exactly one batch",
+      "expect_success": false,
+      "id": "multi-batch-day",
+      "path": "fixtures/multi-batch-day",
+      "policy_mode": "warn"
+    },
+    {
+      "disclosure_class": "A",
+      "expect_contains": "\"overall\": \"success\"",
+      "expect_success": true,
+      "id": "nonzero-previous-day-root-chain-input",
+      "path": "fixtures/nonzero-previous-day-root-chain-input",
+      "policy_mode": "warn"
+    },
+    {
+      "disclosure_class": "A",
+      "expect_contains": "not shortest-form",
+      "expect_success": false,
+      "id": "canonical-cbor-shortest-form-fact-failure",
+      "path": "fixtures/canonical-cbor-shortest-form-fact-failure",
+      "policy_mode": "warn"
+    },
+    {
+      "disclosure_class": "A",
+      "expect_contains": "fact artifact is not canonical CBOR",
+      "expect_success": false,
+      "id": "decoded-bundle-fact-contract-failure",
+      "path": "fixtures/decoded-bundle-fact-contract-failure",
+      "policy_mode": "warn"
+    }
+  ],
+  "schema": "trackone-beta-negative-fixtures-v1"
+}

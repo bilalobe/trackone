@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "site_id": "test-site",
+  "date": "2025-10-07",
+  "prev_day_root": "1111111111111111111111111111111111111111111111111111111111111111",
+  "batches": [
+    {
+      "version": 1,
+      "site_id": "test-site",
+      "day": "2025-10-07",
+      "batch_id": "test-site-2025-10-07-00",
+      "merkle_root": "07d1e02cd4c04314ca276d23544aa692f9844d5c6ee37a908dc1fa7dd4f3e452",
+      "count": 2,
+      "leaf_hashes": [
+        "551bfdeaddfdc407f58e99233ad6e25685e3b471056d5b17f2860af31375e567",
+        "6f12aa8b5b5befda6f1ccd513200f98a7df4f593ea3ea5ec22697e9706a16410"
+      ]
+    }
+  ],
+  "day_root": "07d1e02cd4c04314ca276d23544aa692f9844d5c6ee37a908dc1fa7dd4f3e452"
+}

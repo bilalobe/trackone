@@ -1,0 +1,58 @@
+{
+  "anchoring": {
+    "channels": {
+      "ots": {
+        "enabled": true,
+        "reason": "proof-created",
+        "status": "pending"
+      }
+    },
+    "overall": "success",
+    "policy": {
+      "mode": "warn"
+    }
+  },
+  "artifacts": {
+    "block": {
+      "path": "blocks/2025-10-07-00.block.json",
+      "sha256": "8ab4660328cecbaa1e04ed47e52ecb39400ada219fdc03ee1ba75e87e051e4c9"
+    },
+    "day_cbor": {
+      "path": "day/2025-10-07.cbor",
+      "sha256": "58be0e2dc1ef4296f802a7de4e21184670648f825f21887c51511fdd77db8a4b"
+    },
+    "day_json": {
+      "path": "day/2025-10-07.json",
+      "sha256": "0c246c41ed91355bf2bc1fe9dbffa13f1b68c9f590f70b1ac5335d94614aebcd"
+    },
+    "day_ots": {
+      "path": "day/2025-10-07.cbor.ots",
+      "sha256": "3bf6a4e9a03cd57321aa13291d8c846a71c85ff810de3e2efdbd14ad4d3489b0"
+    },
+    "day_ots_meta": {
+      "path": "day/2025-10-07.ots.meta.json",
+      "sha256": "8a0790280f0fc3e6bb46cb8a84f4e92326482cc8470d6fa4b00ae2f49cd4fac6"
+    },
+    "day_sha256": {
+      "path": "day/2025-10-07.cbor.sha256",
+      "sha256": "c842508d4a321130cc95514583f20dfc7ecefbfcaa0098a176a7829b47a66b6b"
+    },
+    "rejection_audit": {
+      "path": "audit/duplicate.ndjson",
+      "sha256": "2ed5d1869c2c0b884c259c54f0b50841ae8c309ca30c0c04b8fd6deb45b7a6b9"
+    }
+  },
+  "date": "2025-10-07",
+  "device_id": "pod-001",
+  "facts_dir": "facts",
+  "frame_count": 2,
+  "frames_file": "frames.ndjson",
+  "site": "test-site",
+  "verification_bundle": {
+    "checks_executed": [],
+    "checks_skipped": [],
+    "commitment_profile_id": "trackone-canonical-cbor-v1",
+    "disclosure_class": "A"
+  },
+  "version": 1
+}

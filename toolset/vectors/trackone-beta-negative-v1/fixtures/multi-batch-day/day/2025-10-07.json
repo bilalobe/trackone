@@ -1,0 +1,33 @@
+{
+  "batches": [
+    {
+      "batch_id": "test-site-2025-10-07-00",
+      "count": 2,
+      "day": "2025-10-07",
+      "leaf_hashes": [
+        "551bfdeaddfdc407f58e99233ad6e25685e3b471056d5b17f2860af31375e567",
+        "6f12aa8b5b5befda6f1ccd513200f98a7df4f593ea3ea5ec22697e9706a16410"
+      ],
+      "merkle_root": "07d1e02cd4c04314ca276d23544aa692f9844d5c6ee37a908dc1fa7dd4f3e452",
+      "site_id": "test-site",
+      "version": 1
+    },
+    {
+      "batch_id": "test-site-2025-10-07-00",
+      "count": 2,
+      "day": "2025-10-07",
+      "leaf_hashes": [
+        "551bfdeaddfdc407f58e99233ad6e25685e3b471056d5b17f2860af31375e567",
+        "6f12aa8b5b5befda6f1ccd513200f98a7df4f593ea3ea5ec22697e9706a16410"
+      ],
+      "merkle_root": "07d1e02cd4c04314ca276d23544aa692f9844d5c6ee37a908dc1fa7dd4f3e452",
+      "site_id": "test-site",
+      "version": 1
+    }
+  ],
+  "date": "2025-10-07",
+  "day_root": "07d1e02cd4c04314ca276d23544aa692f9844d5c6ee37a908dc1fa7dd4f3e452",
+  "prev_day_root": "0000000000000000000000000000000000000000000000000000000000000000",
+  "site_id": "test-site",
+  "version": 1
+}

@@ -1,0 +1,54 @@
+{
+  "anchoring": {
+    "channels": {
+      "ots": {
+        "enabled": true,
+        "reason": "proof-created",
+        "status": "pending"
+      }
+    },
+    "overall": "success",
+    "policy": {
+      "mode": "warn"
+    }
+  },
+  "artifacts": {
+    "block": {
+      "path": "blocks/2025-10-07-00.block.json",
+      "sha256": "a5a173e14e916cf895f3e99194059142515caf607eaa8c007c21b7e956097062"
+    },
+    "day_cbor": {
+      "path": "day/2025-10-07.cbor",
+      "sha256": "51301176c36c3322d47a880ae2c7370487f21c46cf2e5c7bd3ab631c2c409b26"
+    },
+    "day_json": {
+      "path": "day/2025-10-07.json",
+      "sha256": "5d688fba82814f28a66aba7e738d588152fc421382ec7746dc98b1e91877d467"
+    },
+    "day_ots": {
+      "path": "day/2025-10-07.cbor.ots",
+      "sha256": "a86316a0870a4ac39c99211dc612f2122f4a494c51d721b55e8c0691b78d78a3"
+    },
+    "day_ots_meta": {
+      "path": "day/2025-10-07.ots.meta.json",
+      "sha256": "5cc1ecec3fd903bf44cba0269021a96e5c740f88d0814e6be0c89511a5aa755f"
+    },
+    "day_sha256": {
+      "path": "day/2025-10-07.cbor.sha256",
+      "sha256": "b86c91719e648b6aa2739c73ba550a40bbce14000b9aa45946931a6e7d19dd16"
+    }
+  },
+  "date": "2025-10-07",
+  "device_id": "pod-001",
+  "facts_dir": "facts",
+  "frame_count": 0,
+  "frames_file": "frames.ndjson",
+  "site": "test-site",
+  "verification_bundle": {
+    "checks_executed": [],
+    "checks_skipped": [],
+    "commitment_profile_id": "trackone-canonical-cbor-v1",
+    "disclosure_class": "A"
+  },
+  "version": 1
+}

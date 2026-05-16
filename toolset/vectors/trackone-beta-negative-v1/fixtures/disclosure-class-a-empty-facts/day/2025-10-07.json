@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "site_id": "test-site",
+  "date": "2025-10-07",
+  "prev_day_root": "0000000000000000000000000000000000000000000000000000000000000000",
+  "batches": [
+    {
+      "version": 1,
+      "site_id": "test-site",
+      "day": "2025-10-07",
+      "batch_id": "test-site-2025-10-07-00",
+      "merkle_root": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "count": 0,
+      "leaf_hashes": []
+    }
+  ],
+  "day_root": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}
