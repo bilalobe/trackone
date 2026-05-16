@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-beta.1] - 2026-05-16
+
 ### Added
 - Added the ADR-055 beta negative fixture corpus under
   `toolset/vectors/trackone-beta-negative-v1`, with detached CLI cases for
