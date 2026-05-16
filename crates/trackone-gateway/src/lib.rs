@@ -11,8 +11,7 @@ mod crypto;
 mod ledger;
 #[cfg(feature = "python")]
 mod merkle;
-#[cfg(any(feature = "python", test))]
-mod ots;
+pub mod ots;
 #[cfg(feature = "python")]
 mod radio;
 pub mod sensorthings;

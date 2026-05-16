@@ -134,6 +134,7 @@ fn default_verify_timeout() -> Duration {
     Duration::from_secs(OTS_VERIFY_TIMEOUT_SECS)
 }
 
+#[cfg(feature = "python")]
 fn timeout_from_secs(timeout_secs: Option<f64>) -> Duration {
     match timeout_secs {
         Some(value) if value.is_finite() && value > 0.0 => {
@@ -529,6 +530,7 @@ fn verify_detached_ots_proof(
     Err(OtsInternalError::Fallback)
 }
 
+#[cfg(feature = "python")]
 fn describe_detached_ots_proof_impl(
     ots_path: &Path,
     expected_artifact_sha: Option<&str>,
@@ -543,7 +545,7 @@ fn describe_detached_ots_proof_impl(
 
 #[cfg_attr(feature = "python", pyclass(eq, eq_int, skip_from_py_object))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum OtsStatus {
+pub enum OtsStatus {
     Verified,
     Pending,
     Failed,
@@ -552,7 +554,7 @@ enum OtsStatus {
 }
 
 impl OtsStatus {
-    fn as_str(self) -> &'static str {
+    pub fn as_str(self) -> &'static str {
         match self {
             Self::Verified => "verified",
             Self::Pending => "pending",
@@ -582,15 +584,15 @@ impl OtsStatus {
 
 #[cfg_attr(feature = "python", pyclass(skip_from_py_object))]
 #[derive(Clone, Debug)]
-struct OtsVerifyResult {
-    ok: bool,
-    status: OtsStatus,
-    reason: String,
-    bitcoin_attestation_heights: Vec<u64>,
+pub struct OtsVerifyResult {
+    pub ok: bool,
+    pub status: OtsStatus,
+    pub reason: String,
+    pub bitcoin_attestation_heights: Vec<u64>,
 }
 
 impl OtsVerifyResult {
-    fn new(ok: bool, status: OtsStatus, reason: impl Into<String>) -> Self {
+    pub fn new(ok: bool, status: OtsStatus, reason: impl Into<String>) -> Self {
         Self {
             ok,
             status,
@@ -599,11 +601,11 @@ impl OtsVerifyResult {
         }
     }
 
-    fn success(status: OtsStatus, reason: impl Into<String>) -> Self {
+    pub fn success(status: OtsStatus, reason: impl Into<String>) -> Self {
         Self::new(true, status, reason)
     }
 
-    fn failure(status: OtsStatus, reason: impl Into<String>) -> Self {
+    pub fn failure(status: OtsStatus, reason: impl Into<String>) -> Self {
         Self::new(false, status, reason)
     }
 }
@@ -751,6 +753,22 @@ fn verify_ots_proof_impl(
     }
 }
 
+pub fn verify_ots_proof_native(
+    ots_path: &Path,
+    allow_placeholder: bool,
+    expected_artifact_sha: Option<&str>,
+    ots_binary: Option<&Path>,
+    timeout: Option<Duration>,
+) -> OtsVerifyResult {
+    verify_ots_proof_impl(
+        ots_path,
+        allow_placeholder,
+        expected_artifact_sha,
+        ots_binary,
+        timeout.unwrap_or_else(default_verify_timeout),
+    )
+}
+
 fn validate_meta_sidecar_impl(
     meta_path: &Path,
     repo_root: &Path,
@@ -866,6 +884,20 @@ fn validate_meta_sidecar_impl(
     }
 
     OtsVerifyResult::success(OtsStatus::Verified, "meta-valid")
+}
+
+pub fn validate_meta_sidecar_native(
+    meta_path: &Path,
+    repo_root: &Path,
+    expected_artifact_path: &Path,
+    expected_ots_path: &Path,
+) -> OtsVerifyResult {
+    validate_meta_sidecar_impl(
+        meta_path,
+        repo_root,
+        expected_artifact_path,
+        expected_ots_path,
+    )
 }
 
 #[cfg(feature = "python")]
