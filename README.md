@@ -1,14 +1,8 @@
 # TrackOne
 
-TrackOne is an alpha-stage Rust workspace for low-power telemetry, framed ingest,
-deterministic ledger artifacts, evidence verification/export, and pod firmware
-helpers.
-
-This `no-python` branch intentionally removes Python package shims, Python test
-suites, Python container entrypoints, and Python-only CI/tooling. The tradeoff is
-explicit: the old gateway demo pipeline and wheel publication path are no longer
-supported here until Rust-native replacements exist. Supported product checks and
-evidence operations run through Cargo and Rust crates.
+TrackOne is a beta-boundary Rust workspace for low-power telemetry, framed
+ingest, deterministic ledger artifacts, evidence verification/export, and pod
+firmware helpers.
 
 ## Workspace
 
@@ -59,5 +53,4 @@ cargo run --package trackone-evidence -- export \
   --day 2025-10-07
 ```
 
-`trackone-evidence` is the supported replacement for the removed Python verifier
-and export wrappers.
+`trackone-evidence` is the supported verifier and export surface for beta bar.
