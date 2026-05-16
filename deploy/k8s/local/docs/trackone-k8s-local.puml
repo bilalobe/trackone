@@ -63,11 +63,9 @@ note right of GW
   /health is used for
   readiness + liveness.
 
-  The Python gateway container was
-  removed on the no-Python branch.
-  Replace this with a Rust gateway
-  service before enabling the
-  Deployment.
+  Enable this Deployment only after
+  a release-supported Rust gateway
+  service image is available.
 end note
 
 note bottom of CAL
