@@ -5,7 +5,7 @@ artifact rules.
 
 This crate is the single-source implementation for the deterministic commitment
 primitives that must not drift between batching, verification, vector
-generation, and the Python/native boundary.
+generation, and Rust-native evidence surfaces.
 
 ## Responsibilities
 
@@ -31,12 +31,12 @@ projection and parity workflows.
 - [`trackone-ingest`](../trackone-ingest/README.md) owns framed Postcard wire
   profiles and admission helpers before facts enter commitment artifacts
 - [`trackone-gateway`](../trackone-gateway/README.md) exposes selected ledger
-  helpers to Python
+  helpers to host-side gateway code
 - [`trackone-sensorthings`](../trackone-sensorthings/README.md) may use digest
   helpers for deterministic projection IDs, but those projections are not
   commitment artifacts
-- Python scripts still own workflow concerns such as manifest assembly, export
-  policy, and file choreography
+- [`trackone-evidence`](../trackone-evidence/README.md) owns verifier/export
+  policy for evidence bundles
 
 This split is intentional and matches
 [`ADR-046`](../../adr/ADR-046-sealed-trust-root-boundary-and-deferring-trackone-seal.md):
@@ -59,8 +59,8 @@ deterministic artifact rules, it probably does not belong here.
 
 The published vector corpus under
 [`toolset/vectors/trackone-canonical-cbor-v1/`](../../toolset/vectors/trackone-canonical-cbor-v1/)
-is generated against this contract, and Rust/Python parity tests are expected
-to reproduce it exactly.
+is generated against this contract, and Rust tests are expected to reproduce it
+exactly.
 
 ## Check
 

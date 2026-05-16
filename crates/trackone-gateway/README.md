@@ -1,46 +1,22 @@
 # trackone-gateway
 
-`trackone-gateway` is the Rust crate that exposes TrackOne’s native host-side
-surface to Python through PyO3. It is the bridge between Python orchestration
-and Rust-owned deterministic protocol/ledger behavior.
+`trackone-gateway` is the Rust crate for TrackOne host-side gateway helpers.
+The no-Python branch builds the Rust surface by default; legacy PyO3 bindings
+remain available only behind the explicit `python` feature.
 
 ## Responsibilities
 
 This crate is responsible for:
 
-- exporting native modules under the `trackone_core` Python package
 - exposing selected helpers from `trackone-core`, `trackone-ingest`,
   `trackone-ledger`, and `trackone-sensorthings`
-- keeping Python-facing behavior aligned with Rust-owned commitment and digest
+- keeping host-side behavior aligned with Rust-owned commitment and digest
   contracts
 - consuming external lifecycle/admission results only where they are needed to
   preserve deterministic gateway behavior
 
-Current Python-facing modules include:
-
-- `trackone_core.ledger`
-  - canonical JSON-to-CBOR helpers
-  - day/block artifact helpers
-  - `sha256_hex`
-  - `normalize_hex64`
-- `trackone_core.merkle`
-  - Merkle root and leaf-hash helpers
-- `trackone_core.ots`
-  - OTS proof hashing, parsing, and classification helpers
-  - native detached OpenTimestamps parsing for SHA-256 proofs using
-    `append`, `prepend`, and `sha256` operations
-  - native inspection of `PendingAttestation(...)` and
-    `BitcoinBlockHeaderAttestation(<height>)` proof leaves
-  - Bitcoin attestation height extraction for policy layers; full trustless
-    Bitcoin-header validation remains in the external `ots verify` lane
-- release/disclosure constants re-exported from workspace crates
-- `trackone_core.crypto`
-  - Rust Postcard framed fixture emission
-  - framed payload validation/decrypt helpers
-  - replay-window-backed framed admission
-- `trackone_core.sensorthings`
-  - SensorThings entity-ID and observation-projection helpers backed by
-    `trackone-sensorthings`
+Current Rust-owned helper areas include ledger, Merkle, OTS proof inspection,
+framed fixture/admission helpers, and SensorThings projection helpers.
 
 ## What this crate is not
 
@@ -48,13 +24,12 @@ This crate does not own the full gateway workflow.
 
 It should not absorb:
 
-- Python pipeline orchestration
 - manifest assembly
 - export/publication policy
 - general CLI behavior
 
-Those remain in the Python scripts. This crate exists to keep the native
-contract small, deterministic, and reusable.
+Export/publication policy belongs in `trackone-evidence`. This crate exists to
+keep the gateway helper contract small, deterministic, and reusable.
 
 ## Boundary watchlist
 
@@ -66,8 +41,8 @@ Keep this crate clear of:
 - release/export choreography that is not needed for native deterministic
   helpers
 
-This crate should expose reusable native helpers to Python, not become a host
-control plane.
+This crate should expose reusable gateway helpers, not become a host control
+plane.
 
 ## Key dependencies
 
@@ -78,13 +53,12 @@ control plane.
   digest logic
 - [`trackone-sensorthings`](../trackone-sensorthings/README.md) for
   deterministic read-only SensorThings projection semantics
-- `pyo3` for Python bindings
+- optional `pyo3` for legacy Python bindings
 
 ## Local build
 
-```bash
-uv run maturin develop --manifest-path crates/trackone-gateway/Cargo.toml
-```
+Use `cargo test -p trackone-gateway` for the default Rust surface. Build legacy
+bindings only when explicitly needed with `--features python`.
 
 ## Check
 

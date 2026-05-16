@@ -11,7 +11,7 @@ cloud "Local Kubernetes Cluster" as K8s {
   frame "namespace: trackone" as NS {
 
     node "trackone-gateway (Deployment)" as GW {
-      [gateway container\n(Python FastAPI + Rust PyO3 ext)] as GWc
+      [gateway container\nRust gateway image] as GWc
       () "http:8080" as GWhttp
       GWc - GWhttp
     }
@@ -63,10 +63,11 @@ note right of GW
   /health is used for
   readiness + liveness.
 
-  The container runs a small
-  Python HTTP server that imports
-  the Rust extension module
-  (trackone_core).
+  The Python gateway container was
+  removed on the no-Python branch.
+  Replace this with a Rust gateway
+  service before enabling the
+  Deployment.
 end note
 
 note bottom of CAL

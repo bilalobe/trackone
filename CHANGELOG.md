@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+- Removed the legacy Python product surface: Python package shims, gateway/demo
+  scripts, Python test suites, tox/uv packaging state, Python container
+  entrypoints, wheel publication plumbing, and Python-only OTS helper workflows.
+  The earlier alpha tags remain the compatibility snapshots for that surface.
+- Removed the alpha-era release, weekly-ratchet, OTS calendar, and OTS
+  verification GitHub Actions workflows from this branch. The remaining
+  supported workflow is the Rust-only `ci.yml` gate; release-bound evidence and
+  publication automation must be reintroduced as Rust-native beta release
+  automation before cutting a public beta release.
+
+### Changed
+- Reframed the supported TrackOne surface as a Rust-native VTL/evidence spine:
+  framed ingest, replay/admission contracts, canonical CBOR/day artifacts,
+  deterministic SensorThings projection semantics, verifier manifests, and
+  `trackone-evidence` verify/export behavior run through Cargo and Rust crates
+  without Python.
+- Aligned the beta direction with
+  `draft-elkhatabi-verifiable-telemetry-ledgers-04`: TrackOne starts at
+  accepted telemetry, keeps lifecycle/control-plane decisions outside the VTL
+  profile, treats OTS as the default anchoring channel, and leaves RFC 3161 TSA
+  responses plus peer signatures as optional parallel timestamp/evidence
+  channels.
+- Made the CI contract match the new support boundary. `cargo fmt`, clippy,
+  workspace tests, and package verification are now the required health checks;
+  removed Python and wheel jobs are not silent compatibility regressions because
+  the beta surface no longer promises a Python runtime API.
+
 ## [0.1.0-alpha.19] - 2026-05-16
 
 ### Added

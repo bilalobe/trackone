@@ -1,17 +1,6 @@
 version: 2
 
 updates:
-  - package-ecosystem: "uv"
-    directory: "/"
-    schedule:
-      interval: "monthly"
-    ignore:
-      - dependency-name: "*"
-    labels:
-      - "dependencies"
-      - "python"
-    open-pull-requests-limit: 0
-
   - package-ecosystem: "cargo"
     directory: "/"
     schedule:

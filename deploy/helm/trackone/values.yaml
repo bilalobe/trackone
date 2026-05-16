@@ -9,7 +9,9 @@ namespace:
 imagePullSecrets: []
 
 otsCalendar:
-  enabled: true
+  # Disabled on the no-Python branch until the removed Python calendar image is
+  # replaced by a Rust service image.
+  enabled: false
   image:
     repository: ghcr.io/bilalobe/trackone/ots-calendar
     tag: 0.1.0-alpha.19
@@ -64,7 +66,9 @@ postgres:
       ephemeral-storage: 1Gi
 
 gateway:
-  enabled: true
+  # Disabled on the no-Python branch until the removed Python gateway image is
+  # replaced by a Rust service image.
+  enabled: false
   # If set, the chart will not create trackone-gateway-config and will instead
   # reference this pre-existing ConfigMap for non-secret gateway config.
   existingConfigMap: ""

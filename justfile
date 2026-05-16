@@ -6,25 +6,9 @@
 default:
     @just --list
 
-# Sync the supported Python/dev environment for local work
-setup-dev:
-    uv sync --extra ci --extra test --extra security
-
-# Build/install the native extension into the project environment
-native-dev:
-    uv run --locked maturin develop --manifest-path crates/trackone-gateway/Cargo.toml
-
-# Run the supported deterministic local demo pipeline
-demo out_dir="out/site_demo":
-    uv run --locked python scripts/gateway/run_pipeline_demo.py --out-dir {{out_dir}}
-
 # Re-run verifier checks against a pipeline output root
 verify out_dir="out/site_demo":
-    uv run --locked python scripts/gateway/verify_cli.py --root {{out_dir}} --facts {{out_dir}}/facts
-
-# Run the pytest benchmark suite against the current corpus and gateway paths
-bench: setup-dev
-    uv run --locked tox -e bench
+    cargo run --package trackone-evidence -- verify --root {{out_dir}} --facts {{out_dir}}/facts
 
 # Run all tests with correct feature combinations
 test:

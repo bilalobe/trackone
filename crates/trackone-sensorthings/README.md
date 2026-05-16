@@ -19,8 +19,8 @@ This crate owns:
   sample types, and payload shapes.
 - [`trackone-ledger`](../trackone-ledger/README.md) owns commitment artifacts;
   SensorThings outputs are not Merkle leaves or CBOR commitment authorities.
-- [`trackone-gateway`](../trackone-gateway/README.md) exposes this crate to
-  Python through PyO3 but does not own projection semantics.
+- [`trackone-gateway`](../trackone-gateway/README.md) may expose host-side
+  adapters for this crate but does not own projection semantics.
 
 ## Boundary watchlist
 
@@ -28,7 +28,7 @@ Keep this crate clear of:
 
 - framed decrypt/admission and replay policy
 - CBOR/day/Merkle commitment construction
-- Python CLI/file orchestration
+- CLI/file orchestration
 - publication/export policy
 - fleet lifecycle or onboarding workflows
 

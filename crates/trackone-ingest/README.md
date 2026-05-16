@@ -24,7 +24,7 @@ This crate owns:
   crypto-facing traits, identity/admission input records, and deterministic CBOR
   commitment surfaces.
 - [`trackone-gateway`](../trackone-gateway/README.md) exposes selected ingest,
-  core, and ledger helpers to Python via PyO3.
+  core, and ledger helpers to host-side gateway code.
 - [`trackone-pod-fw`](../trackone-pod-fw/README.md) uses ingest helpers to emit
   framed facts from firmware-side runtime state.
 - [`trackone-sensorthings`](../trackone-sensorthings/README.md) owns read-only
@@ -35,7 +35,7 @@ This crate owns:
 ## What This Crate Is Not
 
 This crate does not own the commitment plane, SensorThings exports, fleet
-lifecycle state, onboarding policy, or Python workflow orchestration. It owns
+lifecycle state, onboarding policy, or workflow orchestration. It owns
 the framed ingest wire contract and the small native admission helpers needed
 to keep pods, gateways, and fixtures aligned.
 
