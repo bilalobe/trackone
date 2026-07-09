@@ -11,8 +11,12 @@
 
 ## Context
 
-TrackOne-pod firmware currently has no hardware watchdog (WDG).
-Alpha .6 introduces a WDG module that:
+Before alpha.6, TrackOne-pod firmware had no hardware watchdog (WDG). The
+current `trackone-pod-fw` implementation now carries the portable WDG policy
+behind the `wdg` feature, and `production` implies that feature while rejecting
+`mock-hal`.
+
+Alpha .6 introduced a WDG module that:
 
 1. Enables the MCU’s independent watchdog after boot.
 1. Requires every periodic task to “check in” via a liveness bitmap.

@@ -3,7 +3,7 @@
 #
 # Smoke-test image for trackone-constants.
 
-FROM rust:1.87-slim
+FROM rust:1.88-slim
 
 WORKDIR /workspace
 

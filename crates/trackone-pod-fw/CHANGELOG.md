@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Firmware build docs and deployment assets now exercise the production
+  no-default-feature path explicitly, matching the crate's `no_std`-first
+  support boundary and watchdog feature policy.
+
 ## [0.1.0-beta.1] - 2026-05-16
 
 ### Notes

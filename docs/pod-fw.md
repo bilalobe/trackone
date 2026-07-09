@@ -76,6 +76,19 @@ The current workspace focuses on the shared protocol (`trackone-core`) and
 portable helpers (`trackone-pod-fw`); board-specific binaries live outside this
 workspace.
 
+For the supported portable helper surface, keep these checks green:
+
+```bash
+cargo test -p trackone-pod-fw --features std
+cargo build -p trackone-pod-fw --no-default-features --features production
+```
+
+The local firmware build image (`deploy/docker/pod-fw/Dockerfile`) mirrors the
+production check by default. Its Kubernetes and Helm Jobs run the image with
+`TRACKONE_POD_FW_FEATURES=production`,
+`TRACKONE_POD_FW_NO_DEFAULT_FEATURES=1`, and
+`TRACKONE_POD_FW_RELEASE=1`.
+
 ## Pod Bring-Up Checklist
 
 Use this as the minimum "do not skip" checklist when bringing up a new pod

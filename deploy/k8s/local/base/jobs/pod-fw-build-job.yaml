@@ -17,3 +17,10 @@ spec:
         - name: pod-fw-build
           image: trackone/pod-fw:local
           imagePullPolicy: Never
+          env:
+            - name: TRACKONE_POD_FW_FEATURES
+              value: "production"
+            - name: TRACKONE_POD_FW_NO_DEFAULT_FEATURES
+              value: "1"
+            - name: TRACKONE_POD_FW_RELEASE
+              value: "1"

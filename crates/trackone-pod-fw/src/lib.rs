@@ -2,11 +2,11 @@
 //!
 //! Firmware and embedded logic for TrackOne pod devices.
 //!
-//! This crate will contain:
-//! - Sensor drivers and hardware abstraction
-//! - Frame emission logic
-//! - Power management
-//! - Radio stack integration
+//! This crate contains portable pod-side helpers:
+//! - frame emission logic
+//! - frame-counter-bound nonce generation
+//! - small hardware abstraction traits and host-side mocks
+//! - power, stress, and watchdog support
 //!
 //! This crate depends on `trackone-core` for shared protocol logic and provides
 //! pod/firmware-focused helpers and abstractions.

@@ -4,20 +4,36 @@
 # A lightweight container that builds the pod firmware crate.
 # This isn't a long-running service; it's a reproducible build artifact check.
 
-FROM rust:1.87-slim
+FROM rust:1.88-slim
 
 WORKDIR /workspace
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
+    bash \
  && rm -rf /var/lib/apt/lists/*
 
 COPY Cargo.toml Cargo.lock ./
 COPY crates/trackone-pod-fw/Cargo.toml crates/trackone-pod-fw/Cargo.toml
 COPY crates ./crates
 
-# Build in release mode; keep default features (std) for now.
-RUN cargo build -p trackone-pod-fw --release
+# Vendor dependencies at image build time so the in-cluster Job can run fully offline.
+RUN mkdir -p .cargo && \
+    cargo vendor /workspace/vendor > /workspace/.cargo/config.toml
 
-# Convenience: verify the built crate exists in target; no runtime entrypoint needed.
-CMD ["bash", "-lc", "echo 'pod-fw built successfully'; ls -la target/release | head"]
+ENV TRACKONE_POD_FW_FEATURES="production"
+ENV TRACKONE_POD_FW_NO_DEFAULT_FEATURES="1"
+ENV TRACKONE_POD_FW_RELEASE="1"
+
+CMD bash -lc 'set -euo pipefail; \
+  FEATURES="${TRACKONE_POD_FW_FEATURES:-production}"; \
+  NODEFAULT="${TRACKONE_POD_FW_NO_DEFAULT_FEATURES:-1}"; \
+  RELEASE="${TRACKONE_POD_FW_RELEASE:-1}"; \
+  echo "Building trackone-pod-fw (features=${FEATURES}, no_default_features=${NODEFAULT}, release=${RELEASE})"; \
+  EXTRA=" --offline"; \
+  if [ "${NODEFAULT}" = "1" ]; then EXTRA="$EXTRA --no-default-features"; fi; \
+  if [ -n "${FEATURES}" ]; then EXTRA="$EXTRA --features ${FEATURES}"; fi; \
+  if [ "${RELEASE}" = "1" ]; then EXTRA="$EXTRA --release"; fi; \
+  cargo --version; rustc --version; \
+  cargo build -p trackone-pod-fw ${EXTRA}; \
+  echo "trackone-pod-fw built successfully"'

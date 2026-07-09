@@ -25,6 +25,13 @@ spec:
         - name: pod-fw-build
           image: {{ include "trackone.image" .Values.jobs.podFw.image }}
           imagePullPolicy: {{ .Values.jobs.podFw.image.pullPolicy }}
+          env:
+            - name: TRACKONE_POD_FW_FEATURES
+              value: "production"
+            - name: TRACKONE_POD_FW_NO_DEFAULT_FEATURES
+              value: "1"
+            - name: TRACKONE_POD_FW_RELEASE
+              value: "1"
           resources:
             {{ toYaml .Values.jobs.podFw.resources | nindent 12 }}
 {{- end }}

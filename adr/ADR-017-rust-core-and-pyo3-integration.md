@@ -40,7 +40,9 @@ Adopt a phased migration to a Rust core crate with PyO3 bindings, wired through 
 
 - `trackone-core` (Rust library crate)
 - `trackone-gateway` (Rust `cdylib` crate exposed to Python via PyO3/maturin)
-- `trackone-pod-fw` (Rust firmware crate, currently a stub depending on `trackone-core`)
+- `trackone-pod-fw` (Rust firmware helper crate with no-std pod emission,
+  nonce, HAL, power/stress, and watchdog support; board-specific binaries
+  remain outside the workspace)
 
 Python remains the orchestrator (I/O, OTS/TSA, CLI), and the Rust crates are used to progressively take over performance-sensitive paths.
 

@@ -36,7 +36,7 @@ build-release:
 # Build with production feature (ensures dummy-aead is disabled)
 build-production:
     cargo build --package trackone-core --no-default-features --features std,production
-    cargo build --package trackone-pod-fw --features production
+    cargo build --package trackone-pod-fw --no-default-features --features production
     cargo build --package trackone-gateway --release
 
 # Run Rust-side serialization benchmarks

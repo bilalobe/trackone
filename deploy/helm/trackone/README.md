@@ -48,14 +48,14 @@ non-local installs, either:
 
 Use the local chart directory and
 [values-local.yaml](values-local.yaml)
-only when you explicitly want local images and build jobs again.
+only when you explicitly want local build jobs again. The beta.1 local override
+keeps the gateway and OTS calendar disabled unless you provide supported images
+and opt into those workloads yourself.
 
 Typical flow:
 
 ```bash
 eval "$(minikube -p ${MINIKUBE_PROFILE:-minikube} docker-env)"
-docker build -t trackone/ots-calendar:local -f deploy/docker/calendar/Dockerfile deploy/docker/calendar
-docker build -t trackone/gateway:local -f deploy/docker/gateway/Dockerfile .
 docker build -t trackone/core:local -f deploy/docker/core/Dockerfile .
 docker build -t trackone/constants:local -f deploy/docker/constants/Dockerfile .
 docker build -t trackone/pod-fw:local -f deploy/docker/pod-fw/Dockerfile .
@@ -64,6 +64,8 @@ helm upgrade --install trackone deploy/helm/trackone \
 ```
 
 `values-local.yaml` explicitly opts in to the stock local Postgres credentials.
+The pod firmware build job runs the local image as a release-mode production
+build with default features disabled.
 
 ## Maintainer workflow: publish the chart artifact
 

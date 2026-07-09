@@ -7,7 +7,7 @@
 # - TRACKONE_CORE_NO_DEFAULT_FEATURES="1"
 # to validate a specific compile-time feature set.
 
-FROM rust:1.87-slim
+FROM rust:1.88-slim
 
 WORKDIR /workspace
 
@@ -19,8 +19,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # The upstream image in this environment provides a toolchain under
 # /usr/local/rustup/toolchains but may not have the `rustup` shim binary.
 # Ensure we can execute cargo/rustc reliably.
-RUN ln -sf /usr/local/rustup/toolchains/1.87.0-x86_64-unknown-linux-gnu/bin/cargo /usr/local/bin/cargo && \
-    ln -sf /usr/local/rustup/toolchains/1.87.0-x86_64-unknown-linux-gnu/bin/rustc /usr/local/bin/rustc
+RUN ln -sf /usr/local/rustup/toolchains/1.88.0-x86_64-unknown-linux-gnu/bin/cargo /usr/local/bin/cargo && \
+    ln -sf /usr/local/rustup/toolchains/1.88.0-x86_64-unknown-linux-gnu/bin/rustc /usr/local/bin/rustc
 
 COPY Cargo.toml Cargo.lock ./
 COPY crates/trackone-core/Cargo.toml crates/trackone-core/Cargo.toml
@@ -42,7 +42,6 @@ CMD bash -lc 'set -euo pipefail; \
   EXTRA=" --offline"; \
   if [ "${NODEFAULT}" = "1" ]; then EXTRA="$EXTRA --no-default-features"; fi; \
   if [ -n "${FEATURES}" ]; then EXTRA="$EXTRA --features ${FEATURES}"; fi; \
-  # shellcheck disable=SC2086 \
   cargo --version; rustc --version; \
   cargo build -p trackone-core ${EXTRA}; \
   echo "trackone-core built successfully"'

@@ -35,7 +35,7 @@ local development:
 
 ```bash
 cargo test -p trackone-pod-fw --features std
-cargo build -p trackone-pod-fw --features production
+cargo build -p trackone-pod-fw --no-default-features --features production
 ```
 
 ## Boundary with other crates
@@ -45,8 +45,8 @@ cargo build -p trackone-pod-fw --features production
 - [`trackone-ingest`](../trackone-ingest/README.md) owns the framed Postcard
   profile, nonce/AAD helpers, and encrypted frame envelope used by pod emission
 - this crate owns firmware-side runtime helpers built on that model
-- board-specific integration belongs in board/application crates such as
-  [`trackone-pod-esp32`](../trackone-pod-esp32/README.md)
+- board-specific integration belongs in board/application crates outside this
+  workspace unless/until a specific board support package is promoted here
 
 ## Notes
 
@@ -68,4 +68,5 @@ discipline.
 
 ```bash
 cargo test -p trackone-pod-fw --features std
+cargo build -p trackone-pod-fw --no-default-features --features production
 ```

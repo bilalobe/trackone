@@ -17,6 +17,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   identifier remains claim-bound rather than embedded in commitment
   preimages.
 
+### Changed
+- Aligned Rust build-only container assets with the workspace Rust 1.88
+  requirement and made the pod firmware image/Kubernetes/Helm build jobs run
+  the production no-default-feature path by default.
+- Refreshed firmware roadmap documentation so ADR-017/ADR-042 and pod firmware
+  notes describe the implemented helper crate and watchdog policy instead of
+  older alpha-era placeholder wording.
+
 ## [0.1.0-beta.1] - 2026-05-16
 
 ### Added
