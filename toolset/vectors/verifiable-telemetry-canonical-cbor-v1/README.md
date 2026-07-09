@@ -1,7 +1,7 @@
 # TrackOne Canonical CBOR Vector Corpus v1
 
 This directory is the public conformance corpus for
-`trackone-canonical-cbor-v1`.
+`verifiable-telemetry-canonical-cbor-v1`.
 
 External verifiers should start from `manifest.json`. The manifest names the
 CDDL profile, vector-manifest schema, CBOR encoding profile, fact/day CBOR

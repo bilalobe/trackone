@@ -102,7 +102,7 @@ fn write_manifest(root: &Path, frame_count: u64) {
         },
         "verification_bundle": {
             "disclosure_class": "A",
-            "commitment_profile_id": "trackone-canonical-cbor-v1",
+            "commitment_profile_id": "verifiable-telemetry-canonical-cbor-v1",
             "checks_executed": [],
             "checks_skipped": []
         }

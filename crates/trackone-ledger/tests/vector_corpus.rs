@@ -32,7 +32,7 @@ struct Manifest {
 
 fn vector_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../toolset/vectors/trackone-canonical-cbor-v1")
+        .join("../../toolset/vectors/verifiable-telemetry-canonical-cbor-v1")
 }
 
 /// Returns `true` when the canonical-CBOR vector corpus is present on disk.
@@ -48,7 +48,7 @@ fn hex_sha256(bytes: &[u8]) -> String {
 /// Verify that the Rust implementation reproduces the published canonical-CBOR
 /// commitment vectors exactly.
 ///
-/// The vector corpus lives under `toolset/vectors/trackone-canonical-cbor-v1/`
+/// The vector corpus lives under `toolset/vectors/verifiable-telemetry-canonical-cbor-v1/`
 /// in the monorepo root.  That directory is **not** packaged with the published
 /// crate, so this test is marked `#[ignore]` to prevent failures in downstream
 /// environments.  Run it explicitly from the workspace root:

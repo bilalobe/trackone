@@ -9,7 +9,7 @@
     "non_finite_floats": "invalid"
   },
   "cddl_profile": "toolset/unified/cddl/commitment-artifacts-v1.cddl",
-  "commitment_profile_id": "trackone-canonical-cbor-v1",
+  "commitment_profile_id": "verifiable-telemetry-canonical-cbor-v1",
   "date": "2025-10-07",
   "day_cbor_sha256": "5bfc50a7dcab7b7908ff9740b5759abb8eac0bdae58147b41eb6b7c3a9fb7209",
   "day_record_cbor_path": "day-record.cbor",

@@ -54,7 +54,7 @@ mod tests {
     fn release_contract_constants_are_reexported() {
         assert_eq!(
             COMMITMENT_PROFILE_ID_CANONICAL_CBOR_V1,
-            "trackone-canonical-cbor-v1"
+            "verifiable-telemetry-canonical-cbor-v1"
         );
         assert_eq!(DISCLOSURE_CLASS_PUBLIC_RECOMPUTE, "A");
         assert_eq!(DISCLOSURE_CLASS_PARTNER_AUDIT, "B");

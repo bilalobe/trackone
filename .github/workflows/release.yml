@@ -212,7 +212,7 @@ jobs:
             "public_evidence": {
               "schemas": "bundle/toolset/unified/schemas",
               "cddl": "bundle/toolset/unified/cddl",
-              "commitment_vectors": "bundle/toolset/vectors/trackone-canonical-cbor-v1",
+              "commitment_vectors": "bundle/toolset/vectors/verifiable-telemetry-canonical-cbor-v1",
               "negative_fixtures": "bundle/toolset/vectors/trackone-beta-negative-v1"
             },
             "pull_back_verification": {
@@ -286,7 +286,7 @@ jobs:
           test -n "${archive_root}"
           test -f "${archive_root}/SHA256SUMS"
           test -f "${archive_root}/release-manifest.json"
-          test -d "${archive_root}/bundle/toolset/vectors/trackone-canonical-cbor-v1"
+          test -d "${archive_root}/bundle/toolset/vectors/verifiable-telemetry-canonical-cbor-v1"
           test -d "${archive_root}/bundle/toolset/vectors/trackone-beta-negative-v1"
           test -d "${archive_root}/bundle/toolset/unified/schemas"
           test -d "${archive_root}/release/crates"
@@ -298,12 +298,12 @@ jobs:
           )
 
           rm -rf \
-            toolset/vectors/trackone-canonical-cbor-v1 \
+            toolset/vectors/verifiable-telemetry-canonical-cbor-v1 \
             toolset/vectors/trackone-beta-negative-v1
           mkdir -p toolset/vectors
           cp -R \
-            "${archive_root}/bundle/toolset/vectors/trackone-canonical-cbor-v1" \
-            "toolset/vectors/trackone-canonical-cbor-v1"
+            "${archive_root}/bundle/toolset/vectors/verifiable-telemetry-canonical-cbor-v1" \
+            "toolset/vectors/verifiable-telemetry-canonical-cbor-v1"
           cp -R \
             "${archive_root}/bundle/toolset/vectors/trackone-beta-negative-v1" \
             "toolset/vectors/trackone-beta-negative-v1"

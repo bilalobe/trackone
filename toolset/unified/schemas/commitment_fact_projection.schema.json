@@ -3,7 +3,7 @@
   "$id": "https://example.org/schemas/commitment_fact_projection.schema.json",
   "title": "TrackOne commitment fact JSON projection",
   "type": "object",
-  "description": "JSON projection shape used by the trackone-canonical-cbor-v1 vector corpus before deterministic JSON-to-CBOR encoding. This is a conformance-corpus projection shape, not the runtime fact.schema.json shape.",
+  "description": "JSON projection shape used by the verifiable-telemetry-canonical-cbor-v1 vector corpus before deterministic JSON-to-CBOR encoding. This is a conformance-corpus projection shape, not the runtime fact.schema.json shape.",
   "properties": {
     "pod_id": {
       "type": "string",

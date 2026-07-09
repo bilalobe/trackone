@@ -20,7 +20,7 @@
     }
   },
   "trackone": {
-    "commitment_profile_id": "trackone-canonical-cbor-v1",
+    "commitment_profile_id": "verifiable-telemetry-canonical-cbor-v1",
     "disclosure_class": "A",
     "day_root": "4444444444444444444444444444444444444444444444444444444444444444",
     "local_verification_gate": {

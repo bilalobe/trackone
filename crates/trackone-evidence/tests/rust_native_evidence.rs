@@ -180,7 +180,7 @@ fn write_bundle(root: &Path) {
         },
         "verification_bundle": {
             "disclosure_class": "A",
-            "commitment_profile_id": "trackone-canonical-cbor-v1",
+            "commitment_profile_id": "verifiable-telemetry-canonical-cbor-v1",
             "checks_executed": [],
             "checks_skipped": []
         }
@@ -198,7 +198,7 @@ fn rust_verifier_accepts_bundle_without_python_runtime() {
         facts: root.join("facts"),
         policy_mode: PolicyMode::Warn,
         disclosure_class: "A".to_string(),
-        commitment_profile_id: "trackone-canonical-cbor-v1".to_string(),
+        commitment_profile_id: "verifiable-telemetry-canonical-cbor-v1".to_string(),
         require_ots: false,
         allow_placeholder: true,
     })
@@ -245,7 +245,7 @@ fn rust_export_writes_detached_bundle_and_reverifies() {
         facts: exported.join("facts"),
         policy_mode: PolicyMode::Warn,
         disclosure_class: "A".to_string(),
-        commitment_profile_id: "trackone-canonical-cbor-v1".to_string(),
+        commitment_profile_id: "verifiable-telemetry-canonical-cbor-v1".to_string(),
         require_ots: false,
         allow_placeholder: true,
     })
@@ -274,7 +274,7 @@ fn rust_export_honors_manifest_strict_policy() {
         facts: root.join("facts"),
         policy_mode: PolicyMode::Strict,
         disclosure_class: "A".to_string(),
-        commitment_profile_id: "trackone-canonical-cbor-v1".to_string(),
+        commitment_profile_id: "verifiable-telemetry-canonical-cbor-v1".to_string(),
         require_ots: false,
         allow_placeholder: true,
     })
@@ -414,7 +414,7 @@ fn rust_verifier_rejects_tampered_fact_root() {
         facts: root.join("facts"),
         policy_mode: PolicyMode::Warn,
         disclosure_class: "A".to_string(),
-        commitment_profile_id: "trackone-canonical-cbor-v1".to_string(),
+        commitment_profile_id: "verifiable-telemetry-canonical-cbor-v1".to_string(),
         require_ots: false,
         allow_placeholder: true,
     })
@@ -437,7 +437,7 @@ fn rust_verifier_rejects_manifest_digest_mismatch() {
         facts: root.join("facts"),
         policy_mode: PolicyMode::Warn,
         disclosure_class: "A".to_string(),
-        commitment_profile_id: "trackone-canonical-cbor-v1".to_string(),
+        commitment_profile_id: "verifiable-telemetry-canonical-cbor-v1".to_string(),
         require_ots: false,
         allow_placeholder: true,
     })
@@ -459,7 +459,7 @@ fn rust_verifier_rejects_nonportable_manifest_artifact_path() {
         facts: root.join("facts"),
         policy_mode: PolicyMode::Warn,
         disclosure_class: "A".to_string(),
-        commitment_profile_id: "trackone-canonical-cbor-v1".to_string(),
+        commitment_profile_id: "verifiable-telemetry-canonical-cbor-v1".to_string(),
         require_ots: false,
         allow_placeholder: true,
     })
@@ -485,7 +485,7 @@ fn rust_verifier_rejects_noncanonical_day_cbor() {
         facts: root.join("facts"),
         policy_mode: PolicyMode::Warn,
         disclosure_class: "A".to_string(),
-        commitment_profile_id: "trackone-canonical-cbor-v1".to_string(),
+        commitment_profile_id: "verifiable-telemetry-canonical-cbor-v1".to_string(),
         require_ots: false,
         allow_placeholder: true,
     })
@@ -509,7 +509,7 @@ fn rust_verifier_rejects_empty_class_a_fact_disclosure() {
         facts: root.join("facts"),
         policy_mode: PolicyMode::Warn,
         disclosure_class: "A".to_string(),
-        commitment_profile_id: "trackone-canonical-cbor-v1".to_string(),
+        commitment_profile_id: "verifiable-telemetry-canonical-cbor-v1".to_string(),
         require_ots: false,
         allow_placeholder: true,
     })
@@ -531,7 +531,7 @@ fn rust_verifier_rejects_missing_class_a_fact_dir_as_empty_disclosure() {
         facts: root.join("facts"),
         policy_mode: PolicyMode::Warn,
         disclosure_class: "A".to_string(),
-        commitment_profile_id: "trackone-canonical-cbor-v1".to_string(),
+        commitment_profile_id: "verifiable-telemetry-canonical-cbor-v1".to_string(),
         require_ots: false,
         allow_placeholder: true,
     })
@@ -556,7 +556,7 @@ fn rust_verifier_reports_class_b_as_not_publicly_recomputable() {
         facts: root.join("facts"),
         policy_mode: PolicyMode::Warn,
         disclosure_class: "B".to_string(),
-        commitment_profile_id: "trackone-canonical-cbor-v1".to_string(),
+        commitment_profile_id: "verifiable-telemetry-canonical-cbor-v1".to_string(),
         require_ots: false,
         allow_placeholder: true,
     })
@@ -615,7 +615,7 @@ fn rust_verifier_accepts_nonzero_previous_day_root_chain_input() {
         facts: root.join("facts"),
         policy_mode: PolicyMode::Warn,
         disclosure_class: "A".to_string(),
-        commitment_profile_id: "trackone-canonical-cbor-v1".to_string(),
+        commitment_profile_id: "verifiable-telemetry-canonical-cbor-v1".to_string(),
         require_ots: false,
         allow_placeholder: true,
     })
@@ -658,7 +658,7 @@ fn rust_verifier_rejects_multi_batch_day_projection_for_current_manifest() {
         facts: root.join("facts"),
         policy_mode: PolicyMode::Warn,
         disclosure_class: "A".to_string(),
-        commitment_profile_id: "trackone-canonical-cbor-v1".to_string(),
+        commitment_profile_id: "verifiable-telemetry-canonical-cbor-v1".to_string(),
         require_ots: false,
         allow_placeholder: true,
     })

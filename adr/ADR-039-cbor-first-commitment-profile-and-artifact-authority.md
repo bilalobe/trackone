@@ -85,7 +85,7 @@ published interop contract is therefore:
 
 1. accepted framed input;
 1. deterministic projection to the canonical fact record;
-1. deterministic CBOR commitment bytes under `trackone-canonical-cbor-v1`.
+1. deterministic CBOR commitment bytes under `verifiable-telemetry-canonical-cbor-v1`.
 
 ### 5) Compatibility window
 
@@ -97,7 +97,7 @@ During migration, a dual-artifact mode is allowed:
 
 ### 6) Commitment profile identifier binding
 
-`trackone-canonical-cbor-v1` is the identifier for the profile semantics, but
+`verifiable-telemetry-canonical-cbor-v1` is the identifier for the profile semantics, but
 it is not embedded into every lower-level commitment preimage.
 
 Per ADR-052, the identifier is **claim-bound, not commitment-preimage-bound**:

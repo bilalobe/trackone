@@ -26,7 +26,7 @@
   native Rust gateway boundary.
 - **Commitment boundary:** Postcard is not the public interoperability
   contract. Accepted frames are projected into canonical facts, then committed
-  as deterministic CBOR under `trackone-canonical-cbor-v1`.
+  as deterministic CBOR under `verifiable-telemetry-canonical-cbor-v1`.
 
 ### M#2 Implementation Note (Test Harness)
 

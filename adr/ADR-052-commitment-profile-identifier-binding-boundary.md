@@ -13,7 +13,7 @@
 
 ## Context
 
-TrackOne uses `trackone-canonical-cbor-v1` as the
+TrackOne uses `verifiable-telemetry-canonical-cbor-v1` as the
 `commitment_profile_id` for the current public commitment profile.
 
 That identifier appears in verifier-facing manifests, conformance vectors,
@@ -33,7 +33,7 @@ the already-committed bytes are interpreted?
 
 ## Decision
 
-`trackone-canonical-cbor-v1` is **claim-bound, not
+`verifiable-telemetry-canonical-cbor-v1` is **claim-bound, not
 commitment-preimage-bound**.
 
 The profile identifier is the verifier-visible name for the semantic and
@@ -131,7 +131,7 @@ rejected for the current profile for four reasons.
 
 ### Bind the profile identifier into every Merkle leaf and day record
 
-Rejected for `trackone-canonical-cbor-v1`.
+Rejected for `verifiable-telemetry-canonical-cbor-v1`.
 
 This would provide self-describing roots at the cost of invalidating existing
 vectors and proofs and making label-only clarifications cryptographically

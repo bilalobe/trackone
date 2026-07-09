@@ -125,7 +125,7 @@ Entries list **Status** and **Summary**. Related references are grouped under **
 
 - **[ADR-052](ADR-052-commitment-profile-identifier-binding-boundary.md): Commitment profile identifier binding boundary**
   **Status**: Accepted
-  **Summary**: Defines `trackone-canonical-cbor-v1` as a claim-bound profile selector rather than a value embedded in every fact/day/Merkle/anchor preimage; signed manifests, evidence publications, and SCITT-style statements bind the identifier to claims, while raw roots remain non-self-describing.
+  **Summary**: Defines `verifiable-telemetry-canonical-cbor-v1` as a claim-bound profile selector rather than a value embedded in every fact/day/Merkle/anchor preimage; signed manifests, evidence publications, and SCITT-style statements bind the identifier to claims, while raw roots remain non-self-describing.
 
 - **[ADR-053](ADR-053-beta-public-contract-spine.md): Beta public contract spine**
   **Status**: Accepted

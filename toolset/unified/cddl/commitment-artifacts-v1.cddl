@@ -12,7 +12,7 @@
 ; Notes:
 ; - env-fact-v1 and fact-v1 model the lower-level positional array encodings
 ;   implemented in crates/trackone-core/src/cbor.rs. Published Merkle leaves in
-;   the trackone-canonical-cbor-v1 vector corpus are deterministic CBOR encodings
+;   the verifiable-telemetry-canonical-cbor-v1 vector corpus are deterministic CBOR encodings
 ;   of the canonical JSON fact projection, not these lower-level framed payload
 ;   arrays.
 ; - block-header-v1 and day-record-v1 model the canonical CBOR map structure of

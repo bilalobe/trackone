@@ -47,7 +47,7 @@
   "verification_bundle": {
     "checks_executed": [],
     "checks_skipped": [],
-    "commitment_profile_id": "trackone-canonical-cbor-v1",
+    "commitment_profile_id": "verifiable-telemetry-canonical-cbor-v1",
     "disclosure_class": "C"
   },
   "version": 1

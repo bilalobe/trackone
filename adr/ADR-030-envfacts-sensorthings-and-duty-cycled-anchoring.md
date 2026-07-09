@@ -35,7 +35,7 @@ The current architecture is narrower:
 - TrackOne is the evidence plane.
 - `trackone_core` owns the stable environmental `Fact` / `EnvFact` wire model.
 - `rust-postcard-v1` is the supported framed plaintext transport profile.
-- `trackone-canonical-cbor-v1` is the verifier-facing commitment profile.
+- `verifiable-telemetry-canonical-cbor-v1` is the verifier-facing commitment profile.
 - SensorThings and analytics outputs are derived projections unless a later ADR
   promotes them into the evidence contract.
 

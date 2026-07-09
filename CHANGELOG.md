@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking changes
+- Renamed the public commitment profile identifier from
+  `trackone-canonical-cbor-v1` to
+  `verifiable-telemetry-canonical-cbor-v1`. Consumers that validate
+  `commitment_profile_id` values, vector-corpus paths, release-evidence
+  manifests, or SCITT statements must update to the new identifier. The
+  canonical CBOR, Merkle, and artifact bytes are unchanged because the
+  identifier remains claim-bound rather than embedded in commitment
+  preimages.
+
 ## [0.1.0-beta.1] - 2026-05-16
 
 ### Added

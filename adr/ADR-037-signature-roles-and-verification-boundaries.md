@@ -50,7 +50,7 @@ To avoid “same fields, different bytes” failures:
 - All signed artifacts MUST define their signed bytes using a canonical encoding.
 - Required: **TrackOne Canonical CBOR** for signed bytes (ADR-034).
 - JSON encodings are NOT permitted for signed bytes unless a future ADR explicitly updates ADR-034 and this ADR; verifiers MUST treat JSON encodings as invalid until then.
-- Each artifact schema MUST declare the canonicalization algorithm identifier (e.g., `trackone-canonical-cbor-v1`) so verifiers never guess.
+- Each artifact schema MUST declare the canonicalization algorithm identifier (e.g., `verifiable-telemetry-canonical-cbor-v1`) so verifiers never guess.
 
 Each signed payload MUST include an explicit `type` (domain separation) and `schema_version` so signatures cannot be replayed across artifact kinds.
 

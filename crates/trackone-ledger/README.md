@@ -58,7 +58,7 @@ deterministic artifact rules, it probably does not belong here.
 ## Conformance role
 
 The published vector corpus under
-[`toolset/vectors/trackone-canonical-cbor-v1/`](../../toolset/vectors/trackone-canonical-cbor-v1/)
+[`toolset/vectors/verifiable-telemetry-canonical-cbor-v1/`](../../toolset/vectors/verifiable-telemetry-canonical-cbor-v1/)
 is generated against this contract, and Rust tests are expected to reproduce it
 exactly.
 
