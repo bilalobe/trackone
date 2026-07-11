@@ -86,6 +86,8 @@ pub enum RejectReason {
     PayloadFcMismatch,
     Duplicate,
     OutOfWindow,
+    ContinuityBreak,
+    ResyncRequired,
 }
 
 impl RejectReason {
@@ -106,6 +108,8 @@ impl RejectReason {
             Self::PayloadFcMismatch => "payload_fc_mismatch",
             Self::Duplicate => "duplicate",
             Self::OutOfWindow => "out_of_window",
+            Self::ContinuityBreak => "continuity_break",
+            Self::ResyncRequired => "resync_required",
         }
     }
 }
@@ -248,6 +252,8 @@ pub const REJECTION_REASONS: &[&str] = &[
     "payload_fc_mismatch",
     "duplicate",
     "out_of_window",
+    "continuity_break",
+    "resync_required",
 ];
 
 #[cfg(feature = "std")]
@@ -492,13 +498,62 @@ pub struct ReplayWindow {
     seen: BTreeSet<u64>,
 }
 
+/// Complete durable replay state.  Persisting only a high-water mark loses
+/// accepted reordered counters and permits replay after a process restart.
+#[cfg(feature = "std")]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReplayWindowSnapshot {
+    pub version: u8,
+    pub namespace: String,
+    pub window_size: u64,
+    pub highest_fc_seen: Option<u64>,
+    pub seen_fcs: Vec<u64>,
+}
+
 #[cfg(feature = "std")]
 impl ReplayWindow {
     pub fn new(window_size: u64, highest_fc_seen: Option<u64>) -> Self {
+        let mut seen = BTreeSet::new();
+        // Compatibility callers that only retained the old high-water state
+        // must at least never re-admit that counter after restart.
+        if let Some(fc) = highest_fc_seen {
+            seen.insert(fc);
+        }
         Self {
             window_size,
             highest_fc_seen,
-            seen: BTreeSet::new(),
+            seen,
+        }
+    }
+
+    pub fn from_snapshot(snapshot: ReplayWindowSnapshot) -> Result<Self, RejectReason> {
+        if snapshot.version != 1 || snapshot.window_size == 0 {
+            return Err(RejectReason::ContinuityBreak);
+        }
+        let mut state = Self {
+            window_size: snapshot.window_size,
+            highest_fc_seen: snapshot.highest_fc_seen,
+            seen: snapshot.seen_fcs.into_iter().collect(),
+        };
+        if let Some(highest) = state.highest_fc_seen {
+            state.seen.insert(highest);
+            let lower = highest.saturating_sub(state.window_size);
+            if state.seen.iter().any(|fc| *fc < lower || *fc > highest) {
+                return Err(RejectReason::ContinuityBreak);
+            }
+        } else if !state.seen.is_empty() {
+            return Err(RejectReason::ContinuityBreak);
+        }
+        Ok(state)
+    }
+
+    pub fn snapshot(&self, namespace: impl Into<String>) -> ReplayWindowSnapshot {
+        ReplayWindowSnapshot {
+            version: 1,
+            namespace: namespace.into(),
+            window_size: self.window_size,
+            highest_fc_seen: self.highest_fc_seen,
+            seen_fcs: self.seen_fcs(),
         }
     }
 
@@ -978,7 +1033,6 @@ mod tests {
     fn replay_window_rejects_duplicates_and_out_of_window() {
         let mut state = ReplayWindow::new(4, Some(10));
 
-        state.check_and_update(10).expect("first observation");
         assert_eq!(
             state.check_and_update(10).unwrap_err(),
             RejectReason::Duplicate
@@ -991,6 +1045,18 @@ mod tests {
             state.check_and_update(20).unwrap_err(),
             RejectReason::OutOfWindow
         );
+    }
+
+    #[cfg(feature = "std")]
+    #[test]
+    fn replay_snapshot_preserves_reordered_observations() {
+        let mut state = ReplayWindow::new(4, None);
+        state.check_and_update(10).unwrap();
+        state.check_and_update(8).unwrap();
+        let restored = ReplayWindow::from_snapshot(state.snapshot("device-101:epoch-1")).unwrap();
+        let mut restored = restored;
+        assert_eq!(restored.check_and_update(10), Err(RejectReason::Duplicate));
+        assert_eq!(restored.check_and_update(8), Err(RejectReason::Duplicate));
     }
 
     #[cfg(feature = "xchacha")]

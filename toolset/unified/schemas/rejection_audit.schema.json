@@ -53,7 +53,9 @@
         "payload_device_id_mismatch",
         "payload_fc_mismatch",
         "duplicate",
-        "out_of_window"
+        "out_of_window",
+        "continuity_break",
+        "resync_required"
       ]
     },
     "observed_at_utc": {

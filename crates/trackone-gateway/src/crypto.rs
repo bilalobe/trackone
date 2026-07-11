@@ -595,10 +595,6 @@ mod tests {
     fn replay_window_state_rejects_duplicates_and_out_of_window() {
         let mut state = ReplayWindowState::new(4, Some(10));
 
-        state
-            .check_and_update(10)
-            .expect("first session observation");
-
         let duplicate = state.check_and_update(10).unwrap_err();
         assert_eq!(duplicate, RejectReason::Duplicate);
 
