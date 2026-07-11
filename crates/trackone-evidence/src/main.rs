@@ -1,9 +1,10 @@
 use std::path::PathBuf;
+use trackone_evidence::v2::verify_v2_bundle;
 use trackone_evidence::{ExportOptions, PolicyMode, VerifyOptions, export_bundle, verify_bundle};
 
 fn usage() -> ! {
     eprintln!(
-        "usage:\n  trackone-evidence verify --root DIR --facts DIR [--json] [--policy-mode warn|strict] [--disclosure-class A|B|C] [--commitment-profile-id ID] [--require-ots]\n  trackone-evidence export --pipeline-dir DIR --evidence-repo DIR --site SITE --day YYYY-MM-DD [--include-frames] [--git-commit] [--tag] [--tag-name NAME] [--bundle-out PATH]"
+        "usage:\n  trackone-evidence verify --root DIR --facts DIR [--json] [--policy-mode warn|strict] [--disclosure-class A|B|C] [--commitment-profile-id ID] [--require-ots]\n  trackone-evidence verify-v2 --root DIR [--json]\n  trackone-evidence export --pipeline-dir DIR --evidence-repo DIR --site SITE --day YYYY-MM-DD [--include-frames] [--git-commit] [--tag] [--tag-name NAME] [--bundle-out PATH]"
     );
     std::process::exit(2);
 }
@@ -23,6 +24,7 @@ fn main() {
     };
     let result = match cmd {
         "verify" => run_verify(&args[2..]),
+        "verify-v2" => run_verify_v2(&args[2..]),
         "export" => run_export(&args[2..]),
         _ => usage(),
     };
@@ -30,6 +32,33 @@ fn main() {
         eprintln!("ERROR: {err}");
         std::process::exit(1);
     }
+}
+
+fn run_verify_v2(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let mut root: Option<PathBuf> = None;
+    let mut json_mode = false;
+    let mut idx = 0;
+    while idx < args.len() {
+        match args[idx].as_str() {
+            "--root" => root = Some(PathBuf::from(take_value(args, &mut idx, "--root"))),
+            "--json" => json_mode = true,
+            _ => usage(),
+        }
+        idx += 1;
+    }
+    let summary = verify_v2_bundle(&root.unwrap_or_else(|| usage()))?;
+    if json_mode {
+        println!("{}", serde_json::to_string_pretty(&summary)?);
+    } else {
+        println!(
+            "Disclosure={} Overall={}",
+            summary["disclosure_class"], summary["overall"]
+        );
+    }
+    if summary["overall"].as_str() != Some("success") {
+        return Err("v2 verification did not succeed".into());
+    }
+    Ok(())
 }
 
 fn run_verify(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {

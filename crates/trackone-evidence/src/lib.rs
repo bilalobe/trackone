@@ -8,6 +8,8 @@ use trackone::ots::{validate_meta_sidecar_native, verify_ots_proof_native};
 use trackone_ingest::{RejectionRecord, validate_rejection_record};
 use trackone_ledger::{canonical_cbor, merkle, normalize_hex64, sha256_hex};
 
+pub mod v2;
+
 pub const STATUS_VERIFIED: &str = "verified";
 pub const STATUS_FAILED: &str = "failed";
 pub const STATUS_MISSING: &str = "missing";
