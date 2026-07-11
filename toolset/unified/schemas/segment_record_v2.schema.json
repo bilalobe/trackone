@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:trackone:schema:segment-record-v2:1",
+  "title": "Verifiable Telemetry Segment Record v2",
+  "type": "object",
+  "properties": {
+    "version": {"const": 2},
+    "commitment_profile_id": {"const": "verifiable-telemetry-canonical-cbor-v2"},
+    "ledger_id": {"type": "string", "pattern": "^[0-9a-f]{32}$"},
+    "site_id": {"type": "string", "minLength": 1},
+    "segment_number": {"type": "string", "pattern": "^(0|[1-9][0-9]*)$"},
+    "closure_policy": {"$ref": "#/$defs/closure_policy"},
+    "close_reason": {"enum": ["interval", "reconfigure", "record_limit", "size_limit", "shutdown", "recovery", "manual"]},
+    "prev_segment_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "batches": {"type": "array", "items": {"$ref": "#/$defs/batch"}},
+    "segment_root": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  },
+  "required": ["version", "commitment_profile_id", "ledger_id", "site_id", "segment_number", "closure_policy", "close_reason", "prev_segment_sha256", "batches", "segment_root"],
+  "additionalProperties": false,
+  "$defs": {
+    "uint64": {"type": "string", "pattern": "^(0|[1-9][0-9]*)$"},
+    "positive_uint64": {"type": "string", "pattern": "^[1-9][0-9]*$"},
+    "closure_policy": {"type": "object", "properties": {"version":{"const":1},"interval_ms":{"$ref":"#/$defs/positive_uint64"},"batch_record_limit":{"$ref":"#/$defs/positive_uint64"},"record_limit":{"anyOf":[{"$ref":"#/$defs/positive_uint64"},{"type":"null"}]},"size_limit_bytes":{"anyOf":[{"$ref":"#/$defs/positive_uint64"},{"type":"null"}]},"empty_mode":{"enum":["emit","suppress"]}},"required":["version","interval_ms","batch_record_limit","record_limit","size_limit_bytes","empty_mode"],"additionalProperties":false},
+    "batch": {"type":"object","properties":{"version":{"const":2},"ledger_id":{"type":"string","pattern":"^[0-9a-f]{32}$"},"site_id":{"type":"string","minLength":1},"segment_number":{"$ref":"#/$defs/uint64"},"batch_number":{"$ref":"#/$defs/uint64"},"merkle_root":{"type":"string","pattern":"^[0-9a-f]{64}$"},"count":{"$ref":"#/$defs/uint64"},"leaf_hashes":{"type":"array","items":{"type":"string","pattern":"^[0-9a-f]{64}$"}}},"required":["version","ledger_id","site_id","segment_number","batch_number","merkle_root","count","leaf_hashes"],"additionalProperties":false}
+  }
+}

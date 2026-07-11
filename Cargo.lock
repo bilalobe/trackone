@@ -1285,6 +1285,7 @@ name = "trackone-ledger"
 version = "0.1.0-beta.1"
 dependencies = [
  "cddl",
+ "hex",
  "serde",
  "serde_json",
  "sha2",

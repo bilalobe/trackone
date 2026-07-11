@@ -1,0 +1,25 @@
+; Draft -08 profile.  This file is additive: v1 remains immutable.
+segment-record-v2 = {
+  "version": 2,
+  "commitment_profile_id": "verifiable-telemetry-canonical-cbor-v2",
+  "ledger_id": hex32,
+  "site_id": tstr,
+  "segment_number": uint64,
+  "closure_policy": segment-closure-policy-v1,
+  "close_reason": close-reason,
+  "prev_segment_sha256": hex64,
+  "batches": [* segment-batch-v2],
+  "segment_root": hex64
+}
+segment-batch-v2 = { "version": 2, "ledger_id": hex32, "site_id": tstr,
+  "segment_number": uint64, "batch_number": uint64, "merkle_root": hex64,
+  "count": uint64, "leaf_hashes": [* hex64] }
+segment-closure-policy-v1 = { "version": 1, "interval_ms": positive-uint64,
+  "batch_record_limit": positive-uint64, "record_limit": positive-uint64 / nil,
+  "size_limit_bytes": positive-uint64 / nil, "empty_mode": "emit" / "suppress" }
+close-reason = "interval" / "reconfigure" / "record_limit" / "size_limit" /
+  "shutdown" / "recovery" / "manual"
+uint64 = 0..18446744073709551615
+positive-uint64 = 1..18446744073709551615
+hex32 = tstr
+hex64 = tstr

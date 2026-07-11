@@ -9,6 +9,7 @@ pub mod canonical_cbor;
 pub mod canonical_json;
 pub mod merkle;
 pub mod types;
+pub mod v2;
 
 /// Ledger-level errors.
 #[derive(Debug)]

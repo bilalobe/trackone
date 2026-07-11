@@ -1,0 +1,10 @@
+{
+  "schema": "trackone-v2-vector-manifest-1",
+  "commitment_profile_id": "verifiable-telemetry-canonical-cbor-v2",
+  "records": [
+    {"cbor_hex":"87014800000000000000010100f600f6","leaf_sha256":"b83bc27f2d8be3a66373af24e6af3eeffff99ff0696ae18c70e379e853796d26"},
+    {"cbor_hex":"87014800000000000000020201f600f6","leaf_sha256":"b5227357cf5d0619914971d8dc5218c5a99260bc5d5e1b60cb1083a911a2acaf"},
+    {"cbor_hex":"87014800000000000000030302f600f6","leaf_sha256":"4f82e3e7ee90a111774dd951471a31d4582e0908a0bd5fd63c0080c0231f40cc"}
+  ],
+  "segment_root": "bc6502552ed0c515f58d1c632e54db37594042609b59838eb0d5b3d5842aa054"
+}
