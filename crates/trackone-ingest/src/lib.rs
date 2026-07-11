@@ -23,7 +23,7 @@ use trackone_ledger::sha256_hex;
 
 #[cfg(feature = "xchacha")]
 use chacha20poly1305::{
-    XChaCha20Poly1305, XNonce,
+    XChaCha20Poly1305,
     aead::{Aead, KeyInit, Payload},
 };
 #[cfg(feature = "std")]
@@ -591,9 +591,13 @@ pub fn validate_and_decrypt(
 
     let cipher =
         XChaCha20Poly1305::new_from_slice(device.ck_up).map_err(|_| RejectReason::CkUpLength)?;
+    let nonce = frame
+        .nonce
+        .try_into()
+        .map_err(|_| RejectReason::NonceLength)?;
     let plaintext = cipher
         .decrypt(
-            XNonce::from_slice(frame.nonce),
+            nonce,
             Payload {
                 msg: combined.as_slice(),
                 aad: aad.as_slice(),
@@ -659,9 +663,10 @@ pub fn emit_fixture(
     let aad = framed_aad(dev_id, msg_type, flags);
     let cipher = XChaCha20Poly1305::new_from_slice(device.ck_up)
         .map_err(|_| FixtureError::Reject(RejectReason::CkUpLength))?;
+    let nonce_ref = (&nonce[..]).try_into().expect("checked nonce length");
     let combined = cipher
         .encrypt(
-            XNonce::from_slice(&nonce),
+            nonce_ref,
             Payload {
                 msg: &plaintext[..used],
                 aad: aad.as_slice(),
@@ -1008,9 +1013,10 @@ mod tests {
         let nonce = framed_nonce(salt8, 3, *b"rand0001");
         let aad = framed_aad(1, 1, 0);
         let cipher = XChaCha20Poly1305::new_from_slice(&key).expect("cipher");
+        let nonce_ref = (&nonce[..]).try_into().expect("checked nonce length");
         let combined = cipher
             .encrypt(
-                XNonce::from_slice(&nonce),
+                nonce_ref,
                 Payload {
                     msg: &plaintext[..used],
                     aad: aad.as_slice(),
@@ -1081,9 +1087,10 @@ mod tests {
         let nonce = framed_nonce(salt8, 3, *b"rand0001");
         let aad = framed_aad(1, 1, 0);
         let cipher = XChaCha20Poly1305::new_from_slice(&key).expect("cipher");
+        let nonce_ref = (&nonce[..]).try_into().expect("checked nonce length");
         let combined = cipher
             .encrypt(
-                XNonce::from_slice(&nonce),
+                nonce_ref,
                 Payload {
                     msg: plaintext.as_slice(),
                     aad: aad.as_slice(),
@@ -1126,9 +1133,10 @@ mod tests {
         let nonce = framed_nonce(salt8, 3, *b"rand0001");
         let aad = framed_aad(1, 1, 0);
         let cipher = XChaCha20Poly1305::new_from_slice(&key).expect("cipher");
+        let nonce_ref = (&nonce[..]).try_into().expect("checked nonce length");
         let combined = cipher
             .encrypt(
-                XNonce::from_slice(&nonce),
+                nonce_ref,
                 Payload {
                     msg: &plaintext[..used],
                     aad: aad.as_slice(),
