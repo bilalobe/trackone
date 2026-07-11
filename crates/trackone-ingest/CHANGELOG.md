@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Added versioned `ReplayWindowSnapshot` support for persisting the replay
+  namespace, window size, high-water counter, and accepted live-window
+  counters.
+
+### Fixed
+- Restored replay windows now reject the persisted high-water counter and
+  previously accepted reordered counters rather than treating them as new.
+- Added `continuity_break` and `resync_required` to the rejection taxonomy.
+
 ## [0.1.0-beta.1] - 2026-05-16
 
 ### Notes

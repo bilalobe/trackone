@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Added the `verify-v2` CLI command and native v2 bundle verifier. It decodes
+  authoritative segment CBOR through `trackone-ledger`, compares manifest
+  identity claims, and validates disclosed predecessor-artifact linkage.
+
 ## [0.1.0-beta.1] - 2026-05-16
 
 ### Notes

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Added the isolated draft-08 v2 segment-artifact model, deterministic CBOR
+  encoder/decoder, strict artifact invariants, and profile-specific vectors.
+- Exposed `decode_segment_record_v2(...)` for consumers that need to validate
+  authoritative v2 segment bytes before using their fields.
+
 ## [0.1.0-beta.1] - 2026-05-16
 
 ### Notes

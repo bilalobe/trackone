@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Added an isolated `verifiable-telemetry-canonical-cbor-v2` segment-artifact
+  contract, deterministic CBOR decoder, CDDL/JSON Schema assets, and
+  repository vector manifest. The v1 day-artifact profile remains unchanged.
+- Added `trackone-evidence verify-v2 --root DIR` for draft-08 segment bundles.
+
+### Fixed
+- Replay-window snapshots now preserve the complete active-window accepted
+  counter set across restart and expose continuity/resynchronization rejection
+  reasons for operator audit.
+
 ### Breaking changes
 - Renamed the public commitment profile identifier from
   `trackone-canonical-cbor-v1` to
