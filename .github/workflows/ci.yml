@@ -31,7 +31,10 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            target
+            # Do not cache target/package: cargo names package archives only
+            # by crate name and version, so a same-version PR can otherwise
+            # reuse a stale archive from an earlier commit.
+            target/debug
           key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
