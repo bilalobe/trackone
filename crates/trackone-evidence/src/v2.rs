@@ -157,14 +157,16 @@ pub fn verify_v2_bundle(root: &Path) -> Result<Value> {
             .records
             .as_ref()
             .ok_or_else(|| bad("Class A requires disclosed records"))?;
-        if records.is_empty() {
-            return Err(bad("Class A record disclosure is empty"));
-        }
         let bytes = records
             .iter()
             .map(|record| artifact(root, record).map(|(_, bytes)| bytes))
             .collect::<Result<Vec<_>>>()?;
         let root = merkle_root_from_records(&bytes).root_hex();
+        if root != segment.segment_root {
+            return Err(EvidenceError::VerificationFailed(
+                "Class A record root does not match segment root".to_string(),
+            ));
+        }
         executed.push("record_level_recompute");
         return Ok(
             json!({"version":1,"artifact_sha256":sha256_hex(&segment_bytes),"commitment_profile_id":COMMITMENT_PROFILE_ID,"disclosure_class":"A","checks_executed":executed,"checks_skipped":skipped,"record_multiset_root":root,"overall":"success"}),
@@ -246,6 +248,27 @@ mod tests {
                 leaf_hashes: vec![leaf],
             }],
             segment_root: merkle.root_hex(),
+        }
+        .canonical_cbor_bytes()
+        .unwrap()
+    }
+
+    fn empty_epoch_segment_bytes() -> Vec<u8> {
+        SegmentRecordV2 {
+            ledger_id: "b7a1d5e40c6f438e9a75db27c96f31aa".into(),
+            site_id: "an-001".into(),
+            segment_number: 0,
+            closure_policy: ClosurePolicyV1 {
+                interval_ms: 60_000,
+                batch_record_limit: 1,
+                record_limit: None,
+                size_limit_bytes: None,
+                empty_mode: EmptyMode::Emit,
+            },
+            close_reason: "interval".into(),
+            prev_segment_sha256: ZERO_SHA256.into(),
+            batches: Vec::new(),
+            segment_root: sha256_hex(b""),
         }
         .canonical_cbor_bytes()
         .unwrap()
@@ -348,6 +371,63 @@ mod tests {
         assert!(verify_v2_bundle(&root).is_ok());
         fs::write(root.join("segment-0.cbor"), b"unrelated bytes").unwrap();
         assert!(verify_v2_bundle(&root).is_err());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn class_a_rejects_records_that_do_not_match_the_segment_root() {
+        let root = std::env::temp_dir().join(format!(
+            "trackone-v2-class-a-mismatch-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        let segment = epoch_segment_bytes();
+        let replacement = [0x80];
+        fs::write(root.join("segment.cbor"), &segment).unwrap();
+        fs::write(root.join("record.cbor"), replacement).unwrap();
+        let manifest = json!({
+            "version": 2, "ledger_id": "b7a1d5e40c6f438e9a75db27c96f31aa", "site_id": "an-001",
+            "segment_number": "0", "commitment_profile_id": COMMITMENT_PROFILE_ID,
+            "disclosure_class": "A", "anchoring": {}, "artifacts": {
+                "segment_cbor": {"path": "segment.cbor", "sha256": sha256_hex(&segment)},
+                "records": [{"path": "record.cbor", "sha256": sha256_hex(&replacement)}]
+            }
+        });
+        fs::write(
+            root.join("segment.verify.json"),
+            serde_json::to_vec(&manifest).unwrap(),
+        )
+        .unwrap();
+        assert!(matches!(
+            verify_v2_bundle(&root),
+            Err(EvidenceError::VerificationFailed(_))
+        ));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn class_a_accepts_an_empty_emitted_segment_with_no_records() {
+        let root =
+            std::env::temp_dir().join(format!("trackone-v2-class-a-empty-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        let segment = empty_epoch_segment_bytes();
+        fs::write(root.join("segment.cbor"), &segment).unwrap();
+        let manifest = json!({
+            "version": 2, "ledger_id": "b7a1d5e40c6f438e9a75db27c96f31aa", "site_id": "an-001",
+            "segment_number": "0", "commitment_profile_id": COMMITMENT_PROFILE_ID,
+            "disclosure_class": "A", "anchoring": {}, "artifacts": {
+                "segment_cbor": {"path": "segment.cbor", "sha256": sha256_hex(&segment)},
+                "records": []
+            }
+        });
+        fs::write(
+            root.join("segment.verify.json"),
+            serde_json::to_vec(&manifest).unwrap(),
+        )
+        .unwrap();
+        assert!(verify_v2_bundle(&root).is_ok());
         fs::remove_dir_all(root).unwrap();
     }
 }
