@@ -50,8 +50,8 @@
         "nonce_salt_mismatch",
         "nonce_fc_mismatch",
         "decrypt_failed",
-        "postcard_pod_id_mismatch",
-        "postcard_fc_mismatch",
+        "payload_device_id_mismatch",
+        "payload_fc_mismatch",
         "duplicate",
         "out_of_window"
       ]

@@ -82,8 +82,8 @@ pub enum RejectReason {
     UnsupportedFlags,
     DecryptFailed,
     InvalidIngestProfile,
-    PostcardPodIdMismatch,
-    PostcardFcMismatch,
+    PayloadDeviceIdMismatch,
+    PayloadFcMismatch,
     Duplicate,
     OutOfWindow,
 }
@@ -102,8 +102,8 @@ impl RejectReason {
             Self::UnsupportedFlags => "unsupported_flags",
             Self::DecryptFailed => "decrypt_failed",
             Self::InvalidIngestProfile => "invalid_ingest_profile",
-            Self::PostcardPodIdMismatch => "postcard_pod_id_mismatch",
-            Self::PostcardFcMismatch => "postcard_fc_mismatch",
+            Self::PayloadDeviceIdMismatch => "payload_device_id_mismatch",
+            Self::PayloadFcMismatch => "payload_fc_mismatch",
             Self::Duplicate => "duplicate",
             Self::OutOfWindow => "out_of_window",
         }
@@ -244,8 +244,8 @@ pub const REJECTION_REASONS: &[&str] = &[
     "nonce_salt_mismatch",
     "nonce_fc_mismatch",
     "decrypt_failed",
-    "postcard_pod_id_mismatch",
-    "postcard_fc_mismatch",
+    "payload_device_id_mismatch",
+    "payload_fc_mismatch",
     "duplicate",
     "out_of_window",
 ];
@@ -608,8 +608,8 @@ pub fn validate_and_decrypt(
     let fact = decode_fact_postcard(&plaintext).map_err(|_| RejectReason::DecryptFailed)?;
     validate_fact_binding(&fact, frame.header.dev_id, frame.header.fc).map_err(|reason| {
         match reason {
-            FramedFactBindingError::PodIdMismatch => RejectReason::PostcardPodIdMismatch,
-            FramedFactBindingError::FrameCounterMismatch => RejectReason::PostcardFcMismatch,
+            FramedFactBindingError::PodIdMismatch => RejectReason::PayloadDeviceIdMismatch,
+            FramedFactBindingError::FrameCounterMismatch => RejectReason::PayloadFcMismatch,
         }
     })?;
 
@@ -1163,7 +1163,7 @@ mod tests {
             },
         )
         .unwrap_err();
-        assert_eq!(err, RejectReason::PostcardFcMismatch);
+        assert_eq!(err, RejectReason::PayloadFcMismatch);
     }
 
     #[cfg(feature = "xchacha")]
