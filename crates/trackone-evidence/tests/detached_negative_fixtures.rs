@@ -44,7 +44,7 @@ fn temp_dir(name: &str) -> PathBuf {
 }
 
 fn bin() -> PathBuf {
-    PathBuf::from(std::env::var("CARGO_BIN_EXE_trackone-evidence").unwrap())
+    PathBuf::from(env!("CARGO_BIN_EXE_trackone-evidence"))
 }
 
 fn write_json(path: &Path, value: &Value) {
