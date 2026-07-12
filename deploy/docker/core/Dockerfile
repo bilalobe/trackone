@@ -7,7 +7,7 @@
 # - TRACKONE_CORE_NO_DEFAULT_FEATURES="1"
 # to validate a specific compile-time feature set.
 
-FROM rust:1.88-slim
+FROM rust:1.93-slim
 
 WORKDIR /workspace
 
@@ -19,8 +19,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # The upstream image in this environment provides a toolchain under
 # /usr/local/rustup/toolchains but may not have the `rustup` shim binary.
 # Ensure we can execute cargo/rustc reliably.
-RUN ln -sf /usr/local/rustup/toolchains/1.88.0-x86_64-unknown-linux-gnu/bin/cargo /usr/local/bin/cargo && \
-    ln -sf /usr/local/rustup/toolchains/1.88.0-x86_64-unknown-linux-gnu/bin/rustc /usr/local/bin/rustc
+RUN ln -sf /usr/local/rustup/toolchains/1.93.0-x86_64-unknown-linux-gnu/bin/cargo /usr/local/bin/cargo && \
+    ln -sf /usr/local/rustup/toolchains/1.93.0-x86_64-unknown-linux-gnu/bin/rustc /usr/local/bin/rustc
 
 COPY Cargo.toml Cargo.lock ./
 COPY crates/trackone-core/Cargo.toml crates/trackone-core/Cargo.toml

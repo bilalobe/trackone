@@ -4,7 +4,7 @@
 # A lightweight container that builds the pod firmware crate.
 # This isn't a long-running service; it's a reproducible build artifact check.
 
-FROM rust:1.88-slim
+FROM rust:1.93-slim
 
 WORKDIR /workspace
 
