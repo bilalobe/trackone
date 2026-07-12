@@ -7,11 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-beta.2] - 2026-07-11
+
 ### Added
 - Added an isolated `verifiable-telemetry-canonical-cbor-v2` segment-artifact
   contract, deterministic CBOR decoder, CDDL/JSON Schema assets, and
   repository vector manifest. The v1 day-artifact profile remains unchanged.
-- Added `trackone-evidence verify-v2 --root DIR` for draft-08 segment bundles.
+- Added the preview `trackone-evidence verify-v2 --root DIR` verifier for
+  draft-08 segment artifacts. It validates authoritative segment CBOR,
+  predecessor linkage, canonical-record bytes, and Class A batch/root binding;
+  it is not yet a full producer, timestamp-channel, or draft-conformance claim.
 
 ### Fixed
 - Replay-window snapshots now preserve the complete active-window accepted
@@ -29,7 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   preimages.
 
 ### Changed
-- Aligned Rust build-only container assets with the workspace Rust 1.88
+- Aligned Rust build-only container assets with the workspace Rust 1.93
   requirement and made the pod firmware image/Kubernetes/Helm build jobs run
   the production no-default-feature path by default.
 - Refreshed firmware roadmap documentation so ADR-017/ADR-042 and pod firmware

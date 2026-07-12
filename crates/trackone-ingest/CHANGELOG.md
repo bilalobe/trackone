@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-beta.2] - 2026-07-11
+
 ### Added
 - Added versioned `ReplayWindowSnapshot` support for persisting the replay
   namespace, window size, high-water counter, and accepted live-window

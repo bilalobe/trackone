@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-beta.2] - 2026-07-11
+
+### Notes
+- No crate-local API changes landed; the crate remains aligned with the
+  workspace `0.1.0-beta.2` release line.
+
 ## [0.1.0-beta.1] - 2026-05-16
 
 ### Notes

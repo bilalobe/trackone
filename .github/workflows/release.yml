@@ -26,7 +26,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.93.0
 
       - name: Cache cargo
         uses: actions/cache@v6
@@ -41,6 +41,15 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-release-
             ${{ runner.os }}-cargo-
+
+      - name: Validate release tag and workspace versions
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -n1)"
+          test "${GITHUB_REF_NAME}" = "v${version}"
+          grep -Fq "pub const VERSION: &str = \"${version}\";" crates/trackone-core/src/lib.rs
+          grep -Fq "version: ${version}" deploy/helm/trackone/Chart.yaml
+          grep -Fq "appVersion: \"${version}\"" deploy/helm/trackone/Chart.yaml
 
       - name: Package crates for release evidence
         run: cargo package --workspace --locked
@@ -215,11 +224,14 @@ jobs:
               "schemas": "bundle/toolset/unified/schemas",
               "cddl": "bundle/toolset/unified/cddl",
               "commitment_vectors": "bundle/toolset/vectors/verifiable-telemetry-canonical-cbor-v1",
+              "v2_preview_vectors": "bundle/toolset/vectors/verifiable-telemetry-canonical-cbor-v2",
+              "v2_conformance_claim": false,
               "negative_fixtures": "bundle/toolset/vectors/trackone-beta-negative-v1"
             },
             "pull_back_verification": {
               "integrity": "sha256sum -c SHA256SUMS",
               "commitment_vectors": "cargo test --locked -p trackone-ledger --test vector_corpus -- --ignored rust_reproduces_published_commitment_vectors",
+              "v2_preview": "cargo test --locked -p trackone-ledger --lib v2:: && cargo test --locked -p trackone-evidence v2::",
               "negative_fixtures": "cargo test --locked -p trackone-evidence --test detached_negative_fixtures public_beta_negative_fixture_corpus_is_cli_runnable"
             }
           }
@@ -289,6 +301,7 @@ jobs:
           test -f "${archive_root}/SHA256SUMS"
           test -f "${archive_root}/release-manifest.json"
           test -d "${archive_root}/bundle/toolset/vectors/verifiable-telemetry-canonical-cbor-v1"
+          test -d "${archive_root}/bundle/toolset/vectors/verifiable-telemetry-canonical-cbor-v2"
           test -d "${archive_root}/bundle/toolset/vectors/trackone-beta-negative-v1"
           test -d "${archive_root}/bundle/toolset/unified/schemas"
           test -d "${archive_root}/release/crates"
@@ -301,16 +314,22 @@ jobs:
 
           rm -rf \
             toolset/vectors/verifiable-telemetry-canonical-cbor-v1 \
+            toolset/vectors/verifiable-telemetry-canonical-cbor-v2 \
             toolset/vectors/trackone-beta-negative-v1
           mkdir -p toolset/vectors
           cp -R \
             "${archive_root}/bundle/toolset/vectors/verifiable-telemetry-canonical-cbor-v1" \
             "toolset/vectors/verifiable-telemetry-canonical-cbor-v1"
           cp -R \
+            "${archive_root}/bundle/toolset/vectors/verifiable-telemetry-canonical-cbor-v2" \
+            "toolset/vectors/verifiable-telemetry-canonical-cbor-v2"
+          cp -R \
             "${archive_root}/bundle/toolset/vectors/trackone-beta-negative-v1" \
             "toolset/vectors/trackone-beta-negative-v1"
           cargo test --locked -p trackone-ledger --test vector_corpus -- \
             --ignored rust_reproduces_published_commitment_vectors
+          cargo test --locked -p trackone-ledger --lib v2::
+          cargo test --locked -p trackone-evidence v2::
           cargo test --locked -p trackone-evidence --test detached_negative_fixtures \
             public_beta_negative_fixture_corpus_is_cli_runnable
 

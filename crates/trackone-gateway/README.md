@@ -1,7 +1,7 @@
 # trackone-gateway
 
 `trackone-gateway` is the Rust crate for TrackOne host-side gateway helpers.
-The beta.1 surface builds the Rust helper contract by default; legacy PyO3
+The beta surface builds the Rust helper contract by default; legacy PyO3
 bindings remain available only behind the explicit `python` feature.
 
 ## Responsibilities

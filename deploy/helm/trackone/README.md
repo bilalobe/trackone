@@ -15,8 +15,8 @@ helm upgrade --install trackone oci://ghcr.io/bilalobe/trackone/charts/trackone 
   --set postgres.auth.existingSecret=<your-postgres-secret>
 ```
 
-For example, release tag `v0.1.0-beta.1` publishes chart version
-`0.1.0-beta.1`.
+For example, release tag `v0.1.0-beta.2` publishes chart version
+`0.1.0-beta.2`.
 
 The base [values.yaml](values.yaml)
 inside that OCI chart assumes:
@@ -48,7 +48,7 @@ non-local installs, either:
 
 Use the local chart directory and
 [values-local.yaml](values-local.yaml)
-only when you explicitly want local build jobs again. The beta.1 local override
+only when you explicitly want local build jobs again. The beta.2 local override
 keeps the gateway and OTS calendar disabled unless you provide supported images
 and opt into those workloads yourself.
 
