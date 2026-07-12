@@ -58,7 +58,7 @@ fn init_git_repo(repo: &Path) {
 }
 
 fn trackone_evidence_bin() -> PathBuf {
-    PathBuf::from(std::env::var("CARGO_BIN_EXE_trackone-evidence").unwrap())
+    PathBuf::from(env!("CARGO_BIN_EXE_trackone-evidence"))
 }
 
 fn artifact_ref(root: &Path, path: &Path) -> Value {

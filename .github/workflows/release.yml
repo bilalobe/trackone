@@ -328,6 +328,8 @@ jobs:
             "toolset/vectors/trackone-beta-negative-v1"
           cargo test --locked -p trackone-ledger --test vector_corpus -- \
             --ignored rust_reproduces_published_commitment_vectors
+          cargo test --locked -p trackone-ledger --test vector_corpus -- \
+            --ignored rust_reproduces_published_v2_preview_vectors
           cargo test --locked -p trackone-ledger --lib v2::
           cargo test --locked -p trackone-evidence v2::
           cargo test --locked -p trackone-evidence --test detached_negative_fixtures \

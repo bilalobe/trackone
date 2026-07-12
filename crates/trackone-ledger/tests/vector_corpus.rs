@@ -30,6 +30,20 @@ struct Manifest {
     day_cbor_sha256: String,
 }
 
+#[derive(Debug, Deserialize)]
+struct V2Manifest {
+    schema: String,
+    commitment_profile_id: String,
+    records: Vec<V2Record>,
+    segment_root: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct V2Record {
+    cbor_hex: String,
+    leaf_sha256: String,
+}
+
 fn vector_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../toolset/vectors/verifiable-telemetry-canonical-cbor-v1")
@@ -38,6 +52,11 @@ fn vector_root() -> PathBuf {
 /// Returns `true` when the canonical-CBOR vector corpus is present on disk.
 fn vector_corpus_present() -> bool {
     vector_root().join("manifest.json").exists()
+}
+
+fn v2_vector_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../toolset/vectors/verifiable-telemetry-canonical-cbor-v2")
 }
 
 fn hex_sha256(bytes: &[u8]) -> String {
@@ -106,4 +125,42 @@ fn rust_reproduces_published_commitment_vectors() {
         expected_day_cbor
     );
     assert_eq!(hex_sha256(&expected_day_cbor), manifest.day_cbor_sha256);
+}
+
+/// Verify the archived draft-08 v2 preview vectors against the strict record
+/// decoder and the profile's domain-separated Merkle construction.
+#[test]
+#[ignore = "requires the monorepo's toolset/vectors corpus – run with --ignored"]
+fn rust_reproduces_published_v2_preview_vectors() {
+    let root = v2_vector_root();
+    let manifest: V2Manifest =
+        serde_json::from_slice(&fs::read(root.join("manifest.json")).unwrap()).unwrap();
+    assert_eq!(manifest.schema, "trackone-v2-vector-manifest-1");
+    assert_eq!(
+        manifest.commitment_profile_id,
+        trackone_ledger::v2::COMMITMENT_PROFILE_ID
+    );
+    assert!(
+        !manifest.records.is_empty(),
+        "v2 vector corpus must not be empty"
+    );
+
+    let records = manifest
+        .records
+        .iter()
+        .map(|record| {
+            let bytes = hex::decode(&record.cbor_hex).unwrap();
+            trackone_ledger::v2::validate_canonical_record_v2(&bytes).unwrap();
+
+            let mut leaf_preimage = Vec::with_capacity(bytes.len() + 1);
+            leaf_preimage.push(0);
+            leaf_preimage.extend_from_slice(&bytes);
+            assert_eq!(hex_sha256(&leaf_preimage), record.leaf_sha256);
+            bytes
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        trackone_ledger::v2::merkle_root_from_records(&records).root_hex(),
+        manifest.segment_root
+    );
 }
