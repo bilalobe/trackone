@@ -55,6 +55,18 @@ pub struct SegmentRecordV2 {
     pub segment_root: String,
 }
 
+/// Profile-visible metadata decoded from an exact canonical-record preimage.
+/// Payload semantics remain opaque and outside this profile.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CanonicalRecordMetadataV1 {
+    pub version: u8,
+    pub device_id: [u8; 8],
+    pub fc: u64,
+    pub ingest_time: u64,
+    pub device_time: Option<u64>,
+    pub kind: u64,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MerkleResultV2 {
     pub root: [u8; 32],
@@ -250,8 +262,8 @@ impl SegmentRecordV2 {
             if batch.leaf_hashes.iter().any(|hash| !valid_hex(hash, 64)) {
                 return Err("invalid batch leaf hash".into());
             }
-            if batch.leaf_hashes.windows(2).any(|pair| pair[0] >= pair[1]) {
-                return Err("batch leaf hashes are not strictly sorted".into());
+            if batch.leaf_hashes.windows(2).any(|pair| pair[0] > pair[1]) {
+                return Err("batch leaf hashes are not sorted".into());
             }
             let batch_hashes = batch
                 .leaf_hashes
@@ -268,7 +280,7 @@ impl SegmentRecordV2 {
             }
             leaves.extend(batch.leaf_hashes.iter().cloned());
         }
-        if leaves.windows(2).any(|pair| pair[0] >= pair[1]) {
+        if leaves.windows(2).any(|pair| pair[0] > pair[1]) {
             return Err("batch leaves are not consecutive sorted partitions".into());
         }
         let hashes = leaves
@@ -373,6 +385,225 @@ pub fn decode_segment_record_v2(bytes: &[u8]) -> DecodeResult<SegmentRecordV2> {
         ));
     }
     Ok(record)
+}
+
+/// Validate the exact seven-element canonical-record array used by the v2
+/// commitment profile and return only its profile-visible metadata.
+pub fn validate_canonical_record_v2(bytes: &[u8]) -> DecodeResult<CanonicalRecordMetadataV1> {
+    let mut pos = 0;
+    let (major, len) = read_typed_argument(bytes, &mut pos)?;
+    if major != 4 || len != 7 {
+        return Err(V2DecodeError::InvalidField(
+            "canonical record must be a seven-element array",
+        ));
+    }
+    let version = read_uint_item(bytes, &mut pos, "record version")?;
+    if version != 1 {
+        return Err(V2DecodeError::InvalidField("record version must be 1"));
+    }
+    let device_id = read_device_id(bytes, &mut pos)?;
+    let fc = read_uint_item(bytes, &mut pos, "fc")?;
+    let ingest_time = read_uint_item(bytes, &mut pos, "ingest_time")?;
+    let device_time = if bytes.get(pos) == Some(&0xf6) {
+        pos += 1;
+        None
+    } else {
+        Some(read_uint_item(bytes, &mut pos, "device_time")?)
+    };
+    let kind = read_uint_item(bytes, &mut pos, "kind")?;
+    validate_commitment_value(bytes, &mut pos)?;
+    if pos != bytes.len() {
+        return Err(V2DecodeError::Malformed(
+            "canonical record has trailing bytes",
+        ));
+    }
+    Ok(CanonicalRecordMetadataV1 {
+        version: 1,
+        device_id,
+        fc,
+        ingest_time,
+        device_time,
+        kind,
+    })
+}
+
+fn read_typed_argument(bytes: &[u8], pos: &mut usize) -> DecodeResult<(u8, u64)> {
+    let initial = *bytes
+        .get(*pos)
+        .ok_or(V2DecodeError::Malformed("truncated CBOR item"))?;
+    *pos += 1;
+    Ok((
+        initial >> 5,
+        read_cbor_argument(bytes, pos, initial & 0x1f)?,
+    ))
+}
+
+fn read_uint_item(bytes: &[u8], pos: &mut usize, field: &'static str) -> DecodeResult<u64> {
+    let (major, value) = read_typed_argument(bytes, pos)?;
+    if major != 0 {
+        return Err(V2DecodeError::InvalidField(field));
+    }
+    Ok(value)
+}
+
+fn read_device_id(bytes: &[u8], pos: &mut usize) -> DecodeResult<[u8; 8]> {
+    let (major, len) = read_typed_argument(bytes, pos)?;
+    if major != 2 || len != 8 {
+        return Err(V2DecodeError::InvalidField(
+            "device_id must be an eight-byte string",
+        ));
+    }
+    let end = pos
+        .checked_add(8)
+        .filter(|end| *end <= bytes.len())
+        .ok_or(V2DecodeError::Malformed("truncated device_id"))?;
+    let mut device_id = [0u8; 8];
+    device_id.copy_from_slice(&bytes[*pos..end]);
+    *pos = end;
+    Ok(device_id)
+}
+
+fn validate_commitment_value(bytes: &[u8], pos: &mut usize) -> DecodeResult<()> {
+    let start = *pos;
+    let initial = *bytes
+        .get(*pos)
+        .ok_or(V2DecodeError::Malformed("truncated CBOR payload item"))?;
+    *pos += 1;
+    let major = initial >> 5;
+    let ai = initial & 0x1f;
+    if major == 7 {
+        return validate_simple_or_float(bytes, pos, start, ai);
+    }
+    let len = read_cbor_argument(bytes, pos, ai)?;
+    match major {
+        0 | 1 => Ok(()),
+        2 | 3 => {
+            let width = usize::try_from(len)
+                .map_err(|_| V2DecodeError::Malformed("CBOR string length overflows platform"))?;
+            let end = pos
+                .checked_add(width)
+                .filter(|end| *end <= bytes.len())
+                .ok_or(V2DecodeError::Malformed("truncated CBOR string"))?;
+            if major == 3 {
+                core::str::from_utf8(&bytes[*pos..end])
+                    .map_err(|_| V2DecodeError::Malformed("CBOR text is not UTF-8"))?;
+            }
+            *pos = end;
+            Ok(())
+        }
+        4 => {
+            for _ in 0..len {
+                validate_commitment_value(bytes, pos)?;
+            }
+            Ok(())
+        }
+        5 => validate_commitment_map(bytes, pos, len),
+        6 => Err(V2DecodeError::InvalidField(
+            "CBOR tags are not permitted in commitment bytes",
+        )),
+        _ => Err(V2DecodeError::Malformed("invalid CBOR major type")),
+    }
+}
+
+fn validate_commitment_map(bytes: &[u8], pos: &mut usize, len: u64) -> DecodeResult<()> {
+    let mut previous_key: Option<Vec<u8>> = None;
+    for _ in 0..len {
+        let key_start = *pos;
+        let initial = *bytes
+            .get(*pos)
+            .ok_or(V2DecodeError::Malformed("truncated CBOR map key"))?;
+        *pos += 1;
+        if initial >> 5 != 3 {
+            return Err(V2DecodeError::InvalidField(
+                "commitment map keys must be text",
+            ));
+        }
+        let key_len = read_cbor_argument(bytes, pos, initial & 0x1f)?;
+        let width = usize::try_from(key_len)
+            .map_err(|_| V2DecodeError::Malformed("CBOR map key length overflows platform"))?;
+        let end = pos
+            .checked_add(width)
+            .filter(|end| *end <= bytes.len())
+            .ok_or(V2DecodeError::Malformed("truncated CBOR map key"))?;
+        core::str::from_utf8(&bytes[*pos..end])
+            .map_err(|_| V2DecodeError::Malformed("CBOR map key is not UTF-8"))?;
+        *pos = end;
+        let raw_key = bytes[key_start..end].to_vec();
+        if let Some(previous) = &previous_key
+            && (previous.len() > raw_key.len()
+                || (previous.len() == raw_key.len() && previous >= &raw_key))
+        {
+            return Err(V2DecodeError::NonCanonical(
+                "CBOR map keys are not in deterministic order",
+            ));
+        }
+        previous_key = Some(raw_key);
+        validate_commitment_value(bytes, pos)?;
+    }
+    Ok(())
+}
+
+fn validate_simple_or_float(
+    bytes: &[u8],
+    pos: &mut usize,
+    start: usize,
+    ai: u8,
+) -> DecodeResult<()> {
+    match ai {
+        20..=22 => Ok(()),
+        25 => {
+            let bits = read_fixed::<2>(bytes, pos)?;
+            validate_float_encoding(bytes, start, *pos, decode_f16(u16::from_be_bytes(bits)))
+        }
+        26 => {
+            let bits = read_fixed::<4>(bytes, pos)?;
+            validate_float_encoding(
+                bytes,
+                start,
+                *pos,
+                f32::from_bits(u32::from_be_bytes(bits)) as f64,
+            )
+        }
+        27 => {
+            let bits = read_fixed::<8>(bytes, pos)?;
+            validate_float_encoding(bytes, start, *pos, f64::from_bits(u64::from_be_bytes(bits)))
+        }
+        _ => Err(V2DecodeError::InvalidField("unsupported CBOR simple value")),
+    }
+}
+
+fn read_fixed<const N: usize>(bytes: &[u8], pos: &mut usize) -> DecodeResult<[u8; N]> {
+    let end = pos
+        .checked_add(N)
+        .filter(|end| *end <= bytes.len())
+        .ok_or(V2DecodeError::Malformed("truncated CBOR float"))?;
+    let mut out = [0u8; N];
+    out.copy_from_slice(&bytes[*pos..end]);
+    *pos = end;
+    Ok(out)
+}
+
+fn decode_f16(bits: u16) -> f64 {
+    let sign = if bits & 0x8000 == 0 { 1.0 } else { -1.0 };
+    let exponent = (bits >> 10) & 0x1f;
+    let fraction = bits & 0x03ff;
+    match exponent {
+        0 => sign * (fraction as f64) * 2f64.powi(-24),
+        31 if fraction == 0 => sign * f64::INFINITY,
+        31 => f64::NAN,
+        _ => sign * (1.0 + (fraction as f64) / 1024.0) * 2f64.powi(exponent as i32 - 15),
+    }
+}
+
+fn validate_float_encoding(bytes: &[u8], start: usize, end: usize, value: f64) -> DecodeResult<()> {
+    let canonical = crate::canonical_cbor::canonical_float_bytes(value)
+        .map_err(|_| V2DecodeError::InvalidField("non-finite CBOR float"))?;
+    if canonical != bytes[start..end] {
+        return Err(V2DecodeError::NonCanonical(
+            "CBOR float is not encoded at its shortest exact width",
+        ));
+    }
+    Ok(())
 }
 
 fn parse_cbor_value(bytes: &[u8], pos: &mut usize) -> DecodeResult<CborValue> {
@@ -666,6 +897,14 @@ fn decode_hex32(text: &str) -> Result<[u8; 32], String> {
 mod tests {
     use super::*;
 
+    fn record_with_payload(payload: &[u8]) -> Vec<u8> {
+        let mut record = vec![
+            0x87, 0x01, 0x48, 0, 0, 0, 0, 0, 0, 0, 1, 0x01, 0x00, 0xf6, 0x00,
+        ];
+        record.extend_from_slice(payload);
+        record
+    }
+
     fn epoch_segment() -> SegmentRecordV2 {
         let records = vec![hex::decode("87014800000000000000010100f600f6").unwrap()];
         let merkle = merkle_root_from_records(&records);
@@ -703,6 +942,9 @@ mod tests {
             hex::decode("87014800000000000000020201f600f6").unwrap(),
             hex::decode("87014800000000000000030302f600f6").unwrap(),
         ];
+        for record in &records {
+            validate_canonical_record_v2(record).unwrap();
+        }
         let r = merkle_root_from_records(&records);
         assert_eq!(
             hex_lower(&r.leaf_hashes[0]),
@@ -712,6 +954,70 @@ mod tests {
             r.root_hex(),
             "bc6502552ed0c515f58d1c632e54db37594042609b59838eb0d5b3d5842aa054"
         );
+    }
+
+    #[test]
+    fn canonical_record_decoder_accepts_draft_shape_and_payload_subset() {
+        let record = record_with_payload(&[
+            0xa2, 0x61, b'a', 0xf9, 0x3c, 0x00, 0x62, b'b', b'b', 0x82, 0x20, 0x42, 0xaa, 0xbb,
+        ]);
+        let metadata = validate_canonical_record_v2(&record).unwrap();
+        assert_eq!(metadata.version, 1);
+        assert_eq!(metadata.device_id, [0, 0, 0, 0, 0, 0, 0, 1]);
+        assert_eq!(metadata.fc, 1);
+        assert_eq!(metadata.ingest_time, 0);
+        assert_eq!(metadata.device_time, None);
+        assert_eq!(metadata.kind, 0);
+        assert!(
+            validate_canonical_record_v2(&record_with_payload(&[0xfa, 0x47, 0xc3, 0x50, 0x00,]))
+                .is_ok()
+        );
+        assert!(
+            validate_canonical_record_v2(&record_with_payload(&[
+                0xfb, 0x3f, 0xf1, 0x99, 0x99, 0x99, 0x99, 0x99, 0x9a,
+            ]))
+            .is_ok()
+        );
+    }
+
+    #[test]
+    fn canonical_record_decoder_rejects_shape_and_cbor_violations() {
+        assert!(validate_canonical_record_v2(&[0x80]).is_err());
+        assert!(
+            validate_canonical_record_v2(&record_with_payload(&[0xfa, 0x3f, 0x80, 0x00, 0x00,]))
+                .is_err()
+        );
+        assert!(validate_canonical_record_v2(&record_with_payload(&[0xf9, 0x7e, 0x00])).is_err());
+        assert!(validate_canonical_record_v2(&record_with_payload(&[0xf9, 0x7c, 0x00])).is_err());
+        assert!(validate_canonical_record_v2(&record_with_payload(&[0xc0, 0xf6])).is_err());
+        assert!(
+            validate_canonical_record_v2(&record_with_payload(&[
+                0xa2, 0x62, b'b', b'b', 0xf6, 0x61, b'a', 0xf6,
+            ]))
+            .is_err()
+        );
+        assert!(
+            validate_canonical_record_v2(&record_with_payload(&[
+                0xa2, 0x61, b'a', 0xf6, 0x61, b'a', 0xf6,
+            ]))
+            .is_err()
+        );
+        assert!(validate_canonical_record_v2(&record_with_payload(&[0x61, 0xff])).is_err());
+        assert!(validate_canonical_record_v2(&record_with_payload(&[0x9f, 0xff])).is_err());
+    }
+
+    #[test]
+    fn segment_validation_preserves_duplicate_record_multiplicity() {
+        let record = record_with_payload(&[0xf6]);
+        let merkle = merkle_root_from_records(&[record.clone(), record]);
+        let leaf = hex_lower(&merkle.leaf_hashes[0]);
+        let mut segment = epoch_segment();
+        segment.closure_policy.batch_record_limit = 2;
+        segment.batches[0].count = 2;
+        segment.batches[0].leaf_hashes = vec![leaf.clone(), leaf];
+        segment.batches[0].merkle_root = merkle.root_hex();
+        segment.segment_root = merkle.root_hex();
+        assert!(segment.validate().is_ok());
     }
 
     #[test]

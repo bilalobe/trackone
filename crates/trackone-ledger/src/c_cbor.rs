@@ -104,6 +104,12 @@ fn cbor_float(buf: &mut Vec<u8>, n: f64) -> Result<()> {
     Ok(())
 }
 
+pub(crate) fn canonical_float_bytes(value: f64) -> Result<Vec<u8>> {
+    let mut bytes = Vec::with_capacity(9);
+    cbor_float(&mut bytes, value)?;
+    Ok(bytes)
+}
+
 fn cbor_text(buf: &mut Vec<u8>, s: &str) {
     let bytes = s.as_bytes();
     major_u64(buf, 3, bytes.len() as u64);

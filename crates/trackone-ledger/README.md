@@ -17,6 +17,8 @@ This crate owns:
 - lowercase SHA-256 hex generation
 - `hex64` normalization and validation used by the alpha.11 integrity/manifest
   path
+- the isolated draft-08 v2 canonical-record and segment-artifact encoder,
+  strict decoder, hash-sorted Merkle calculation, and embedded-batch invariants
 
 It is the right place for reusable deterministic logic that belongs to the
 commitment contract. Under
@@ -61,6 +63,11 @@ The published vector corpus under
 [`toolset/vectors/verifiable-telemetry-canonical-cbor-v1/`](../../toolset/vectors/verifiable-telemetry-canonical-cbor-v1/)
 is generated against this contract, and Rust tests are expected to reproduce it
 exactly.
+
+The v2 surface is additive and does not reinterpret v1 day artifacts. It
+implements deterministic record/segment commitment primitives; elapsed-time
+segment formation, durable publication, and timestamp-channel orchestration
+remain outside this crate.
 
 ## Check
 

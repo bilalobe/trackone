@@ -7,11 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-beta.2] - 2026-07-11
+
 ### Added
 - Added the isolated draft-08 v2 segment-artifact model, deterministic CBOR
   encoder/decoder, strict artifact invariants, and profile-specific vectors.
 - Exposed `decode_segment_record_v2(...)` for consumers that need to validate
   authoritative v2 segment bytes before using their fields.
+- Exposed `validate_canonical_record_v2(...)` for the exact seven-element v2
+  record preimage, including deterministic nested payload CBOR and shortest
+  finite-float validation. Segment validation now preserves duplicate record
+  occurrences in the hash-sorted multiset.
 
 ## [0.1.0-beta.1] - 2026-05-16
 
