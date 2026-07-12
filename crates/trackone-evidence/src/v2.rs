@@ -5,8 +5,11 @@ use serde_json::{Value, json};
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 use trackone_ledger::{
-    sha256_hex,
-    v2::{COMMITMENT_PROFILE_ID, ZERO_SHA256, decode_segment_record_v2, merkle_root_from_records},
+    hex_lower, sha256_hex,
+    v2::{
+        COMMITMENT_PROFILE_ID, ZERO_SHA256, decode_segment_record_v2, merkle_root_from_records,
+        validate_canonical_record_v2,
+    },
 };
 
 #[derive(Clone, Debug, Deserialize)]
@@ -159,15 +162,42 @@ pub fn verify_v2_bundle(root: &Path) -> Result<Value> {
             .ok_or_else(|| bad("Class A requires disclosed records"))?;
         let bytes = records
             .iter()
-            .map(|record| artifact(root, record).map(|(_, bytes)| bytes))
+            .enumerate()
+            .map(|(index, record)| {
+                let (_, bytes) = artifact(root, record)?;
+                validate_canonical_record_v2(&bytes).map_err(|err| {
+                    bad(format!(
+                        "invalid Class A canonical record {index} at {}: {err}",
+                        record.path
+                    ))
+                })?;
+                Ok(bytes)
+            })
             .collect::<Result<Vec<_>>>()?;
-        let root = merkle_root_from_records(&bytes).root_hex();
+        let merkle = merkle_root_from_records(&bytes);
+        let root = merkle.root_hex();
+        let recomputed_leaves = merkle
+            .leaf_hashes
+            .iter()
+            .map(|hash| hex_lower(hash))
+            .collect::<Vec<_>>();
+        let embedded_leaves = segment
+            .batches
+            .iter()
+            .flat_map(|batch| batch.leaf_hashes.iter().cloned())
+            .collect::<Vec<_>>();
+        if recomputed_leaves != embedded_leaves {
+            return Err(EvidenceError::VerificationFailed(
+                "Class A record leaves do not match authoritative batches".to_string(),
+            ));
+        }
         if root != segment.segment_root {
             return Err(EvidenceError::VerificationFailed(
                 "Class A record root does not match segment root".to_string(),
             ));
         }
         executed.push("record_level_recompute");
+        executed.push("batch_metadata_validation");
         return Ok(
             json!({"version":1,"artifact_sha256":sha256_hex(&segment_bytes),"commitment_profile_id":COMMITMENT_PROFILE_ID,"disclosure_class":"A","checks_executed":executed,"checks_skipped":skipped,"record_multiset_root":root,"overall":"success"}),
         );
@@ -401,8 +431,44 @@ mod tests {
         .unwrap();
         assert!(matches!(
             verify_v2_bundle(&root),
-            Err(EvidenceError::VerificationFailed(_))
+            Err(EvidenceError::Invalid(message)) if message.contains("invalid Class A canonical record")
         ));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn class_a_validates_records_against_embedded_batch_leaves() {
+        let root =
+            std::env::temp_dir().join(format!("trackone-v2-class-a-valid-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        let segment = epoch_segment_bytes();
+        let record = [
+            0x87, 0x01, 0x48, 0, 0, 0, 0, 0, 0, 0, 1, 0x01, 0x00, 0xf6, 0x00, 0xf6,
+        ];
+        fs::write(root.join("segment.cbor"), &segment).unwrap();
+        fs::write(root.join("record.cbor"), record).unwrap();
+        let manifest = json!({
+            "version": 2, "ledger_id": "b7a1d5e40c6f438e9a75db27c96f31aa", "site_id": "an-001",
+            "segment_number": "0", "commitment_profile_id": COMMITMENT_PROFILE_ID,
+            "disclosure_class": "A", "anchoring": {}, "artifacts": {
+                "segment_cbor": {"path": "segment.cbor", "sha256": sha256_hex(&segment)},
+                "records": [{"path": "record.cbor", "sha256": sha256_hex(&record)}]
+            }
+        });
+        fs::write(
+            root.join("segment.verify.json"),
+            serde_json::to_vec(&manifest).unwrap(),
+        )
+        .unwrap();
+        let result = verify_v2_bundle(&root).unwrap();
+        assert!(
+            result["checks_executed"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|check| check == "batch_metadata_validation")
+        );
         fs::remove_dir_all(root).unwrap();
     }
 
