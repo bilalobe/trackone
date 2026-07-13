@@ -11,3 +11,7 @@ Thumbs.db
 
 # Rust
 target/
+
+# Python tooling
+__pycache__/
+*.py[cod]
