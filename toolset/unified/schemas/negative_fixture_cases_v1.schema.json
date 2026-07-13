@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/negative_fixture_cases_v1.schema.json",
+  "title": "TrackOne beta negative fixture cases v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "cases"],
+  "properties": {
+    "schema": {
+      "const": "trackone-beta-negative-fixtures-v1"
+    },
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "path",
+          "disclosure_class",
+          "policy_mode",
+          "expect_success",
+          "expect_contains"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          },
+          "path": {
+            "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/portable_relative_path"
+          },
+          "disclosure_class": {
+            "enum": ["A", "B", "C"]
+          },
+          "policy_mode": {
+            "enum": ["warn", "strict"]
+          },
+          "expect_success": {
+            "type": "boolean"
+          },
+          "expect_contains": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  }
+}
