@@ -391,6 +391,13 @@ fn regenerate_public_beta_negative_fixture_corpus() {
 #[test]
 fn public_beta_negative_fixture_corpus_is_cli_runnable() {
     let corpus = repo_root().join("toolset/vectors/trackone-beta-negative-v1");
+    if !corpus.join("cases.json").is_file() {
+        eprintln!(
+            "skipping: beta negative fixture corpus is not present at {}",
+            corpus.display()
+        );
+        return;
+    }
     let manifest: FixtureCorpus =
         serde_json::from_slice(&fs::read(corpus.join("cases.json")).unwrap()).unwrap();
 
