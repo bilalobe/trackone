@@ -1,0 +1,10 @@
+# Runtime dependencies for exact-commit OpenTimestamps PR compatibility probes.
+# The client itself is installed separately from a full Git commit URL.
+opentimestamps==0.4.5
+python-bitcoinlib==0.12.2
+GitPython==3.1.51
+gitdb==4.0.12
+smmap==5.0.3
+PySocks==1.7.1
+appdirs==1.4.4
+pycryptodomex==3.23.0

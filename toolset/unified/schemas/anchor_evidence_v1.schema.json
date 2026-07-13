@@ -1,0 +1,273 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/anchor_evidence_v1.schema.json",
+  "title": "TrackOne Anchor Evidence v1",
+  "description": "Detached, monotonically advancing OpenTimestamps receipt for a TrackOne conformance archive. Public-header quorum is explicitly weaker than full Bitcoin consensus validation.",
+  "type": "object",
+  "$defs": {
+    "nullable_hex64": {
+      "oneOf": [
+        {
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/hex64_lower"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "nullable_path": {
+      "oneOf": [
+        {
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/portable_relative_path"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "nullable_artifact_ref": {
+      "oneOf": [
+        {
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/artifact_ref"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "bitcoin_header": {
+      "type": "object",
+      "properties": {
+        "height": {
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/non_negative_integer"
+        },
+        "block_hash": {
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/hex64_lower"
+        },
+        "merkle_root": {
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/hex64_lower"
+        },
+        "header_sha256": {
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/hex64_lower"
+        }
+      },
+      "required": [
+        "height",
+        "block_hash",
+        "merkle_root",
+        "header_sha256"
+      ],
+      "additionalProperties": false
+    },
+    "upstream_client": {
+      "type": "object",
+      "properties": {
+        "repository": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+        },
+        "commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        }
+      },
+      "required": [
+        "repository",
+        "commit"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "properties": {
+    "schema": {
+      "const": "trackone-anchor-evidence-v1"
+    },
+    "schema_uri": {
+      "const": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/anchor_evidence_v1.schema.json"
+    },
+    "version": {
+      "const": 1
+    },
+    "subject": {
+      "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/artifact_ref"
+    },
+    "bundle_verifier": {
+      "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/artifact_ref"
+    },
+    "provenance": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/portable_relative_path"
+        },
+        "sha256": {
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/hex64_lower"
+        },
+        "source_ci_run_id": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "source_ci_run_id"
+      ],
+      "additionalProperties": false
+    },
+    "conformance": {
+      "type": "object",
+      "properties": {
+        "manifest": {
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/artifact_ref"
+        },
+        "independent_verification": {
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/artifact_ref"
+        }
+      },
+      "required": [
+        "manifest",
+        "independent_verification"
+      ],
+      "additionalProperties": false
+    },
+    "proof": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "enum": [
+            "stationary",
+            "calendar-pending",
+            "bitcoin-attested-structure",
+            "bitcoin-header-quorum-verified",
+            "failed"
+          ]
+        },
+        "path": {
+          "$ref": "#/$defs/nullable_path"
+        },
+        "sha256": {
+          "$ref": "#/$defs/nullable_hex64"
+        },
+        "file_digest": {
+          "$ref": "#/$defs/nullable_hex64"
+        },
+        "pending_calendars": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uri"
+          },
+          "uniqueItems": true
+        },
+        "bitcoin_heights": {
+          "type": "array",
+          "items": {
+            "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/non_negative_integer"
+          },
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "state",
+        "path",
+        "sha256",
+        "file_digest",
+        "pending_calendars",
+        "bitcoin_heights"
+      ],
+      "additionalProperties": false
+    },
+    "verification": {
+      "type": "object",
+      "properties": {
+        "subject_binding": {
+          "type": "boolean"
+        },
+        "method": {
+          "enum": [
+            "none",
+            "public-header-source-quorum"
+          ]
+        },
+        "full_bitcoin_consensus_validated": {
+          "const": false
+        },
+        "configured_header_sources": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "type": "string",
+            "format": "uri"
+          },
+          "uniqueItems": true
+        },
+        "required_header_quorum": {
+          "type": "integer",
+          "minimum": 2
+        },
+        "bitcoin_headers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/bitcoin_header"
+          }
+        },
+        "header_sidecar": {
+          "$ref": "#/$defs/nullable_artifact_ref"
+        },
+        "sanity": {
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/artifact_ref"
+        }
+      },
+      "required": [
+        "subject_binding",
+        "method",
+        "full_bitcoin_consensus_validated",
+        "configured_header_sources",
+        "required_header_quorum",
+        "bitcoin_headers",
+        "header_sidecar",
+        "sanity"
+      ],
+      "additionalProperties": false
+    },
+    "upstream": {
+      "type": "object",
+      "properties": {
+        "stable_client": {
+          "type": "string",
+          "pattern": "^opentimestamps-client==[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "json_client": {
+          "$ref": "#/$defs/upstream_client"
+        },
+        "headers_client": {
+          "$ref": "#/$defs/upstream_client"
+        }
+      },
+      "required": [
+        "stable_client",
+        "json_client",
+        "headers_client"
+      ],
+      "additionalProperties": false
+    },
+    "observed_at_utc": {
+      "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/rfc3339_utc"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_uri",
+    "version",
+    "subject",
+    "bundle_verifier",
+    "provenance",
+    "conformance",
+    "proof",
+    "verification",
+    "upstream",
+    "observed_at_utc"
+  ],
+  "additionalProperties": false
+}

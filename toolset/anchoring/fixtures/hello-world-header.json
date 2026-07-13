@@ -1,0 +1,14 @@
+{
+  "bitcoin_block_hash": "000000000000000003e892881a8cdcdc117c06d444057c98b6f04a9ee75a2319",
+  "bitcoin_block_height": 358391,
+  "bitcoin_header_hex": "02000000b96394585a281b7e5f438fd1c9ed492645a1fd61cb3802040000000000000000007ee445d23ad061af4a36b809501fab1ac4f2d7e7a739817dd0cbb7ec661b8a1e376755f58616186272def6",
+  "bitcoin_merkle_root": "8a1b66ecb7cbd07d8139a7e7d7f2c41aab1f5009b8364aaf61d03ad245e47e00",
+  "fixture_id": "opentimestamps-hello-world-bitcoin-358391",
+  "proof_sha256": "be61ecb940db2e4a6f89fbed59c8d4f7f74fa756cbc1fad1ad7aabcb2bf59c30",
+  "sources": [
+    "https://github.com/opentimestamps/opentimestamps-client/blob/master/examples/hello-world.txt.ots",
+    "https://blockstream.info/api/block-height/358391",
+    "https://mempool.space/api/block-height/358391"
+  ],
+  "target_sha256": "03ba204e50d126e4674c005e04d82e84c21366780af1f43bd54a37816b6ab340"
+}

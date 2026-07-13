@@ -1,0 +1,65 @@
+{
+  "bundle_verifier": {
+    "path": "verify-anchor-evidence.py",
+    "sha256": "5555555555555555555555555555555555555555555555555555555555555555"
+  },
+  "conformance": {
+    "independent_verification": {
+      "path": "independent-verification.json",
+      "sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "manifest": {
+      "path": "conformance-manifest.json",
+      "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+    }
+  },
+  "observed_at_utc": "2026-07-13T12:00:00Z",
+  "proof": {
+    "bitcoin_heights": [],
+    "file_digest": null,
+    "path": null,
+    "pending_calendars": [],
+    "sha256": null,
+    "state": "stationary"
+  },
+  "provenance": {
+    "path": "provenance.json",
+    "sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+    "source_ci_run_id": 123456789
+  },
+  "schema": "trackone-anchor-evidence-v1",
+  "schema_uri": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/anchor_evidence_v1.schema.json",
+  "subject": {
+    "path": "subject.json",
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "upstream": {
+    "headers_client": {
+      "commit": "c0386ab1f1fe56e0d7742961e3e456e27c4f83a1",
+      "repository": "djdarcy/dazzle-opentimestamps-client"
+    },
+    "json_client": {
+      "commit": "3fd9cc735b48e5103316adc53f587220315e18cb",
+      "repository": "bilalobe/opentimestamps-client"
+    },
+    "stable_client": "opentimestamps-client==0.7.2"
+  },
+  "verification": {
+    "bitcoin_headers": [],
+    "configured_header_sources": [
+      "https://blockstream.info/api",
+      "https://mempool.space/api",
+      "https://mempool.emzy.de/api"
+    ],
+    "full_bitcoin_consensus_validated": false,
+    "header_sidecar": null,
+    "method": "none",
+    "required_header_quorum": 2,
+    "sanity": {
+      "path": "verifier-sanity.json",
+      "sha256": "3333333333333333333333333333333333333333333333333333333333333333"
+    },
+    "subject_binding": false
+  },
+  "version": 1
+}

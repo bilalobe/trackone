@@ -1,0 +1,31 @@
+{
+  "bundle_verifier": {
+    "path": "verify-anchor-evidence.py",
+    "sha256": "5555555555555555555555555555555555555555555555555555555555555555"
+  },
+  "conformance_archive": {
+    "artifact_type": "application/vnd.trackone.conformance.archive.v2+tar",
+    "carrier": "ghcr.io/bilalobe/trackone/conformance-archive:sha-0000000000000000000000000000000000000000",
+    "filename": "trackone-conformance-sha-0000000000000000000000000000000000000000.tar.gz",
+    "manifest_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "git_commit": "0000000000000000000000000000000000000000",
+  "independent_verification": {
+    "ok": true,
+    "path": "independent-verification.json",
+    "result_schema": "trackone-conformance-archive-v2",
+    "sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+  },
+  "ots_verifier_sanity": {
+    "fixture": "opentimestamps-hello-world-bitcoin-358391",
+    "headers_client_commit": "c0386ab1f1fe56e0d7742961e3e456e27c4f83a1",
+    "json_client_commit": "3fd9cc735b48e5103316adc53f587220315e18cb",
+    "path": "verifier-sanity.json",
+    "sha256": "3333333333333333333333333333333333333333333333333333333333333333"
+  },
+  "repository": "bilalobe/trackone",
+  "schema": "trackone-anchor-subject-v1",
+  "schema_uri": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/anchor_subject_v1.schema.json",
+  "version": 1
+}

@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/ots_verifier_sanity_v1.schema.json",
+  "title": "TrackOne OpenTimestamps Verifier Sanity v1",
+  "description": "Deterministic compatibility result for the exact-commit JSON and sparse-header OpenTimestamps verifier candidates.",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "const": "trackone-ots-verifier-sanity-v1"
+    },
+    "ok": {
+      "const": true
+    },
+    "fixture": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "proof_sha256": {
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/hex64_lower"
+        },
+        "target_sha256": {
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/hex64_lower"
+        },
+        "bitcoin_height": {
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/non_negative_integer"
+        },
+        "block_hash": {
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/hex64_lower"
+        },
+        "bits": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}$"
+        },
+        "header_sha256": {
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/hex64_lower"
+        },
+        "merkle_root": {
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/hex64_lower"
+        }
+      },
+      "required": [
+        "id",
+        "proof_sha256",
+        "target_sha256",
+        "bitcoin_height",
+        "block_hash",
+        "bits",
+        "header_sha256",
+        "merkle_root"
+      ],
+      "additionalProperties": false
+    },
+    "clients": {
+      "type": "object",
+      "properties": {
+        "json": {
+          "$ref": "#/$defs/client_result"
+        },
+        "headers": {
+          "$ref": "#/$defs/client_result"
+        }
+      },
+      "required": [
+        "json",
+        "headers"
+      ],
+      "additionalProperties": false
+    },
+    "trust_boundary": {
+      "type": "object",
+      "properties": {
+        "header_sidecar_validates_full_bitcoin_consensus": {
+          "const": false
+        },
+        "header_sidecar_role": {
+          "const": "proof-shape-and-configured-header-source-quorum"
+        }
+      },
+      "required": [
+        "header_sidecar_validates_full_bitcoin_consensus",
+        "header_sidecar_role"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$defs": {
+    "client_result": {
+      "type": "object",
+      "properties": {
+        "repository": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+        },
+        "commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "checks": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "repository",
+        "commit",
+        "checks"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schema",
+    "ok",
+    "fixture",
+    "clients",
+    "trust_boundary"
+  ],
+  "additionalProperties": false
+}

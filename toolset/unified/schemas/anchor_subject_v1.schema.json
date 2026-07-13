@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/anchor_subject_v1.schema.json",
+  "title": "TrackOne Anchor Subject v1",
+  "description": "Canonical JSON statement timestamped by the beta anchor-evidence workflow. Its exact UTF-8 bytes, not this schema, are the OpenTimestamps subject.",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "const": "trackone-anchor-subject-v1"
+    },
+    "schema_uri": {
+      "const": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/anchor_subject_v1.schema.json"
+    },
+    "version": {
+      "const": 1
+    },
+    "repository": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+    },
+    "git_commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "bundle_verifier": {
+      "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/artifact_ref"
+    },
+    "conformance_archive": {
+      "type": "object",
+      "properties": {
+        "filename": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^/]+$"
+        },
+        "sha256": {
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/hex64_lower"
+        },
+        "manifest_sha256": {
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/hex64_lower"
+        },
+        "artifact_type": {
+          "const": "application/vnd.trackone.conformance.archive.v2+tar"
+        },
+        "carrier": {
+          "type": "string",
+          "pattern": "^ghcr\\.io/[A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+:[A-Za-z0-9_.-]+$"
+        }
+      },
+      "required": [
+        "filename",
+        "sha256",
+        "manifest_sha256",
+        "artifact_type",
+        "carrier"
+      ],
+      "additionalProperties": false
+    },
+    "independent_verification": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/portable_relative_path"
+        },
+        "sha256": {
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/hex64_lower"
+        },
+        "result_schema": {
+          "const": "trackone-conformance-archive-v2"
+        },
+        "ok": {
+          "const": true
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "result_schema",
+        "ok"
+      ],
+      "additionalProperties": false
+    },
+    "ots_verifier_sanity": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/portable_relative_path"
+        },
+        "sha256": {
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/hex64_lower"
+        },
+        "fixture": {
+          "type": "string",
+          "minLength": 1
+        },
+        "json_client_commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "headers_client_commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "fixture",
+        "json_client_commit",
+        "headers_client_commit"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schema",
+    "schema_uri",
+    "version",
+    "repository",
+    "git_commit",
+    "bundle_verifier",
+    "conformance_archive",
+    "independent_verification",
+    "ots_verifier_sanity"
+  ],
+  "additionalProperties": false
+}

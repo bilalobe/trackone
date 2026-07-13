@@ -1,0 +1,41 @@
+{
+  "clients": {
+    "headers": {
+      "checks": {
+        "offline_completed_proof_verified": true,
+        "tampered_header_rejected": true,
+        "tampered_target_rejected": true
+      },
+      "commit": "c0386ab1f1fe56e0d7742961e3e456e27c4f83a1",
+      "repository": "djdarcy/dazzle-opentimestamps-client"
+    },
+    "json": {
+      "checks": {
+        "info_json": true,
+        "manual_check_exit_code": 2,
+        "reported_bitcoin_heights": [
+          358391
+        ],
+        "tampered_target_rejected": true
+      },
+      "commit": "3fd9cc735b48e5103316adc53f587220315e18cb",
+      "repository": "bilalobe/opentimestamps-client"
+    }
+  },
+  "fixture": {
+    "bitcoin_height": 358391,
+    "bits": "181686f5",
+    "block_hash": "000000000000000003e892881a8cdcdc117c06d444057c98b6f04a9ee75a2319",
+    "header_sha256": "2d70bce7cc43096b98e4b55615eeec9f3548c471de917253e6496c4016dffda8",
+    "id": "opentimestamps-hello-world-bitcoin-358391",
+    "merkle_root": "8a1b66ecb7cbd07d8139a7e7d7f2c41aab1f5009b8364aaf61d03ad245e47e00",
+    "proof_sha256": "be61ecb940db2e4a6f89fbed59c8d4f7f74fa756cbc1fad1ad7aabcb2bf59c30",
+    "target_sha256": "03ba204e50d126e4674c005e04d82e84c21366780af1f43bd54a37816b6ab340"
+  },
+  "ok": true,
+  "schema": "trackone-ots-verifier-sanity-v1",
+  "trust_boundary": {
+    "header_sidecar_role": "proof-shape-and-configured-header-source-quorum",
+    "header_sidecar_validates_full_bitcoin_consensus": false
+  }
+}

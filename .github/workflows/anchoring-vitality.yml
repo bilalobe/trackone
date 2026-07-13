@@ -1,0 +1,439 @@
+name: Anchoring Vitality
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+  schedule:
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: Successful main-branch CI run to anchor; defaults to the latest
+        required: false
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+  packages: write
+
+concurrency:
+  group: anchoring-vitality-main
+  cancel-in-progress: false
+
+jobs:
+  beta-anchor-evidence:
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       (github.event.workflow_run.head_branch == 'main' ||
+        github.event.workflow_run.head_branch == 'master'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      OTS_STABLE_VERSION: '0.7.2'
+      OTS_JSON_COMMIT: 3fd9cc735b48e5103316adc53f587220315e18cb
+      OTS_HEADERS_COMMIT: c0386ab1f1fe56e0d7742961e3e456e27c4f83a1
+      OTS_STATE_ARTIFACT: ots-anchor-evidence-state
+      OTS_EVIDENCE_ARTIFACT_TYPE: application/vnd.trackone.anchor-evidence.v1
+    steps:
+      - name: Resolve the successful main CI subject
+        id: source
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_RUN_ID: ${{ github.event.workflow_run.id }}
+          REQUESTED_RUN_ID: ${{ inputs.source_run_id }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ "${EVENT_NAME}" = workflow_run ]; then
+            run_id="${EVENT_RUN_ID}"
+          elif [ -n "${REQUESTED_RUN_ID:-}" ]; then
+            case "${REQUESTED_RUN_ID}" in
+              *[!0-9]*|'') echo "::error::source_run_id must be numeric"; exit 1 ;;
+              *) run_id="${REQUESTED_RUN_ID}" ;;
+            esac
+          else
+            run_id="$(gh api \
+              "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?event=push&status=success&per_page=50" \
+              --jq '[.workflow_runs[] | select(.head_branch == "main" or .head_branch == "master")][0].id // empty')"
+          fi
+          test -n "${run_id}"
+          run_json="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}")"
+          conclusion="$(jq -r '.conclusion' <<<"${run_json}")"
+          event="$(jq -r '.event' <<<"${run_json}")"
+          head_branch="$(jq -r '.head_branch' <<<"${run_json}")"
+          head_sha="$(jq -r '.head_sha' <<<"${run_json}")"
+          test "${conclusion}" = success
+          test "${event}" = push
+          case "${head_branch}" in
+            main|master) ;;
+            *)
+              echo "refusing non-default source branch: ${head_branch}" >&2
+              exit 1
+              ;;
+          esac
+          case "${head_sha}" in
+            *[!0-9a-f]*|'') echo "::error::CI run has a non-canonical head SHA"; exit 1 ;;
+          esac
+          test "${#head_sha}" -eq 40
+          echo "run_id=${run_id}" >> "${GITHUB_OUTPUT}"
+          echo "head_branch=${head_branch}" >> "${GITHUB_OUTPUT}"
+          echo "head_sha=${head_sha}" >> "${GITHUB_OUTPUT}"
+
+      - name: Checkout the exact CI revision
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.source.outputs.head_sha }}
+          fetch-depth: 1
+          lfs: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Recover the latest monotonic proof queue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p state run
+          printf 'trackone-anchor-state-v1\n' > state/FORMAT
+          previous_run=""
+          while IFS= read -r candidate_run; do
+            artifact_count="$(gh api \
+              "repos/${GITHUB_REPOSITORY}/actions/runs/${candidate_run}/artifacts?per_page=100" \
+              --jq "[.artifacts[] | select(.name == \"${OTS_STATE_ARTIFACT}\" and .expired == false)] | length")"
+            if [ "${artifact_count}" -gt 0 ]; then
+              previous_run="${candidate_run}"
+              break
+            fi
+          done < <(gh api \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/anchoring-vitality.yml/runs?status=success&per_page=50" \
+            --jq '.workflow_runs[] | select(.head_branch == "main" or .head_branch == "master") | .id')
+          if [ -n "${previous_run}" ]; then
+            gh run download "${previous_run}" \
+              --name "${OTS_STATE_ARTIFACT}" \
+              --dir state
+          fi
+          printf 'trackone-anchor-state-v1\n' > state/FORMAT
+
+      - name: Download the exact CI conformance archive
+        uses: actions/download-artifact@v8
+        with:
+          name: conformance-archive
+          path: handoff
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ steps.source.outputs.run_id }}
+
+      - name: Re-run the bundled independent verifier outside the checkout
+        id: conformance
+        env:
+          EXPECTED_COMMIT: ${{ steps.source.outputs.head_sha }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          archives=(handoff/*.tar.gz)
+          test "${#archives[@]}" -eq 1
+          archive="${archives[0]}"
+          digest_sidecar="${archive}.sha256"
+          manifest_sidecar="${archive}.manifest.json"
+          test -f "${digest_sidecar}"
+          test -f "${manifest_sidecar}"
+          expected_digest="$(cut -d' ' -f1 "${digest_sidecar}")"
+          actual_digest="$(sha256sum "${archive}" | cut -d' ' -f1)"
+          test "${expected_digest}" = "${actual_digest}"
+          rm -rf "${RUNNER_TEMP}/anchor-conformance"
+          mkdir -p "${RUNNER_TEMP}/anchor-conformance"
+          tar -xzf "${archive}" -C "${RUNNER_TEMP}/anchor-conformance"
+          archive_root="$(find "${RUNNER_TEMP}/anchor-conformance" -mindepth 1 -maxdepth 1 -type d -print -quit)"
+          test -n "${archive_root}"
+          cmp "${manifest_sidecar}" "${archive_root}/conformance-manifest.json"
+          verifier="$(realpath "${archive_root}/verifier/verify_conformance_archive.py")"
+          root="$(realpath "${archive_root}")"
+          workspace="${GITHUB_WORKSPACE}"
+          cd "${RUNNER_TEMP}"
+          env -u PYTHONPATH python3 "${verifier}" \
+            --root "${root}" \
+            --output "${workspace}/run/independent-verification.json"
+          cd "${workspace}"
+          python3 - "${manifest_sidecar}" "${EXPECTED_COMMIT}" <<'PY'
+          import json
+          import sys
+
+          manifest = json.load(open(sys.argv[1], encoding="utf-8"))
+          assert manifest["subject"]["git_commit"] == sys.argv[2]
+          assert manifest["repository"] == __import__("os").environ["GITHUB_REPOSITORY"]
+          PY
+          echo "archive=${archive}" >> "${GITHUB_OUTPUT}"
+          echo "archive_manifest=${manifest_sidecar}" >> "${GITHUB_OUTPUT}"
+          echo "archive_sha256=${actual_digest}" >> "${GITHUB_OUTPUT}"
+
+      - name: Install stable and exact-commit OTS clients in isolation
+        run: |
+          set -euo pipefail
+          stable="${RUNNER_TEMP}/ots-stable"
+          json_client="${RUNNER_TEMP}/ots-json"
+          headers_client="${RUNNER_TEMP}/ots-headers"
+          python -m venv "${stable}"
+          python -m venv "${json_client}"
+          python -m venv "${headers_client}"
+          "${stable}/bin/python" -m pip install \
+            --disable-pip-version-check \
+            --requirement toolset/anchoring/requirements-ots-vitality.txt
+          for environment in "${json_client}" "${headers_client}"; do
+            "${environment}/bin/python" -m pip install \
+              --disable-pip-version-check \
+              --requirement toolset/anchoring/requirements-ots-prerelease.txt
+          done
+          "${json_client}/bin/python" -m pip install \
+            --disable-pip-version-check \
+            --no-deps \
+            "git+https://github.com/bilalobe/opentimestamps-client.git@${OTS_JSON_COMMIT}"
+          "${headers_client}/bin/python" -m pip install \
+            --disable-pip-version-check \
+            --no-deps \
+            "git+https://github.com/djdarcy/dazzle-opentimestamps-client.git@${OTS_HEADERS_COMMIT}"
+          "${stable}/bin/python" -m pip check
+          "${json_client}/bin/python" -m pip check
+          "${headers_client}/bin/python" -m pip check
+          test "$("${stable}/bin/ots" --version)" = "v${OTS_STABLE_VERSION}"
+
+      - name: Prove verifier sanity with positive and tamper vectors
+        run: |
+          set -euo pipefail
+          python toolset/anchoring/ots_verifier_sanity.py \
+            --json-ots "${RUNNER_TEMP}/ots-json/bin/ots" \
+            --headers-ots "${RUNNER_TEMP}/ots-headers/bin/ots" \
+            --json-client-commit "${OTS_JSON_COMMIT}" \
+            --headers-client-commit "${OTS_HEADERS_COMMIT}" \
+            --output run/verifier-sanity.json
+
+      - name: Freeze the verified conformance subject
+        id: prepare
+        env:
+          SOURCE_RUN_ID: ${{ steps.source.outputs.run_id }}
+          SOURCE_COMMIT: ${{ steps.source.outputs.head_sha }}
+          ARCHIVE: ${{ steps.conformance.outputs.archive }}
+          ARCHIVE_MANIFEST: ${{ steps.conformance.outputs.archive_manifest }}
+          ARCHIVE_SHA256: ${{ steps.conformance.outputs.archive_sha256 }}
+        run: |
+          set -euo pipefail
+          python toolset/anchoring/anchor_evidence.py prepare \
+            --state-root state \
+            --archive "${ARCHIVE}" \
+            --archive-manifest "${ARCHIVE_MANIFEST}" \
+            --expected-archive-sha256 "${ARCHIVE_SHA256}" \
+            --independent-verification run/independent-verification.json \
+            --verifier-sanity run/verifier-sanity.json \
+            --repository "${GITHUB_REPOSITORY}" \
+            --git-commit "${SOURCE_COMMIT}" \
+            --source-ci-run-id "${SOURCE_RUN_ID}" \
+            --json-client-commit "${OTS_JSON_COMMIT}" \
+            --headers-client-commit "${OTS_HEADERS_COMMIT}" \
+            --github-output "${GITHUB_OUTPUT}"
+
+      - name: Advance every pending proof and header-quorum receipt
+        run: |
+          set -euo pipefail
+          python toolset/anchoring/anchor_evidence.py advance \
+            --state-root state \
+            --stable-ots "${RUNNER_TEMP}/ots-stable/bin/ots" \
+            --json-ots "${RUNNER_TEMP}/ots-json/bin/ots" \
+            --headers-ots "${RUNNER_TEMP}/ots-headers/bin/ots" \
+            --stable-client-version "opentimestamps-client==${OTS_STABLE_VERSION}" \
+            --json-client-commit "${OTS_JSON_COMMIT}" \
+            --headers-client-commit "${OTS_HEADERS_COMMIT}" \
+            --calendar https://a.pool.opentimestamps.org \
+            --calendar https://b.pool.opentimestamps.org \
+            --header-source https://blockstream.info/api \
+            --header-source https://mempool.space/api \
+            --header-source https://mempool.emzy.de/api \
+            --header-quorum 2 | tee run/advance-result.json
+          python "${{ steps.prepare.outputs.anchor_dir }}/verify-anchor-evidence.py" verify-bundle \
+            --root "${{ steps.prepare.outputs.anchor_dir }}" | \
+            tee run/current-bundle-verification.json
+
+      - name: Set up ORAS
+        uses: oras-project/setup-oras@v2
+
+      - name: Publish immutable receipt revisions and pull them back
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          echo "${GHCR_TOKEN}" | oras login ghcr.io \
+            --username "${GITHUB_ACTOR}" \
+            --password-stdin
+          repository="ghcr.io/${GITHUB_REPOSITORY}/anchor-evidence"
+          mkdir -p run/published state/publications
+          : > run/publications.tsv
+          while IFS= read -r receipt; do
+            bundle="$(dirname "${receipt}")"
+            receipt_sha="$(sha256sum "${receipt}" | cut -d' ' -f1)"
+            ref="${repository}:sha256-${receipt_sha}"
+            marker="state/publications/${receipt_sha}.json"
+            if [ -f "${marker}" ]; then
+              python3 - "${marker}" "${receipt_sha}" "${ref}" <<'PY' >> run/publications.tsv
+          import json
+          import re
+          import sys
+          from pathlib import Path
+
+          marker = Path(sys.argv[1])
+          if marker.is_symlink():
+              raise SystemExit(f"publication marker is a symlink: {marker}")
+          value = json.loads(marker.read_text(encoding="utf-8"))
+          assert value["schema"] == "trackone-anchor-publication-v1"
+          assert value["receipt_sha256"] == sys.argv[2]
+          assert value["reference"] == sys.argv[3]
+          assert re.fullmatch(r"sha256:[0-9a-f]{64}", value["manifest_digest"])
+          print("\t".join((value["receipt_sha256"], value["reference"], value["manifest_digest"])))
+          PY
+              continue
+            fi
+            if ! oras resolve "${ref}" >/dev/null 2>&1; then
+              revision="$(jq -r '.git_commit' "${bundle}/subject.json")"
+              (
+                cd "${bundle}"
+                layers=(
+                  "subject.json:application/vnd.trackone.anchor-subject.v1+json"
+                  "receipt.json:application/vnd.trackone.anchor-evidence.v1+json"
+                  "provenance.json:application/json"
+                  "conformance-manifest.json:application/json"
+                  "independent-verification.json:application/json"
+                  "verifier-sanity.json:application/vnd.trackone.ots-verifier-sanity.v1+json"
+                  "verify-anchor-evidence.py:text/x-python"
+                )
+                if [ -f subject.json.ots ]; then
+                  layers+=("subject.json.ots:application/vnd.opentimestamps.ots")
+                fi
+                if [ -f bitcoin-headers.bin ]; then
+                  layers+=("bitcoin-headers.bin:application/vnd.trackone.bitcoin-headers.sparse.v1")
+                fi
+                oras push "${ref}" \
+                  --artifact-type "${OTS_EVIDENCE_ARTIFACT_TYPE}" \
+                  --annotation "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
+                  --annotation "org.opencontainers.image.revision=${revision}" \
+                  --annotation "org.opencontainers.image.title=TrackOne anchor evidence" \
+                  "${layers[@]}"
+              )
+            fi
+            manifest_digest="$(oras resolve "${ref}")"
+            pullback="run/published/${receipt_sha}"
+            rm -rf "${pullback}"
+            mkdir -p "${pullback}"
+            oras pull --output "${pullback}" "${ref}"
+            test "$(sha256sum "${pullback}/receipt.json" | cut -d' ' -f1)" = "${receipt_sha}"
+            (
+              cd "${RUNNER_TEMP}"
+              env -u PYTHONPATH python3 \
+                "${GITHUB_WORKSPACE}/${pullback}/verify-anchor-evidence.py" \
+                verify-bundle \
+                --root "${GITHUB_WORKSPACE}/${pullback}"
+            )
+            python3 - "${marker}" "${receipt_sha}" "${ref}" "${manifest_digest}" <<'PY' >> run/publications.tsv
+          import json
+          import re
+          import sys
+          from pathlib import Path
+
+          marker = Path(sys.argv[1])
+          receipt_sha256, reference, manifest_digest = sys.argv[2:]
+          assert re.fullmatch(r"[0-9a-f]{64}", receipt_sha256)
+          assert re.fullmatch(r"sha256:[0-9a-f]{64}", manifest_digest)
+          value = {
+              "schema": "trackone-anchor-publication-v1",
+              "receipt_sha256": receipt_sha256,
+              "reference": reference,
+              "manifest_digest": manifest_digest,
+          }
+          marker.write_text(
+              json.dumps(value, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          print("\t".join((receipt_sha256, reference, manifest_digest)))
+          PY
+          done < <(find state/anchors -mindepth 2 -maxdepth 2 -name receipt.json -type f | sort)
+          test -s run/publications.tsv
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          records = []
+          for line in Path("run/publications.tsv").read_text(encoding="utf-8").splitlines():
+              receipt_sha256, reference, manifest_digest = line.split("\t")
+              records.append({
+                  "receipt_sha256": receipt_sha256,
+                  "reference": reference,
+                  "manifest_digest": manifest_digest,
+              })
+          Path("run/publications.json").write_text(
+              json.dumps({"schema": "trackone-anchor-publications-v1", "records": records},
+                         indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Summarize the current anchor state
+        if: always()
+        env:
+          CURRENT_ANCHOR: ${{ steps.prepare.outputs.anchor_dir }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          summary = Path(os.environ["GITHUB_STEP_SUMMARY"])
+          anchor = Path(os.environ.get("CURRENT_ANCHOR") or "")
+          lines = ["# Anchor evidence", ""]
+          receipt = anchor / "receipt.json"
+          if receipt.is_file():
+              value = json.loads(receipt.read_text(encoding="utf-8"))
+              lines.extend([
+                  f"- State: `{value['proof']['state']}`",
+                  f"- Subject SHA-256: `{value['subject']['sha256']}`",
+                  f"- Bitcoin heights: `{value['proof']['bitcoin_heights']}`",
+                  f"- Header method: `{value['verification']['method']}`",
+                  "- Full Bitcoin consensus validated: "
+                  f"`{value['verification']['full_bitcoin_consensus_validated']}`",
+              ])
+          else:
+              lines.append("- No current receipt was produced; inspect the failed step diagnostics.")
+          summary.write_text("\n".join(lines) + "\n", encoding="utf-8")
+          PY
+
+      - name: Upload the current anchor-evidence deliverance
+        if: always() && steps.prepare.outputs.anchor_id != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: anchor-evidence-${{ steps.source.outputs.head_sha }}
+          path: |
+            state/anchors/${{ steps.prepare.outputs.anchor_id }}/subject.json
+            state/anchors/${{ steps.prepare.outputs.anchor_id }}/subject.json.ots
+            state/anchors/${{ steps.prepare.outputs.anchor_id }}/receipt.json
+            state/anchors/${{ steps.prepare.outputs.anchor_id }}/provenance.json
+            state/anchors/${{ steps.prepare.outputs.anchor_id }}/conformance-manifest.json
+            state/anchors/${{ steps.prepare.outputs.anchor_id }}/independent-verification.json
+            state/anchors/${{ steps.prepare.outputs.anchor_id }}/verifier-sanity.json
+            state/anchors/${{ steps.prepare.outputs.anchor_id }}/verify-anchor-evidence.py
+            state/anchors/${{ steps.prepare.outputs.anchor_id }}/bitcoin-headers.bin
+            state/anchors/${{ steps.prepare.outputs.anchor_id }}/attempt.json
+            state/anchors/${{ steps.prepare.outputs.anchor_id }}/attempts/
+            run/current-bundle-verification.json
+            run/publications.json
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Upload the monotonic proof queue
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ots-anchor-evidence-state
+          path: state/
+          if-no-files-found: error
+          retention-days: 90
