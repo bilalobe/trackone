@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.org/schemas/scitt_verify_manifest_statement.schema.json",
+  "$id": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/scitt_verify_manifest_statement.schema.json",
   "title": "TrackOne SCITT Verify Manifest Statement",
   "type": "object",
   "properties": {
@@ -12,17 +12,17 @@
       "pattern": "^urn:trackone:site:[^:]+:day:\\d{4}-\\d{2}-\\d{2}$"
     },
     "site": {
-      "$ref": "https://example.org/schemas/common.schema.json#/$defs/site_id"
+      "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/site_id"
     },
     "day": {
-      "$ref": "https://example.org/schemas/common.schema.json#/$defs/utc_date"
+      "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/utc_date"
     },
     "issuer": {
       "type": "string",
       "minLength": 1
     },
     "verified_at": {
-      "$ref": "https://example.org/schemas/common.schema.json#/$defs/rfc3339_utc"
+      "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/rfc3339_utc"
     },
     "artifacts": {
       "$ref": "#/$defs/verify_statement_artifacts"
@@ -45,13 +45,13 @@
       "type": "object",
       "properties": {
         "verify_manifest": {
-          "$ref": "https://example.org/schemas/common.schema.json#/$defs/artifact_ref"
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/artifact_ref"
         },
         "day_cbor": {
-          "$ref": "https://example.org/schemas/common.schema.json#/$defs/artifact_ref"
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/artifact_ref"
         },
         "block": {
-          "$ref": "https://example.org/schemas/common.schema.json#/$defs/artifact_ref"
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/artifact_ref"
         }
       },
       "required": [
@@ -105,7 +105,7 @@
           ]
         },
         "day_root": {
-          "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex64_lower"
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/hex64_lower"
         },
         "local_verification_gate": {
           "$ref": "#/$defs/local_verification_gate"

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.org/schemas/provisioning_records.schema.json",
+  "$id": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/provisioning_records.schema.json",
   "title": "Provisioning Records Bundle",
   "type": "object",
   "properties": {
@@ -12,7 +12,7 @@
       "format": "date-time"
     },
     "site_id": {
-      "$ref": "https://example.org/schemas/common.schema.json#/$defs/site_id"
+      "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/site_id"
     },
     "records": {
       "type": "array",
@@ -26,28 +26,28 @@
       "type": "object",
       "properties": {
         "pod_id": {
-          "$ref": "https://example.org/schemas/common.schema.json#/$defs/pod_id_hex16"
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/pod_id_hex16"
         },
         "firmware_version": {
-          "$ref": "https://example.org/schemas/common.schema.json#/$defs/firmware_version"
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/firmware_version"
         },
         "firmware_hash": {
-          "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex64_lower"
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/hex64_lower"
         },
         "identity_pubkey": {
-          "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex64_lower"
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/hex64_lower"
         },
         "birth_cert_sig": {
-          "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex128_lower"
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/hex128_lower"
         },
         "provisioned_at": {
-          "$ref": "https://example.org/schemas/common.schema.json#/$defs/integer_timestamp"
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/integer_timestamp"
         },
         "site_id": {
-          "$ref": "https://example.org/schemas/common.schema.json#/$defs/nullable_site_id"
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/nullable_site_id"
         },
         "deployment": {
-          "$ref": "https://example.org/schemas/common.schema.json#/$defs/deployment_metadata"
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/deployment_metadata"
         }
       },
       "required": [

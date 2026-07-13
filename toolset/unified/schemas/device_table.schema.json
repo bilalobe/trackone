@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.org/schemas/device_table.schema.json",
+  "$id": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/device_table.schema.json",
   "title": "Device Table",
   "type": "object",
   "properties": {
@@ -8,7 +8,7 @@
       "type": "object",
       "properties": {
         "master_seed": {
-          "$ref": "https://example.org/schemas/common.schema.json#/$defs/base64_string"
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/base64_string"
         },
         "version": {
           "const": "1.0"
@@ -26,10 +26,10 @@
       "type": "object",
       "properties": {
         "salt8": {
-          "$ref": "https://example.org/schemas/common.schema.json#/$defs/base64_string"
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/base64_string"
         },
         "ck_up": {
-          "$ref": "https://example.org/schemas/common.schema.json#/$defs/base64_string"
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/base64_string"
         },
         "highest_fc_seen": {
           "type": [

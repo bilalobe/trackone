@@ -1,0 +1,37 @@
+{
+  "schema": "trackone-schema-catalog-v1",
+  "provider": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/",
+  "resources": {
+    "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/anchor_evidence_v1.schema.json": "schemas/anchor_evidence_v1.schema.json",
+    "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/anchor_subject_v1.schema.json": "schemas/anchor_subject_v1.schema.json",
+    "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/block_header.schema.json": "schemas/block_header.schema.json",
+    "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/commitment_fact_projection.schema.json": "schemas/commitment_fact_projection.schema.json",
+    "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/commitment_vector_manifest.schema.json": "schemas/commitment_vector_manifest.schema.json",
+    "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json": "schemas/common.schema.json",
+    "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/conformance_archive_manifest_v2.schema.json": "schemas/conformance_archive_manifest_v2.schema.json",
+    "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/day_record.schema.json": "schemas/day_record.schema.json",
+    "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/device_table.schema.json": "schemas/device_table.schema.json",
+    "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/env_sensor_capability.schema.json": "schemas/env_sensor_capability.schema.json",
+    "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/fact.schema.json": "schemas/fact.schema.json",
+    "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/negative_fixture_cases_v1.schema.json": "schemas/negative_fixture_cases_v1.schema.json",
+    "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/ots_meta.schema.json": "schemas/ots_meta.schema.json",
+    "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/ots_verifier_sanity_v1.schema.json": "schemas/ots_verifier_sanity_v1.schema.json",
+    "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/outages.schema.json": "schemas/outages.schema.json",
+    "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/peer_attest.schema.json": "schemas/peer_attest.schema.json",
+    "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/pipeline_manifest.schema.json": "schemas/pipeline_manifest.schema.json",
+    "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/provisioning_input.schema.json": "schemas/provisioning_input.schema.json",
+    "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/provisioning_records.schema.json": "schemas/provisioning_records.schema.json",
+    "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/ratchet.schema.json": "schemas/ratchet.schema.json",
+    "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/rejection_audit.schema.json": "schemas/rejection_audit.schema.json",
+    "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/scitt_evidence_bundle_statement.schema.json": "schemas/scitt_evidence_bundle_statement.schema.json",
+    "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/scitt_verify_manifest_statement.schema.json": "schemas/scitt_verify_manifest_statement.schema.json",
+    "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/sensorthings_projection.schema.json": "schemas/sensorthings_projection.schema.json",
+    "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/v2_bundle_cases_v1.schema.json": "schemas/v2_bundle_cases_v1.schema.json",
+    "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/v2_vector_manifest_v1.schema.json": "schemas/v2_vector_manifest_v1.schema.json",
+    "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/verify_manifest.schema.json": "schemas/verify_manifest.schema.json"
+  },
+  "urn_resources": {
+    "urn:trackone:schema:segment-record-v2:1": "schemas/segment_record_v2.schema.json",
+    "urn:trackone:schema:verification-manifest-v2:1": "schemas/verify_manifest_v2.schema.json"
+  }
+}

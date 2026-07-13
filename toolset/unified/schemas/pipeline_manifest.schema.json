@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.org/schemas/pipeline_manifest.schema.json",
+  "$id": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/pipeline_manifest.schema.json",
   "title": "Pipeline Manifest",
   "type": "object",
   "properties": {
@@ -8,17 +8,17 @@
       "const": 1
     },
     "date": {
-      "$ref": "https://example.org/schemas/common.schema.json#/$defs/utc_date"
+      "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/utc_date"
     },
     "site": {
-      "$ref": "https://example.org/schemas/common.schema.json#/$defs/site_id"
+      "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/site_id"
     },
     "device_id": {
       "type": "string",
       "minLength": 1
     },
     "frame_count": {
-      "$ref": "https://example.org/schemas/common.schema.json#/$defs/non_negative_integer"
+      "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/non_negative_integer"
     },
     "facts_dir": {
       "type": "string",
@@ -46,40 +46,40 @@
       "type": "object",
       "properties": {
         "block": {
-          "$ref": "https://example.org/schemas/common.schema.json#/$defs/artifact_ref"
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/artifact_ref"
         },
         "day_cbor": {
-          "$ref": "https://example.org/schemas/common.schema.json#/$defs/artifact_ref"
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/artifact_ref"
         },
         "day_json": {
-          "$ref": "https://example.org/schemas/common.schema.json#/$defs/artifact_ref"
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/artifact_ref"
         },
         "day_sha256": {
-          "$ref": "https://example.org/schemas/common.schema.json#/$defs/artifact_ref"
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/artifact_ref"
         },
         "day_ots": {
-          "$ref": "https://example.org/schemas/common.schema.json#/$defs/artifact_ref"
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/artifact_ref"
         },
         "day_ots_meta": {
-          "$ref": "https://example.org/schemas/common.schema.json#/$defs/artifact_ref"
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/artifact_ref"
         },
         "peer_attest": {
-          "$ref": "https://example.org/schemas/common.schema.json#/$defs/artifact_ref"
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/artifact_ref"
         },
         "provisioning_input": {
-          "$ref": "https://example.org/schemas/common.schema.json#/$defs/artifact_ref"
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/artifact_ref"
         },
         "provisioning_records": {
-          "$ref": "https://example.org/schemas/common.schema.json#/$defs/artifact_ref"
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/artifact_ref"
         },
         "sensorthings_projection": {
-          "$ref": "https://example.org/schemas/common.schema.json#/$defs/artifact_ref"
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/artifact_ref"
         },
         "tsa_info": {
-          "$ref": "https://example.org/schemas/common.schema.json#/$defs/artifact_ref"
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/artifact_ref"
         },
         "tsa_tsr": {
-          "$ref": "https://example.org/schemas/common.schema.json#/$defs/artifact_ref"
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/artifact_ref"
         }
       },
       "required": [

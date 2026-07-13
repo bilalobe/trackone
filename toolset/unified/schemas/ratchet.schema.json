@@ -1,12 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.org/schemas/ratchet.schema.json",
+  "$id": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/ratchet.schema.json",
   "title": "Weekly ratchet metadata",
   "type": "object",
   "description": "Metadata artifact produced by the Weekly Ratchet workflow (ADR-022).",
   "properties": {
     "timestamp_utc": {
-      "$ref": "https://example.org/schemas/common.schema.json#/$defs/rfc3339_utc"
+      "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/rfc3339_utc"
     },
     "run": {
       "type": "object",

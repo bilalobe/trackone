@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.org/schemas/block_header.schema.json",
+  "$id": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/block_header.schema.json",
   "title": "Merkle Block Header",
   "description": "Header for a batch of facts committed via Merkle root. OTS proofs are external artifacts; this header may at most carry a reference path, not embedded proof bytes.",
   "allOf": [
     {
-      "$ref": "https://example.org/schemas/common.schema.json#/$defs/block_header_v1"
+      "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/block_header_v1"
     }
   ]
 }

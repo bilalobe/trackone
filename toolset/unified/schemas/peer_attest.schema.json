@@ -1,20 +1,20 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.org/schemas/peer_attest.schema.json",
+  "$id": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/peer_attest.schema.json",
   "title": "Peer Attestation",
   "description": "Co-signatures over a TrackOne day Merkle root by external peers.",
   "type": "object",
   "properties": {
     "day": {
-      "$ref": "https://example.org/schemas/common.schema.json#/$defs/utc_date",
+      "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/utc_date",
       "description": "UTC date (YYYY-MM-DD) this attestation covers."
     },
     "site_id": {
-      "$ref": "https://example.org/schemas/common.schema.json#/$defs/site_id",
+      "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/site_id",
       "description": "Site identifier corresponding to the day record."
     },
     "day_root": {
-      "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex64_lower",
+      "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/hex64_lower",
       "description": "Hex-encoded SHA-256 Merkle root for the day (matches day_record.day_root)."
     },
     "context": {
@@ -34,11 +34,11 @@
             "description": "Peer identifier (human-readable or stable ID)."
           },
           "signature_hex": {
-            "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex_lower",
+            "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/hex_lower",
             "description": "Hex-encoded Ed25519 signature over the attestation message."
           },
           "pubkey_hex": {
-            "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex64_lower",
+            "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/hex64_lower",
             "description": "Hex-encoded Ed25519 public key for this peer (32 bytes)."
           }
         },

@@ -1,24 +1,24 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.org/schemas/fact.schema.json",
+  "$id": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/fact.schema.json",
   "title": "Telemetry Fact",
   "type": "object",
   "description": "Atomic telemetry fact produced by a pod device before batching/anchoring using the canonical TrackOne fact shape.",
   "properties": {
     "pod_id": {
-      "$ref": "https://example.org/schemas/common.schema.json#/$defs/pod_id_hex16"
+      "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/pod_id_hex16"
     },
     "fc": {
-      "$ref": "https://example.org/schemas/common.schema.json#/$defs/non_negative_integer"
+      "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/non_negative_integer"
     },
     "ingest_time": {
-      "$ref": "https://example.org/schemas/common.schema.json#/$defs/integer_timestamp"
+      "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/integer_timestamp"
     },
     "ingest_time_rfc3339_utc": {
-      "$ref": "https://example.org/schemas/common.schema.json#/$defs/rfc3339_utc"
+      "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/rfc3339_utc"
     },
     "pod_time": {
-      "$ref": "https://example.org/schemas/common.schema.json#/$defs/nullable_integer_timestamp"
+      "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/nullable_integer_timestamp"
     },
     "kind": {
       "type": "string",

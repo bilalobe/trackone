@@ -1,12 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.org/schemas/ots_meta.schema.json",
+  "$id": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/ots_meta.schema.json",
   "title": "OpenTimestamps Day Artifact Metadata",
   "type": "object",
   "description": "Sidecar metadata for an OpenTimestamps (OTS) proof anchoring a day-level artifact. This JSON is not part of the Merkle tree and MUST NOT be hashed into day_root.",
   "properties": {
     "day": {
-      "$ref": "https://example.org/schemas/common.schema.json#/$defs/utc_date",
+      "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/utc_date",
       "description": "UTC date (YYYY-MM-DD) of the anchored day artifact."
     },
     "artifact": {
@@ -15,7 +15,7 @@
       "description": "Relative path to the canonical artifact file that was stamped (e.g., out/site_demo/day/2025-10-07.bin)."
     },
     "artifact_sha256": {
-      "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex64_lower",
+      "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/hex64_lower",
       "description": "Hex-encoded SHA-256 of the artifact at the time of stamping."
     },
     "ots_proof": {
@@ -44,21 +44,21 @@
         "attestation_heights": {
           "type": "array",
           "items": {
-            "$ref": "https://example.org/schemas/common.schema.json#/$defs/non_negative_integer"
+            "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/non_negative_integer"
           },
           "uniqueItems": true,
           "description": "Bitcoin block heights parsed from BitcoinBlockHeaderAttestation leaves when present."
         },
         "height": {
-          "$ref": "https://example.org/schemas/common.schema.json#/$defs/non_negative_integer",
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/non_negative_integer",
           "description": "Legacy single Bitcoin height field; omit unless a real attestation is present."
         },
         "blockhash": {
-          "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex64_lower",
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/hex64_lower",
           "description": "Optional block hash supplied by a trustless verification lane; never use a zero placeholder."
         },
         "merkleroot": {
-          "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex64_lower",
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/hex64_lower",
           "description": "Optional Bitcoin block Merkle root supplied by a trustless verification lane; never use the artifact digest as a stand-in."
         }
       },
@@ -68,7 +68,7 @@
       "additionalProperties": false
     },
     "verified_at_utc": {
-      "$ref": "https://example.org/schemas/common.schema.json#/$defs/rfc3339_utc",
+      "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/rfc3339_utc",
       "description": "ISO-8601 timestamp when the OTS proof was last verified."
     }
   },

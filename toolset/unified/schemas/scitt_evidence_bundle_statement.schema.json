@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.org/schemas/scitt_evidence_bundle_statement.schema.json",
+  "$id": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/scitt_evidence_bundle_statement.schema.json",
   "title": "TrackOne SCITT Evidence Bundle Statement",
   "type": "object",
   "properties": {
@@ -12,17 +12,17 @@
       "pattern": "^urn:trackone:site:[^:]+:day:\\d{4}-\\d{2}-\\d{2}:bundle$"
     },
     "site": {
-      "$ref": "https://example.org/schemas/common.schema.json#/$defs/site_id"
+      "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/site_id"
     },
     "day": {
-      "$ref": "https://example.org/schemas/common.schema.json#/$defs/utc_date"
+      "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/utc_date"
     },
     "issuer": {
       "type": "string",
       "minLength": 1
     },
     "published_at": {
-      "$ref": "https://example.org/schemas/common.schema.json#/$defs/rfc3339_utc"
+      "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/rfc3339_utc"
     },
     "bundle": {
       "$ref": "#/$defs/bundle_ref"
@@ -47,7 +47,7 @@
           "minLength": 1
         },
         "sha256": {
-          "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex64_lower"
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/hex64_lower"
         }
       },
       "required": [
@@ -61,13 +61,13 @@
       "type": "object",
       "properties": {
         "verify_manifest_sha256": {
-          "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex64_lower"
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/hex64_lower"
         },
         "day_cbor_sha256": {
-          "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex64_lower"
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/hex64_lower"
         },
         "day_root": {
-          "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex64_lower"
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/hex64_lower"
         }
       },
       "required": [

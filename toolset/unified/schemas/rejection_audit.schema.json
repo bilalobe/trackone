@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.org/schemas/rejection_audit.schema.json",
+  "$id": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/rejection_audit.schema.json",
   "title": "Rejection Audit Record",
   "type": "object",
   "description": "One NDJSON record from audit/rejections-<day>.ndjson. This is operator-audit evidence, not a beta public-spine commitment artifact.",
@@ -12,7 +12,7 @@
     "fc": {
       "anyOf": [
         {
-          "$ref": "https://example.org/schemas/common.schema.json#/$defs/non_negative_integer"
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/non_negative_integer"
         },
         {
           "type": "null"
@@ -59,10 +59,10 @@
       ]
     },
     "observed_at_utc": {
-      "$ref": "https://example.org/schemas/common.schema.json#/$defs/rfc3339_utc"
+      "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/rfc3339_utc"
     },
     "frame_sha256": {
-      "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex64_lower"
+      "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/hex64_lower"
     },
     "source": {
       "enum": [

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.org/schemas/env_sensor_capability.schema.json",
+  "$id": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/env_sensor_capability.schema.json",
   "title": "Environmental sensor capability (SHTC3-class)",
   "type": "object",
   "description": "Capability metadata for SHTC3-class temperature / humidity sensors (ADR-027).",
@@ -50,7 +50,7 @@
         "calibration_date": {
           "anyOf": [
             {
-              "$ref": "https://example.org/schemas/common.schema.json#/$defs/rfc3339_utc"
+              "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/rfc3339_utc"
             },
             {
               "type": "null"

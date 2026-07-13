@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.org/schemas/day_record.schema.json",
+  "$id": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/day_record.schema.json",
   "title": "Day Record",
   "type": "object",
   "description": "Daily record referencing one or more batch headers, chain linkage, and day-level Merkle root. OTS proofs are external artifacts and MUST NOT be embedded in this JSON.",
@@ -11,26 +11,26 @@
       "description": "Schema version (currently 1)."
     },
     "site_id": {
-      "$ref": "https://example.org/schemas/common.schema.json#/$defs/site_id",
+      "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/site_id",
       "description": "Site identifier."
     },
     "date": {
-      "$ref": "https://example.org/schemas/common.schema.json#/$defs/utc_date",
+      "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/utc_date",
       "description": "UTC date (YYYY-MM-DD)."
     },
     "prev_day_root": {
-      "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex64_lower",
+      "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/hex64_lower",
       "description": "Merkle root of previous day (chain linkage); 64 zeros if first day."
     },
     "batches": {
       "type": "array",
       "items": {
-        "$ref": "https://example.org/schemas/block_header.schema.json"
+        "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/block_header.schema.json"
       },
       "description": "Array of block headers for this day."
     },
     "day_root": {
-      "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex64_lower",
+      "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/hex64_lower",
       "description": "Aggregate Merkle root for the entire day."
     }
   },

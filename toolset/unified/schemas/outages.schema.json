@@ -1,15 +1,15 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.org/schemas/outages.schema.json",
+  "$id": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/outages.schema.json",
   "title": "Daily Outages Record",
   "type": "object",
   "additionalProperties": false,
   "properties": {
     "date": {
-      "$ref": "https://example.org/schemas/common.schema.json#/$defs/utc_date"
+      "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/utc_date"
     },
     "site_id": {
-      "$ref": "https://example.org/schemas/common.schema.json#/$defs/site_id"
+      "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/site_id"
     },
     "incidents": {
       "type": "array",
@@ -31,10 +31,10 @@
             ]
           },
           "start_utc": {
-            "$ref": "https://example.org/schemas/common.schema.json#/$defs/rfc3339_utc"
+            "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/rfc3339_utc"
           },
           "end_utc": {
-            "$ref": "https://example.org/schemas/common.schema.json#/$defs/rfc3339_utc",
+            "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/rfc3339_utc",
             "$comment": "end_utc should be greater than or equal to start_utc; enforce via external validation"
           },
           "components": {
@@ -81,7 +81,7 @@
                     "type": "string"
                   },
                   "first_detected_utc": {
-                    "$ref": "https://example.org/schemas/common.schema.json#/$defs/rfc3339_utc"
+                    "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/rfc3339_utc"
                   }
                 },
                 "required": [
@@ -138,13 +138,13 @@
                 "type": "string"
               },
               "merkle_index": {
-                "$ref": "https://example.org/schemas/common.schema.json#/$defs/non_negative_integer",
+                "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/non_negative_integer",
                 "description": "Position of the fact in the day's Merkle tree"
               },
               "merkle_proof": {
                 "type": "array",
                 "items": {
-                  "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex64_lower"
+                  "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/hex64_lower"
                 },
                 "description": "SHA-256 sibling hashes from leaf to root"
               }

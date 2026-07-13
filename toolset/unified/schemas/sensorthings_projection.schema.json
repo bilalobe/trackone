@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.org/schemas/sensorthings_projection.schema.json",
+  "$id": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/sensorthings_projection.schema.json",
   "title": "SensorThings Projection Bundle",
   "type": "object",
   "description": "Read-only derived projection of TrackOne canonical facts into OGC SensorThings API entities. This artifact is regenerable from the canonical fact log and MUST NOT be used as a commitment-root input.",
@@ -8,7 +8,7 @@
   "additionalProperties": false,
   "properties": {
     "generated_at_utc": {
-      "$ref": "https://example.org/schemas/common.schema.json#/$defs/rfc3339_utc",
+      "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/rfc3339_utc",
       "description": "UTC timestamp at which this projection bundle was generated."
     },
     "site_id": {
@@ -145,7 +145,7 @@
           "description": "Observed scalar measurement value."
         },
         "result_time_rfc3339_utc": {
-          "$ref": "https://example.org/schemas/common.schema.json#/$defs/rfc3339_utc"
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/rfc3339_utc"
         },
         "phenomenon_time": {
           "type": "object",
@@ -154,10 +154,10 @@
           "description": "Phenomenon time interval for the observation.",
           "properties": {
             "start_rfc3339_utc": {
-              "$ref": "https://example.org/schemas/common.schema.json#/$defs/rfc3339_utc"
+              "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/rfc3339_utc"
             },
             "end_rfc3339_utc": {
-              "$ref": "https://example.org/schemas/common.schema.json#/$defs/rfc3339_utc"
+              "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/rfc3339_utc"
             }
           }
         }

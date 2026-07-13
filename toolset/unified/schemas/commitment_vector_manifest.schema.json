@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.org/schemas/commitment_vector_manifest.schema.json",
+  "$id": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/commitment_vector_manifest.schema.json",
   "title": "TrackOne commitment vector manifest",
   "type": "object",
   "description": "Portable manifest for the published TrackOne canonical CBOR commitment vector corpus.",
@@ -236,7 +236,7 @@
           "const": "duplicate-last"
         },
         "empty_root": {
-          "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex64_lower"
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/hex64_lower"
         }
       },
       "required": [
@@ -256,7 +256,7 @@
       "type": "string"
     },
     "prev_day_root": {
-      "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex64_lower"
+      "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/hex64_lower"
     },
     "batch_id": {
       "type": "string"
@@ -276,7 +276,7 @@
             "type": "string"
           },
           "cbor_sha256": {
-            "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex64_lower"
+            "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/hex64_lower"
           }
         },
         "required": [
@@ -300,14 +300,14 @@
     "leaf_hashes": {
       "type": "array",
       "items": {
-        "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex64_lower"
+        "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/hex64_lower"
       }
     },
     "merkle_root": {
-      "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex64_lower"
+      "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/hex64_lower"
     },
     "day_cbor_sha256": {
-      "$ref": "https://example.org/schemas/common.schema.json#/$defs/hex64_lower"
+      "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/hex64_lower"
     }
   },
   "required": [
