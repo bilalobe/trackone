@@ -1,7 +1,10 @@
 # ADR-054: Release-Bound Evidence Artifacts
 
-**Status**: Accepted
+**Status**: Superseded by ADR-059
 **Date**: 2026-04-29
+
+ADR-059 preserves the formal release-artifact and pull-back requirements while
+moving the Rust-native contract payload to a distinct v2 artifact family.
 
 ## Related ADRs
 
