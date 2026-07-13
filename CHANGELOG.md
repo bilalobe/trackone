@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Added the `conformance-archive` v2 artifact family with deterministic
+  assembly; archive-local schemas, CDDL, and catalog; v1 and v2-preview vector
+  replay; ADR-055 negative fixtures; and detached verification outside the
+  source checkout.
+- Added commit-addressed conformance OCI survivability: successful main CI now
+  publishes, pulls back, and independently verifies its exact archive.
+- Added the beta Anchoring Vitality workflow. It binds a successful main CI
+  conformance subject to a stable OpenTimestamps proof, qualifies exact-pinned
+  JSON and header-client candidates against a completed fixture plus tamper
+  cases, and publishes content-addressed detached receipt revisions.
+- Added schema-governed anchor-subject, anchor-evidence, and OTS verifier-sanity
+  records, including an explicit `bitcoin-header-quorum-verified` state that
+  never claims full Bitcoin consensus validation.
+
+### Changed
+- Public JSON Schema identifiers and references now use the real raw GitHub
+  provider instead of `example.org`, while CI and archives resolve them
+  offline through the checked-in catalog.
+- CI now exercises the supported feature matrix and production builds before
+  producing the exact crate, Helm, and conformance handoff consumed by
+  survivability, anchoring, and release workflows.
+- Tag release now gates all publishers behind annotated-tag/version preflight,
+  waits for crates and Helm before publishing conformance state, verifies the
+  pulled archive without repository imports, and finishes with compact GitHub
+  prerelease records.
+
+### Fixed
+- Conformance assembly selects exactly the eight current-version crate
+  packages and one current-version Helm chart, preventing stale package-cache
+  artifacts from leaking into a release archive.
+- Anchor continuity now resumes only successful workflow state, rolls back
+  interrupted proof advancement atomically, pins pending proofs to their
+  qualified verifier commits, and retires terminal v1 receipts from repeated
+  calendar, explorer, and registry work.
+- Monorepo-only evidence corpus tests now self-skip when run from a published
+  crate, while remaining mandatory in the repository and detached archive.
+
 ## [0.1.0-beta.2] - 2026-07-11
 
 ### Added
