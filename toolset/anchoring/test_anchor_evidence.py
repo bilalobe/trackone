@@ -252,7 +252,7 @@ class AnchorEvidenceTests(unittest.TestCase):
         verified = anchor.verify_bundle(anchor_dir)
         self.assertEqual(verified["state"], "bitcoin-header-quorum-verified")
 
-    def test_failed_advancement_rolls_back_mutable_evidence(self):
+    def test_failed_state_regression_preserves_pending_receipt(self):
         prepared = self.prepare()
         anchor_dir = Path(prepared["anchor_dir"])
         proof = anchor_dir / "subject.json.ots"
@@ -282,15 +282,17 @@ class AnchorEvidenceTests(unittest.TestCase):
             path: path.read_bytes() for path in (proof, anchor_dir / "receipt.json")
         }
 
-        def interrupted_run(command, _timeout):
-            if "upgrade" in command:
-                proof.write_bytes(b"partially-upgraded-proof")
+        def regressed_run(command, _timeout):
             if "info" in command:
-                return subprocess.CompletedProcess(command, 0, "not-json", "")
+                payload = {
+                    "file_digest": prepared["anchor_id"],
+                    "timestamp": {"attestations": []},
+                }
+                return subprocess.CompletedProcess(command, 0, json.dumps(payload), "")
             return subprocess.CompletedProcess(command, 0, "ok", "")
 
-        with patch("anchor_evidence.run", interrupted_run):
-            with self.assertRaises(anchor.AnchorError):
+        with patch("anchor_evidence.run", regressed_run):
+            with self.assertRaisesRegex(anchor.AnchorError, "state regressed"):
                 anchor.advance(args)
 
         for path, expected in before.items():

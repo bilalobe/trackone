@@ -621,7 +621,6 @@ def _advance_one(anchor_dir: Path, args: argparse.Namespace) -> dict[str, Any]:
             previous_state in STATE_ORDER
             and state in STATE_ORDER
             and STATE_ORDER[state] < STATE_ORDER[previous_state]
-            and state != "failed"
         ):
             raise AnchorError(
                 f"anchor evidence state regressed: {previous_state} -> {state}"
