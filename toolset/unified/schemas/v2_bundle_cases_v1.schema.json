@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/v2_bundle_cases_v1.schema.json",
+  "title": "TrackOne v2 detached bundle cases v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "cases"],
+  "properties": {
+    "schema": {
+      "const": "trackone-v2-bundle-cases-1"
+    },
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "path", "expect_success"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          },
+          "path": {
+            "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/portable_relative_path"
+          },
+          "expect_success": {
+            "type": "boolean"
+          },
+          "expected_result": {
+            "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/portable_relative_path"
+          },
+          "expected_error": {
+            "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/portable_relative_path"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": { "expect_success": { "const": true } },
+              "required": ["expect_success"]
+            },
+            "then": {
+              "required": ["expected_result"],
+              "not": { "required": ["expected_error"] }
+            },
+            "else": {
+              "required": ["expected_error"],
+              "not": { "required": ["expected_result"] }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

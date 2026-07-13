@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "ledger_id": "b7a1d5e40c6f438e9a75db27c96f31aa",
+  "site_id": "an-001",
+  "segment_number": "7",
+  "commitment_profile_id": "verifiable-telemetry-canonical-cbor-v2",
+  "disclosure_class": "C",
+  "artifacts": {
+    "segment_cbor": {
+      "path": "segments/segment-7.cbor",
+      "sha256": "5a0aff8ffbb9314bc02d789c1cca00e2a92be741acef586f51784f4bed1ef4f4"
+    }
+  },
+  "anchoring": {}
+}

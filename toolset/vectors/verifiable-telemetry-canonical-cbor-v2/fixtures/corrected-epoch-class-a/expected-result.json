@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "artifact_sha256": "ce76302d1fcbf713097c0d70070b6a651bcd97e7855213aaf422b0ff9226708c",
+  "commitment_profile_id": "verifiable-telemetry-canonical-cbor-v2",
+  "disclosure_class": "A",
+  "checks_executed": [
+    "bundle_disclosure_validation",
+    "verification_manifest_validation",
+    "segment_digest_binding",
+    "segment_artifact_validation",
+    "segment_chain_validation",
+    "record_level_recompute",
+    "batch_metadata_validation"
+  ],
+  "checks_skipped": [],
+  "record_multiset_root": "bc6502552ed0c515f58d1c632e54db37594042609b59838eb0d5b3d5842aa054",
+  "overall": "success"
+}

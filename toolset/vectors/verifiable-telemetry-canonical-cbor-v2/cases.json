@@ -1,0 +1,23 @@
+{
+  "schema": "trackone-v2-bundle-cases-1",
+  "cases": [
+    {
+      "id": "corrected-epoch-class-a",
+      "path": "fixtures/corrected-epoch-class-a",
+      "expect_success": true,
+      "expected_result": "expected-result.json"
+    },
+    {
+      "id": "successor-class-a",
+      "path": "fixtures/successor-class-a",
+      "expect_success": true,
+      "expected_result": "expected-result.json"
+    },
+    {
+      "id": "segment-7-zero-predecessor",
+      "path": "fixtures/segment-7-zero-predecessor",
+      "expect_success": false,
+      "expected_error": "expected-error.json"
+    }
+  ]
+}
