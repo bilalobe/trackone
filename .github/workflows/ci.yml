@@ -6,6 +6,25 @@ on:
   pull_request:
     branches: [main, master]
   workflow_call:
+    inputs:
+      archive_subject_kind:
+        description: Conformance archive subject kind
+        required: false
+        default: commit
+        type: string
+      archive_subject:
+        description: Conformance archive subject name; defaults to sha-<commit>
+        required: false
+        default: ''
+        type: string
+      archive_carrier:
+        description: Tag-addressed conformance archive OCI reference
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -31,25 +50,159 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            # Do not cache target/package: cargo names package archives only
-            # by crate name and version, so a same-version PR can otherwise
-            # reuse a stale archive from an earlier commit.
             target/debug
           key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
 
-      - name: Cargo fmt
-        run: cargo fmt --all --check
+      - name: Check formatting
+        run: just fmt-check
 
-      - name: Cargo clippy
-        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: Lint default and supported feature sets
+        run: just clippy
 
-      - name: Cargo test
-        run: cargo test --workspace --locked
+      - name: Test default and supported feature sets
+        run: just test
 
-      - name: Cargo test public vector corpus
-        run: cargo test --locked -p trackone-ledger --test vector_corpus -- --ignored
+      - name: Build production feature sets
+        run: just build-production
 
-      - name: Cargo package
-        run: cargo package --workspace --locked
+  contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          lfs: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+
+      - name: Install pinned JSON Schema validator
+        run: python -m pip install --disable-pip-version-check 'jsonschema==4.26.0'
+
+      - name: Validate provider IDs, offline references, schemas, and corpora
+        run: python toolset/ci/check_contracts.py
+
+      - name: Compile release helper scripts
+        run: >-
+          python -m py_compile
+          toolset/anchoring/anchor_evidence.py
+          toolset/anchoring/ots_verifier_sanity.py
+          toolset/ci/check_contracts.py
+          toolset/independent-verifier/build_conformance_archive.py
+          toolset/independent-verifier/verify_conformance_archive.py
+
+      - name: Test anchor-evidence state and sanity primitives
+        env:
+          PYTHONPATH: toolset/anchoring
+        run: python -m unittest discover -s toolset/anchoring -p 'test_*.py'
+
+  conformance-archive:
+    runs-on: ubuntu-latest
+    needs: [rust, contracts]
+    permissions:
+      attestations: write
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          lfs: true
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@1.93.0
+
+      - name: Cache cargo
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target/debug
+          key: ${{ runner.os }}-cargo-package-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v5
+
+      - name: Package the validated software artifacts
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -n1)"
+          cargo package --workspace --locked
+          cargo build --release --locked -p trackone-evidence
+          mkdir -p dist/crates dist/helm
+          shopt -s nullglob
+          packages=(target/package/*-"${version}".crate)
+          test "${#packages[@]}" -eq 8
+          cp "${packages[@]}" dist/crates/
+          helm lint deploy/helm/trackone
+          helm package deploy/helm/trackone \
+            --version "${version}" \
+            --app-version "${version}" \
+            --destination dist/helm
+
+      - name: Assemble deterministic conformance archive
+        env:
+          INPUT_SUBJECT_KIND: ${{ inputs.archive_subject_kind || 'commit' }}
+          INPUT_SUBJECT: ${{ inputs.archive_subject }}
+          INPUT_CARRIER: ${{ inputs.archive_carrier }}
+        run: |
+          set -euo pipefail
+          subject="${INPUT_SUBJECT:-sha-${GITHUB_SHA}}"
+          carrier="${INPUT_CARRIER:-ghcr.io/${GITHUB_REPOSITORY}/conformance-archive:sha-${GITHUB_SHA}}"
+          archive="dist/trackone-conformance-${subject}.tar.gz"
+          version="$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -n1)"
+          python toolset/independent-verifier/build_conformance_archive.py \
+            --subject-kind "${INPUT_SUBJECT_KIND}" \
+            --subject "${subject}" \
+            --commit "${GITHUB_SHA}" \
+            --version "${version}" \
+            --repository "${GITHUB_REPOSITORY}" \
+            --carrier "${carrier}" \
+            --crates-dir dist/crates \
+            --helm-dir dist/helm \
+            --verifier target/release/trackone-evidence \
+            --output "${archive}"
+          python toolset/independent-verifier/verify_conformance_archive.py \
+            --archive "${archive}" \
+            --output dist/conformance-verification.json
+
+      - name: Attest the archive built by CI
+        if: github.event_name != 'pull_request' && github.event.repository.private == false
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: dist/trackone-conformance-*.tar.gz
+
+      - name: Upload crate packages
+        uses: actions/upload-artifact@v7
+        with:
+          name: crates-packages
+          path: dist/crates/*.crate
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload Helm chart
+        uses: actions/upload-artifact@v7
+        with:
+          name: helm-chart
+          path: dist/helm/*.tgz
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload detached conformance archive handoff
+        uses: actions/upload-artifact@v7
+        with:
+          name: conformance-archive
+          path: |
+            dist/trackone-conformance-*.tar.gz
+            dist/trackone-conformance-*.tar.gz.sha256
+            dist/trackone-conformance-*.tar.gz.manifest.json
+            dist/conformance-verification.json
+          if-no-files-found: error
+          retention-days: 30
