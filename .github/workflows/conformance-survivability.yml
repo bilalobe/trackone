@@ -1,0 +1,122 @@
+name: Conformance Archive Survivability
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: read
+  packages: write
+
+concurrency:
+  group: conformance-survivability-main
+  cancel-in-progress: false
+
+jobs:
+  publish-pullback-verify:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      (github.event.workflow_run.head_branch == 'main' ||
+       github.event.workflow_run.head_branch == 'master')
+    runs-on: ubuntu-latest
+    env:
+      ARCHIVE_OCI_REF: ghcr.io/${{ github.repository }}/conformance-archive:sha-${{ github.event.workflow_run.head_sha }}
+    steps:
+      - name: Download the CI-built archive handoff
+        uses: actions/download-artifact@v8
+        with:
+          name: conformance-archive
+          path: handoff
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event.workflow_run.id }}
+
+      - name: Validate the handoff digest
+        id: handoff
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          archives=(handoff/*.tar.gz)
+          test "${#archives[@]}" -eq 1
+          archive="${archives[0]}"
+          sidecar="${archive}.sha256"
+          test -f "${sidecar}"
+          expected="$(cut -d' ' -f1 "${sidecar}")"
+          actual="$(sha256sum "${archive}" | cut -d' ' -f1)"
+          test "${expected}" = "${actual}"
+          echo "archive=${archive}" >> "${GITHUB_OUTPUT}"
+          echo "archive_name=$(basename "${archive}")" >> "${GITHUB_OUTPUT}"
+          echo "archive_sha256=${actual}" >> "${GITHUB_OUTPUT}"
+
+      - name: Set up ORAS
+        uses: oras-project/setup-oras@v2
+
+      - name: Log in to GHCR
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >-
+          echo "${GHCR_TOKEN}" |
+          oras login ghcr.io --username "${GITHUB_ACTOR}" --password-stdin
+
+      - name: Publish the immutable commit-addressed archive
+        env:
+          ARCHIVE: ${{ steps.handoff.outputs.archive }}
+          ARCHIVE_NAME: ${{ steps.handoff.outputs.archive_name }}
+          ARCHIVE_SHA256: ${{ steps.handoff.outputs.archive_sha256 }}
+        run: |
+          set -euo pipefail
+          if oras resolve "${ARCHIVE_OCI_REF}" > existing-oci-digest.txt 2>/dev/null; then
+            mkdir -p existing
+            oras pull --output existing "${ARCHIVE_OCI_REF}"
+            existing_archive="existing/${ARCHIVE_NAME}"
+            test -f "${existing_archive}"
+            existing_sha="$(sha256sum "${existing_archive}" | cut -d' ' -f1)"
+            if [ "${existing_sha}" != "${ARCHIVE_SHA256}" ]; then
+              echo "::error::Immutable OCI tag already points at different archive bytes"
+              exit 1
+            fi
+          else
+            oras push "${ARCHIVE_OCI_REF}" \
+              --artifact-type application/vnd.trackone.conformance.archive.v2+tar \
+              --annotation org.opencontainers.image.source="https://github.com/${GITHUB_REPOSITORY}" \
+              --annotation org.opencontainers.image.revision="${{ github.event.workflow_run.head_sha }}" \
+              --annotation org.opencontainers.image.title="TrackOne conformance archive v2" \
+              "${ARCHIVE}:application/gzip"
+          fi
+          oras resolve "${ARCHIVE_OCI_REF}" | tee conformance-oci-digest.txt
+
+      - name: Pull back and verify outside the source checkout
+        env:
+          ARCHIVE_NAME: ${{ steps.handoff.outputs.archive_name }}
+          ARCHIVE_SHA256: ${{ steps.handoff.outputs.archive_sha256 }}
+        run: |
+          set -euo pipefail
+          mkdir -p pulled extracted
+          oras pull --output pulled "${ARCHIVE_OCI_REF}"
+          pulled_archive="pulled/${ARCHIVE_NAME}"
+          test -f "${pulled_archive}"
+          pulled_sha="$(sha256sum "${pulled_archive}" | cut -d' ' -f1)"
+          test "${pulled_sha}" = "${ARCHIVE_SHA256}"
+          tar -xzf "${pulled_archive}" -C extracted
+          archive_root="$(find extracted -mindepth 1 -maxdepth 1 -type d -print -quit)"
+          test -n "${archive_root}"
+          verifier="$(realpath "${archive_root}/verifier/verify_conformance_archive.py")"
+          root="$(realpath "${archive_root}")"
+          cd "${RUNNER_TEMP}"
+          env -u PYTHONPATH python3 "${verifier}" \
+            --root "${root}" \
+            --output "${GITHUB_WORKSPACE}/conformance-oci-verification.json"
+
+      - name: Upload survivability records
+        uses: actions/upload-artifact@v7
+        with:
+          name: conformance-survivability-${{ github.event.workflow_run.head_sha }}
+          path: |
+            conformance-oci-digest.txt
+            conformance-oci-verification.json
+            handoff/*.sha256
+            handoff/*.manifest.json
+          if-no-files-found: error
+          retention-days: 30
