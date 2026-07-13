@@ -9,15 +9,42 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  ci:
-    uses: ./.github/workflows/ci.yml
+  preflight:
+    runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write
+    steps:
+      - name: Checkout the complete tag object
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Validate annotated tag and release versions
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -n1)"
+          test "${GITHUB_REF_NAME}" = "v${version}"
+          test "$(git cat-file -t "refs/tags/${GITHUB_REF_NAME}")" = tag
+          test "$(git rev-parse "refs/tags/${GITHUB_REF_NAME}^{commit}")" = "${GITHUB_SHA}"
+          grep -Fq "pub const VERSION: &str = \"${version}\";" crates/trackone-core/src/lib.rs
+          grep -Fq "version: ${version}" deploy/helm/trackone/Chart.yaml
+          grep -Fq "appVersion: \"${version}\"" deploy/helm/trackone/Chart.yaml
+
+  ci:
+    needs: preflight
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      attestations: write
+      contents: read
+      id-token: write
+    with:
+      archive_subject_kind: release
+      archive_subject: ${{ github.ref_name }}
+      archive_carrier: ghcr.io/${{ github.repository }}/conformance-archive:${{ github.ref_name }}
 
   publish-crates:
     runs-on: ubuntu-latest
-    needs: ci
+    needs: [preflight, ci]
     environment: crates-io
     permissions:
       contents: read
@@ -28,41 +55,7 @@ jobs:
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@1.93.0
 
-      - name: Cache cargo
-        uses: actions/cache@v6
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            # Keep normal build artifacts but never restore stale package
-            # archives for a same-version release candidate.
-            target/debug
-          key: ${{ runner.os }}-cargo-release-${{ hashFiles('Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-release-
-            ${{ runner.os }}-cargo-
-
-      - name: Validate release tag and workspace versions
-        run: |
-          set -euo pipefail
-          version="$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -n1)"
-          test "${GITHUB_REF_NAME}" = "v${version}"
-          grep -Fq "pub const VERSION: &str = \"${version}\";" crates/trackone-core/src/lib.rs
-          grep -Fq "version: ${version}" deploy/helm/trackone/Chart.yaml
-          grep -Fq "appVersion: \"${version}\"" deploy/helm/trackone/Chart.yaml
-
-      - name: Package crates for release evidence
-        run: cargo package --workspace --locked
-
-      - name: Upload packaged crates
-        uses: actions/upload-artifact@v7
-        with:
-          name: crates-packages
-          path: target/package/*.crate
-          if-no-files-found: error
-          retention-days: 30
-
-      - name: Publish crates
+      - name: Publish crates in dependency order
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: |
@@ -77,172 +70,129 @@ jobs:
             trackone-gateway
             trackone-evidence
           )
-
+          mkdir -p publication
+          : > publication/crates.txt
           for crate in "${crates[@]}"; do
-            echo "::group::Publishing ${crate}"
             rc=0
             for attempt in 1 2 3; do
               set +e
               cargo publish -p "${crate}" --locked 2>&1 | tee /tmp/publish-out.txt
               rc=${PIPESTATUS[0]}
               set -e
-
-              if [ "${rc}" -eq 0 ]; then
+              if [ "${rc}" -eq 0 ] || grep -qi "already exists" /tmp/publish-out.txt; then
                 break
               fi
-
-              if grep -qi "already exists" /tmp/publish-out.txt; then
-                break
-              fi
-
               if grep -qi "no matching package named" /tmp/publish-out.txt && [ "${attempt}" -lt 3 ]; then
-                echo "Retrying ${crate} after crates.io index propagation delay..."
                 sleep 20
                 continue
               fi
-
               break
             done
-
-            if [ "${rc}" -ne 0 ]; then
-              if grep -qi "already exists" /tmp/publish-out.txt; then
-                echo "Skipping ${crate}; already published."
-              else
-                echo "Failed to publish ${crate} (exit ${rc})."
-                exit "${rc}"
-              fi
-            else
-              echo "Published ${crate}."
+            if [ "${rc}" -ne 0 ] && ! grep -qi "already exists" /tmp/publish-out.txt; then
+              exit "${rc}"
             fi
-            echo "::endgroup::"
+            printf '%s %s\n' "${crate}" "${GITHUB_REF_NAME#v}" >> publication/crates.txt
           done
+
+      - name: Upload crate publication record
+        uses: actions/upload-artifact@v7
+        with:
+          name: crates-publication-record
+          path: publication/crates.txt
+          if-no-files-found: error
+          retention-days: 30
 
   publish-helm:
     runs-on: ubuntu-latest
-    needs: ci
+    needs: [preflight, ci]
     permissions:
       contents: read
       packages: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
+      - name: Download the CI-validated chart
+        uses: actions/download-artifact@v8
+        with:
+          name: helm-chart
+          path: dist
 
       - name: Set up Helm
         uses: azure/setup-helm@v5
 
-      - name: Package chart for release tag
-        run: |
-          set -euo pipefail
-          version="${GITHUB_REF_NAME#v}"
-          mkdir -p dist
-          helm lint deploy/helm/trackone
-          helm package deploy/helm/trackone \
-            --version "${version}" \
-            --app-version "${version}" \
-            --destination dist
-
-      - name: Upload Helm chart
-        uses: actions/upload-artifact@v7
-        with:
-          name: helm-chart
-          path: dist/*.tgz
-          if-no-files-found: error
-          retention-days: 30
-
       - name: Log in to GHCR
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >-
+          echo "${GHCR_TOKEN}" |
+          helm registry login ghcr.io
+          --username "${GITHUB_REPOSITORY_OWNER,,}"
+          --password-stdin
+
+      - name: Push the exact validated chart
         run: |
           set -euo pipefail
+          shopt -s nullglob
+          charts=(dist/*.tgz)
+          test "${#charts[@]}" -eq 1
           owner="${GITHUB_REPOSITORY_OWNER,,}"
-          echo "${GHCR_TOKEN}" | helm registry login ghcr.io \
-            --username "${owner}" \
-            --password-stdin
+          helm push "${charts[0]}" "oci://ghcr.io/${owner}/trackone/charts" | tee helm-push.txt
+          sha256sum "${charts[0]}" > helm-chart.sha256
+          grep '^Digest:' helm-push.txt | sed 's/^Digest:[[:space:]]*//' > helm-oci-digest.txt
+          test -s helm-oci-digest.txt
 
-      - name: Push OCI chart artifact
-        run: |
-          set -euo pipefail
-          version="${GITHUB_REF_NAME#v}"
-          owner="${GITHUB_REPOSITORY_OWNER,,}"
-          helm push "dist/trackone-${version}.tgz" "oci://ghcr.io/${owner}/trackone/charts"
+      - name: Upload Helm publication record
+        uses: actions/upload-artifact@v7
+        with:
+          name: helm-publication-record
+          path: |
+            helm-chart.sha256
+            helm-oci-digest.txt
+          if-no-files-found: error
+          retention-days: 30
 
-  publish-release-evidence:
+  publish-conformance-archive:
     runs-on: ubuntu-latest
     needs: [publish-crates, publish-helm]
     permissions:
       contents: read
       packages: write
     env:
-      ARCHIVE_OCI_REF: ghcr.io/${{ github.repository }}/evidence-archive:${{ github.ref_name }}
+      ARCHIVE_OCI_REF: ghcr.io/${{ github.repository }}/conformance-archive:${{ github.ref_name }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          lfs: true
-
-      - name: Download packaged crates
+      - name: Download the CI-built release archive
         uses: actions/download-artifact@v8
         with:
-          name: crates-packages
-          path: release-input/crates
+          name: conformance-archive
+          path: handoff
 
-      - name: Download Helm chart
-        uses: actions/download-artifact@v8
-        with:
-          name: helm-chart
-          path: release-input/helm
-
-      - name: Build release evidence archive
+      - name: Validate the release archive handoff
+        id: handoff
         run: |
           set -euo pipefail
-          archive_root="release-evidence-${GITHUB_REF_NAME}"
-          rm -rf "${archive_root}" release-evidence.tar.gz release-evidence.tar.gz.sha256
-          mkdir -p \
-            "${archive_root}/bundle/toolset" \
-            "${archive_root}/release/crates" \
-            "${archive_root}/release/helm" \
-            "${archive_root}/verifier"
+          shopt -s nullglob
+          archives=(handoff/*.tar.gz)
+          test "${#archives[@]}" -eq 1
+          archive="${archives[0]}"
+          expected="$(cut -d' ' -f1 "${archive}.sha256")"
+          actual="$(sha256sum "${archive}" | cut -d' ' -f1)"
+          test "${expected}" = "${actual}"
+          python3 - "${archive}.manifest.json" "${GITHUB_REF_NAME}" "${GITHUB_SHA}" <<'PY'
+          import json
+          import sys
 
-          cp -R toolset/unified "${archive_root}/bundle/toolset/unified"
-          cp -R toolset/vectors "${archive_root}/bundle/toolset/vectors"
-          cp release-input/crates/*.crate "${archive_root}/release/crates/"
-          cp release-input/helm/*.tgz "${archive_root}/release/helm/"
-          cp crates/trackone-evidence/README.md "${archive_root}/verifier/trackone-evidence.README.md"
-
-          cat > "${archive_root}/release-manifest.json" <<EOF
-          {
-            "schema": "trackone-release-evidence-v1",
-            "release_tag": "${GITHUB_REF_NAME}",
-            "git_commit": "${GITHUB_SHA}",
-            "repository": "${GITHUB_REPOSITORY}",
-            "evidence_carrier": "${ARCHIVE_OCI_REF}",
-            "software_artifacts": {
-              "crates": "release/crates",
-              "helm": "release/helm"
-            },
-            "public_evidence": {
-              "schemas": "bundle/toolset/unified/schemas",
-              "cddl": "bundle/toolset/unified/cddl",
-              "commitment_vectors": "bundle/toolset/vectors/verifiable-telemetry-canonical-cbor-v1",
-              "v2_preview_vectors": "bundle/toolset/vectors/verifiable-telemetry-canonical-cbor-v2",
-              "v2_conformance_claim": false,
-              "negative_fixtures": "bundle/toolset/vectors/trackone-beta-negative-v1"
-            },
-            "pull_back_verification": {
-              "integrity": "sha256sum -c SHA256SUMS",
-              "commitment_vectors": "cargo test --locked -p trackone-ledger --test vector_corpus -- --ignored rust_reproduces_published_commitment_vectors",
-              "v2_preview": "cargo test --locked -p trackone-ledger --lib v2:: && cargo test --locked -p trackone-evidence v2::",
-              "negative_fixtures": "cargo test --locked -p trackone-evidence --test detached_negative_fixtures public_beta_negative_fixture_corpus_is_cli_runnable"
-            }
+          manifest = json.load(open(sys.argv[1], encoding="utf-8"))
+          assert manifest["subject"] == {
+              "kind": "release",
+              "name": sys.argv[2],
+              "git_commit": sys.argv[3],
           }
-          EOF
-
-          (
-            cd "${archive_root}"
-            find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
+          assert manifest["carrier"]["oci_ref"] == (
+              f"ghcr.io/{__import__('os').environ['GITHUB_REPOSITORY']}/"
+              f"conformance-archive:{sys.argv[2]}"
           )
-          tar -czf release-evidence.tar.gz "${archive_root}"
-          sha256sum release-evidence.tar.gz > release-evidence.tar.gz.sha256
+          PY
+          echo "archive=${archive}" >> "${GITHUB_OUTPUT}"
+          echo "archive_name=$(basename "${archive}")" >> "${GITHUB_OUTPUT}"
+          echo "archive_sha256=${actual}" >> "${GITHUB_OUTPUT}"
 
       - name: Set up ORAS
         uses: oras-project/setup-oras@v2
@@ -250,109 +200,107 @@ jobs:
       - name: Log in to GHCR
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          echo "${GHCR_TOKEN}" | oras login ghcr.io \
-            --username "${GITHUB_ACTOR}" \
-            --password-stdin
+        run: >-
+          echo "${GHCR_TOKEN}" |
+          oras login ghcr.io --username "${GITHUB_ACTOR}" --password-stdin
 
-      - name: Publish release evidence archive to GHCR OCI
+      - name: Publish the immutable release archive
+        env:
+          ARCHIVE: ${{ steps.handoff.outputs.archive }}
+          ARCHIVE_NAME: ${{ steps.handoff.outputs.archive_name }}
+          ARCHIVE_SHA256: ${{ steps.handoff.outputs.archive_sha256 }}
         run: |
           set -euo pipefail
-          declared_sha="$(cut -d' ' -f1 release-evidence.tar.gz.sha256)"
-          actual_sha="$(sha256sum release-evidence.tar.gz | cut -d' ' -f1)"
-          if [ "${declared_sha}" != "${actual_sha}" ]; then
-            echo "::error::Release evidence tarball SHA-256 mismatch before OCI publish"
-            exit 1
+          if oras resolve "${ARCHIVE_OCI_REF}" > existing-oci-digest.txt 2>/dev/null; then
+            mkdir -p existing
+            oras pull --output existing "${ARCHIVE_OCI_REF}"
+            existing_archive="existing/${ARCHIVE_NAME}"
+            test -f "${existing_archive}"
+            existing_sha="$(sha256sum "${existing_archive}" | cut -d' ' -f1)"
+            if [ "${existing_sha}" != "${ARCHIVE_SHA256}" ]; then
+              echo "::error::Release OCI tag already points at different archive bytes"
+              exit 1
+            fi
+          else
+            oras push "${ARCHIVE_OCI_REF}" \
+              --artifact-type application/vnd.trackone.conformance.archive.v2+tar \
+              --annotation org.opencontainers.image.source="https://github.com/${GITHUB_REPOSITORY}" \
+              --annotation org.opencontainers.image.revision="${GITHUB_SHA}" \
+              --annotation org.opencontainers.image.version="${GITHUB_REF_NAME}" \
+              --annotation org.opencontainers.image.title="TrackOne release conformance archive v2" \
+              "${ARCHIVE}:application/gzip"
           fi
+          oras resolve "${ARCHIVE_OCI_REF}" | tee conformance-oci-digest.txt
 
-          oras push "${ARCHIVE_OCI_REF}" \
-            --artifact-type application/vnd.trackone.evidence.archive.v1+tar \
-            --annotation org.opencontainers.image.source="https://github.com/${GITHUB_REPOSITORY}" \
-            --annotation org.opencontainers.image.revision="${GITHUB_SHA}" \
-            --annotation org.opencontainers.image.version="${GITHUB_REF_NAME}" \
-            --annotation org.opencontainers.image.title="TrackOne release evidence archive bundle" \
-            "release-evidence.tar.gz:application/gzip"
-          oras resolve "${ARCHIVE_OCI_REF}" | tee release-evidence-oci-digest.txt
-
-      - name: Pull release evidence archive back from GHCR
+      - name: Pull back and verify outside the source checkout
+        env:
+          ARCHIVE_NAME: ${{ steps.handoff.outputs.archive_name }}
+          ARCHIVE_SHA256: ${{ steps.handoff.outputs.archive_sha256 }}
         run: |
           set -euo pipefail
-          rm -rf pulled-release-evidence extracted-release-evidence
-          mkdir -p pulled-release-evidence extracted-release-evidence
-          oras pull --output pulled-release-evidence "${ARCHIVE_OCI_REF}"
-
-          pulled="pulled-release-evidence/release-evidence.tar.gz"
-          test -f "${pulled}"
-          expected_sha="$(cut -d' ' -f1 release-evidence.tar.gz.sha256)"
-          actual_sha="$(sha256sum "${pulled}" | cut -d' ' -f1)"
-          if [ "${expected_sha}" != "${actual_sha}" ]; then
-            echo "::error::Pulled release evidence archive SHA-256 mismatch"
-            echo "expected=${expected_sha}"
-            echo "actual=${actual_sha}"
-            exit 1
-          fi
-
-      - name: Verify pulled release evidence archive
-        run: |
-          set -euo pipefail
-          tar -xzf pulled-release-evidence/release-evidence.tar.gz -C extracted-release-evidence
-          archive_root="$(find extracted-release-evidence -mindepth 1 -maxdepth 1 -type d -print -quit)"
+          mkdir -p pulled extracted
+          oras pull --output pulled "${ARCHIVE_OCI_REF}"
+          pulled_archive="pulled/${ARCHIVE_NAME}"
+          test -f "${pulled_archive}"
+          pulled_sha="$(sha256sum "${pulled_archive}" | cut -d' ' -f1)"
+          test "${pulled_sha}" = "${ARCHIVE_SHA256}"
+          tar -xzf "${pulled_archive}" -C extracted
+          archive_root="$(find extracted -mindepth 1 -maxdepth 1 -type d -print -quit)"
           test -n "${archive_root}"
-          test -f "${archive_root}/SHA256SUMS"
-          test -f "${archive_root}/release-manifest.json"
-          test -d "${archive_root}/bundle/toolset/vectors/verifiable-telemetry-canonical-cbor-v1"
-          test -d "${archive_root}/bundle/toolset/vectors/verifiable-telemetry-canonical-cbor-v2"
-          test -d "${archive_root}/bundle/toolset/vectors/trackone-beta-negative-v1"
-          test -d "${archive_root}/bundle/toolset/unified/schemas"
-          test -d "${archive_root}/release/crates"
-          test -d "${archive_root}/release/helm"
+          verifier="$(realpath "${archive_root}/verifier/verify_conformance_archive.py")"
+          root="$(realpath "${archive_root}")"
+          cd "${RUNNER_TEMP}"
+          env -u PYTHONPATH python3 "${verifier}" \
+            --root "${root}" \
+            --output "${GITHUB_WORKSPACE}/release-conformance-verification.json"
 
-          (
-            cd "${archive_root}"
-            sha256sum -c SHA256SUMS
-          )
-
-          rm -rf \
-            toolset/vectors/verifiable-telemetry-canonical-cbor-v1 \
-            toolset/vectors/verifiable-telemetry-canonical-cbor-v2 \
-            toolset/vectors/trackone-beta-negative-v1
-          mkdir -p toolset/vectors
-          cp -R \
-            "${archive_root}/bundle/toolset/vectors/verifiable-telemetry-canonical-cbor-v1" \
-            "toolset/vectors/verifiable-telemetry-canonical-cbor-v1"
-          cp -R \
-            "${archive_root}/bundle/toolset/vectors/verifiable-telemetry-canonical-cbor-v2" \
-            "toolset/vectors/verifiable-telemetry-canonical-cbor-v2"
-          cp -R \
-            "${archive_root}/bundle/toolset/vectors/trackone-beta-negative-v1" \
-            "toolset/vectors/trackone-beta-negative-v1"
-          cargo test --locked -p trackone-ledger --test vector_corpus -- \
-            --ignored rust_reproduces_published_commitment_vectors
-          cargo test --locked -p trackone-ledger --test vector_corpus -- \
-            --ignored rust_reproduces_published_v2_preview_vectors
-          cargo test --locked -p trackone-ledger --lib v2::
-          cargo test --locked -p trackone-evidence v2::
-          cargo test --locked -p trackone-evidence --test detached_negative_fixtures \
-            public_beta_negative_fixture_corpus_is_cli_runnable
-
-          cat > release-evidence-oci-verification.json <<EOF
-          {
-            "ok": true,
-            "release_tag": "${GITHUB_REF_NAME}",
-            "git_commit": "${GITHUB_SHA}",
-            "evidence_carrier": "${ARCHIVE_OCI_REF}",
-            "archive_sha256": "$(cut -d' ' -f1 release-evidence.tar.gz.sha256)",
-            "oci_digest_file": "release-evidence-oci-digest.txt"
-          }
-          EOF
-
-      - name: Upload release evidence verification artifacts
+      - name: Upload release conformance records
         uses: actions/upload-artifact@v7
         with:
-          name: release-evidence-oci-verification
+          name: release-conformance-record
           path: |
-            release-evidence-oci-digest.txt
-            release-evidence-oci-verification.json
-            release-evidence.tar.gz.sha256
+            conformance-oci-digest.txt
+            release-conformance-verification.json
+            handoff/*.sha256
+            handoff/*.manifest.json
           if-no-files-found: error
           retention-days: 30
+
+  publish-github-release:
+    runs-on: ubuntu-latest
+    needs: [publish-conformance-archive]
+    permissions:
+      contents: write
+    steps:
+      - name: Download durable release records
+        uses: actions/download-artifact@v8
+        with:
+          pattern: '*-publication-record'
+          path: records
+          merge-multiple: true
+
+      - name: Download conformance release records
+        uses: actions/download-artifact@v8
+        with:
+          name: release-conformance-record
+          path: records
+
+      - name: Create or update the GitHub prerelease record
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            gh release edit "${GITHUB_REF_NAME}" \
+              --title "TrackOne ${GITHUB_REF_NAME}" \
+              --prerelease
+          else
+            gh release create "${GITHUB_REF_NAME}" \
+              --verify-tag \
+              --title "TrackOne ${GITHUB_REF_NAME}" \
+              --generate-notes \
+              --prerelease
+          fi
+          mapfile -t files < <(find records -type f -print | sort)
+          test "${#files[@]}" -gt 0
+          gh release upload "${GITHUB_REF_NAME}" "${files[@]}" --clobber
