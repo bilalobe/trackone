@@ -44,6 +44,11 @@ jobs:
         with:
           components: rustfmt, clippy
 
+      - name: Install just
+        uses: taiki-e/install-action@v2
+        with:
+          tool: just
+
       - name: Cache cargo
         uses: actions/cache@v6
         with:
