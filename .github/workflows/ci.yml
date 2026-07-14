@@ -39,6 +39,54 @@ jobs:
         with:
           lfs: true
 
+      - name: Check JSON Schema provider identifiers
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          schema_dir = Path("toolset/unified/schemas")
+          provider_base = (
+              "https://raw.githubusercontent.com/bilalobe/trackone/"
+              "main/toolset/unified/schemas/"
+          )
+          paths = sorted(schema_dir.glob("*.schema.json"))
+          if not paths:
+              raise SystemExit("no unified JSON Schemas found")
+
+          documents = {}
+          for path in paths:
+              document = json.loads(path.read_text(encoding="utf-8"))
+              expected_id = provider_base + path.name
+              if document.get("$id") != expected_id:
+                  raise SystemExit(
+                      f"{path}: $id must be {expected_id!r}, "
+                      f"got {document.get('$id')!r}"
+                  )
+              if "example.org" in path.read_text(encoding="utf-8"):
+                  raise SystemExit(f"{path}: reserved example.org URL is not allowed")
+              documents[expected_id] = document
+
+          def references(value):
+              if isinstance(value, dict):
+                  ref = value.get("$ref")
+                  if isinstance(ref, str):
+                      yield ref
+                  for child in value.values():
+                      yield from references(child)
+              elif isinstance(value, list):
+                  for child in value:
+                      yield from references(child)
+
+          for schema_id, document in documents.items():
+              for ref in references(document):
+                  resource = ref.partition("#")[0]
+                  if resource.startswith(provider_base) and resource not in documents:
+                      raise SystemExit(f"{schema_id}: dangling provider $ref {ref!r}")
+
+          print(f"validated {len(documents)} canonical schema provider identifiers")
+          PY
+
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@1.93.0
         with:
