@@ -153,6 +153,11 @@ jobs:
           PYTHONPATH: toolset/anchoring
         run: python -m unittest discover -s toolset/anchoring -p 'test_*.py'
 
+      - name: Test independent verifier
+        env:
+          PYTHONPATH: toolset/independent-verifier
+        run: python -m unittest discover -s toolset/independent-verifier -p 'test_*.py'
+
   conformance-archive:
     runs-on: ubuntu-latest
     needs: [rust, contracts]

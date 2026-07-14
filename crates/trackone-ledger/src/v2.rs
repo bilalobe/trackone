@@ -91,22 +91,29 @@ impl V2InvariantError {
     }
 
     fn from_message(message: &str) -> Option<Self> {
-        [
-            Self::SegmentHexField,
-            Self::SegmentIdentityOrClosurePolicy,
-            Self::EpochPredecessorNotZero,
-            Self::SuccessorPredecessorIsZero,
-            Self::EmptySegment,
-            Self::EmbeddedBatchIdentityOrCardinality,
-            Self::BatchLeafHash,
-            Self::BatchLeavesUnsorted,
-            Self::BatchRootMismatch,
-            Self::NonFinalBatchShort,
-            Self::BatchPartitionsUnsorted,
-            Self::SegmentRootMismatch,
-        ]
-        .into_iter()
-        .find(|error| error.to_string() == message)
+        match message {
+            "segment hex field is invalid" => Some(Self::SegmentHexField),
+            "segment identity or closure policy is invalid" => {
+                Some(Self::SegmentIdentityOrClosurePolicy)
+            }
+            "epoch segment must use zero predecessor" => Some(Self::EpochPredecessorNotZero),
+            "successor segment must have a predecessor" => Some(Self::SuccessorPredecessorIsZero),
+            "empty segment is invalid" => Some(Self::EmptySegment),
+            "embedded batch identity or cardinality is invalid" => {
+                Some(Self::EmbeddedBatchIdentityOrCardinality)
+            }
+            "invalid batch leaf hash" => Some(Self::BatchLeafHash),
+            "batch leaf hashes are not sorted" => Some(Self::BatchLeavesUnsorted),
+            "batch root does not match batch leaves" => Some(Self::BatchRootMismatch),
+            "only the final batch may be shorter than the batch limit" => {
+                Some(Self::NonFinalBatchShort)
+            }
+            "batch leaves are not consecutive sorted partitions" => {
+                Some(Self::BatchPartitionsUnsorted)
+            }
+            "segment root does not match embedded leaves" => Some(Self::SegmentRootMismatch),
+            _ => None,
+        }
     }
 }
 
