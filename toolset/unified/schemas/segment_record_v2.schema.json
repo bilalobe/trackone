@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:trackone:schema:segment-record-v2:1",
+  "$id": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/segment_record_v2.schema.json",
   "title": "Verifiable Telemetry Segment Record v2",
   "type": "object",
   "properties": {
@@ -16,6 +16,32 @@
     "segment_root": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
   },
   "required": ["version", "commitment_profile_id", "ledger_id", "site_id", "segment_number", "closure_policy", "close_reason", "prev_segment_sha256", "batches", "segment_root"],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "segment_number": {"const": "0"}
+        },
+        "required": ["segment_number"]
+      },
+      "then": {
+        "properties": {
+          "prev_segment_sha256": {
+            "const": "0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "prev_segment_sha256": {
+            "not": {
+              "const": "0000000000000000000000000000000000000000000000000000000000000000"
+            }
+          }
+        }
+      }
+    }
+  ],
   "additionalProperties": false,
   "$defs": {
     "uint64": {"type": "string", "pattern": "^(0|[1-9][0-9]*)$"},

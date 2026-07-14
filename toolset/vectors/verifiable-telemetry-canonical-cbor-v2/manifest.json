@@ -1,10 +1,92 @@
 {
-  "schema": "trackone-v2-vector-manifest-1",
+  "schema": "trackone-v2-vector-manifest-2",
+  "draft_revision": "draft-elkhatabi-verifiable-telemetry-ledgers-08",
   "commitment_profile_id": "verifiable-telemetry-canonical-cbor-v2",
   "records": [
-    {"cbor_hex":"87014800000000000000010100f600f6","leaf_sha256":"b83bc27f2d8be3a66373af24e6af3eeffff99ff0696ae18c70e379e853796d26"},
-    {"cbor_hex":"87014800000000000000020201f600f6","leaf_sha256":"b5227357cf5d0619914971d8dc5218c5a99260bc5d5e1b60cb1083a911a2acaf"},
-    {"cbor_hex":"87014800000000000000030302f600f6","leaf_sha256":"4f82e3e7ee90a111774dd951471a31d4582e0908a0bd5fd63c0080c0231f40cc"}
+    {
+      "cbor_path": "fixtures/corrected-epoch-class-a/records/record-1.cbor",
+      "cbor_hex": "87014800000000000000010100f600f6",
+      "cbor_sha256": "8ab3fda697af089e1aa5ed8c3f4ff12be2842a0fef6a4ac45cb764b463016c3c",
+      "leaf_sha256": "b83bc27f2d8be3a66373af24e6af3eeffff99ff0696ae18c70e379e853796d26"
+    },
+    {
+      "cbor_path": "fixtures/corrected-epoch-class-a/records/record-2.cbor",
+      "cbor_hex": "87014800000000000000020201f600f6",
+      "cbor_sha256": "9653fb8f67b01be6ee5c0ec7aad549543aad76da8518cb6088f71fa4e37f15e3",
+      "leaf_sha256": "b5227357cf5d0619914971d8dc5218c5a99260bc5d5e1b60cb1083a911a2acaf"
+    },
+    {
+      "cbor_path": "fixtures/corrected-epoch-class-a/records/record-3.cbor",
+      "cbor_hex": "87014800000000000000030302f600f6",
+      "cbor_sha256": "630765dd51926538bde59353e8a494051d80105cf206ce9529dbe0c8f1fd1e67",
+      "leaf_sha256": "4f82e3e7ee90a111774dd951471a31d4582e0908a0bd5fd63c0080c0231f40cc"
+    }
+  ],
+  "batches": [
+    {
+      "batch_number": "0",
+      "count": "2",
+      "leaf_hashes": [
+        "4f82e3e7ee90a111774dd951471a31d4582e0908a0bd5fd63c0080c0231f40cc",
+        "b5227357cf5d0619914971d8dc5218c5a99260bc5d5e1b60cb1083a911a2acaf"
+      ],
+      "merkle_root": "554491e4edf28061622396b83a870db4652211557127c664c6be1c4ad66471ff"
+    },
+    {
+      "batch_number": "1",
+      "count": "1",
+      "leaf_hashes": [
+        "b83bc27f2d8be3a66373af24e6af3eeffff99ff0696ae18c70e379e853796d26"
+      ],
+      "merkle_root": "b83bc27f2d8be3a66373af24e6af3eeffff99ff0696ae18c70e379e853796d26"
+    }
+  ],
+  "segment": {
+    "cbor_path": "fixtures/corrected-epoch-class-a/segments/segment-0.cbor",
+    "cbor_sha256": "ce76302d1fcbf713097c0d70070b6a651bcd97e7855213aaf422b0ff9226708c",
+    "cbor_size": 1049,
+    "ledger_id": "b7a1d5e40c6f438e9a75db27c96f31aa",
+    "site_id": "an-001",
+    "segment_number": "0",
+    "closure_policy": {
+      "version": 1,
+      "interval_ms": "86400000",
+      "batch_record_limit": "2",
+      "record_limit": null,
+      "size_limit_bytes": null,
+      "empty_mode": "suppress"
+    },
+    "close_reason": "interval",
+    "prev_segment_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "segment_root": "bc6502552ed0c515f58d1c632e54db37594042609b59838eb0d5b3d5842aa054"
+  },
+  "successor_segment": {
+    "cbor_path": "fixtures/successor-class-a/segments/segment-1.cbor",
+    "cbor_sha256": "e58ebc264de3681789d6fd7774bf3ab1d396b091e0bb4fff6793566ec00d9a8b",
+    "cbor_size": 1049,
+    "ledger_id": "b7a1d5e40c6f438e9a75db27c96f31aa",
+    "site_id": "an-001",
+    "segment_number": "1",
+    "closure_policy": {
+      "version": 1,
+      "interval_ms": "86400000",
+      "batch_record_limit": "2",
+      "record_limit": null,
+      "size_limit_bytes": null,
+      "empty_mode": "suppress"
+    },
+    "close_reason": "interval",
+    "prev_segment_sha256": "ce76302d1fcbf713097c0d70070b6a651bcd97e7855213aaf422b0ff9226708c",
+    "segment_root": "bc6502552ed0c515f58d1c632e54db37594042609b59838eb0d5b3d5842aa054"
+  },
+  "negative_segments": [
+    {
+      "id": "segment-7-zero-predecessor",
+      "cbor_path": "fixtures/segment-7-zero-predecessor/segments/segment-7.cbor",
+      "cbor_sha256": "5a0aff8ffbb9314bc02d789c1cca00e2a92be741acef586f51784f4bed1ef4f4",
+      "cbor_size": 1049,
+      "expected_invariant": "successor-predecessor-is-zero"
+    }
   ],
   "segment_root": "bc6502552ed0c515f58d1c632e54db37594042609b59838eb0d5b3d5842aa054"
 }

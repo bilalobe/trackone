@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:trackone:schema:verification-manifest-v2:1",
+  "$id": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/verify_manifest_v2.schema.json",
   "title": "Verifiable Telemetry Segment Verification Manifest v2",
   "type": "object",
   "properties": {
