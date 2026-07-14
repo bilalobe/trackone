@@ -26,6 +26,7 @@ PROVIDER = (
     "main/toolset/unified/schemas/"
 )
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
+V2_VECTOR_SCHEMA = "trackone-v2-vector-manifest-2"
 
 
 class VerifyError(RuntimeError):
@@ -307,7 +308,7 @@ def v2_tree(leaves: list[bytes]) -> bytes:
 
 def verify_v2_vectors(vector_root: Path) -> int:
     manifest = read_json(vector_root / "manifest.json")
-    if manifest.get("schema") != "trackone-v2-vector-manifest-1":
+    if manifest.get("schema") != V2_VECTOR_SCHEMA:
         raise VerifyError("v2 vector schema token mismatch")
     if manifest.get("commitment_profile_id") != "verifiable-telemetry-canonical-cbor-v2":
         raise VerifyError("v2 commitment profile mismatch")
