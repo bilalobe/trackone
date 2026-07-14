@@ -18,6 +18,22 @@
       "tsa_policy_oid": "1.3.6.1.4.1.55555.1"
     },
     {
+      "id": "epoch-class-b",
+      "path": "fixtures/epoch-class-b",
+      "expect_success": true,
+      "expected_result": "expected-result.json",
+      "tsa_ca_file": "trust/tsa-root.pem",
+      "tsa_policy_oid": "1.3.6.1.4.1.55555.1"
+    },
+    {
+      "id": "epoch-class-c",
+      "path": "fixtures/epoch-class-c",
+      "expect_success": true,
+      "expected_result": "expected-result.json",
+      "tsa_ca_file": "trust/tsa-root.pem",
+      "tsa_policy_oid": "1.3.6.1.4.1.55555.1"
+    },
+    {
       "id": "segment-7-zero-predecessor",
       "path": "fixtures/segment-7-zero-predecessor",
       "expect_success": false,

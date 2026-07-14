@@ -6,7 +6,10 @@ of the Internet-Draft.
 
 The corpus carries the complete corrected draft-08 compact epoch artifact,
 its three exact canonical records, embedded batch expectations, artifact
-digest, and a CLI-runnable Class-A bundle. It also archives the pre-correction
+digest, and CLI-runnable Class A, B, and C bundles. The positive bundles carry
+real RFC 3161 timestamp responses over the authoritative segment artifact and
+are verified against the test-only `trust/tsa-root.pem` with policy OID
+`1.3.6.1.4.1.55555.1`. It also archives the pre-correction
 segment-7/zero-predecessor artifact as a required negative case. The negative
 bytes remain exactly hash-reproducible but must never decode as a valid v2
 segment. A second Class-A bundle proves a valid segment-1 successor against
@@ -48,5 +51,6 @@ cargo test --locked -p trackone-evidence --test v2_vector_bundles
 ```
 
 This corpus closes the record, Merkle, embedded-batch, segment-artifact,
-epoch/successor construction, and strict chain-position vector boundary. It
-does not claim complete v2 producer or timestamp-channel conformance.
+epoch/successor construction, strict chain-position, disclosure-class, and
+RFC 3161 verifier boundaries. The fixture root is not a production trust
+anchor.

@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "artifact_sha256": "ce76302d1fcbf713097c0d70070b6a651bcd97e7855213aaf422b0ff9226708c",
+  "commitment_profile_id": "verifiable-telemetry-canonical-cbor-v2",
+  "disclosure_class": "B",
+  "verification_scope": "partial_verification",
+  "channels": {"tsa": {"status": "verified"}},
+  "policy": {"require_tsa": true},
+  "checks_executed": [
+    "bundle_disclosure_validation",
+    "verification_manifest_validation",
+    "segment_artifact_validation",
+    "segment_chain_validation",
+    "segment_digest_binding",
+    "tsa_verification"
+  ],
+  "checks_skipped": [
+    {"check": "record_level_recompute", "reason": "disclosure-class-b"},
+    {"check": "batch_metadata_validation", "reason": "not_disclosed"}
+  ],
+  "overall": "success"
+}

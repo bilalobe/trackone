@@ -42,7 +42,7 @@ fn v2_vector_bundles_are_cli_runnable() {
     }
     let cases: Cases = serde_json::from_slice(&fs::read(root.join("cases.json")).unwrap()).unwrap();
     assert_eq!(cases.schema, "trackone-v2-bundle-cases-1");
-    assert_eq!(cases.cases.len(), 3);
+    assert_eq!(cases.cases.len(), 5);
 
     for case in cases.cases {
         let bundle = root.join(&case.path);
