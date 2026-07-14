@@ -2,7 +2,7 @@
 
 **Status**: Accepted
 **Date**: 2026-03-12
-**Updated**: 2026-03-12
+**Updated**: 2026-07-12
 
 ## Related ADRs
 
@@ -101,7 +101,21 @@ TrackOne MAY add shared schema modules such as:
 Those modules are still ordinary JSON Schema artifacts and remain directly
 inspectable by standard tools.
 
-### 5) Higher-level generation is optional, but output remains authoritative
+### 5) Public schema identifiers resolve through the source repository
+
+Identifiers for checked-in schemas MUST use the public provider base
+`https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/`.
+The provider path must resolve to the same checked-in artifact and cross-file
+`$ref` values must use the same base. Reserved example domains such as
+`example.org` MUST NOT be used as schema identifiers because consumers can
+legitimately attempt remote reference resolution.
+
+Release evidence archives remain the version-bound distribution surface.
+Consumers that require immutable schema bytes SHOULD use the archive for a
+specific release or substitute that release's tag or commit for `main` in the
+provider URL.
+
+### 6) Higher-level generation is optional, but output remains authoritative
 
 If TrackOne later adopts a higher-level authoring system (for example CUE,
 Pydantic-based generation, or another schema DSL), that layer MUST satisfy all
@@ -155,5 +169,7 @@ system in order to interpret the contract.
    active work.
 1. Add CI checks that validate all checked-in schemas and detect stale
    generated output if a higher-level generation step is later introduced.
+1. Reject reserved example-domain `$id` and `$ref` values in checked-in schema
+   artifacts.
 1. Keep the checked-in `.schema.json` artifacts as the reviewable contract in
    PRs, even if authoring is assisted by generation tooling.
