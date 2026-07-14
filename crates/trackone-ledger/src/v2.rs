@@ -250,6 +250,13 @@ fn mth(leaves: &[[u8; 32]]) -> [u8; 32] {
     }
 }
 
+/// Reduce an already sorted list of v2 leaf hashes using the profile's
+/// recursive split rule. This is primarily used when constructing the
+/// authoritative per-batch metadata after records have been globally sorted.
+pub fn merkle_root_from_leaf_hashes(leaves: &[[u8; 32]]) -> [u8; 32] {
+    mth(leaves)
+}
+
 /// Compute the draft -08, domain-separated, hash-sorted multiset tree.
 pub fn merkle_root_from_records(records: &[Vec<u8>]) -> MerkleResultV2 {
     let mut leaf_hashes = records

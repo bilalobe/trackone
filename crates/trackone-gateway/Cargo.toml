@@ -18,6 +18,7 @@ doctest = false
 [features]
 default = []
 python = ["dep:pyo3", "dep:base64"]
+postgres-store = ["dep:postgres"]
 
 [dependencies]
 trackone-constants.workspace = true
@@ -28,3 +29,4 @@ trackone-sensorthings.workspace = true
 pyo3 = { workspace = true, optional = true }
 serde_json.workspace = true
 base64 = { workspace = true, optional = true }
+postgres = { workspace = true, optional = true }

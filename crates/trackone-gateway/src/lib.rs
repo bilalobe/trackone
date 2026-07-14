@@ -15,6 +15,9 @@ pub mod ots;
 #[cfg(feature = "python")]
 mod radio;
 pub mod sensorthings;
+#[cfg(feature = "postgres-store")]
+pub mod v2_postgres;
+pub mod v2_producer;
 
 #[cfg(feature = "python")]
 fn extract_frames(py_frames: &Bound<'_, PyAny>) -> PyResult<Vec<Vec<u8>>> {
