@@ -19,6 +19,7 @@ doctest = false
 default = []
 python = ["dep:pyo3", "dep:base64"]
 postgres-store = ["dep:postgres"]
+v2-service = ["postgres-store", "dep:axum", "dep:tokio"]
 
 [dependencies]
 trackone-constants.workspace = true
@@ -30,3 +31,10 @@ pyo3 = { workspace = true, optional = true }
 serde_json.workspace = true
 base64 = { workspace = true, optional = true }
 postgres = { workspace = true, optional = true }
+axum = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
+
+[[bin]]
+name = "trackone-v2-gateway"
+path = "src/bin/trackone-v2-gateway.rs"
+required-features = ["v2-service"]

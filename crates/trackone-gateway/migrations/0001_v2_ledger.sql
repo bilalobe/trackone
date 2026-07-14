@@ -45,3 +45,13 @@ CREATE TABLE IF NOT EXISTS trackone_v2_sealed_record (
         REFERENCES trackone_v2_sealed_segment(ledger_id, segment_number)
         ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS trackone_v2_idempotency (
+    ledger_id text NOT NULL REFERENCES trackone_v2_ledger_state(ledger_id) ON DELETE CASCADE,
+    idempotency_key text NOT NULL CHECK (length(idempotency_key) BETWEEN 1 AND 255),
+    record_sha256 text NOT NULL CHECK (record_sha256 ~ '^[0-9a-f]{64}$'),
+    admitted_segment_number numeric(20,0) NOT NULL CHECK (admitted_segment_number BETWEEN 0 AND 18446744073709551615),
+    state_revision numeric(20,0) NOT NULL CHECK (state_revision BETWEEN 0 AND 18446744073709551615),
+    sealed_segment_numbers text[] NOT NULL,
+    PRIMARY KEY (ledger_id, idempotency_key)
+);

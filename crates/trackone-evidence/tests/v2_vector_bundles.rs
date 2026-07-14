@@ -47,7 +47,10 @@ fn v2_vector_bundles_are_cli_runnable() {
     for case in cases.cases {
         let bundle = root.join(&case.path);
         let mut command = Command::new(env!("CARGO_BIN_EXE_trackone-evidence"));
-        command.args(["verify-v2", "--root"]).arg(&bundle).arg("--json");
+        command
+            .args(["verify-v2", "--root"])
+            .arg(&bundle)
+            .arg("--json");
         if let Some(ca_file) = &case.tsa_ca_file {
             command.arg("--tsa-ca-file").arg(root.join(ca_file));
         }

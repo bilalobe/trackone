@@ -3,7 +3,9 @@
 use postgres::{Client, IsolationLevel};
 use trackone_ledger::v2::{ClosurePolicyV1, EmptyMode};
 
-use crate::v2_producer::{LedgerStore, OpenInterval, ProducerError, ProducerState, SealedSegment};
+use crate::v2_producer::{
+    IdempotencyRecord, LedgerStore, OpenInterval, ProducerError, ProducerState, SealedSegment,
+};
 
 pub const MIGRATION: &str = include_str!("../migrations/0001_v2_ledger.sql");
 
@@ -130,11 +132,41 @@ impl LedgerStore for PostgresLedgerStore {
         }))
     }
 
+    fn lookup_idempotency(
+        &mut self,
+        key: &str,
+    ) -> Result<Option<IdempotencyRecord>, ProducerError> {
+        let row = self
+            .client
+            .query_opt(
+                "SELECT record_sha256, admitted_segment_number::text, state_revision::text, \
+                 sealed_segment_numbers \
+                 FROM trackone_v2_idempotency WHERE ledger_id=$1 AND idempotency_key=$2",
+                &[&self.ledger_id, &key],
+            )
+            .map_err(store_error)?;
+        row.map(|row| {
+            let sealed: Vec<String> = row.get(3);
+            Ok(IdempotencyRecord {
+                key: key.to_string(),
+                record_sha256: row.get(0),
+                admitted_segment_number: parse_u64(row.get(1), "admitted_segment_number")?,
+                state_revision: parse_u64(row.get(2), "state_revision")?,
+                sealed_segment_numbers: sealed
+                    .into_iter()
+                    .map(|value| parse_u64(value, "sealed_segment_number"))
+                    .collect::<Result<Vec<_>, _>>()?,
+            })
+        })
+        .transpose()
+    }
+
     fn compare_and_swap(
         &mut self,
         expected_revision: Option<u64>,
         state: &ProducerState,
         sealed: &[SealedSegment],
+        admission: Option<&IdempotencyRecord>,
     ) -> Result<(), ProducerError> {
         if state.ledger_id != self.ledger_id {
             return Err(ProducerError::Store(
@@ -269,6 +301,35 @@ impl LedgerStore for PostgresLedgerStore {
                         &[&state.ledger_id, &segment_number, &ordinal, record],
                     )
                     .map_err(store_error)?;
+            }
+        }
+        if let Some(admission) = admission {
+            let admitted_segment_number = numeric(admission.admitted_segment_number);
+            let state_revision = numeric(admission.state_revision);
+            let sealed_segment_numbers = admission
+                .sealed_segment_numbers
+                .iter()
+                .map(|number| numeric(*number))
+                .collect::<Vec<_>>();
+            let inserted = transaction
+                .execute(
+                    "INSERT INTO trackone_v2_idempotency \
+                     (ledger_id, idempotency_key, record_sha256, admitted_segment_number, \
+                      state_revision, sealed_segment_numbers) \
+                     VALUES ($1,$2,$3,$4::numeric,$5::numeric,$6) \
+                     ON CONFLICT DO NOTHING",
+                    &[
+                        &state.ledger_id,
+                        &admission.key,
+                        &admission.record_sha256,
+                        &admitted_segment_number,
+                        &state_revision,
+                        &sealed_segment_numbers,
+                    ],
+                )
+                .map_err(store_error)?;
+            if inserted != 1 {
+                return Err(ProducerError::ConcurrentWriter);
             }
         }
         transaction.commit().map_err(store_error)

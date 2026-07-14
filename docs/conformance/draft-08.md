@@ -54,6 +54,17 @@ be able to take transaction-scoped advisory locks and mutate the four v2
 tables in one serializable transaction. A restart must use a new elapsed-clock
 continuity identifier and invoke recovery before accepting telemetry.
 
+Build the HTTP handoff with the `v2-service` feature and run the
+`trackone-v2-gateway` binary. It requires `TRACKONE_DATABASE_URL`,
+`TRACKONE_LEDGER_ID`, and `TRACKONE_SITE_ID`; interval, batch, record, size,
+empty-mode, and bind settings use the corresponding `TRACKONE_*` environment
+variables shown by the binary source. `POST /v2/records` accepts only
+`application/cbor` and requires `Idempotency-Key`. Identical bytes replay the
+durably recorded outcome; reuse of the key for different bytes returns HTTP
+409. Exact canonical bytes, interval membership, counters, sealed artifacts,
+serial advancement, and the idempotency outcome share one database
+transaction.
+
 RFC 3161 verification requires OpenSSL on `PATH`, a deployment trust-anchor
 file passed with `--tsa-ca-file`, and the expected TSA policy passed with
 `--tsa-policy`. The conformance fixture root is test-only and must not be used

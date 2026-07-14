@@ -53,11 +53,14 @@ pub struct SealedSegment {
 /// as a single transaction before returning success.
 pub trait LedgerStore {
     fn load(&mut self) -> Result<Option<ProducerState>, ProducerError>;
+    fn lookup_idempotency(&mut self, key: &str)
+    -> Result<Option<IdempotencyRecord>, ProducerError>;
     fn compare_and_swap(
         &mut self,
         expected_revision: Option<u64>,
         state: &ProducerState,
         sealed: &[SealedSegment],
+        admission: Option<&IdempotencyRecord>,
     ) -> Result<(), ProducerError>;
 }
 
@@ -107,6 +110,17 @@ pub struct AdmissionOutcome {
     pub state_revision: u64,
     pub admitted_segment_number: u64,
     pub sealed: Vec<SealedSegment>,
+    pub sealed_segment_numbers: Vec<u64>,
+    pub replayed: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct IdempotencyRecord {
+    pub key: String,
+    pub record_sha256: String,
+    pub admitted_segment_number: u64,
+    pub state_revision: u64,
+    pub sealed_segment_numbers: Vec<u64>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -119,6 +133,7 @@ pub enum ProducerError {
     CounterOverflow(&'static str),
     Store(String),
     ConcurrentWriter,
+    IdempotencyConflict,
     Construction(String),
 }
 
@@ -137,6 +152,9 @@ impl fmt::Display for ProducerError {
             Self::CounterOverflow(name) => write!(formatter, "{name} counter overflow"),
             Self::Store(message) => write!(formatter, "ledger store failed: {message}"),
             Self::ConcurrentWriter => formatter.write_str("concurrent ledger writer detected"),
+            Self::IdempotencyConflict => {
+                formatter.write_str("idempotency key was already used for different bytes")
+            }
             Self::Construction(message) => {
                 write!(formatter, "segment construction failed: {message}")
             }
@@ -217,7 +235,7 @@ impl<S: LedgerStore, C: ElapsedClock> V2LedgerProducer<S, C> {
                 "ledger_id must be 16-byte lowercase hex and site_id must be non-empty",
             ));
         }
-        store.compare_and_swap(None, &state, &[])?;
+        store.compare_and_swap(None, &state, &[], None)?;
         Ok(Self {
             store,
             clock,
@@ -253,7 +271,7 @@ impl<S: LedgerStore, C: ElapsedClock> V2LedgerProducer<S, C> {
         } else {
             let mut next = self.state.clone();
             next.next_policy = policy;
-            self.commit(next, Vec::new())?;
+            self.commit(next, Vec::new(), None)?;
             Ok(Vec::new())
         }
     }
@@ -264,6 +282,41 @@ impl<S: LedgerStore, C: ElapsedClock> V2LedgerProducer<S, C> {
     }
 
     pub fn admit(&mut self, record: Vec<u8>) -> Result<AdmissionOutcome, ProducerError> {
+        self.admit_inner(record, None)
+    }
+
+    pub fn admit_idempotent(
+        &mut self,
+        key: impl Into<String>,
+        record: Vec<u8>,
+    ) -> Result<AdmissionOutcome, ProducerError> {
+        let key = key.into();
+        if key.is_empty() || key.len() > 255 || key.chars().any(char::is_control) {
+            return Err(ProducerError::InvalidConfiguration(
+                "idempotency key must contain 1..255 non-control characters",
+            ));
+        }
+        let digest = sha256_hex(&record);
+        if let Some(existing) = self.store.lookup_idempotency(&key)? {
+            if existing.record_sha256 != digest {
+                return Err(ProducerError::IdempotencyConflict);
+            }
+            return Ok(AdmissionOutcome {
+                state_revision: existing.state_revision,
+                admitted_segment_number: existing.admitted_segment_number,
+                sealed: Vec::new(),
+                sealed_segment_numbers: existing.sealed_segment_numbers,
+                replayed: true,
+            });
+        }
+        self.admit_inner(record, Some((key, digest)))
+    }
+
+    fn admit_inner(
+        &mut self,
+        record: Vec<u8>,
+        idempotency: Option<(String, String)>,
+    ) -> Result<AdmissionOutcome, ProducerError> {
         validate_canonical_record_v2(&record)
             .map_err(|error| ProducerError::InvalidRecord(error.to_string()))?;
         let now = self.safe_now()?;
@@ -301,11 +354,33 @@ impl<S: LedgerStore, C: ElapsedClock> V2LedgerProducer<S, C> {
         {
             sealed.push(segment);
         }
-        self.commit(next, sealed.clone())?;
+        let admission = idempotency
+            .map(|(key, record_sha256)| {
+                Ok(IdempotencyRecord {
+                    key,
+                    record_sha256,
+                    admitted_segment_number,
+                    state_revision: next
+                        .revision
+                        .checked_add(1)
+                        .ok_or(ProducerError::CounterOverflow("state revision"))?,
+                    sealed_segment_numbers: sealed
+                        .iter()
+                        .map(|segment| segment.segment_number)
+                        .collect(),
+                })
+            })
+            .transpose()?;
+        self.commit(next, sealed.clone(), admission.as_ref())?;
         Ok(AdmissionOutcome {
             state_revision: self.state.revision,
             admitted_segment_number,
+            sealed_segment_numbers: sealed
+                .iter()
+                .map(|segment| segment.segment_number)
+                .collect(),
             sealed,
+            replayed: false,
         })
     }
 
@@ -338,7 +413,7 @@ impl<S: LedgerStore, C: ElapsedClock> V2LedgerProducer<S, C> {
         }
         next.open.opened_at_ms = now;
         next.open.clock_continuity_id = self.clock.continuity_id();
-        self.commit(next, sealed.clone())?;
+        self.commit(next, sealed.clone(), None)?;
         Ok(sealed)
     }
 
@@ -443,13 +518,14 @@ impl<S: LedgerStore, C: ElapsedClock> V2LedgerProducer<S, C> {
         &mut self,
         mut next: ProducerState,
         sealed: Vec<SealedSegment>,
+        admission: Option<&IdempotencyRecord>,
     ) -> Result<(), ProducerError> {
         let expected = self.state.revision;
         next.revision = expected
             .checked_add(1)
             .ok_or(ProducerError::CounterOverflow("state revision"))?;
         self.store
-            .compare_and_swap(Some(expected), &next, &sealed)?;
+            .compare_and_swap(Some(expected), &next, &sealed, admission)?;
         self.state = next;
         Ok(())
     }
@@ -459,6 +535,7 @@ impl<S: LedgerStore, C: ElapsedClock> V2LedgerProducer<S, C> {
 pub struct MemoryLedgerStore {
     pub state: Option<ProducerState>,
     pub sealed: BTreeMap<u64, SealedSegment>,
+    pub idempotency: BTreeMap<String, IdempotencyRecord>,
 }
 
 impl LedgerStore for MemoryLedgerStore {
@@ -466,11 +543,19 @@ impl LedgerStore for MemoryLedgerStore {
         Ok(self.state.clone())
     }
 
+    fn lookup_idempotency(
+        &mut self,
+        key: &str,
+    ) -> Result<Option<IdempotencyRecord>, ProducerError> {
+        Ok(self.idempotency.get(key).cloned())
+    }
+
     fn compare_and_swap(
         &mut self,
         expected_revision: Option<u64>,
         state: &ProducerState,
         sealed: &[SealedSegment],
+        admission: Option<&IdempotencyRecord>,
     ) -> Result<(), ProducerError> {
         if self.state.as_ref().map(|current| current.revision) != expected_revision {
             return Err(ProducerError::ConcurrentWriter);
@@ -480,9 +565,18 @@ impl LedgerStore for MemoryLedgerStore {
                 return Err(ProducerError::ConcurrentWriter);
             }
         }
+        if let Some(admission) = admission
+            && self.idempotency.contains_key(&admission.key)
+        {
+            return Err(ProducerError::ConcurrentWriter);
+        }
         self.state = Some(state.clone());
         for segment in sealed {
             self.sealed.insert(segment.segment_number, segment.clone());
+        }
+        if let Some(admission) = admission {
+            self.idempotency
+                .insert(admission.key.clone(), admission.clone());
         }
         Ok(())
     }
@@ -535,10 +629,10 @@ mod tests {
         ]
     }
 
-    fn producer<'a>(
-        clock: &'a FakeClock,
+    fn producer(
+        clock: &FakeClock,
         empty_mode: EmptyMode,
-    ) -> V2LedgerProducer<MemoryLedgerStore, &'a FakeClock> {
+    ) -> V2LedgerProducer<MemoryLedgerStore, &FakeClock> {
         V2LedgerProducer::open_or_create(
             MemoryLedgerStore::default(),
             clock,
@@ -656,6 +750,22 @@ mod tests {
         assert_eq!(
             CloseReason::highest([CloseReason::RecordLimit, CloseReason::SizeLimit]),
             Some(CloseReason::SizeLimit)
+        );
+    }
+
+    #[test]
+    fn idempotency_replays_identical_bytes_and_rejects_key_reuse() {
+        let clock = FakeClock::new(0);
+        let mut producer = producer(&clock, EmptyMode::Suppress);
+        let first = producer.admit_idempotent("request-1", record(1)).unwrap();
+        let replay = producer.admit_idempotent("request-1", record(1)).unwrap();
+        assert!(!first.replayed);
+        assert!(replay.replayed);
+        assert_eq!(replay.state_revision, first.state_revision);
+        assert_eq!(producer.state().open.records.len(), 1);
+        assert_eq!(
+            producer.admit_idempotent("request-1", record(2)),
+            Err(ProducerError::IdempotencyConflict)
         );
     }
 }
