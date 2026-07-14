@@ -101,7 +101,6 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p state run
-          printf 'trackone-anchor-state-v1\n' > state/FORMAT
           previous_run=""
           while IFS= read -r candidate_run; do
             artifact_count="$(gh api \
