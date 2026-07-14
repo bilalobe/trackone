@@ -55,6 +55,84 @@ pub struct SegmentRecordV2 {
     pub segment_root: String,
 }
 
+/// Stable semantic failure categories for a decoded or constructed v2 segment.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum V2InvariantError {
+    SegmentHexField,
+    SegmentIdentityOrClosurePolicy,
+    EpochPredecessorNotZero,
+    SuccessorPredecessorIsZero,
+    EmptySegment,
+    EmbeddedBatchIdentityOrCardinality,
+    BatchLeafHash,
+    BatchLeavesUnsorted,
+    BatchRootMismatch,
+    NonFinalBatchShort,
+    BatchPartitionsUnsorted,
+    SegmentRootMismatch,
+}
+
+impl V2InvariantError {
+    pub const fn code(self) -> &'static str {
+        match self {
+            Self::SegmentHexField => "segment-hex-field",
+            Self::SegmentIdentityOrClosurePolicy => "segment-identity-or-closure-policy",
+            Self::EpochPredecessorNotZero => "epoch-predecessor-not-zero",
+            Self::SuccessorPredecessorIsZero => "successor-predecessor-is-zero",
+            Self::EmptySegment => "empty-segment",
+            Self::EmbeddedBatchIdentityOrCardinality => "embedded-batch-identity-or-cardinality",
+            Self::BatchLeafHash => "batch-leaf-hash",
+            Self::BatchLeavesUnsorted => "batch-leaves-unsorted",
+            Self::BatchRootMismatch => "batch-root-mismatch",
+            Self::NonFinalBatchShort => "non-final-batch-short",
+            Self::BatchPartitionsUnsorted => "batch-partitions-unsorted",
+            Self::SegmentRootMismatch => "segment-root-mismatch",
+        }
+    }
+
+    fn from_message(message: &str) -> Option<Self> {
+        [
+            Self::SegmentHexField,
+            Self::SegmentIdentityOrClosurePolicy,
+            Self::EpochPredecessorNotZero,
+            Self::SuccessorPredecessorIsZero,
+            Self::EmptySegment,
+            Self::EmbeddedBatchIdentityOrCardinality,
+            Self::BatchLeafHash,
+            Self::BatchLeavesUnsorted,
+            Self::BatchRootMismatch,
+            Self::NonFinalBatchShort,
+            Self::BatchPartitionsUnsorted,
+            Self::SegmentRootMismatch,
+        ]
+        .into_iter()
+        .find(|error| error.to_string() == message)
+    }
+}
+
+impl core::fmt::Display for V2InvariantError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(match self {
+            Self::SegmentHexField => "segment hex field is invalid",
+            Self::SegmentIdentityOrClosurePolicy => "segment identity or closure policy is invalid",
+            Self::EpochPredecessorNotZero => "epoch segment must use zero predecessor",
+            Self::SuccessorPredecessorIsZero => "successor segment must have a predecessor",
+            Self::EmptySegment => "empty segment is invalid",
+            Self::EmbeddedBatchIdentityOrCardinality => {
+                "embedded batch identity or cardinality is invalid"
+            }
+            Self::BatchLeafHash => "invalid batch leaf hash",
+            Self::BatchLeavesUnsorted => "batch leaf hashes are not sorted",
+            Self::BatchRootMismatch => "batch root does not match batch leaves",
+            Self::NonFinalBatchShort => "only the final batch may be shorter than the batch limit",
+            Self::BatchPartitionsUnsorted => "batch leaves are not consecutive sorted partitions",
+            Self::SegmentRootMismatch => "segment root does not match embedded leaves",
+        })
+    }
+}
+
+impl std::error::Error for V2InvariantError {}
+
 /// Profile-visible metadata decoded from an exact canonical-record preimage.
 /// Payload semantics remain opaque and outside this profile.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -98,6 +176,39 @@ impl core::fmt::Display for V2DecodeError {
 }
 
 impl std::error::Error for V2DecodeError {}
+
+impl V2DecodeError {
+    /// Return a stable semantic invariant category when decoding reached the
+    /// v2 model but the decoded segment violated a cross-field invariant.
+    pub fn invariant_error(&self) -> Option<V2InvariantError> {
+        match self {
+            Self::Invariant(message) => V2InvariantError::from_message(message),
+            _ => None,
+        }
+    }
+}
+
+/// Failures while deriving a valid epoch or successor segment.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum V2ConstructionError {
+    InvalidPredecessor(V2DecodeError),
+    SegmentNumberExhausted,
+    TooManyBatches,
+    Invariant(V2InvariantError),
+}
+
+impl core::fmt::Display for V2ConstructionError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::InvalidPredecessor(error) => write!(f, "invalid predecessor segment: {error}"),
+            Self::SegmentNumberExhausted => f.write_str("segment number is exhausted"),
+            Self::TooManyBatches => f.write_str("batch count exceeds uint64"),
+            Self::Invariant(error) => error.fmt(f),
+        }
+    }
+}
+
+impl std::error::Error for V2ConstructionError {}
 
 type DecodeResult<T> = core::result::Result<T, V2DecodeError>;
 
@@ -217,12 +328,100 @@ fn valid_close_reason(value: &str) -> bool {
 }
 
 impl SegmentRecordV2 {
+    /// Construct a validated epoch segment and propagate its identity into all
+    /// embedded batches.
+    pub fn new_epoch(
+        ledger_id: impl Into<String>,
+        site_id: impl Into<String>,
+        closure_policy: ClosurePolicyV1,
+        close_reason: impl Into<String>,
+        batches: Vec<SegmentBatchV2>,
+        segment_root: impl Into<String>,
+    ) -> Result<Self, V2ConstructionError> {
+        Self::new_at_position(
+            ledger_id.into(),
+            site_id.into(),
+            0,
+            ZERO_SHA256.to_string(),
+            closure_policy,
+            close_reason.into(),
+            batches,
+            segment_root.into(),
+        )
+    }
+
+    /// Construct a validated successor from the predecessor's exact canonical
+    /// artifact bytes. Ledger/site identity, serial, and predecessor digest are
+    /// derived rather than accepted independently.
+    pub fn new_successor(
+        predecessor_bytes: &[u8],
+        closure_policy: ClosurePolicyV1,
+        close_reason: impl Into<String>,
+        batches: Vec<SegmentBatchV2>,
+        segment_root: impl Into<String>,
+    ) -> Result<Self, V2ConstructionError> {
+        let predecessor = decode_segment_record_v2(predecessor_bytes)
+            .map_err(V2ConstructionError::InvalidPredecessor)?;
+        let segment_number = predecessor
+            .segment_number
+            .checked_add(1)
+            .ok_or(V2ConstructionError::SegmentNumberExhausted)?;
+        Self::new_at_position(
+            predecessor.ledger_id,
+            predecessor.site_id,
+            segment_number,
+            sha256_hex(predecessor_bytes),
+            closure_policy,
+            close_reason.into(),
+            batches,
+            segment_root.into(),
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn new_at_position(
+        ledger_id: String,
+        site_id: String,
+        segment_number: u64,
+        prev_segment_sha256: String,
+        closure_policy: ClosurePolicyV1,
+        close_reason: String,
+        mut batches: Vec<SegmentBatchV2>,
+        segment_root: String,
+    ) -> Result<Self, V2ConstructionError> {
+        for (number, batch) in batches.iter_mut().enumerate() {
+            batch.ledger_id.clone_from(&ledger_id);
+            batch.site_id.clone_from(&site_id);
+            batch.segment_number = segment_number;
+            batch.batch_number =
+                u64::try_from(number).map_err(|_| V2ConstructionError::TooManyBatches)?;
+        }
+        let segment = Self {
+            ledger_id,
+            site_id,
+            segment_number,
+            closure_policy,
+            close_reason,
+            prev_segment_sha256,
+            batches,
+            segment_root,
+        };
+        segment
+            .validate_detailed()
+            .map_err(V2ConstructionError::Invariant)?;
+        Ok(segment)
+    }
+
     pub fn validate(&self) -> Result<(), String> {
+        self.validate_detailed().map_err(|error| error.to_string())
+    }
+
+    pub fn validate_detailed(&self) -> Result<(), V2InvariantError> {
         if !valid_hex(&self.ledger_id, 32)
             || !valid_hex(&self.prev_segment_sha256, 64)
             || !valid_hex(&self.segment_root, 64)
         {
-            return Err("segment hex field is invalid".into());
+            return Err(V2InvariantError::SegmentHexField);
         }
         if self.site_id.is_empty()
             || self.closure_policy.interval_ms == 0
@@ -231,19 +430,19 @@ impl SegmentRecordV2 {
             || self.closure_policy.size_limit_bytes == Some(0)
             || !valid_close_reason(&self.close_reason)
         {
-            return Err("segment identity or closure policy is invalid".into());
+            return Err(V2InvariantError::SegmentIdentityOrClosurePolicy);
         }
         if self.segment_number == 0 && self.prev_segment_sha256 != ZERO_SHA256 {
-            return Err("epoch segment must use zero predecessor".into());
+            return Err(V2InvariantError::EpochPredecessorNotZero);
         }
         if self.segment_number != 0 && self.prev_segment_sha256 == ZERO_SHA256 {
-            return Err("successor segment must have a predecessor".into());
+            return Err(V2InvariantError::SuccessorPredecessorIsZero);
         }
         if self.batches.is_empty() {
             if self.closure_policy.empty_mode != EmptyMode::Emit
                 || self.segment_root != sha256_hex(b"")
             {
-                return Err("empty segment is invalid".into());
+                return Err(V2InvariantError::EmptySegment);
             }
             return Ok(());
         }
@@ -257,38 +456,40 @@ impl SegmentRecordV2 {
                 || batch.count as usize != batch.leaf_hashes.len()
                 || batch.count > self.closure_policy.batch_record_limit
             {
-                return Err("embedded batch identity or cardinality is invalid".into());
+                return Err(V2InvariantError::EmbeddedBatchIdentityOrCardinality);
             }
             if batch.leaf_hashes.iter().any(|hash| !valid_hex(hash, 64)) {
-                return Err("invalid batch leaf hash".into());
+                return Err(V2InvariantError::BatchLeafHash);
             }
             if batch.leaf_hashes.windows(2).any(|pair| pair[0] > pair[1]) {
-                return Err("batch leaf hashes are not sorted".into());
+                return Err(V2InvariantError::BatchLeavesUnsorted);
             }
             let batch_hashes = batch
                 .leaf_hashes
                 .iter()
                 .map(|hash| decode_hex32(hash))
-                .collect::<Result<Vec<_>, _>>()?;
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|_| V2InvariantError::BatchLeafHash)?;
             if hex_lower(&mth(&batch_hashes)) != batch.merkle_root {
-                return Err("batch root does not match batch leaves".into());
+                return Err(V2InvariantError::BatchRootMismatch);
             }
             if number + 1 != self.batches.len()
                 && batch.count != self.closure_policy.batch_record_limit
             {
-                return Err("only the final batch may be shorter than the batch limit".into());
+                return Err(V2InvariantError::NonFinalBatchShort);
             }
             leaves.extend(batch.leaf_hashes.iter().cloned());
         }
         if leaves.windows(2).any(|pair| pair[0] > pair[1]) {
-            return Err("batch leaves are not consecutive sorted partitions".into());
+            return Err(V2InvariantError::BatchPartitionsUnsorted);
         }
         let hashes = leaves
             .iter()
             .map(|h| decode_hex32(h))
-            .collect::<Result<Vec<_>, _>>()?;
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|_| V2InvariantError::BatchLeafHash)?;
         if hex_lower(&mth(&hashes)) != self.segment_root {
-            return Err("segment root does not match embedded leaves".into());
+            return Err(V2InvariantError::SegmentRootMismatch);
         }
         Ok(())
     }
@@ -375,7 +576,9 @@ pub fn decode_segment_record_v2(bytes: &[u8]) -> DecodeResult<SegmentRecordV2> {
         batches,
         segment_root,
     };
-    record.validate().map_err(V2DecodeError::Invariant)?;
+    record
+        .validate_detailed()
+        .map_err(|error| V2DecodeError::Invariant(error.to_string()))?;
     let canonical = record
         .canonical_cbor_bytes()
         .map_err(V2DecodeError::Invariant)?;
@@ -909,30 +1112,29 @@ mod tests {
         let records = vec![hex::decode("87014800000000000000010100f600f6").unwrap()];
         let merkle = merkle_root_from_records(&records);
         let leaf = hex_lower(&merkle.leaf_hashes[0]);
-        SegmentRecordV2 {
-            ledger_id: "b7a1d5e40c6f438e9a75db27c96f31aa".into(),
-            site_id: "an-001".into(),
-            segment_number: 0,
-            closure_policy: ClosurePolicyV1 {
+        SegmentRecordV2::new_epoch(
+            "b7a1d5e40c6f438e9a75db27c96f31aa",
+            "an-001",
+            ClosurePolicyV1 {
                 interval_ms: 60_000,
                 batch_record_limit: 1,
                 record_limit: None,
                 size_limit_bytes: None,
                 empty_mode: EmptyMode::Suppress,
             },
-            close_reason: "interval".into(),
-            prev_segment_sha256: ZERO_SHA256.into(),
-            batches: vec![SegmentBatchV2 {
-                ledger_id: "b7a1d5e40c6f438e9a75db27c96f31aa".into(),
-                site_id: "an-001".into(),
-                segment_number: 0,
-                batch_number: 0,
+            "interval",
+            vec![SegmentBatchV2 {
+                ledger_id: String::new(),
+                site_id: String::new(),
+                segment_number: u64::MAX,
+                batch_number: u64::MAX,
                 merkle_root: leaf.clone(),
                 count: 1,
                 leaf_hashes: vec![leaf],
             }],
-            segment_root: merkle.root_hex(),
-        }
+            merkle.root_hex(),
+        )
+        .unwrap()
     }
 
     #[test]
@@ -1042,10 +1244,85 @@ mod tests {
     }
 
     #[test]
-    fn decoder_enforces_successor_predecessor_rule() {
+    fn model_validation_rejects_successor_zero_predecessor() {
         let mut successor = epoch_segment();
         successor.segment_number = 7;
         successor.batches[0].segment_number = 7;
-        assert!(successor.validate().is_err());
+        assert_eq!(
+            successor.validate_detailed(),
+            Err(V2InvariantError::SuccessorPredecessorIsZero)
+        );
+        assert_eq!(
+            successor.validate().unwrap_err(),
+            "successor segment must have a predecessor"
+        );
+        assert_eq!(
+            V2InvariantError::SuccessorPredecessorIsZero.code(),
+            "successor-predecessor-is-zero"
+        );
+    }
+
+    #[test]
+    fn successor_constructor_derives_chain_and_batch_identity() {
+        let predecessor = epoch_segment();
+        let predecessor_bytes = predecessor.canonical_cbor_bytes().unwrap();
+        let mut batch = predecessor.batches[0].clone();
+        batch.ledger_id = "wrong".into();
+        batch.site_id = "wrong".into();
+        batch.segment_number = 99;
+        batch.batch_number = 99;
+
+        let successor = SegmentRecordV2::new_successor(
+            &predecessor_bytes,
+            predecessor.closure_policy.clone(),
+            "interval",
+            vec![batch],
+            predecessor.segment_root.clone(),
+        )
+        .unwrap();
+
+        assert_eq!(successor.ledger_id, predecessor.ledger_id);
+        assert_eq!(successor.site_id, predecessor.site_id);
+        assert_eq!(successor.segment_number, 1);
+        assert_eq!(
+            successor.prev_segment_sha256,
+            sha256_hex(&predecessor_bytes)
+        );
+        assert_eq!(successor.batches[0].ledger_id, successor.ledger_id);
+        assert_eq!(successor.batches[0].site_id, successor.site_id);
+        assert_eq!(successor.batches[0].segment_number, 1);
+        assert_eq!(successor.batches[0].batch_number, 0);
+        let bytes = successor.canonical_cbor_bytes().unwrap();
+        assert_eq!(decode_segment_record_v2(&bytes).unwrap(), successor);
+    }
+
+    #[test]
+    fn successor_constructor_rejects_invalid_or_exhausted_predecessors() {
+        assert!(matches!(
+            SegmentRecordV2::new_successor(
+                &[0x80],
+                epoch_segment().closure_policy,
+                "interval",
+                Vec::new(),
+                sha256_hex(b""),
+            ),
+            Err(V2ConstructionError::InvalidPredecessor(_))
+        ));
+
+        let mut predecessor = epoch_segment();
+        predecessor.segment_number = u64::MAX;
+        predecessor.prev_segment_sha256 = "11".repeat(32);
+        predecessor.batches[0].segment_number = u64::MAX;
+        let predecessor_bytes = predecessor.canonical_cbor_bytes().unwrap();
+        assert_eq!(
+            SegmentRecordV2::new_successor(
+                &predecessor_bytes,
+                predecessor.closure_policy.clone(),
+                "interval",
+                predecessor.batches.clone(),
+                predecessor.segment_root.clone(),
+            ),
+            Err(V2ConstructionError::SegmentNumberExhausted)
+        );
     }
 }

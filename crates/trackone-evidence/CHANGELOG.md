@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Added corpus-driven `verify-v2` CLI replay for corrected Class-A epoch and
+  successor bundles plus the archived segment-7/zero-predecessor failure
+  bundle.
+
+### Changed
+- V2 test artifact construction now uses the ledger-owned validated epoch and
+  successor constructors, preserving fail-fast chain validation before
+  Class-A recomputation or proof-channel work.
+
 ## [0.1.0-beta.2] - 2026-07-11
 
 ### Added

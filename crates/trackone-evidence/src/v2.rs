@@ -221,30 +221,29 @@ mod tests {
         ]];
         let merkle = merkle_root_from_records(&record);
         let leaf = trackone_ledger::hex_lower(&merkle.leaf_hashes[0]);
-        SegmentRecordV2 {
-            ledger_id: "b7a1d5e40c6f438e9a75db27c96f31aa".into(),
-            site_id: "an-001".into(),
-            segment_number: 0,
-            closure_policy: ClosurePolicyV1 {
+        SegmentRecordV2::new_epoch(
+            "b7a1d5e40c6f438e9a75db27c96f31aa",
+            "an-001",
+            ClosurePolicyV1 {
                 interval_ms: 60_000,
                 batch_record_limit: 1,
                 record_limit: None,
                 size_limit_bytes: None,
                 empty_mode: EmptyMode::Suppress,
             },
-            close_reason: "interval".into(),
-            prev_segment_sha256: ZERO_SHA256.into(),
-            batches: vec![SegmentBatchV2 {
-                ledger_id: "b7a1d5e40c6f438e9a75db27c96f31aa".into(),
-                site_id: "an-001".into(),
-                segment_number: 0,
-                batch_number: 0,
+            "interval",
+            vec![SegmentBatchV2 {
+                ledger_id: String::new(),
+                site_id: String::new(),
+                segment_number: u64::MAX,
+                batch_number: u64::MAX,
                 merkle_root: leaf.clone(),
                 count: 1,
                 leaf_hashes: vec![leaf],
             }],
-            segment_root: merkle.root_hex(),
-        }
+            merkle.root_hex(),
+        )
+        .unwrap()
         .canonical_cbor_bytes()
         .unwrap()
     }
@@ -255,51 +254,48 @@ mod tests {
         ]];
         let merkle = merkle_root_from_records(&record);
         let leaf = trackone_ledger::hex_lower(&merkle.leaf_hashes[0]);
-        SegmentRecordV2 {
-            ledger_id: "b7a1d5e40c6f438e9a75db27c96f31aa".into(),
-            site_id: "an-001".into(),
-            segment_number: 1,
-            closure_policy: ClosurePolicyV1 {
+        SegmentRecordV2::new_successor(
+            predecessor,
+            ClosurePolicyV1 {
                 interval_ms: 60_000,
                 batch_record_limit: 1,
                 record_limit: None,
                 size_limit_bytes: None,
                 empty_mode: EmptyMode::Suppress,
             },
-            close_reason: "interval".into(),
-            prev_segment_sha256: sha256_hex(predecessor),
-            batches: vec![SegmentBatchV2 {
-                ledger_id: "b7a1d5e40c6f438e9a75db27c96f31aa".into(),
-                site_id: "an-001".into(),
-                segment_number: 1,
-                batch_number: 0,
+            "interval",
+            vec![SegmentBatchV2 {
+                ledger_id: String::new(),
+                site_id: String::new(),
+                segment_number: u64::MAX,
+                batch_number: u64::MAX,
                 merkle_root: leaf.clone(),
                 count: 1,
                 leaf_hashes: vec![leaf],
             }],
-            segment_root: merkle.root_hex(),
-        }
+            merkle.root_hex(),
+        )
+        .unwrap()
         .canonical_cbor_bytes()
         .unwrap()
     }
 
     fn empty_epoch_segment_bytes() -> Vec<u8> {
-        SegmentRecordV2 {
-            ledger_id: "b7a1d5e40c6f438e9a75db27c96f31aa".into(),
-            site_id: "an-001".into(),
-            segment_number: 0,
-            closure_policy: ClosurePolicyV1 {
+        SegmentRecordV2::new_epoch(
+            "b7a1d5e40c6f438e9a75db27c96f31aa",
+            "an-001",
+            ClosurePolicyV1 {
                 interval_ms: 60_000,
                 batch_record_limit: 1,
                 record_limit: None,
                 size_limit_bytes: None,
                 empty_mode: EmptyMode::Emit,
             },
-            close_reason: "interval".into(),
-            prev_segment_sha256: ZERO_SHA256.into(),
-            batches: Vec::new(),
-            segment_root: sha256_hex(b""),
-        }
+            "interval",
+            Vec::new(),
+            sha256_hex(b""),
+        )
+        .unwrap()
         .canonical_cbor_bytes()
         .unwrap()
     }

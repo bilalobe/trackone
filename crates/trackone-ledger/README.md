@@ -18,7 +18,8 @@ This crate owns:
 - `hex64` normalization and validation used by the alpha.11 integrity/manifest
   path
 - the isolated draft-08 v2 canonical-record and segment-artifact encoder,
-  strict decoder, hash-sorted Merkle calculation, and embedded-batch invariants
+  strict decoder, validated epoch/successor constructors, stable invariant
+  categories, hash-sorted Merkle calculation, and embedded-batch invariants
 
 It is the right place for reusable deterministic logic that belongs to the
 commitment contract. Under
@@ -68,6 +69,11 @@ The v2 surface is additive and does not reinterpret v1 day artifacts. It
 implements deterministic record/segment commitment primitives; elapsed-time
 segment formation, durable publication, and timestamp-channel orchestration
 remain outside this crate.
+
+The v2 corpus includes exact corrected epoch bytes and a preserved invalid
+successor/zero-predecessor artifact. The corpus gate checks canonical
+round-trip equality and artifact digests in addition to record and Merkle
+values.
 
 ## Check
 

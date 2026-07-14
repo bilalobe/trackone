@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Added `SegmentRecordV2::new_epoch(...)` and `new_successor(...)` constructors
+  that derive chain position from the epoch rule or exact predecessor bytes and
+  propagate the resulting identity into embedded batches.
+- Added `V2InvariantError`, `validate_detailed(...)`, and decoder invariant
+  classification while preserving the existing string-returning validation
+  and strict decoder APIs.
+
+### Changed
+- Expanded the draft-08 v2 corpus gate to replay the corrected complete epoch
+  artifact, a chain-bound successor, embedded batches, exact digests, and the
+  archived segment-7/zero-predecessor decoder-negative artifact.
+
 ## [0.1.0-beta.2] - 2026-07-11
 
 ### Added
