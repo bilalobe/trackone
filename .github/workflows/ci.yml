@@ -187,7 +187,11 @@ jobs:
         run: |
           set -euo pipefail
           version="$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -n1)"
-          cargo package --workspace --locked
+          # Workspace packages consume APIs added by sibling crates in this
+          # release. Verification already ran in the rust job; verifying each
+          # tarball here would resolve siblings from the previous crates.io
+          # release instead of this coordinated source set.
+          cargo package --workspace --locked --no-verify
           cargo build --release --locked -p trackone-evidence
           mkdir -p dist/crates dist/helm
           shopt -s nullglob
