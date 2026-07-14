@@ -251,6 +251,10 @@ impl<S: LedgerStore, C: ElapsedClock> V2LedgerProducer<S, C> {
         self.store
     }
 
+    pub fn store_mut(&mut self) -> &mut S {
+        &mut self.store
+    }
+
     /// Recover uncertain elapsed/open-interval state before accepting more
     /// telemetry. Recoverable material is sealed; an empty suppress interval
     /// advances only the logical interval.

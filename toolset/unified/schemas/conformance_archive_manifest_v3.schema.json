@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/conformance_archive_manifest_v3.schema.json",
+  "title": "TrackOne conformance archive manifest v3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "schema_uri",
+    "version",
+    "subject",
+    "software_version",
+    "repository",
+    "carrier",
+    "contents",
+    "claims"
+  ],
+  "properties": {
+    "schema": {
+      "const": "trackone-conformance-archive-v3"
+    },
+    "schema_uri": {
+      "const": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/conformance_archive_manifest_v3.schema.json"
+    },
+    "version": {
+      "const": 3
+    },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "name", "git_commit"],
+      "properties": {
+        "kind": {
+          "enum": ["commit", "release"]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "git_commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        }
+      }
+    },
+    "software_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$"
+    },
+    "repository": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+    },
+    "carrier": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["oci_ref", "artifact_type"],
+      "properties": {
+        "oci_ref": {
+          "type": "string",
+          "pattern": "^ghcr\\.io/\\S+:\\S+$"
+        },
+        "artifact_type": {
+          "const": "application/vnd.trackone.conformance.archive.v3+tar"
+        }
+      }
+    },
+    "contents": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_catalog",
+        "schemas",
+        "cddl",
+        "vectors",
+        "crates",
+        "helm",
+        "detached_verifier"
+      ],
+      "properties": {
+        "schema_catalog": {
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/portable_relative_path"
+        },
+        "schemas": {
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/portable_relative_path"
+        },
+        "cddl": {
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/portable_relative_path"
+        },
+        "vectors": {
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/portable_relative_path"
+        },
+        "crates": {
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/portable_relative_path"
+        },
+        "helm": {
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/portable_relative_path"
+        },
+        "detached_verifier": {
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/portable_relative_path"
+        }
+      }
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "canonical_cbor_v1_vectors",
+        "canonical_cbor_v2_vectors",
+        "v2_full_conformance",
+        "v2_durable_producer",
+        "v2_disclosure_classes",
+        "rfc3161_timestamp_channel",
+        "negative_fixture_floor",
+        "offline_schema_resolution"
+      ],
+      "properties": {
+        "canonical_cbor_v1_vectors": { "const": true },
+        "canonical_cbor_v2_vectors": { "const": true },
+        "v2_full_conformance": { "const": true },
+        "v2_durable_producer": { "const": true },
+        "v2_disclosure_classes": { "const": true },
+        "rfc3161_timestamp_channel": { "const": true },
+        "negative_fixture_floor": { "const": true },
+        "offline_schema_resolution": { "const": true }
+      }
+    }
+  }
+}

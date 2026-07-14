@@ -40,7 +40,10 @@
           "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/hex64_lower"
         },
         "artifact_type": {
-          "const": "application/vnd.trackone.conformance.archive.v2+tar"
+          "enum": [
+            "application/vnd.trackone.conformance.archive.v2+tar",
+            "application/vnd.trackone.conformance.archive.v3+tar"
+          ]
         },
         "carrier": {
           "type": "string",
@@ -66,7 +69,7 @@
           "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/hex64_lower"
         },
         "result_schema": {
-          "const": "trackone-conformance-archive-v2"
+          "enum": ["trackone-conformance-archive-v2", "trackone-conformance-archive-v3"]
         },
         "ok": {
           "const": true

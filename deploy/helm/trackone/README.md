@@ -88,7 +88,7 @@ checked-in `Chart.yaml` version.
 The chart generates and manages these runtime config objects:
 
 - `ConfigMap/trackone-gateway-config` for non-secret gateway config such as `OTS_CALENDARS`
-- `Secret/trackone-gateway-env` for sensitive gateway config such as `DATABASE_URL`
+- `Secret/trackone-gateway-env` for `TRACKONE_DATABASE_URL` and the RFC 3161 trust root
 - `Secret/postgres-auth` for Postgres bootstrap credentials
 
 The values still live in `values.yaml` and any overlays, but the pods now consume
@@ -100,7 +100,11 @@ creating `trackone-gateway-config`. That ConfigMap must define an `OTS_CALENDARS
 
 If you already manage sensitive gateway config elsewhere, set
 `gateway.existingSecret` and the chart will reuse that Secret instead of
-creating `trackone-gateway-env`. That Secret must define a `DATABASE_URL` key to match the environment consumed via `secretKeyRef`.
+creating `trackone-gateway-env`. That Secret must define
+`TRACKONE_DATABASE_URL` and `tsa-ca.pem`. The latter is mounted as the RFC 3161
+trust root. When the chart manages the Secret, set `gateway.env.tsaCaPem`
+(preferably with `--set-file`) and configure the TSA URL and policy OID in
+`gateway.env`.
 
 If you already manage Postgres bootstrap credentials elsewhere, set
 `postgres.auth.existingSecret` and the chart will reuse that Secret instead of

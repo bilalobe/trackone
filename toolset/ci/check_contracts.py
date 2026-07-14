@@ -179,11 +179,11 @@ def check(repo: Path) -> dict[str, int]:
         )
         instance_count += 1
 
-    conformance_schema = schemas[f"{PROVIDER}conformance_archive_manifest_v2.schema.json"]
+    conformance_schema = schemas[f"{PROVIDER}conformance_archive_manifest_v3.schema.json"]
     conformance_example = {
-        "schema": "trackone-conformance-archive-v2",
-        "schema_uri": f"{PROVIDER}conformance_archive_manifest_v2.schema.json",
-        "version": 2,
+        "schema": "trackone-conformance-archive-v3",
+        "schema_uri": f"{PROVIDER}conformance_archive_manifest_v3.schema.json",
+        "version": 3,
         "subject": {
             "kind": "commit",
             "name": "sha-0000000000000000000000000000000000000000",
@@ -196,7 +196,7 @@ def check(repo: Path) -> dict[str, int]:
                 "ghcr.io/bilalobe/trackone/conformance-archive:"
                 "sha-0000000000000000000000000000000000000000"
             ),
-            "artifact_type": "application/vnd.trackone.conformance.archive.v2+tar",
+            "artifact_type": "application/vnd.trackone.conformance.archive.v3+tar",
         },
         "contents": {
             "schema_catalog": "contracts/toolset/unified/schema-catalog.json",
@@ -209,8 +209,11 @@ def check(repo: Path) -> dict[str, int]:
         },
         "claims": {
             "canonical_cbor_v1_vectors": True,
-            "canonical_cbor_v2_preview_vectors": True,
-            "v2_full_conformance": False,
+            "canonical_cbor_v2_vectors": True,
+            "v2_full_conformance": True,
+            "v2_durable_producer": True,
+            "v2_disclosure_classes": True,
+            "rfc3161_timestamp_channel": True,
             "negative_fixture_floor": True,
             "offline_schema_resolution": True,
         },

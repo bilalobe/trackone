@@ -6,6 +6,7 @@ use postgres::{Client, NoTls};
 use trackone::v2_postgres::PostgresLedgerStore;
 use trackone::v2_producer::{ElapsedClock, ProducerError, V2LedgerProducer};
 use trackone::v2_service::{GatewayHttpState, router};
+use trackone::v2_tsa::Rfc3161TimestampAuthority;
 use trackone_ledger::v2::{ClosurePolicyV1, EmptyMode};
 
 struct SystemElapsedClock {
@@ -50,6 +51,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let database_url = required("TRACKONE_DATABASE_URL")?;
     let ledger_id = required("TRACKONE_LEDGER_ID")?;
     let site_id = required("TRACKONE_SITE_ID")?;
+    let tsa_url = required("TRACKONE_TSA_URL")?;
+    let tsa_ca_file = required("TRACKONE_TSA_CA_FILE")?.into();
+    let tsa_policy_oid = required("TRACKONE_TSA_POLICY_OID")?;
     let bind: SocketAddr = env::var("TRACKONE_BIND")
         .unwrap_or_else(|_| "0.0.0.0:8080".to_string())
         .parse()?;
@@ -84,6 +88,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let listener = tokio::net::TcpListener::bind(bind).await?;
-    axum::serve(listener, router(GatewayHttpState::new(producer))).await?;
+    let timestamp_authority = Rfc3161TimestampAuthority::new(tsa_url, tsa_ca_file, tsa_policy_oid);
+    axum::serve(
+        listener,
+        router(GatewayHttpState::new(producer, timestamp_authority)),
+    )
+    .await?;
     Ok(())
 }

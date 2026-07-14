@@ -32,8 +32,15 @@ CREATE TABLE IF NOT EXISTS trackone_v2_sealed_segment (
     close_reason text NOT NULL CHECK (close_reason IN ('recovery', 'shutdown', 'reconfigure', 'size_limit', 'record_limit', 'interval', 'manual')),
     artifact_cbor bytea NOT NULL,
     artifact_sha256 text NOT NULL CHECK (artifact_sha256 ~ '^[0-9a-f]{64}$'),
+    tsa_status text NOT NULL DEFAULT 'pending' CHECK (tsa_status IN ('pending', 'verified')),
+    tsa_response bytea,
     PRIMARY KEY (ledger_id, segment_number)
 );
+
+ALTER TABLE trackone_v2_sealed_segment
+    ADD COLUMN IF NOT EXISTS tsa_status text NOT NULL DEFAULT 'pending'
+        CHECK (tsa_status IN ('pending', 'verified')),
+    ADD COLUMN IF NOT EXISTS tsa_response bytea;
 
 CREATE TABLE IF NOT EXISTS trackone_v2_sealed_record (
     ledger_id text NOT NULL,

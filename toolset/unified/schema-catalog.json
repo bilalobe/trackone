@@ -9,6 +9,7 @@
     "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/commitment_vector_manifest.schema.json": "schemas/commitment_vector_manifest.schema.json",
     "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json": "schemas/common.schema.json",
     "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/conformance_archive_manifest_v2.schema.json": "schemas/conformance_archive_manifest_v2.schema.json",
+    "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/conformance_archive_manifest_v3.schema.json": "schemas/conformance_archive_manifest_v3.schema.json",
     "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/day_record.schema.json": "schemas/day_record.schema.json",
     "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/device_table.schema.json": "schemas/device_table.schema.json",
     "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/env_sensor_capability.schema.json": "schemas/env_sensor_capability.schema.json",

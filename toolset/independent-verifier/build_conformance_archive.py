@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Assemble the deterministic TrackOne conformance archive v2 carrier."""
+"""Assemble the deterministic TrackOne conformance archive v3 carrier."""
 
 from __future__ import annotations
 
@@ -18,10 +18,10 @@ from pathlib import Path
 from typing import Any
 
 
-ARTIFACT_TYPE = "application/vnd.trackone.conformance.archive.v2+tar"
+ARTIFACT_TYPE = "application/vnd.trackone.conformance.archive.v3+tar"
 SCHEMA_URI = (
     "https://raw.githubusercontent.com/bilalobe/trackone/main/"
-    "toolset/unified/schemas/conformance_archive_manifest_v2.schema.json"
+    "toolset/unified/schemas/conformance_archive_manifest_v3.schema.json"
 )
 
 
@@ -168,9 +168,9 @@ def assemble(args: argparse.Namespace) -> dict[str, Any]:
         )
 
         manifest = {
-            "schema": "trackone-conformance-archive-v2",
+            "schema": "trackone-conformance-archive-v3",
             "schema_uri": SCHEMA_URI,
-            "version": 2,
+            "version": 3,
             "subject": {
                 "kind": args.subject_kind,
                 "name": args.subject,
@@ -193,8 +193,11 @@ def assemble(args: argparse.Namespace) -> dict[str, Any]:
             },
             "claims": {
                 "canonical_cbor_v1_vectors": True,
-                "canonical_cbor_v2_preview_vectors": True,
-                "v2_full_conformance": False,
+                "canonical_cbor_v2_vectors": True,
+                "v2_full_conformance": True,
+                "v2_durable_producer": True,
+                "v2_disclosure_classes": True,
+                "rfc3161_timestamp_channel": True,
                 "negative_fixture_floor": True,
                 "offline_schema_resolution": True,
             },

@@ -17,6 +17,7 @@ test:
     cargo test --locked --package trackone-ingest --features std,xchacha
     cargo test --locked --package trackone-pod-fw --features std
     cargo test --locked --package trackone-gateway --no-default-features
+    cargo test --locked --package trackone-gateway --features v2-service
     cargo test --locked --package trackone-ledger --test vector_corpus -- --ignored
 
 # Run clippy with correct features (avoid --all-features due to production+dummy-aead conflict)
@@ -26,6 +27,7 @@ clippy:
     cargo clippy --locked --package trackone-ingest --all-targets --features std,xchacha -- -D warnings
     cargo clippy --locked --package trackone-pod-fw --all-targets --features std -- -D warnings
     cargo clippy --locked --package trackone-gateway --all-targets --no-default-features -- -D warnings
+    cargo clippy --locked --package trackone-gateway --all-targets --features v2-service -- -D warnings
 
 # Build all packages in release mode
 build-release:
@@ -35,7 +37,7 @@ build-release:
 build-production:
     cargo build --locked --package trackone-core --no-default-features --features std,production
     cargo build --locked --package trackone-pod-fw --no-default-features --features production
-    cargo build --locked --package trackone-gateway --release
+    cargo build --locked --package trackone-gateway --release --features v2-service --bin trackone-v2-gateway
 
 # Run Rust-side serialization benchmarks
 bench-rust:

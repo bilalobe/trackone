@@ -56,14 +56,19 @@ continuity identifier and invoke recovery before accepting telemetry.
 
 Build the HTTP handoff with the `v2-service` feature and run the
 `trackone-v2-gateway` binary. It requires `TRACKONE_DATABASE_URL`,
-`TRACKONE_LEDGER_ID`, and `TRACKONE_SITE_ID`; interval, batch, record, size,
-empty-mode, and bind settings use the corresponding `TRACKONE_*` environment
-variables shown by the binary source. `POST /v2/records` accepts only
+`TRACKONE_LEDGER_ID`, `TRACKONE_SITE_ID`, `TRACKONE_TSA_URL`,
+`TRACKONE_TSA_CA_FILE`, and `TRACKONE_TSA_POLICY_OID`; interval, batch, record,
+size, empty-mode, and bind settings use the corresponding `TRACKONE_*`
+environment variables shown by the binary source. `POST /v2/records` accepts only
 `application/cbor` and requires `Idempotency-Key`. Identical bytes replay the
 durably recorded outcome; reuse of the key for different bytes returns HTTP
 409. Exact canonical bytes, interval membership, counters, sealed artifacts,
 serial advancement, and the idempotency outcome share one database
 transaction.
+Sealed artifacts enter a pending TSA state, are submitted as RFC 3161 queries
+over their exact SHA-256 digest, and move to verified only after OpenSSL checks
+the response against the query and configured trust root. Replaying the
+idempotent request retries a pending timestamp without readmitting the record.
 
 RFC 3161 verification requires OpenSSL on `PATH`, a deployment trust-anchor
 file passed with `--tsa-ca-file`, and the expected TSA policy passed with

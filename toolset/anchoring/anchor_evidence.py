@@ -217,7 +217,10 @@ def prepare(args: argparse.Namespace) -> dict[str, Any]:
     artifact_type = carrier.get("artifact_type")
     if not isinstance(carrier_ref, str) or not carrier_ref.startswith("ghcr.io/"):
         raise AnchorError("conformance manifest has no canonical GHCR carrier")
-    if artifact_type != "application/vnd.trackone.conformance.archive.v2+tar":
+    if artifact_type not in {
+        "application/vnd.trackone.conformance.archive.v2+tar",
+        "application/vnd.trackone.conformance.archive.v3+tar",
+    }:
         raise AnchorError("conformance archive artifact type mismatch")
 
     archive_sha256 = sha256_file(archive)

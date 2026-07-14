@@ -29,6 +29,50 @@ impl PostgresLedgerStore {
     pub fn into_client(self) -> Client {
         self.client
     }
+
+    pub fn load_pending_tsa_segment(
+        &mut self,
+        segment_number: u64,
+    ) -> Result<Option<(Vec<u8>, String)>, ProducerError> {
+        let segment_number = numeric(segment_number);
+        self.client
+            .query_opt(
+                "SELECT artifact_cbor, artifact_sha256 FROM trackone_v2_sealed_segment \
+                 WHERE ledger_id=$1 AND segment_number=$2::numeric AND tsa_status='pending'",
+                &[&self.ledger_id, &segment_number],
+            )
+            .map(|row| row.map(|row| (row.get(0), row.get(1))))
+            .map_err(store_error)
+    }
+
+    pub fn attach_tsa_response(
+        &mut self,
+        segment_number: u64,
+        artifact_sha256: &str,
+        response: &[u8],
+    ) -> Result<(), ProducerError> {
+        let segment_number = numeric(segment_number);
+        let changed = self
+            .client
+            .execute(
+                "UPDATE trackone_v2_sealed_segment SET tsa_response=$4, tsa_status='verified' \
+                 WHERE ledger_id=$1 AND segment_number=$2::numeric AND artifact_sha256=$3 \
+                 AND tsa_status='pending'",
+                &[
+                    &self.ledger_id,
+                    &segment_number,
+                    &artifact_sha256,
+                    &response,
+                ],
+            )
+            .map_err(store_error)?;
+        if changed != 1 {
+            return Err(ProducerError::Store(
+                "TSA response target is missing, changed, or already complete".to_string(),
+            ));
+        }
+        Ok(())
+    }
 }
 
 fn store_error(error: postgres::Error) -> ProducerError {

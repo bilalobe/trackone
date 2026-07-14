@@ -20,6 +20,8 @@ pub mod v2_postgres;
 pub mod v2_producer;
 #[cfg(feature = "v2-service")]
 pub mod v2_service;
+#[cfg(feature = "v2-service")]
+pub mod v2_tsa;
 
 #[cfg(feature = "python")]
 fn extract_frames(py_frames: &Bound<'_, PyAny>) -> PyResult<Vec<Vec<u8>>> {

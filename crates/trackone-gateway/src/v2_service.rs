@@ -12,6 +12,7 @@ use serde_json::json;
 
 use crate::v2_postgres::PostgresLedgerStore;
 use crate::v2_producer::{ElapsedClock, ProducerError, V2LedgerProducer};
+use crate::v2_tsa::Rfc3161TimestampAuthority;
 
 pub const CBOR_MEDIA_TYPE: &str = "application/cbor";
 pub const IDEMPOTENCY_KEY: &str = "idempotency-key";
@@ -20,20 +21,26 @@ pub type ServiceProducer<C> = V2LedgerProducer<PostgresLedgerStore, C>;
 
 pub struct GatewayHttpState<C> {
     producer: Arc<Mutex<ServiceProducer<C>>>,
+    timestamp_authority: Arc<Rfc3161TimestampAuthority>,
 }
 
 impl<C> Clone for GatewayHttpState<C> {
     fn clone(&self) -> Self {
         Self {
             producer: Arc::clone(&self.producer),
+            timestamp_authority: Arc::clone(&self.timestamp_authority),
         }
     }
 }
 
 impl<C> GatewayHttpState<C> {
-    pub fn new(producer: ServiceProducer<C>) -> Self {
+    pub fn new(
+        producer: ServiceProducer<C>,
+        timestamp_authority: Rfc3161TimestampAuthority,
+    ) -> Self {
         Self {
             producer: Arc::new(Mutex::new(producer)),
+            timestamp_authority: Arc::new(timestamp_authority),
         }
     }
 }
@@ -85,15 +92,36 @@ where
         );
     };
     let producer = Arc::clone(&state.producer);
+    let timestamp_authority = Arc::clone(&state.timestamp_authority);
     let result = tokio::task::spawn_blocking(move || {
         let mut producer = producer
             .lock()
             .map_err(|_| ProducerError::Store("producer mutex is poisoned".to_string()))?;
-        producer.admit_idempotent(key, body.to_vec())
+        let outcome = producer.admit_idempotent(key, body.to_vec())?;
+        let mut tsa_status = "not_applicable";
+        for segment_number in &outcome.sealed_segment_numbers {
+            if let Some((artifact, digest)) = producer
+                .store_mut()
+                .load_pending_tsa_segment(*segment_number)?
+            {
+                tsa_status = "pending";
+                if let Ok(response) = timestamp_authority.stamp(&artifact)
+                    && producer
+                        .store_mut()
+                        .attach_tsa_response(*segment_number, &digest, &response)
+                        .is_ok()
+                {
+                    tsa_status = "verified";
+                }
+            } else {
+                tsa_status = "verified";
+            }
+        }
+        Ok::<_, ProducerError>((outcome, tsa_status))
     })
     .await;
     match result {
-        Ok(Ok(outcome)) => {
+        Ok(Ok((outcome, tsa_status))) => {
             let status = if outcome.replayed {
                 StatusCode::OK
             } else {
@@ -106,6 +134,7 @@ where
                     "replayed": outcome.replayed,
                     "state_revision": outcome.state_revision.to_string(),
                     "admitted_segment_number": outcome.admitted_segment_number.to_string(),
+                    "tsa_status": tsa_status,
                     "sealed_segment_numbers": outcome.sealed_segment_numbers.iter()
                         .map(u64::to_string).collect::<Vec<_>>()
                 })),

@@ -88,9 +88,18 @@ gateway:
     otsCalendars: http://ots-calendar:8468
     # Rendered into the generated trackone-gateway-env Secret.
     databaseUrl: postgresql://trackone:trackone@postgres:5432/trackone
+    ledgerId: b7a1d5e40c6f438e9a75db27c96f31aa
+    siteId: an-001
+    intervalMs: "60000"
+    batchRecordLimit: "1000"
+    emptyMode: suppress
+    tsaUrl: https://tsa.example.invalid/tsr
+    tsaPolicyOid: 1.3.6.1.4.1.55555.1
+    # Required when gateway.enabled=true; use --set-file or an existing Secret.
+    tsaCaPem: ""
   probes:
-    readinessPath: /health
-    livenessPath: /health
+    readinessPath: /healthz
+    livenessPath: /healthz
     readinessInitialDelay: 2
     readinessPeriod: 5
     livenessInitialDelay: 10

@@ -19,8 +19,8 @@ from typing import Any, Iterator
 from urllib.parse import urldefrag
 
 
-ARCHIVE_SCHEMA = "trackone-conformance-archive-v2"
-ARTIFACT_TYPE = "application/vnd.trackone.conformance.archive.v2+tar"
+ARCHIVE_SCHEMA = "trackone-conformance-archive-v3"
+ARTIFACT_TYPE = "application/vnd.trackone.conformance.archive.v3+tar"
 PROVIDER = (
     "https://raw.githubusercontent.com/bilalobe/trackone/"
     "main/toolset/unified/schemas/"
@@ -427,17 +427,20 @@ def verify_root(root: Path) -> dict[str, Any]:
         raise VerifyError("archive root must not be a symlink")
     checksummed_files = verify_checksums(root)
     manifest = read_json(root / "conformance-manifest.json")
-    if manifest.get("schema") != ARCHIVE_SCHEMA or manifest.get("version") != 2:
+    if manifest.get("schema") != ARCHIVE_SCHEMA or manifest.get("version") != 3:
         raise VerifyError("conformance archive manifest version mismatch")
-    if manifest.get("schema_uri") != f"{PROVIDER}conformance_archive_manifest_v2.schema.json":
+    if manifest.get("schema_uri") != f"{PROVIDER}conformance_archive_manifest_v3.schema.json":
         raise VerifyError("conformance archive schema URI mismatch")
     if manifest.get("carrier", {}).get("artifact_type") != ARTIFACT_TYPE:
         raise VerifyError("conformance archive media type mismatch")
     claims = manifest.get("claims", {})
     expected_claims = {
         "canonical_cbor_v1_vectors": True,
-        "canonical_cbor_v2_preview_vectors": True,
-        "v2_full_conformance": False,
+        "canonical_cbor_v2_vectors": True,
+        "v2_full_conformance": True,
+        "v2_durable_producer": True,
+        "v2_disclosure_classes": True,
+        "rfc3161_timestamp_channel": True,
         "negative_fixture_floor": True,
         "offline_schema_resolution": True,
     }
