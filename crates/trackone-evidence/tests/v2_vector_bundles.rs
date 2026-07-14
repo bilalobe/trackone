@@ -19,6 +19,10 @@ struct Case {
     expected_result: Option<String>,
     #[serde(default)]
     expected_error: Option<String>,
+    #[serde(default)]
+    tsa_ca_file: Option<String>,
+    #[serde(default)]
+    tsa_policy_oid: Option<String>,
 }
 
 fn vector_root() -> PathBuf {
@@ -42,12 +46,15 @@ fn v2_vector_bundles_are_cli_runnable() {
 
     for case in cases.cases {
         let bundle = root.join(&case.path);
-        let output = Command::new(env!("CARGO_BIN_EXE_trackone-evidence"))
-            .args(["verify-v2", "--root"])
-            .arg(&bundle)
-            .arg("--json")
-            .output()
-            .unwrap();
+        let mut command = Command::new(env!("CARGO_BIN_EXE_trackone-evidence"));
+        command.args(["verify-v2", "--root"]).arg(&bundle).arg("--json");
+        if let Some(ca_file) = &case.tsa_ca_file {
+            command.arg("--tsa-ca-file").arg(root.join(ca_file));
+        }
+        if let Some(policy_oid) = &case.tsa_policy_oid {
+            command.arg("--tsa-policy").arg(policy_oid);
+        }
+        let output = command.output().unwrap();
 
         if case.expect_success {
             assert!(

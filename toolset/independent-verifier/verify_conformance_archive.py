@@ -342,8 +342,14 @@ def verify_v2_bundles(vector_root: Path, binary: Path) -> int:
             f"v2 bundle {case.get('id')}",
             directory=True,
         )
+        command = [str(binary), "verify-v2", "--root", str(fixture), "--json"]
+        if case.get("tsa_ca_file"):
+            ca_file = portable(vector_root, case["tsa_ca_file"], "v2 TSA trust anchor")
+            command.extend(["--tsa-ca-file", str(ca_file)])
+        if case.get("tsa_policy_oid"):
+            command.extend(["--tsa-policy", case["tsa_policy_oid"]])
         completed = subprocess.run(
-            [str(binary), "verify-v2", "--root", str(fixture), "--json"],
+            command,
             text=True,
             capture_output=True,
             timeout=60,

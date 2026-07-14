@@ -32,6 +32,13 @@
           },
           "expected_error": {
             "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/portable_relative_path"
+          },
+          "tsa_ca_file": {
+            "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/portable_relative_path"
+          },
+          "tsa_policy_oid": {
+            "type": "string",
+            "pattern": "^[0-9]+(?:\\.[0-9]+)+$"
           }
         },
         "allOf": [

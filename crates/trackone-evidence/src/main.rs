@@ -1,10 +1,10 @@
 use std::path::PathBuf;
-use trackone_evidence::v2::verify_v2_bundle;
+use trackone_evidence::v2::{V2VerifyPolicy, verify_v2_bundle_with_policy};
 use trackone_evidence::{ExportOptions, PolicyMode, VerifyOptions, export_bundle, verify_bundle};
 
 fn usage() -> ! {
     eprintln!(
-        "usage:\n  trackone-evidence verify --root DIR --facts DIR [--json] [--policy-mode warn|strict] [--disclosure-class A|B|C] [--commitment-profile-id ID] [--require-ots]\n  trackone-evidence verify-v2 --root DIR [--json]\n  trackone-evidence export --pipeline-dir DIR --evidence-repo DIR --site SITE --day YYYY-MM-DD [--include-frames] [--git-commit] [--tag] [--tag-name NAME] [--bundle-out PATH]"
+        "usage:\n  trackone-evidence verify --root DIR --facts DIR [--json] [--policy-mode warn|strict] [--disclosure-class A|B|C] [--commitment-profile-id ID] [--require-ots]\n  trackone-evidence verify-v2 --root DIR [--json] [--tsa-ca-file FILE] [--tsa-policy OID] [--allow-missing-tsa]\n  trackone-evidence export --pipeline-dir DIR --evidence-repo DIR --site SITE --day YYYY-MM-DD [--include-frames] [--git-commit] [--tag] [--tag-name NAME] [--bundle-out PATH]"
     );
     std::process::exit(2);
 }
@@ -37,16 +37,25 @@ fn main() {
 fn run_verify_v2(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let mut root: Option<PathBuf> = None;
     let mut json_mode = false;
+    let mut policy = V2VerifyPolicy::baseline();
     let mut idx = 0;
     while idx < args.len() {
         match args[idx].as_str() {
             "--root" => root = Some(PathBuf::from(take_value(args, &mut idx, "--root"))),
             "--json" => json_mode = true,
+            "--tsa-ca-file" => {
+                policy.tsa_ca_file =
+                    Some(PathBuf::from(take_value(args, &mut idx, "--tsa-ca-file")))
+            }
+            "--tsa-policy" => {
+                policy.tsa_policy_oid = Some(take_value(args, &mut idx, "--tsa-policy"))
+            }
+            "--allow-missing-tsa" => policy.require_tsa = false,
             _ => usage(),
         }
         idx += 1;
     }
-    let summary = verify_v2_bundle(&root.unwrap_or_else(|| usage()))?;
+    let summary = verify_v2_bundle_with_policy(&root.unwrap_or_else(|| usage()), &policy)?;
     if json_mode {
         println!("{}", serde_json::to_string_pretty(&summary)?);
     } else {

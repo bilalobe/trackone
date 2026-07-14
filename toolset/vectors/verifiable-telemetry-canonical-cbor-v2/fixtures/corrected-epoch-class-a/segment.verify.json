@@ -23,7 +23,13 @@
         "path": "records/record-3.cbor",
         "sha256": "630765dd51926538bde59353e8a494051d80105cf206ce9529dbe0c8f1fd1e67"
       }
-    ]
+    ],
+    "tsa_tsr": {
+      "path": "segments/segment-0.tsr",
+      "sha256": "3d9644e88cc9c4dcf43eb79355cbaac20f561016db74da18bee13700ac9e9c77"
+    }
   },
-  "anchoring": {}
+  "anchoring": {
+    "tsa": {"status": "complete"}
+  }
 }

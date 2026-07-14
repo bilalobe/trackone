@@ -13,6 +13,7 @@ readme = "README.md"
 [dependencies]
 serde.workspace = true
 serde_json.workspace = true
+rustix.workspace = true
 trackone-constants.workspace = true
 trackone-gateway.workspace = true
 trackone-ingest = { workspace = true, features = ["std"] }
