@@ -28,10 +28,9 @@
     "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/sensorthings_projection.schema.json": "schemas/sensorthings_projection.schema.json",
     "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/v2_bundle_cases_v1.schema.json": "schemas/v2_bundle_cases_v1.schema.json",
     "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/v2_vector_manifest_v1.schema.json": "schemas/v2_vector_manifest_v1.schema.json",
-    "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/verify_manifest.schema.json": "schemas/verify_manifest.schema.json"
-  },
-  "urn_resources": {
-    "urn:trackone:schema:segment-record-v2:1": "schemas/segment_record_v2.schema.json",
-    "urn:trackone:schema:verification-manifest-v2:1": "schemas/verify_manifest_v2.schema.json"
+    "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/v2_vector_manifest_v2.schema.json": "schemas/v2_vector_manifest_v2.schema.json",
+    "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/verify_manifest.schema.json": "schemas/verify_manifest.schema.json",
+    "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/segment_record_v2.schema.json": "schemas/segment_record_v2.schema.json",
+    "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/verify_manifest_v2.schema.json": "schemas/verify_manifest_v2.schema.json"
   }
 }

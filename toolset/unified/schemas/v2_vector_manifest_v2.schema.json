@@ -1,0 +1,151 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/v2_vector_manifest_v2.schema.json",
+  "title": "TrackOne canonical CBOR v2 vector manifest v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "draft_revision",
+    "commitment_profile_id",
+    "records",
+    "batches",
+    "segment",
+    "successor_segment",
+    "negative_segments",
+    "segment_root"
+  ],
+  "properties": {
+    "schema": {"const": "trackone-v2-vector-manifest-2"},
+    "draft_revision": {"type": "string", "minLength": 1},
+    "commitment_profile_id": {"const": "verifiable-telemetry-canonical-cbor-v2"},
+    "records": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/record"}
+    },
+    "batches": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/batch"}
+    },
+    "segment": {"$ref": "#/$defs/segment"},
+    "successor_segment": {"$ref": "#/$defs/segment"},
+    "negative_segments": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/negative_segment"}
+    },
+    "segment_root": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {
+      "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/hex64_lower"
+    },
+    "path": {
+      "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/portable_relative_path"
+    },
+    "uint64": {"type": "string", "pattern": "^(0|[1-9][0-9]*)$"},
+    "positive_uint64": {"type": "string", "pattern": "^[1-9][0-9]*$"},
+    "record": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cbor_path", "cbor_hex", "cbor_sha256", "leaf_sha256"],
+      "properties": {
+        "cbor_path": {"$ref": "#/$defs/path"},
+        "cbor_hex": {"type": "string", "pattern": "^(?:[0-9a-f]{2})+$"},
+        "cbor_sha256": {"$ref": "#/$defs/sha256"},
+        "leaf_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "batch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["batch_number", "count", "leaf_hashes", "merkle_root"],
+      "properties": {
+        "batch_number": {"$ref": "#/$defs/uint64"},
+        "count": {"$ref": "#/$defs/positive_uint64"},
+        "leaf_hashes": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/sha256"}
+        },
+        "merkle_root": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "closure_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "interval_ms",
+        "batch_record_limit",
+        "record_limit",
+        "size_limit_bytes",
+        "empty_mode"
+      ],
+      "properties": {
+        "version": {"const": 1},
+        "interval_ms": {"$ref": "#/$defs/positive_uint64"},
+        "batch_record_limit": {"$ref": "#/$defs/positive_uint64"},
+        "record_limit": {
+          "anyOf": [{"$ref": "#/$defs/positive_uint64"}, {"type": "null"}]
+        },
+        "size_limit_bytes": {
+          "anyOf": [{"$ref": "#/$defs/positive_uint64"}, {"type": "null"}]
+        },
+        "empty_mode": {"enum": ["emit", "suppress"]}
+      }
+    },
+    "segment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cbor_path",
+        "cbor_sha256",
+        "cbor_size",
+        "ledger_id",
+        "site_id",
+        "segment_number",
+        "closure_policy",
+        "close_reason",
+        "prev_segment_sha256",
+        "segment_root"
+      ],
+      "properties": {
+        "cbor_path": {"$ref": "#/$defs/path"},
+        "cbor_sha256": {"$ref": "#/$defs/sha256"},
+        "cbor_size": {"type": "integer", "minimum": 1},
+        "ledger_id": {"type": "string", "pattern": "^[0-9a-f]{32}$"},
+        "site_id": {"type": "string", "minLength": 1},
+        "segment_number": {"$ref": "#/$defs/uint64"},
+        "closure_policy": {"$ref": "#/$defs/closure_policy"},
+        "close_reason": {
+          "enum": [
+            "interval",
+            "reconfigure",
+            "record_limit",
+            "size_limit",
+            "shutdown",
+            "recovery",
+            "manual"
+          ]
+        },
+        "prev_segment_sha256": {"$ref": "#/$defs/sha256"},
+        "segment_root": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "negative_segment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "cbor_path", "cbor_sha256", "cbor_size", "expected_invariant"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "cbor_path": {"$ref": "#/$defs/path"},
+        "cbor_sha256": {"$ref": "#/$defs/sha256"},
+        "cbor_size": {"type": "integer", "minimum": 1},
+        "expected_invariant": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

@@ -143,7 +143,7 @@ def check(repo: Path) -> dict[str, int]:
         ),
         (
             repo / "toolset/vectors/verifiable-telemetry-canonical-cbor-v2/manifest.json",
-            f"{PROVIDER}v2_vector_manifest_v1.schema.json",
+            f"{PROVIDER}v2_vector_manifest_v2.schema.json",
         ),
         (
             repo / "toolset/vectors/verifiable-telemetry-canonical-cbor-v2/cases.json",
@@ -174,7 +174,7 @@ def check(repo: Path) -> dict[str, int]:
     ):
         validate_instance(
             instance_path,
-            schemas["urn:trackone:schema:verification-manifest-v2:1"],
+            schemas[f"{PROVIDER}verify_manifest_v2.schema.json"],
             registry,
         )
         instance_count += 1
