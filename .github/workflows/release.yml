@@ -246,11 +246,17 @@ jobs:
           ARCHIVE_SHA256: ${{ steps.handoff.outputs.archive_sha256 }}
         run: |
           set -euo pipefail
+          find_archive() {
+            local directory="$1"
+            local matches
+            mapfile -t matches < <(find "${directory}" -type f -name "${ARCHIVE_NAME}" -print)
+            test "${#matches[@]}" -eq 1
+            printf '%s\n' "${matches[0]}"
+          }
           if oras resolve "${ARCHIVE_OCI_REF}" > existing-oci-digest.txt 2>/dev/null; then
             mkdir -p existing
             oras pull --output existing "${ARCHIVE_OCI_REF}"
-            existing_archive="existing/${ARCHIVE_NAME}"
-            test -f "${existing_archive}"
+            existing_archive="$(find_archive existing)"
             existing_sha="$(sha256sum "${existing_archive}" | cut -d' ' -f1)"
             if [ "${existing_sha}" != "${ARCHIVE_SHA256}" ]; then
               echo "::error::Release OCI tag already points at different archive bytes"
@@ -273,10 +279,16 @@ jobs:
           ARCHIVE_SHA256: ${{ steps.handoff.outputs.archive_sha256 }}
         run: |
           set -euo pipefail
+          find_archive() {
+            local directory="$1"
+            local matches
+            mapfile -t matches < <(find "${directory}" -type f -name "${ARCHIVE_NAME}" -print)
+            test "${#matches[@]}" -eq 1
+            printf '%s\n' "${matches[0]}"
+          }
           mkdir -p pulled extracted
           oras pull --output pulled "${ARCHIVE_OCI_REF}"
-          pulled_archive="pulled/${ARCHIVE_NAME}"
-          test -f "${pulled_archive}"
+          pulled_archive="$(find_archive pulled)"
           pulled_sha="$(sha256sum "${pulled_archive}" | cut -d' ' -f1)"
           test "${pulled_sha}" = "${ARCHIVE_SHA256}"
           tar -xzf "${pulled_archive}" -C extracted
