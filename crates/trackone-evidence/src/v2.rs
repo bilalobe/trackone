@@ -1,10 +1,13 @@
 //! Additive verifier for draft-08 segment bundles.
 use super::{EvidenceError, Result};
-use serde::Deserialize;
+use serde::de::{DeserializeSeed, Error as _, MapAccess, SeqAccess, Visitor};
+use serde::{Deserialize, Deserializer};
 use serde_json::{Value, json};
+use std::collections::{BTreeMap, BTreeSet};
+use std::fmt;
 use std::fs::{self, File};
 use std::io::Read;
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use trackone_ledger::{
     hex_lower, sha256_hex,
@@ -32,9 +35,9 @@ struct Manifest {
     artifacts: Artifacts,
     anchoring: Anchoring,
     #[serde(default)]
-    operational_summary: Option<Value>,
+    operational_summary: Option<BTreeMap<String, Value>>,
     #[serde(default)]
-    extensions: Option<Value>,
+    extensions: Option<BTreeMap<String, Value>>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -48,13 +51,21 @@ struct Artifacts {
     #[serde(default)]
     batches: Option<Vec<ArtifactRef>>,
     #[serde(default)]
+    segment_json: Option<ArtifactRef>,
+    #[serde(default)]
+    segment_sha256: Option<ArtifactRef>,
+    #[serde(default)]
     segment_ots: Option<ArtifactRef>,
     #[serde(default)]
     segment_ots_meta: Option<ArtifactRef>,
     #[serde(default)]
     peer_attest: Option<ArtifactRef>,
     #[serde(default)]
+    tsa_info: Option<ArtifactRef>,
+    #[serde(default)]
     tsa_tsr: Option<ArtifactRef>,
+    #[serde(default)]
+    extensions: BTreeMap<String, ArtifactRef>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -120,6 +131,104 @@ fn valid_uint64(value: &str) -> bool {
         && value.parse::<u64>().is_ok()
 }
 
+struct UniqueJson;
+
+impl<'de> DeserializeSeed<'de> for UniqueJson {
+    type Value = Value;
+
+    fn deserialize<D>(self, deserializer: D) -> core::result::Result<Value, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_any(UniqueJsonVisitor)
+    }
+}
+
+struct UniqueJsonVisitor;
+
+impl<'de> Visitor<'de> for UniqueJsonVisitor {
+    type Value = Value;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("a JSON value without duplicate object member names")
+    }
+
+    fn visit_bool<E>(self, value: bool) -> core::result::Result<Value, E> {
+        Ok(Value::Bool(value))
+    }
+
+    fn visit_i64<E>(self, value: i64) -> core::result::Result<Value, E> {
+        Ok(Value::Number(value.into()))
+    }
+
+    fn visit_u64<E>(self, value: u64) -> core::result::Result<Value, E> {
+        Ok(Value::Number(value.into()))
+    }
+
+    fn visit_f64<E>(self, value: f64) -> core::result::Result<Value, E>
+    where
+        E: serde::de::Error,
+    {
+        serde_json::Number::from_f64(value)
+            .map(Value::Number)
+            .ok_or_else(|| E::custom("JSON number is not finite"))
+    }
+
+    fn visit_str<E>(self, value: &str) -> core::result::Result<Value, E>
+    where
+        E: serde::de::Error,
+    {
+        Ok(Value::String(value.to_owned()))
+    }
+
+    fn visit_string<E>(self, value: String) -> core::result::Result<Value, E> {
+        Ok(Value::String(value))
+    }
+
+    fn visit_none<E>(self) -> core::result::Result<Value, E> {
+        Ok(Value::Null)
+    }
+
+    fn visit_unit<E>(self) -> core::result::Result<Value, E> {
+        Ok(Value::Null)
+    }
+
+    fn visit_seq<A>(self, mut sequence: A) -> core::result::Result<Value, A::Error>
+    where
+        A: SeqAccess<'de>,
+    {
+        let mut values = Vec::new();
+        while let Some(value) = sequence.next_element_seed(UniqueJson)? {
+            values.push(value);
+        }
+        Ok(Value::Array(values))
+    }
+
+    fn visit_map<A>(self, mut object: A) -> core::result::Result<Value, A::Error>
+    where
+        A: MapAccess<'de>,
+    {
+        let mut names = BTreeSet::new();
+        let mut values = serde_json::Map::new();
+        while let Some(name) = object.next_key::<String>()? {
+            if !names.insert(name.clone()) {
+                return Err(A::Error::custom(format!(
+                    "duplicate JSON object member name: {name}"
+                )));
+            }
+            values.insert(name, object.next_value_seed(UniqueJson)?);
+        }
+        Ok(Value::Object(values))
+    }
+}
+
+fn parse_manifest(bytes: &[u8]) -> Result<Manifest> {
+    let mut deserializer = serde_json::Deserializer::from_slice(bytes);
+    let value = UniqueJson.deserialize(&mut deserializer)?;
+    deserializer.end()?;
+    Ok(serde_json::from_value(value)?)
+}
+
 fn validate_portable_path(rel: &str) -> Result<()> {
     if rel.is_empty()
         || rel.starts_with('/')
@@ -130,12 +239,12 @@ fn validate_portable_path(rel: &str) -> Result<()> {
     {
         return Err(bad("v2 manifest path is not portable"));
     }
-    for component in Path::new(rel).components() {
-        let Component::Normal(part) = component else {
-            return Err(bad("v2 manifest path contains a dot or parent component"));
-        };
-        if part.is_empty() {
+    for component in rel.split('/') {
+        if component.is_empty() {
             return Err(bad("v2 manifest path contains an empty component"));
+        }
+        if matches!(component, "." | "..") {
+            return Err(bad("v2 manifest path contains a dot or parent component"));
         }
     }
     Ok(())
@@ -190,6 +299,12 @@ fn validate_manifest(manifest: &Manifest) -> Result<()> {
     {
         return Err(bad("v2 manifest identity is invalid"));
     }
+    for reference in manifest.artifacts.references() {
+        validate_portable_path(&reference.path)?;
+        if !valid_hex(&reference.sha256, 64) {
+            return Err(bad("v2 artifact digest is not lowercase SHA-256"));
+        }
+    }
     for claim in [
         manifest.anchoring.tsa.as_ref(),
         manifest.anchoring.ots.as_ref(),
@@ -206,6 +321,24 @@ fn validate_manifest(manifest: &Manifest) -> Result<()> {
         }
     }
     Ok(())
+}
+
+impl Artifacts {
+    fn references(&self) -> Vec<&ArtifactRef> {
+        let mut references = vec![&self.segment_cbor];
+        references.extend(self.predecessor_segment_cbor.iter());
+        references.extend(self.records.iter().flatten());
+        references.extend(self.batches.iter().flatten());
+        references.extend(self.segment_json.iter());
+        references.extend(self.segment_sha256.iter());
+        references.extend(self.segment_ots.iter());
+        references.extend(self.segment_ots_meta.iter());
+        references.extend(self.peer_attest.iter());
+        references.extend(self.tsa_info.iter());
+        references.extend(self.tsa_tsr.iter());
+        references.extend(self.extensions.values());
+        references
+    }
 }
 
 fn verify_rfc3161(response: &[u8], artifact_sha256: &str, policy: &V2VerifyPolicy) -> Result<()> {
@@ -274,9 +407,12 @@ pub fn verify_v2_bundle(root: &Path) -> Result<Value> {
 
 pub fn verify_v2_bundle_with_policy(root: &Path, policy: &V2VerifyPolicy) -> Result<Value> {
     let manifest_path = root.join("segment.verify.json");
-    let manifest: Manifest = serde_json::from_slice(&fs::read(&manifest_path)?)?;
+    let manifest = parse_manifest(&fs::read(&manifest_path)?)?;
     validate_manifest(&manifest)?;
     let _ = (&manifest.operational_summary, &manifest.extensions);
+    for reference in manifest.artifacts.references() {
+        artifact(root, reference)?;
+    }
     let segment_bytes = artifact(root, &manifest.artifacts.segment_cbor)?;
     let segment = decode_segment_record_v2(&segment_bytes)
         .map_err(|err| bad(format!("invalid v2 segment artifact: {err}")))?;
@@ -776,6 +912,81 @@ mod tests {
         )
         .unwrap();
         assert!(verify_v2_bundle(&root).is_ok());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn portable_paths_are_checked_before_filesystem_normalization() {
+        for path in [
+            "segments/./segment-0.cbor",
+            "segments//segment-0.cbor",
+            "segments/../segment-0.cbor",
+            "segments/",
+        ] {
+            assert!(validate_portable_path(path).is_err(), "accepted {path}");
+        }
+        assert!(validate_portable_path("segments/segment-0.cbor").is_ok());
+    }
+
+    #[test]
+    fn manifest_rejects_duplicate_names_in_untyped_subtrees() {
+        let prefix = r#"{
+            "version":2,
+            "ledger_id":"b7a1d5e40c6f438e9a75db27c96f31aa",
+            "site_id":"an-001",
+            "segment_number":"0",
+            "commitment_profile_id":"verifiable-telemetry-canonical-cbor-v2",
+            "disclosure_class":"C",
+            "artifacts":{"segment_cbor":{"path":"segment.cbor","sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}},
+            "anchoring":{},
+        "#;
+        let operational =
+            prefix.to_owned() + r#""operational_summary":{"nested":{"count":1,"count":2}}}"#;
+        let extensions =
+            prefix.to_owned() + r#""extensions":{"nested":[{"name":"a","name":"b"}]}}"#;
+        assert!(parse_manifest(operational.as_bytes()).is_err());
+        assert!(parse_manifest(extensions.as_bytes()).is_err());
+    }
+
+    #[test]
+    fn v2_bundle_accepts_and_digest_binds_optional_artifacts() {
+        let root = std::env::temp_dir().join(format!(
+            "trackone-v2-optional-artifacts-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        let segment = epoch_segment_bytes();
+        let segment_json = br#"{"projection":true}"#;
+        let segment_sha256 = format!("{}  segment.cbor\n", sha256_hex(&segment));
+        let tsa_info = br#"{"authority":"example"}"#;
+        let extension = b"extension artifact";
+        fs::write(root.join("segment.cbor"), &segment).unwrap();
+        fs::write(root.join("segment.json"), segment_json).unwrap();
+        fs::write(root.join("segment.sha256"), &segment_sha256).unwrap();
+        fs::write(root.join("tsa-info.json"), tsa_info).unwrap();
+        fs::write(root.join("extension.bin"), extension).unwrap();
+        let manifest = json!({
+            "version": 2, "ledger_id": "b7a1d5e40c6f438e9a75db27c96f31aa", "site_id": "an-001",
+            "segment_number": "0", "commitment_profile_id": COMMITMENT_PROFILE_ID,
+            "disclosure_class": "C", "anchoring": {}, "artifacts": {
+                "segment_cbor": {"path": "segment.cbor", "sha256": sha256_hex(&segment)},
+                "segment_json": {"path": "segment.json", "sha256": sha256_hex(segment_json)},
+                "segment_sha256": {"path": "segment.sha256", "sha256": sha256_hex(segment_sha256.as_bytes())},
+                "tsa_info": {"path": "tsa-info.json", "sha256": sha256_hex(tsa_info)},
+                "extensions": {
+                    "x-example": {"path": "extension.bin", "sha256": sha256_hex(extension)}
+                }
+            }
+        });
+        fs::write(
+            root.join("segment.verify.json"),
+            serde_json::to_vec(&manifest).unwrap(),
+        )
+        .unwrap();
+        assert!(verify_v2_bundle(&root).is_ok());
+        fs::write(root.join("extension.bin"), b"tampered").unwrap();
+        assert!(verify_v2_bundle(&root).is_err());
         fs::remove_dir_all(root).unwrap();
     }
 }

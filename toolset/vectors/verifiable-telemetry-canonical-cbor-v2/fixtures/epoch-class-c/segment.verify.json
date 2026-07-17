@@ -10,9 +10,27 @@
       "path": "segments/segment-0.cbor",
       "sha256": "ce76302d1fcbf713097c0d70070b6a651bcd97e7855213aaf422b0ff9226708c"
     },
+    "segment_json": {
+      "path": "segments/segment-0.json",
+      "sha256": "4c7ddb78cd92a5799b3ad0aa9e4e374f2351f61060afe9bd304706204826a564"
+    },
+    "segment_sha256": {
+      "path": "segments/segment-0.cbor.sha256",
+      "sha256": "ddabd00c21ef4793d01c43f18429c891bfbb6cbc5f0ba39ed1385b9f0a3dc187"
+    },
+    "tsa_info": {
+      "path": "segments/segment-0.tsa-info.json",
+      "sha256": "e5070d5fd93712adc13a8a830e6e8a200ddf063265b04f563db4439745184d46"
+    },
     "tsa_tsr": {
       "path": "segments/segment-0.tsr",
       "sha256": "3d9644e88cc9c4dcf43eb79355cbaac20f561016db74da18bee13700ac9e9c77"
+    },
+    "extensions": {
+      "x-example": {
+        "path": "segments/segment-0.extension.txt",
+        "sha256": "1b98de66add0f32d2b8b96591b2d83ca8e3f6a262d46d6f8d127b0596f9e1880"
+      }
     }
   },
   "anchoring": {"tsa": {"status": "complete"}}

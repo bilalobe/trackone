@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/verification_result_v2.schema.json",
+  "title": "Verifiable Telemetry Segment Verification Result v2",
+  "type": "object",
+  "properties": {
+    "version": {"const": 2},
+    "artifact_sha256": {"$ref": "#/$defs/sha256"},
+    "commitment_profile_id": {"const": "verifiable-telemetry-canonical-cbor-v2"},
+    "disclosure_class": {"enum": ["A", "B", "C"]},
+    "verification_scope": {"enum": ["public_recompute", "partial_verification", "anchor_only"]},
+    "channels": {
+      "type": "object",
+      "additionalProperties": {"$ref": "#/$defs/channel_result"}
+    },
+    "policy": {"type": "object"},
+    "checks_executed": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/check_name"},
+      "uniqueItems": true
+    },
+    "checks_skipped": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/skipped_check"}
+    },
+    "record_multiset_root": {"$ref": "#/$defs/sha256"},
+    "overall": {"enum": ["success", "partial", "failure"]}
+  },
+  "required": [
+    "version",
+    "artifact_sha256",
+    "commitment_profile_id",
+    "disclosure_class",
+    "verification_scope",
+    "checks_executed",
+    "checks_skipped",
+    "overall"
+  ],
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {"properties": {"disclosure_class": {"const": "A"}}, "required": ["disclosure_class"]},
+      "then": {
+        "properties": {"verification_scope": {"const": "public_recompute"}},
+        "required": ["record_multiset_root"]
+      },
+      "else": {"not": {"required": ["record_multiset_root"]}}
+    },
+    {
+      "if": {"properties": {"disclosure_class": {"const": "B"}}, "required": ["disclosure_class"]},
+      "then": {"properties": {"verification_scope": {"const": "partial_verification"}}}
+    },
+    {
+      "if": {"properties": {"disclosure_class": {"const": "C"}}, "required": ["disclosure_class"]},
+      "then": {"properties": {"verification_scope": {"const": "anchor_only"}}}
+    }
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "standardized_check": {
+      "enum": [
+        "bundle_disclosure_validation",
+        "verification_manifest_validation",
+        "segment_artifact_validation",
+        "segment_chain_validation",
+        "record_level_recompute",
+        "batch_metadata_validation",
+        "segment_digest_binding",
+        "tsa_verification"
+      ]
+    },
+    "check_name": {
+      "oneOf": [
+        {"$ref": "#/$defs/standardized_check"},
+        {"type": "string", "pattern": "^x-[A-Za-z0-9._-]+$"}
+      ]
+    },
+    "skipped_check": {
+      "type": "object",
+      "properties": {
+        "check": {"$ref": "#/$defs/check_name"},
+        "reason": {"type": "string", "minLength": 1}
+      },
+      "required": ["check", "reason"],
+      "additionalProperties": false
+    },
+    "channel_result": {
+      "type": "object",
+      "properties": {
+        "status": {"enum": ["verified", "pending", "missing", "failed", "skipped", "complete"]},
+        "reason": {"type": "string"},
+        "detail": {"type": "string"},
+        "diagnostic": {"type": "string"},
+        "check": {"$ref": "#/$defs/check_name"}
+      },
+      "required": ["status"],
+      "additionalProperties": false
+    }
+  }
+}

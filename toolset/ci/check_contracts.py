@@ -178,6 +178,18 @@ def check(repo: Path) -> dict[str, int]:
             registry,
         )
         instance_count += 1
+    for instance_path in sorted(
+        (
+            repo
+            / "toolset/vectors/verifiable-telemetry-canonical-cbor-v2/fixtures"
+        ).glob("*/expected-result.json")
+    ):
+        validate_instance(
+            instance_path,
+            schemas[f"{PROVIDER}verification_result_v2.schema.json"],
+            registry,
+        )
+        instance_count += 1
 
     conformance_schema = schemas[f"{PROVIDER}conformance_archive_manifest_v3.schema.json"]
     conformance_example = {

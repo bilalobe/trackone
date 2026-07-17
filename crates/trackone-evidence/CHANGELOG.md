@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added corpus-driven `verify-v2` CLI replay for corrected Class-A epoch and
   successor bundles plus the archived segment-7/zero-predecessor failure
   bundle.
+- Added strict RFC 3161 validation for draft-08 v2 bundles, including trusted
+  TSA-chain validation and signed-content binding checks.
 
 ### Changed
 - V2 test artifact construction now uses the ledger-owned validated epoch and

@@ -14,5 +14,8 @@ python3 verify_conformance_archive.py --archive trackone-conformance.tar.gz
 
 The bundled native verifier currently targets Linux x86-64. Packaged crate
 sources remain in `software/crates/` for independent rebuilds on other targets.
-The archive does not claim full v2 conformance; its v2 corpus is explicitly a
-durable-producer, disclosure-class, and RFC 3161 verifier gates.
+The archive claims full conformance to the scoped draft-08 v2 profile:
+durable production, disclosure Classes A/B/C, RFC 3161 verification, the
+negative-fixture refusal floor, and offline schema resolution. The claim does
+not cover telemetry truth or completeness, external TSA availability, or
+fitness for automated sanctions or actuation.

@@ -32,6 +32,7 @@
     "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/v2_vector_manifest_v2.schema.json": "schemas/v2_vector_manifest_v2.schema.json",
     "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/verify_manifest.schema.json": "schemas/verify_manifest.schema.json",
     "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/segment_record_v2.schema.json": "schemas/segment_record_v2.schema.json",
-    "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/verify_manifest_v2.schema.json": "schemas/verify_manifest_v2.schema.json"
+    "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/verify_manifest_v2.schema.json": "schemas/verify_manifest_v2.schema.json",
+    "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/verification_result_v2.schema.json": "schemas/verification_result_v2.schema.json"
   }
 }
