@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-beta.3] - 2026-07-17
+
+### Changed
+- `trackone-core::VERSION` now reports `0.1.0-beta.3` to match the workspace
+  release.
+
 ## [0.1.0-beta.2] - 2026-07-11
 
 ### Changed

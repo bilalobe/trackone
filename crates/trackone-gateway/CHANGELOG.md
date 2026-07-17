@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-beta.3] - 2026-07-17
+
 ### Added
 - Added durable draft-08 v2 segment production backed by PostgreSQL, including
   transaction-safe idempotency, segment closure, and recovery of persisted

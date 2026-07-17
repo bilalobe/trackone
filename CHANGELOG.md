@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-beta.3] - 2026-07-17
+
 ### Added
 - Added the `conformance-archive` v3 artifact family with deterministic
   assembly; archive-local schemas, CDDL, and catalog; v1 and full draft-08 v2

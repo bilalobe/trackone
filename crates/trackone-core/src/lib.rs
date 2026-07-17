@@ -10,7 +10,7 @@
 #![cfg_attr(not(debug_assertions), deny(warnings))]
 
 /// Protocol version string
-pub const VERSION: &str = "0.1.0-beta.2";
+pub const VERSION: &str = "0.1.0-beta.3";
 
 /// Core shared types for frames, identifiers, and errors.
 pub mod types;
@@ -47,7 +47,7 @@ mod tests {
 
     #[test]
     fn version_sanity() {
-        assert_eq!(VERSION, "0.1.0-beta.2");
+        assert_eq!(VERSION, "0.1.0-beta.3");
     }
 
     #[test]

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-beta.3] - 2026-07-17
+
 ### Added
 - Added `SegmentRecordV2::new_epoch(...)` and `new_successor(...)` constructors
   that derive chain position from the epoch rule or exact predecessor bytes and
