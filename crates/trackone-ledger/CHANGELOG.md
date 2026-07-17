@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Expanded the draft-08 v2 corpus gate to replay the corrected complete epoch
   artifact, a chain-bound successor, embedded batches, exact digests, and the
   archived segment-7/zero-predecessor decoder-negative artifact.
+- V2 invariant categories now match stable message literals directly rather
+  than depending on formatted error output.
 
 ## [0.1.0-beta.2] - 2026-07-11
 

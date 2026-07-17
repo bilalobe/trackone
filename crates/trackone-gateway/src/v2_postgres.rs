@@ -1,6 +1,8 @@
 //! PostgreSQL durable store for the draft-08 v2 producer.
 
 use postgres::{Client, IsolationLevel};
+use rustix::rand::{GetRandomFlags, getrandom};
+use trackone_ledger::hex_lower;
 use trackone_ledger::v2::{ClosurePolicyV1, EmptyMode};
 
 use crate::v2_producer::{
@@ -26,23 +28,83 @@ impl PostgresLedgerStore {
         self.client.batch_execute(MIGRATION).map_err(store_error)
     }
 
+    /// Resolve the durable active epoch for a site, generating a fresh random
+    /// ledger identity only when the site has no current or legacy state.
+    pub fn open_active(mut client: Client, site_id: &str) -> Result<(Self, String), ProducerError> {
+        if site_id.is_empty() {
+            return Err(ProducerError::InvalidConfiguration(
+                "site_id must be non-empty",
+            ));
+        }
+        client.batch_execute(MIGRATION).map_err(store_error)?;
+        let mut transaction = client
+            .build_transaction()
+            .isolation_level(IsolationLevel::Serializable)
+            .start()
+            .map_err(store_error)?;
+        transaction
+            .execute(
+                "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
+                &[&site_id],
+            )
+            .map_err(store_error)?;
+        let active = transaction
+            .query_opt(
+                "SELECT ledger_id FROM trackone_v2_active_epoch WHERE site_id=$1",
+                &[&site_id],
+            )
+            .map_err(store_error)?
+            .map(|row| row.get::<_, String>(0));
+        let legacy = if active.is_none() {
+            transaction
+                .query(
+                    "SELECT ledger_id FROM trackone_v2_ledger_state \
+                     WHERE site_id=$1 ORDER BY ledger_id",
+                    &[&site_id],
+                )
+                .map_err(store_error)?
+                .into_iter()
+                .map(|row| row.get::<_, String>(0))
+                .collect::<Vec<_>>()
+        } else {
+            Vec::new()
+        };
+        let ledger_id = choose_active_ledger(active, &legacy)?.unwrap_or(generate_ledger_id()?);
+        transaction
+            .execute(
+                "INSERT INTO trackone_v2_active_epoch (site_id, ledger_id) VALUES ($1, $2) \
+                 ON CONFLICT (site_id) DO NOTHING",
+                &[&site_id, &ledger_id],
+            )
+            .map_err(store_error)?;
+        transaction.commit().map_err(store_error)?;
+        Ok((Self::new(client, &ledger_id), ledger_id))
+    }
+
     pub fn into_client(self) -> Client {
         self.client
     }
 
-    pub fn load_pending_tsa_segment(
+    pub fn load_pending_tsa_segments(
         &mut self,
-        segment_number: u64,
-    ) -> Result<Option<(Vec<u8>, String)>, ProducerError> {
-        let segment_number = numeric(segment_number);
+    ) -> Result<Vec<(u64, Vec<u8>, String)>, ProducerError> {
         self.client
-            .query_opt(
-                "SELECT artifact_cbor, artifact_sha256 FROM trackone_v2_sealed_segment \
-                 WHERE ledger_id=$1 AND segment_number=$2::numeric AND tsa_status='pending'",
-                &[&self.ledger_id, &segment_number],
+            .query(
+                "SELECT segment_number::text, artifact_cbor, artifact_sha256 \
+                 FROM trackone_v2_sealed_segment WHERE ledger_id=$1 AND tsa_status='pending' \
+                 ORDER BY segment_number",
+                &[&self.ledger_id],
             )
-            .map(|row| row.map(|row| (row.get(0), row.get(1))))
-            .map_err(store_error)
+            .map_err(store_error)?
+            .into_iter()
+            .map(|row| {
+                Ok((
+                    parse_u64(row.get(0), "pending segment_number")?,
+                    row.get(1),
+                    row.get(2),
+                ))
+            })
+            .collect()
     }
 
     pub fn attach_tsa_response(
@@ -73,6 +135,38 @@ impl PostgresLedgerStore {
         }
         Ok(())
     }
+}
+
+fn choose_active_ledger(
+    active: Option<String>,
+    legacy: &[String],
+) -> Result<Option<String>, ProducerError> {
+    if active.is_some() {
+        return Ok(active);
+    }
+    match legacy {
+        [] => Ok(None),
+        [ledger_id] => Ok(Some(ledger_id.clone())),
+        _ => Err(ProducerError::Store(
+            "multiple legacy ledgers exist for the site; active epoch is ambiguous".to_string(),
+        )),
+    }
+}
+
+fn generate_ledger_id() -> Result<String, ProducerError> {
+    let mut bytes = [0_u8; 16];
+    let mut filled = 0;
+    while filled < bytes.len() {
+        let initialized = getrandom(&mut bytes[filled..], GetRandomFlags::empty())
+            .map_err(|error| ProducerError::Entropy(error.to_string()))?;
+        if initialized == 0 {
+            return Err(ProducerError::Entropy(
+                "getrandom returned no bytes".to_string(),
+            ));
+        }
+        filled += initialized;
+    }
+    Ok(hex_lower(&bytes))
 }
 
 fn store_error(error: postgres::Error) -> ProducerError {
@@ -377,5 +471,38 @@ impl LedgerStore for PostgresLedgerStore {
             }
         }
         transaction.commit().map_err(store_error)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn generated_ledger_ids_are_lowercase_hex_and_fresh() {
+        let first = generate_ledger_id().unwrap();
+        let second = generate_ledger_id().unwrap();
+        assert_eq!(first.len(), 32);
+        assert!(
+            first
+                .bytes()
+                .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+        );
+        assert_ne!(first, second);
+    }
+
+    #[test]
+    fn active_epoch_resolution_adopts_or_disambiguates_legacy_state() {
+        let one = vec!["1".repeat(32)];
+        assert_eq!(
+            choose_active_ledger(None, &one).unwrap(),
+            Some("1".repeat(32))
+        );
+        let many = vec!["1".repeat(32), "2".repeat(32)];
+        assert!(choose_active_ledger(None, &many).is_err());
+        assert_eq!(
+            choose_active_ledger(Some("3".repeat(32)), &many).unwrap(),
+            Some("3".repeat(32))
+        );
     }
 }

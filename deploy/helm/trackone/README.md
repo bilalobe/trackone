@@ -93,6 +93,9 @@ The chart generates and manages these runtime config objects:
 
 The values still live in `values.yaml` and any overlays, but the pods now consume
 them via `configMapRef` / `secretKeyRef` instead of inline `env.value` entries.
+The gateway generates its ledger identifier from operating-system entropy for a
+site's first epoch and stores the active identity in PostgreSQL; the chart does
+not ship or inject a reusable ledger identifier.
 
 If you already manage non-secret gateway config elsewhere, set
 `gateway.existingConfigMap` and the chart will reuse that ConfigMap instead of

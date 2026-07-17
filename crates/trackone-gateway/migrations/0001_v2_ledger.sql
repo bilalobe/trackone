@@ -19,6 +19,11 @@ CREATE TABLE IF NOT EXISTS trackone_v2_ledger_state (
     next_empty_mode text NOT NULL CHECK (next_empty_mode IN ('emit', 'suppress'))
 );
 
+CREATE TABLE IF NOT EXISTS trackone_v2_active_epoch (
+    site_id text PRIMARY KEY CHECK (site_id <> ''),
+    ledger_id text NOT NULL UNIQUE CHECK (ledger_id ~ '^[0-9a-f]{32}$')
+);
+
 CREATE TABLE IF NOT EXISTS trackone_v2_open_record (
     ledger_id text NOT NULL REFERENCES trackone_v2_ledger_state(ledger_id) ON DELETE CASCADE,
     ordinal numeric(20,0) NOT NULL CHECK (ordinal BETWEEN 0 AND 18446744073709551615),

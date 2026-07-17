@@ -1,5 +1,6 @@
 //! HTTP handoff surface for exact v2 canonical-record CBOR bytes.
 
+use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
 use axum::body::Bytes;
@@ -18,6 +19,30 @@ pub const CBOR_MEDIA_TYPE: &str = "application/cbor";
 pub const IDEMPOTENCY_KEY: &str = "idempotency-key";
 
 pub type ServiceProducer<C> = V2LedgerProducer<PostgresLedgerStore, C>;
+
+pub fn submit_pending_timestamps<C>(
+    producer: &mut ServiceProducer<C>,
+    timestamp_authority: &Rfc3161TimestampAuthority,
+) -> Result<BTreeMap<u64, bool>, ProducerError>
+where
+    C: ElapsedClock,
+{
+    let pending = producer.store_mut().load_pending_tsa_segments()?;
+    let mut outcomes = BTreeMap::new();
+    for (segment_number, artifact, digest) in pending {
+        let verified = match timestamp_authority.stamp(&artifact) {
+            Ok(response) => {
+                producer
+                    .store_mut()
+                    .attach_tsa_response(segment_number, &digest, &response)?;
+                true
+            }
+            Err(_) => false,
+        };
+        outcomes.insert(segment_number, verified);
+    }
+    Ok(outcomes)
+}
 
 pub struct GatewayHttpState<C> {
     producer: Arc<Mutex<ServiceProducer<C>>>,
@@ -98,25 +123,18 @@ where
             .lock()
             .map_err(|_| ProducerError::Store("producer mutex is poisoned".to_string()))?;
         let outcome = producer.admit_idempotent(key, body.to_vec())?;
-        let mut tsa_status = "not_applicable";
-        for segment_number in &outcome.sealed_segment_numbers {
-            if let Some((artifact, digest)) = producer
-                .store_mut()
-                .load_pending_tsa_segment(*segment_number)?
-            {
-                tsa_status = "pending";
-                if let Ok(response) = timestamp_authority.stamp(&artifact)
-                    && producer
-                        .store_mut()
-                        .attach_tsa_response(*segment_number, &digest, &response)
-                        .is_ok()
-                {
-                    tsa_status = "verified";
-                }
-            } else {
-                tsa_status = "verified";
-            }
-        }
+        let timestamped = submit_pending_timestamps(&mut producer, &timestamp_authority)?;
+        let tsa_status = if outcome.sealed_segment_numbers.is_empty() {
+            "not_applicable"
+        } else if outcome
+            .sealed_segment_numbers
+            .iter()
+            .all(|number| timestamped.get(number).copied().unwrap_or(true))
+        {
+            "verified"
+        } else {
+            "pending"
+        };
         Ok::<_, ProducerError>((outcome, tsa_status))
     })
     .await;

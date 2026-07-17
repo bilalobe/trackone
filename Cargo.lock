@@ -1880,6 +1880,7 @@ dependencies = [
  "base64",
  "postgres",
  "pyo3",
+ "rustix",
  "serde_json",
  "tokio",
  "trackone-constants",

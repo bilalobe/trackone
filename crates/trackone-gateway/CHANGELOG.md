@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Added durable draft-08 v2 segment production backed by PostgreSQL, including
+  transaction-safe idempotency, segment closure, and recovery of persisted
+  producer state.
+- Added the `trackone-v2-gateway` CBOR admission service, which exposes the
+  v2 producer at the HTTP boundary with explicit idempotency semantics.
+- Added an optional RFC 3161 TSA client for timestamping completed v2 segment
+  bundles and publishing the resulting timestamp response with the evidence.
+
+### Changed
+- Gateway container and Helm deployment configuration can now run the v2
+  admission service and supply its PostgreSQL and timestamping settings.
+
 ## [0.1.0-beta.2] - 2026-07-11
 
 ### Notes

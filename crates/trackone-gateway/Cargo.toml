@@ -33,6 +33,7 @@ base64 = { workspace = true, optional = true }
 postgres = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true }
+rustix.workspace = true
 
 [[bin]]
 name = "trackone-v2-gateway"

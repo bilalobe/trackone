@@ -157,10 +157,6 @@
               "type": "string",
               "minLength": 1
             },
-            "ledgerId": {
-              "type": "string",
-              "pattern": "^[0-9a-f]{32}$"
-            },
             "siteId": {
               "type": "string",
               "minLength": 1

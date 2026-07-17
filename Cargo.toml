@@ -35,7 +35,7 @@ serde_repr = "0.1.20"
 zeroize = { version = "1.9.0", default-features = false, features = ["derive"] }
 serde_json_canonicalizer = "0.3.2"
 postgres = { version = "0.19.14", features = ["array-impls"] }
-rustix = { version = "1.1.4", features = ["fs"] }
+rustix = { version = "1.1.4", features = ["fs", "rand", "time"] }
 axum = "0.8.9"
 tokio = { version = "1.52.0", features = ["macros", "net", "rt-multi-thread"] }
 

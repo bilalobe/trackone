@@ -128,6 +128,7 @@ pub enum ProducerError {
     InvalidConfiguration(&'static str),
     InvalidRecord(String),
     Clock(String),
+    Entropy(String),
     ClockDiscontinuity,
     SerialExhausted,
     CounterOverflow(&'static str),
@@ -145,6 +146,7 @@ impl fmt::Display for ProducerError {
                 write!(formatter, "invalid canonical record: {message}")
             }
             Self::Clock(message) => write!(formatter, "elapsed clock failed: {message}"),
+            Self::Entropy(message) => write!(formatter, "system entropy failed: {message}"),
             Self::ClockDiscontinuity => {
                 formatter.write_str("elapsed clock continuity is uncertain")
             }
