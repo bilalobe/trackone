@@ -69,14 +69,28 @@ impl PostgresLedgerStore {
         } else {
             Vec::new()
         };
-        let ledger_id = choose_active_ledger(active, &legacy)?.unwrap_or(generate_ledger_id()?);
-        transaction
+        let candidate_ledger_id = match choose_active_ledger(active, &legacy)? {
+            Some(ledger_id) => ledger_id,
+            None => generate_ledger_id()?,
+        };
+        let inserted = transaction
             .execute(
                 "INSERT INTO trackone_v2_active_epoch (site_id, ledger_id) VALUES ($1, $2) \
                  ON CONFLICT (site_id) DO NOTHING",
-                &[&site_id, &ledger_id],
+                &[&site_id, &candidate_ledger_id],
             )
             .map_err(store_error)?;
+        let ledger_id = if inserted == 1 {
+            candidate_ledger_id
+        } else {
+            transaction
+                .query_one(
+                    "SELECT ledger_id FROM trackone_v2_active_epoch WHERE site_id=$1",
+                    &[&site_id],
+                )
+                .map_err(store_error)?
+                .get::<_, String>(0)
+        };
         transaction.commit().map_err(store_error)?;
         Ok((Self::new(client, &ledger_id), ledger_id))
     }

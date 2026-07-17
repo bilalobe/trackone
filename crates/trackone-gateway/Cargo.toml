@@ -18,7 +18,7 @@ doctest = false
 [features]
 default = []
 python = ["dep:pyo3", "dep:base64"]
-postgres-store = ["dep:postgres"]
+postgres-store = ["dep:postgres", "dep:rustix"]
 v2-service = ["postgres-store", "dep:axum", "dep:tokio"]
 
 [dependencies]
@@ -33,7 +33,7 @@ base64 = { workspace = true, optional = true }
 postgres = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true }
-rustix.workspace = true
+rustix = { workspace = true, optional = true }
 
 [[bin]]
 name = "trackone-v2-gateway"

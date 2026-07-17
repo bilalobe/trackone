@@ -20,6 +20,29 @@ pub const IDEMPOTENCY_KEY: &str = "idempotency-key";
 
 pub type ServiceProducer<C> = V2LedgerProducer<PostgresLedgerStore, C>;
 
+type PendingTimestamp = (u64, Vec<u8>, String);
+type StampedTimestamp = (u64, String, Vec<u8>);
+
+fn stamp_pending_timestamps(
+    pending: Vec<PendingTimestamp>,
+    timestamp_authority: &Rfc3161TimestampAuthority,
+) -> (BTreeMap<u64, bool>, Vec<StampedTimestamp>) {
+    let mut outcomes = BTreeMap::new();
+    let mut stamped = Vec::new();
+    for (segment_number, artifact, digest) in pending {
+        match timestamp_authority.stamp(&artifact) {
+            Ok(response) => {
+                outcomes.insert(segment_number, true);
+                stamped.push((segment_number, digest, response));
+            }
+            Err(_) => {
+                outcomes.insert(segment_number, false);
+            }
+        }
+    }
+    (outcomes, stamped)
+}
+
 pub fn submit_pending_timestamps<C>(
     producer: &mut ServiceProducer<C>,
     timestamp_authority: &Rfc3161TimestampAuthority,
@@ -27,19 +50,15 @@ pub fn submit_pending_timestamps<C>(
 where
     C: ElapsedClock,
 {
-    let pending = producer.store_mut().load_pending_tsa_segments()?;
-    let mut outcomes = BTreeMap::new();
-    for (segment_number, artifact, digest) in pending {
-        let verified = match timestamp_authority.stamp(&artifact) {
-            Ok(response) => {
-                producer
-                    .store_mut()
-                    .attach_tsa_response(segment_number, &digest, &response)?;
-                true
-            }
-            Err(_) => false,
-        };
-        outcomes.insert(segment_number, verified);
+    let (mut outcomes, stamped) = stamp_pending_timestamps(
+        producer.store_mut().load_pending_tsa_segments()?,
+        timestamp_authority,
+    );
+    for (segment_number, digest, response) in stamped {
+        producer
+            .store_mut()
+            .attach_tsa_response(segment_number, &digest, &response)?;
+        outcomes.insert(segment_number, true);
     }
     Ok(outcomes)
 }
@@ -119,11 +138,27 @@ where
     let producer = Arc::clone(&state.producer);
     let timestamp_authority = Arc::clone(&state.timestamp_authority);
     let result = tokio::task::spawn_blocking(move || {
-        let mut producer = producer
+        let outcome = producer
             .lock()
-            .map_err(|_| ProducerError::Store("producer mutex is poisoned".to_string()))?;
-        let outcome = producer.admit_idempotent(key, body.to_vec())?;
-        let timestamped = submit_pending_timestamps(&mut producer, &timestamp_authority)?;
+            .map_err(|_| ProducerError::Store("producer mutex is poisoned".to_string()))?
+            .admit_idempotent(key, body.to_vec())?;
+        let pending = producer
+            .lock()
+            .map_err(|_| ProducerError::Store("producer mutex is poisoned".to_string()))?
+            .store_mut()
+            .load_pending_tsa_segments()?;
+        let (mut timestamped, stamped) = stamp_pending_timestamps(pending, &timestamp_authority);
+        if !stamped.is_empty() {
+            let mut producer = producer
+                .lock()
+                .map_err(|_| ProducerError::Store("producer mutex is poisoned".to_string()))?;
+            for (segment_number, digest, response) in stamped {
+                producer
+                    .store_mut()
+                    .attach_tsa_response(segment_number, &digest, &response)?;
+                timestamped.insert(segment_number, true);
+            }
+        }
         let tsa_status = if outcome.sealed_segment_numbers.is_empty() {
             "not_applicable"
         } else if outcome
