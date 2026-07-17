@@ -8,6 +8,7 @@
 - [ADR-054](ADR-054-release-bound-evidence-artifacts.md): durable release carriers
 - [ADR-056](ADR-056-ots-proof-state-metadata-and-verification-lanes.md): OTS state vocabulary
 - [ADR-059](ADR-059-rust-native-conformance-archive-and-workflow-lanes.md): conformance archive and workflow split
+- [ADR-061](ADR-061-full-draft-08-v2-conformance-and-archive-v3.md): archive v3 and full draft-08 v2 conformance
 
 ## Context
 

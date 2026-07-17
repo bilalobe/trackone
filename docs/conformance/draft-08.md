@@ -56,7 +56,7 @@ continuity identifier and invoke recovery before accepting telemetry.
 
 Build the HTTP handoff with the `v2-service` feature and run the
 `trackone-v2-gateway` binary. It requires `TRACKONE_DATABASE_URL`,
-`TRACKONE_LEDGER_ID`, `TRACKONE_SITE_ID`, `TRACKONE_TSA_URL`,
+`TRACKONE_SITE_ID`, `TRACKONE_TSA_URL`,
 `TRACKONE_TSA_CA_FILE`, and `TRACKONE_TSA_POLICY_OID`; interval, batch, record,
 size, empty-mode, and bind settings use the corresponding `TRACKONE_*`
 environment variables shown by the binary source. `POST /v2/records` accepts only
@@ -65,10 +65,17 @@ durably recorded outcome; reuse of the key for different bytes returns HTTP
 409. Exact canonical bytes, interval membership, counters, sealed artifacts,
 serial advancement, and the idempotency outcome share one database
 transaction.
+On a site's first epoch, the gateway generates a 16-byte ledger identifier from
+the operating-system CSPRNG and persists it in the PostgreSQL active-epoch
+table. Restarts reuse that durable mapping. During upgrades from databases that
+predate the active-epoch table, one unambiguous ledger is adopted automatically.
+If more than one prior ledger exists for the site, startup fails closed rather
+than selecting an epoch from process configuration.
 Sealed artifacts enter a pending TSA state, are submitted as RFC 3161 queries
 over their exact SHA-256 digest, and move to verified only after OpenSSL checks
-the response against the query and configured trust root. Replaying the
-idempotent request retries a pending timestamp without readmitting the record.
+the response against the query and configured trust root. Startup recovery and
+every admission drain the durable pending backlog, so failed submissions and
+segments sealed during recovery remain retryable without readmitting a record.
 
 RFC 3161 verification requires OpenSSL on `PATH`, a deployment trust-anchor
 file passed with `--tsa-ca-file`, and the expected TSA policy passed with

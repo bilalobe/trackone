@@ -1,7 +1,11 @@
 # ADR-059: Rust-Native Conformance Archive and Workflow Lanes
 
-**Status**: Accepted
+**Status**: Superseded by [ADR-061](ADR-061-full-draft-08-v2-conformance-and-archive-v3.md)
 **Date**: 2026-07-12
+
+ADR-061 preserves the workflow split, offline verification, and archive-v2
+history while moving current subjects to archive v3 and declaring scoped full
+draft-08 v2 conformance.
 
 ## Related ADRs
 

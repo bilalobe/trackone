@@ -8,10 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Added the `conformance-archive` v2 artifact family with deterministic
-  assembly; archive-local schemas, CDDL, and catalog; v1 and v2-preview vector
-  replay; ADR-055 negative fixtures; and detached verification outside the
-  source checkout.
+- Added the `conformance-archive` v3 artifact family with deterministic
+  assembly; archive-local schemas, CDDL, and catalog; v1 and full draft-08 v2
+  conformance replay; ADR-055 negative fixtures; and detached verification
+  outside the source checkout.
 - Added commit-addressed conformance OCI survivability: successful main CI now
   publishes, pulls back, and independently verifies its exact archive.
 - Added the beta Anchoring Vitality workflow. It binds a successful main CI
@@ -21,6 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added schema-governed anchor-subject, anchor-evidence, and OTS verifier-sanity
   records, including an explicit `bitcoin-header-quorum-verified` state that
   never claims full Bitcoin consensus validation.
+- Added the draft-08 v2 gateway service: durable PostgreSQL-backed segment
+  production, CBOR admission with idempotency handling, and optional RFC 3161
+  timestamp issuance for completed segment bundles.
 
 ### Changed
 - Public JSON Schema identifiers and references now use the real raw GitHub
@@ -44,6 +47,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   calendar, explorer, and registry work.
 - Monorepo-only evidence corpus tests now self-skip when run from a published
   crate, while remaining mandatory in the repository and detached archive.
+- V2 invariant error classification no longer depends on display formatting,
+  and CI now runs the independent conformance-archive verifier regression
+  tests.
 
 ## [0.1.0-beta.2] - 2026-07-11
 
