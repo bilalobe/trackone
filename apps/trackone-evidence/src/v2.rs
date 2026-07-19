@@ -2,6 +2,7 @@
 use super::{EvidenceError, Result};
 use serde::Deserialize;
 use serde_json::{Value, json};
+use std::collections::BTreeMap;
 use std::fs::{self, File};
 use std::io::Read;
 use std::path::{Component, Path, PathBuf};
@@ -48,13 +49,39 @@ struct Artifacts {
     #[serde(default)]
     batches: Option<Vec<ArtifactRef>>,
     #[serde(default)]
+    segment_json: Option<ArtifactRef>,
+    #[serde(default)]
+    segment_sha256: Option<ArtifactRef>,
+    #[serde(default)]
     segment_ots: Option<ArtifactRef>,
     #[serde(default)]
     segment_ots_meta: Option<ArtifactRef>,
     #[serde(default)]
     peer_attest: Option<ArtifactRef>,
     #[serde(default)]
+    tsa_info: Option<ArtifactRef>,
+    #[serde(default)]
     tsa_tsr: Option<ArtifactRef>,
+    #[serde(default)]
+    extensions: BTreeMap<String, ArtifactRef>,
+}
+
+impl Artifacts {
+    fn references(&self) -> Vec<&ArtifactRef> {
+        let mut references = vec![&self.segment_cbor];
+        references.extend(self.predecessor_segment_cbor.iter());
+        references.extend(self.records.iter().flatten());
+        references.extend(self.batches.iter().flatten());
+        references.extend(self.segment_json.iter());
+        references.extend(self.segment_sha256.iter());
+        references.extend(self.segment_ots.iter());
+        references.extend(self.segment_ots_meta.iter());
+        references.extend(self.peer_attest.iter());
+        references.extend(self.tsa_info.iter());
+        references.extend(self.tsa_tsr.iter());
+        references.extend(self.extensions.values());
+        references
+    }
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -190,6 +217,12 @@ fn validate_manifest(manifest: &Manifest) -> Result<()> {
     {
         return Err(bad("v2 manifest identity is invalid"));
     }
+    for reference in manifest.artifacts.references() {
+        validate_portable_path(&reference.path)?;
+        if !valid_hex(&reference.sha256, 64) {
+            return Err(bad("v2 artifact digest is not lowercase SHA-256"));
+        }
+    }
     for claim in [
         manifest.anchoring.tsa.as_ref(),
         manifest.anchoring.ots.as_ref(),
@@ -277,6 +310,9 @@ pub fn verify_v2_bundle_with_policy(root: &Path, policy: &V2VerifyPolicy) -> Res
     let manifest: Manifest = serde_json::from_slice(&fs::read(&manifest_path)?)?;
     validate_manifest(&manifest)?;
     let _ = (&manifest.operational_summary, &manifest.extensions);
+    for reference in manifest.artifacts.references() {
+        artifact(root, reference)?;
+    }
     let segment_bytes = artifact(root, &manifest.artifacts.segment_cbor)?;
     let segment = decode_segment_record_v2(&segment_bytes)
         .map_err(|err| bad(format!("invalid v2 segment artifact: {err}")))?;
