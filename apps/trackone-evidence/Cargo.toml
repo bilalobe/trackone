@@ -1,0 +1,28 @@
+[package]
+name = "trackone-evidence"
+description = "Rust-native verifier/export application for TrackOne evidence bundles"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+readme = "README.md"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+rustix.workspace = true
+trackone-constants.workspace = true
+trackone-ots.workspace = true
+trackone-ingest = { workspace = true, features = ["std"] }
+trackone-ledger.workspace = true
+
+[lib]
+path = "src/lib.rs"
+doctest = false
+
+[[bin]]
+name = "trackone-evidence"
+path = "src/main.rs"

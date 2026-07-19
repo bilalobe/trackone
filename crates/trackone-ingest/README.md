@@ -18,13 +18,17 @@ This crate owns:
 - deterministic Rust framed fixture emission for tests and demos
 - replay-window state used by framed gateway admission
 
+The implementation is organized into `profile`, `frame`, `aad`, `nonce`,
+`fixture`, `replay`, and `admission` modules while preserving the
+crate-root API.
+
 ## Boundary With Other Crates
 
 - [`trackone-core`](../trackone-core/README.md) owns canonical protocol types,
   crypto-facing traits, identity/admission input records, and deterministic CBOR
   commitment surfaces.
-- [`trackone-gateway`](../trackone-gateway/README.md) exposes selected ingest,
-  core, and ledger helpers to host-side gateway code.
+- [`trackone-python`](../../bindings/trackone-python/README.md) optionally
+  exposes selected ingest helpers through PyO3 without owning their semantics.
 - [`trackone-pod-fw`](../trackone-pod-fw/README.md) uses ingest helpers to emit
   framed facts from firmware-side runtime state.
 - [`trackone-sensorthings`](../trackone-sensorthings/README.md) owns read-only
@@ -56,6 +60,6 @@ without the host admission surface.
 ## Check
 
 ```bash
-cargo test -p trackone-ingest --features std,xchacha
-cargo check -p trackone-ingest --no-default-features
+cargo test --locked -p trackone-ingest --features std,xchacha
+cargo check --locked -p trackone-ingest --no-default-features
 ```

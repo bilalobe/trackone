@@ -1,0 +1,40 @@
+[package]
+name = "trackone-python"
+description = "Optional legacy PyO3 bridge for TrackOne Rust libraries"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+readme = "README.md"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+doctest = false
+
+[features]
+default = []
+python = [
+    "dep:base64",
+    "dep:pyo3",
+    "dep:serde_json",
+    "dep:trackone-constants",
+    "dep:trackone-core",
+    "dep:trackone-ingest",
+    "dep:trackone-ledger",
+    "dep:trackone-ots",
+    "dep:trackone-sensorthings",
+]
+
+[dependencies]
+base64 = { workspace = true, optional = true }
+pyo3 = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+trackone-constants = { workspace = true, optional = true }
+trackone-core = { workspace = true, optional = true }
+trackone-ingest = { workspace = true, features = ["std", "xchacha"], optional = true }
+trackone-ledger = { workspace = true, optional = true }
+trackone-ots = { workspace = true, optional = true }
+trackone-sensorthings = { workspace = true, optional = true }

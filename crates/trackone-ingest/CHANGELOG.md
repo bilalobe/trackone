@@ -7,11 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-beta.4] - 2026-07-18
+
+### Changed
+- Split the implementation into focused profile, frame, AAD, nonce, fixture,
+  replay, and admission modules while preserving crate-root exports.
+
 ## [0.1.0-beta.3] - 2026-07-17
 
 ### Notes
 - No crate-local API changes landed; the crate remains aligned with the
   workspace `0.1.0-beta.3` release line.
+
+### Changed
+
+- Split the implementation into focused profile, frame, AAD, nonce, fixture,
+  replay, and admission modules while preserving crate-root exports.
 
 ## [0.1.0-beta.2] - 2026-07-11
 

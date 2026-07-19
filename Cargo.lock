@@ -1843,11 +1843,11 @@ dependencies = [
 
 [[package]]
 name = "trackone-constants"
-version = "0.1.0-beta.3"
+version = "0.1.0-beta.4"
 
 [[package]]
 name = "trackone-core"
-version = "0.1.0-beta.3"
+version = "0.1.0-beta.4"
 dependencies = [
  "heapless",
  "postcard",
@@ -1861,38 +1861,31 @@ dependencies = [
 
 [[package]]
 name = "trackone-evidence"
-version = "0.1.0-beta.3"
+version = "0.1.0-beta.4"
 dependencies = [
  "rustix",
  "serde",
  "serde_json",
  "trackone-constants",
- "trackone-gateway",
  "trackone-ingest",
  "trackone-ledger",
+ "trackone-ots",
 ]
 
 [[package]]
-name = "trackone-gateway"
-version = "0.1.0-beta.3"
+name = "trackone-gateway-svc"
+version = "0.1.0-beta.4"
 dependencies = [
  "axum",
- "base64",
  "postgres",
- "pyo3",
- "rustix",
  "serde_json",
  "tokio",
- "trackone-constants",
- "trackone-core",
- "trackone-ingest",
  "trackone-ledger",
- "trackone-sensorthings",
 ]
 
 [[package]]
 name = "trackone-ingest"
-version = "0.1.0-beta.3"
+version = "0.1.0-beta.4"
 dependencies = [
  "chacha20poly1305",
  "heapless",
@@ -1905,7 +1898,7 @@ dependencies = [
 
 [[package]]
 name = "trackone-ledger"
-version = "0.1.0-beta.3"
+version = "0.1.0-beta.4"
 dependencies = [
  "cddl",
  "hex",
@@ -1915,16 +1908,40 @@ dependencies = [
 ]
 
 [[package]]
+name = "trackone-ots"
+version = "0.1.0-beta.4"
+dependencies = [
+ "serde_json",
+ "trackone-constants",
+ "trackone-ledger",
+]
+
+[[package]]
 name = "trackone-pod-fw"
-version = "0.1.0-beta.3"
+version = "0.1.0-beta.4"
 dependencies = [
  "trackone-core",
  "trackone-ingest",
 ]
 
 [[package]]
+name = "trackone-python"
+version = "0.1.0-beta.4"
+dependencies = [
+ "base64",
+ "pyo3",
+ "serde_json",
+ "trackone-constants",
+ "trackone-core",
+ "trackone-ingest",
+ "trackone-ledger",
+ "trackone-ots",
+ "trackone-sensorthings",
+]
+
+[[package]]
 name = "trackone-sensorthings"
-version = "0.1.0-beta.3"
+version = "0.1.0-beta.4"
 dependencies = [
  "serde_json",
  "trackone-core",

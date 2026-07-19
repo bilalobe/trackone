@@ -1,18 +1,20 @@
 [workspace]
 resolver = "3"
 members = [
-    "crates/trackone-core",
-    "crates/trackone-evidence",
-    "crates/trackone-gateway",
-    "crates/trackone-ingest",
-    "crates/trackone-pod-fw",
+    "apps/trackone-evidence",
+    "apps/trackone-gateway-svc",
+    "bindings/trackone-python",
     "crates/trackone-constants",
+    "crates/trackone-core",
+    "crates/trackone-ingest",
     "crates/trackone-ledger",
+    "crates/trackone-ots",
+    "crates/trackone-pod-fw",
     "crates/trackone-sensorthings",
 ]
 
 [workspace.package]
-version = "0.1.0-beta.3"
+version = "0.1.0-beta.4"
 edition = "2024"
 rust-version = "1.93"
 publish = true
@@ -40,12 +42,12 @@ axum = "0.8.9"
 tokio = { version = "1.52.0", features = ["macros", "net", "rt-multi-thread"] }
 
 # Internal crates (workspace path + pinned version for publish compatibility)
-trackone-core = { path = "crates/trackone-core", version = "0.1.0-beta.3", default-features = false }
-trackone-ingest = { path = "crates/trackone-ingest", version = "0.1.0-beta.3", default-features = false }
-trackone-ledger = { path = "crates/trackone-ledger", version = "0.1.0-beta.3" }
-trackone-constants = { path = "crates/trackone-constants", version = "0.1.0-beta.3" }
-trackone-sensorthings = { path = "crates/trackone-sensorthings", version = "0.1.0-beta.3" }
-trackone-gateway = { path = "crates/trackone-gateway", version = "0.1.0-beta.3", default-features = false }
+trackone-core = { path = "crates/trackone-core", version = "0.1.0-beta.4", default-features = false }
+trackone-ingest = { path = "crates/trackone-ingest", version = "0.1.0-beta.4", default-features = false }
+trackone-ledger = { path = "crates/trackone-ledger", version = "0.1.0-beta.4" }
+trackone-constants = { path = "crates/trackone-constants", version = "0.1.0-beta.4" }
+trackone-sensorthings = { path = "crates/trackone-sensorthings", version = "0.1.0-beta.4" }
+trackone-ots = { path = "crates/trackone-ots", version = "0.1.0-beta.4" }
 
 [profile.release]
 lto = true
