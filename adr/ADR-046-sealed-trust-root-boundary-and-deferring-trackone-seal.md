@@ -1,6 +1,10 @@
 # ADR-046: Sealed trust-root boundary and deferring a dedicated `trackone-seal` crate
 
 **Status**: Accepted
+
+> **Current package allocation:** ADR-061 supersedes this record's
+> `trackone-gateway` Python-exposure statements. Deterministic seal and
+> publication-boundary decisions remain unchanged.
 **Date**: 2026-03-18
 
 ## Related ADRs

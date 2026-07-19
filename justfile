@@ -10,14 +10,17 @@ default:
 verify out_dir="out/site_demo":
     cargo run --package trackone-evidence -- verify --root {{out_dir}} --facts {{out_dir}}/facts
 
+# Enforce reusable-library, application, and binding dependency direction.
+boundaries:
+    python3 toolset/ci/check_workspace_boundaries.py
+
 # Run all tests with correct feature combinations
 test:
     cargo test --workspace --locked
     cargo test --locked --package trackone-core --features std,postcard,dummy-aead
     cargo test --locked --package trackone-ingest --features std,xchacha
     cargo test --locked --package trackone-pod-fw --features std
-    cargo test --locked --package trackone-gateway --no-default-features
-    cargo test --locked --package trackone-gateway --features v2-service
+    cargo test --locked --package trackone-python --features python
     cargo test --locked --package trackone-ledger --test vector_corpus -- --ignored
 
 # Run clippy with correct features (avoid --all-features due to production+dummy-aead conflict)
@@ -26,8 +29,7 @@ clippy:
     cargo clippy --locked --package trackone-core --all-targets --features std,postcard,dummy-aead -- -D warnings
     cargo clippy --locked --package trackone-ingest --all-targets --features std,xchacha -- -D warnings
     cargo clippy --locked --package trackone-pod-fw --all-targets --features std -- -D warnings
-    cargo clippy --locked --package trackone-gateway --all-targets --no-default-features -- -D warnings
-    cargo clippy --locked --package trackone-gateway --all-targets --features v2-service -- -D warnings
+    cargo clippy --locked --package trackone-python --all-targets --features python -- -D warnings
 
 # Build all packages in release mode
 build-release:
@@ -37,7 +39,7 @@ build-release:
 build-production:
     cargo build --locked --package trackone-core --no-default-features --features std,production
     cargo build --locked --package trackone-pod-fw --no-default-features --features production
-    cargo build --locked --package trackone-gateway --release --features v2-service --bin trackone-v2-gateway
+    cargo build --locked --package trackone-gateway-svc --release --bin trackone-v2-gateway
 
 # Run Rust-side serialization benchmarks
 bench-rust:
@@ -56,5 +58,5 @@ clean:
     cargo clean
 
 # Full CI check (format, clippy, test, build)
-ci: fmt-check clippy test build-release
+ci: boundaries fmt-check clippy test build-release
     @echo "✅ All CI checks passed!"

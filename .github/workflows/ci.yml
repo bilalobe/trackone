@@ -108,6 +108,9 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
+      - name: Check workspace package boundaries
+        run: just boundaries
+
       - name: Check formatting
         run: just fmt-check
 
@@ -145,6 +148,7 @@ jobs:
           toolset/anchoring/anchor_evidence.py
           toolset/anchoring/ots_verifier_sanity.py
           toolset/ci/check_contracts.py
+          toolset/ci/check_workspace_boundaries.py
           toolset/independent-verifier/build_conformance_archive.py
           toolset/independent-verifier/verify_conformance_archive.py
 
@@ -196,15 +200,16 @@ jobs:
           # release. Verification already ran in the rust job; verifying each
           # tarball here would resolve siblings from the previous crates.io
           # release instead of this coordinated source set.
-          cargo package --workspace --locked --no-verify
+          cargo package --workspace --exclude trackone-python --locked --no-verify
           cargo build --release --locked -p trackone-evidence
           mkdir -p dist/crates dist/helm
           shopt -s nullglob
           packages=(target/package/*-"${version}".crate)
-          test "${#packages[@]}" -eq 8
+          # Seven reusable libraries and two publishable applications.
+          test "${#packages[@]}" -eq 9
           cp "${packages[@]}" dist/crates/
-          helm lint deploy/helm/trackone
-          helm package deploy/helm/trackone \
+          helm lint apps/trackone-gateway-svc/deploy/helm/trackone
+          helm package apps/trackone-gateway-svc/deploy/helm/trackone \
             --version "${version}" \
             --app-version "${version}" \
             --destination dist/helm

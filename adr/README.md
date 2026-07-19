@@ -1,7 +1,25 @@
 # Architecture Decision Records (ADRs)
 
-This directory contains the key design decisions for Track1 (secure telemetry + verifiable ledger).
+This directory contains the key design decisions for TrackOne's secure
+telemetry and verifiable-ledger evidence plane.
 Each ADR captures context, the decision, consequences, and alternatives.
+
+## Current workspace boundary
+
+The current package allocation is defined by
+[ADR-061](ADR-061-library-application-and-binding-package-boundaries.md):
+
+- reusable domain libraries live under `crates/`
+- deployable/operator-facing packages live under `apps/`
+- optional language adapters live under `bindings/`
+- cross-cutting schemas, vectors, and detached-verifier tooling live under
+  `toolset/`
+
+When an older ADR mentions the former `trackone-gateway` package, the
+application-owned `trackone-gateway-svc`, reusable `trackone-ots`, and
+unpublished `trackone-python` packages described by ADR-061 are the current
+implementation. Historical protocol and security decisions remain in force
+unless an ADR explicitly supersedes them.
 
 ## Index (Project)
 
@@ -66,6 +84,7 @@ Each ADR captures context, the decision, consequences, and alternatives.
 - [ADR-059: Rust-Native Conformance Archive and Workflow Lanes](ADR-059-rust-native-conformance-archive-and-workflow-lanes.md)
 - [ADR-060: Beta Anchor-Evidence Advancement and Verifier Sanity](ADR-060-beta-anchor-evidence-advancement-and-verifier-sanity.md)
 - [ADR-061: Full Draft-08 V2 Conformance and Conformance Archive V3](ADR-061-full-draft-08-v2-conformance-and-archive-v3.md)
+- [ADR-061: Library, Application, and Binding Package Boundaries](ADR-061-library-application-and-binding-package-boundaries.md)
 
 ## Index Conventions
 
@@ -197,7 +216,11 @@ Entries list **Status** and **Summary**. Related references are grouped under **
 
 - **[ADR-051](ADR-051-internal-dependency-boundaries-and-feature-demotion.md): Internal dependency boundaries and feature demotion**
   **Status**: Accepted
-  **Summary**: Keeps convenience dependencies from hardening into architecture boundaries: shared inert labels belong in `trackone-constants`, transport helpers in `trackone-core` stay opt-in, PyO3 remains a leaf feature of `trackone-gateway`, and one-off compatibility dependencies should be removed when a small wire-compatible local helper is clearer.
+  **Summary**: Keeps convenience dependencies from hardening into architecture boundaries; its former mixed-gateway package allocation is superseded by ADR-061.
+
+- **[ADR-061](ADR-061-library-application-and-binding-package-boundaries.md): Library, application, and binding package boundaries**
+  **Status**: Accepted
+  **Summary**: Separates reusable libraries, deployable applications, and optional bindings; extracts `trackone-ots`, establishes the gateway-service and evidence app boundaries, confines PyO3 to `trackone-python`, and assigns deployment assets to the service app.
 
 ### Verification, Integrity & OTS Pipeline
 
@@ -434,7 +457,7 @@ Entries list **Status** and **Summary**. Related references are grouped under **
 **Conformance & Interop**: [ADR-032](ADR-032-informational-rfc-verifiable-telemetry-ledger.md) \<- [ADR-039](ADR-039-cbor-first-commitment-profile-and-artifact-authority.md), [ADR-040](ADR-040-commitment-test-vectors-and-conformance-gates.md), [ADR-041](ADR-041-verification-disclosure-bundles-and-privacy-tiers.md), [ADR-043](ADR-043-phased-bundle-manifest-maturity-for-id.md), [ADR-052](ADR-052-commitment-profile-identifier-binding-boundary.md), [ADR-055](ADR-055-independent-verifier-negative-fixture-corpus.md), [ADR-057](ADR-057-publication-channel-status-and-export-refusal-policy.md), [ADR-059](ADR-059-rust-native-conformance-archive-and-workflow-lanes.md), [ADR-061](ADR-061-full-draft-08-v2-conformance-and-archive-v3.md)
 **Environmental Evidence & Projections**: [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md) \<- [ADR-027](ADR-027-sensorthings-shtc3-representation.md), [ADR-028](ADR-028-sensorthings-projection-mapping.md), [ADR-029](ADR-029-env-daily-summaries-and-usecases.md)
 **Future Roadmap**: [ADR-017](ADR-017-rust-core-and-pyo3-integration.md), [ADR-036](ADR-036-post-quantum-kem.md), [ADR-037](ADR-037-signature-roles-and-verification-boundaries.md)
-**System Scope & Boundary**: [ADR-047](ADR-047-trackone-evidence-plane-within-device-lifecycle.md) \<- [ADR-024](ADR-024-anti-replay-and-ots-backed-ledger.md), [ADR-032](ADR-032-informational-rfc-verifiable-telemetry-ledger.md), [ADR-037](ADR-037-signature-roles-and-verification-boundaries.md), [ADR-039](ADR-039-cbor-first-commitment-profile-and-artifact-authority.md), [ADR-041](ADR-041-verification-disclosure-bundles-and-privacy-tiers.md), [ADR-046](ADR-046-sealed-trust-root-boundary-and-deferring-trackone-seal.md)
+**System Scope & Boundary**: [ADR-047](ADR-047-trackone-evidence-plane-within-device-lifecycle.md) \<- [ADR-024](ADR-024-anti-replay-and-ots-backed-ledger.md), [ADR-032](ADR-032-informational-rfc-verifiable-telemetry-ledger.md), [ADR-037](ADR-037-signature-roles-and-verification-boundaries.md), [ADR-039](ADR-039-cbor-first-commitment-profile-and-artifact-authority.md), [ADR-041](ADR-041-verification-disclosure-bundles-and-privacy-tiers.md), [ADR-046](ADR-046-sealed-trust-root-boundary-and-deferring-trackone-seal.md), [ADR-061](ADR-061-library-application-and-binding-package-boundaries.md)
 **Decision Record Stewardship**: [ADR-050](ADR-050-fiftieth-adr-milestone-and-record-stewardship.md) \<- [ADR-016](ADR-016-changelog-policy-git-cliff.md), [ADR-035](ADR-035-workspace-versioning-and-release-visibility.md), [ADR-038](ADR-038-surface-tooling-and-abi3-wheel-strategy.md)
 
 ## Usage

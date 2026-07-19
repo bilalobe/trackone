@@ -27,8 +27,8 @@ jobs:
           test "$(git cat-file -t "refs/tags/${GITHUB_REF_NAME}")" = tag
           test "$(git rev-parse "refs/tags/${GITHUB_REF_NAME}^{commit}")" = "${GITHUB_SHA}"
           grep -Fq "pub const VERSION: &str = \"${version}\";" crates/trackone-core/src/lib.rs
-          grep -Fq "version: ${version}" deploy/helm/trackone/Chart.yaml
-          grep -Fq "appVersion: \"${version}\"" deploy/helm/trackone/Chart.yaml
+          grep -Fq "version: ${version}" apps/trackone-gateway-svc/deploy/helm/trackone/Chart.yaml
+          grep -Fq "appVersion: \"${version}\"" apps/trackone-gateway-svc/deploy/helm/trackone/Chart.yaml
 
   ci:
     needs: preflight
@@ -67,7 +67,7 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: .
-          file: deploy/docker/gateway/Dockerfile
+          file: apps/trackone-gateway-svc/deploy/Dockerfile
           push: true
           tags: |
             ghcr.io/${{ github.repository }}/gateway:${{ github.ref_name }}
@@ -100,9 +100,10 @@ jobs:
             trackone-ledger
             trackone-core
             trackone-ingest
+            trackone-ots
             trackone-sensorthings
             trackone-pod-fw
-            trackone-gateway
+            trackone-gateway-svc
             trackone-evidence
           )
           mkdir -p publication

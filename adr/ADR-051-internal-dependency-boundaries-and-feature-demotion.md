@@ -1,6 +1,6 @@
 # ADR-051: Internal Dependency Boundaries and Feature Demotion
 
-**Status**: Accepted
+**Status**: Accepted; package allocation superseded by ADR-061
 **Date**: 2026-04-19
 
 ## Related ADRs

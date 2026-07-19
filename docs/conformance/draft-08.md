@@ -12,11 +12,11 @@ The conformance boundary consists of:
   constructs and decodes deterministic segment CBOR, calculates domain-
   separated recursive-split Merkle trees, validates batches, and derives
   successor linkage from exact predecessor bytes;
-- `trackone-gateway::v2_producer`, which serializes elapsed-time boundaries
+- `trackone-gateway-svc::producer`, which serializes elapsed-time boundaries
   and admission, snapshots policy, applies close-reason precedence, persists
   exact bytes before acknowledgement, and handles emit, suppress, restart,
   recovery, and contiguous segment allocation;
-- `trackone-gateway::v2_postgres`, which provides serializable atomic
+- `trackone-gateway-svc::postgres`, which provides serializable atomic
   transitions and per-ledger advisory single-writer fencing over PostgreSQL;
 - `trackone-evidence verify-v2`, which performs disclosure-aware Class A, B,
   and C validation, race-resistant Linux `openat2` artifact access, segment
@@ -49,14 +49,14 @@ outside the claim, as required by the draft.
 
 The baseline deployment is Linux with one active writer per ledger and a
 PostgreSQL durable store initialized from
-`crates/trackone-gateway/migrations/0001_v2_ledger.sql`. The database role must
+`apps/trackone-gateway-svc/migrations/0001_v2_ledger.sql`. The database role must
 be able to take transaction-scoped advisory locks and mutate the four v2
 tables in one serializable transaction. A restart must use a new elapsed-clock
 continuity identifier and invoke recovery before accepting telemetry.
 
-Build the HTTP handoff with the `v2-service` feature and run the
-`trackone-v2-gateway` binary. It requires `TRACKONE_DATABASE_URL`,
-`TRACKONE_SITE_ID`, `TRACKONE_TSA_URL`,
+Build the `trackone-gateway-svc` package and run the `trackone-v2-gateway`
+binary. It requires `TRACKONE_DATABASE_URL`,
+`TRACKONE_LEDGER_ID`, `TRACKONE_SITE_ID`, `TRACKONE_TSA_URL`,
 `TRACKONE_TSA_CA_FILE`, and `TRACKONE_TSA_POLICY_OID`; interval, batch, record,
 size, empty-mode, and bind settings use the corresponding `TRACKONE_*`
 environment variables shown by the binary source. `POST /v2/records` accepts only
@@ -89,9 +89,9 @@ Run the supported repository gates:
 ```console
 python3 toolset/ci/check_contracts.py
 cargo test -p trackone-ledger --locked
-cargo test -p trackone-gateway --features postgres-store --locked
+cargo test -p trackone-gateway-svc --locked
 cargo test -p trackone-evidence --locked
-cargo clippy -p trackone-gateway --features postgres-store -- -D warnings
+cargo clippy -p trackone-gateway-svc --all-targets -- -D warnings
 cargo clippy -p trackone-evidence --all-targets -- -D warnings
 ```
 
