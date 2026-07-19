@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-beta.4] - 2026-07-18
+
+### Notes
+- No pod-firmware-specific changes landed; the crate remains aligned with the
+  workspace `0.1.0-beta.4` release line.
+
 ## [0.1.0-beta.3] - 2026-07-17
 
 ### Notes

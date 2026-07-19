@@ -152,8 +152,10 @@ def assemble(args: argparse.Namespace) -> dict[str, Any]:
             root / "software/helm",
             "Helm",
         )
-        if crate_count != 8:
-            raise BuildError(f"expected exactly 8 workspace crate packages, found {crate_count}")
+        if crate_count != 9:
+            raise BuildError(
+                f"expected exactly 9 publishable workspace packages, found {crate_count}"
+            )
         if helm_count != 1:
             raise BuildError(f"expected exactly one Helm chart, found {helm_count}")
         shutil.copy2(verifier, root / "verifier/bin/trackone-evidence")

@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-beta.4] - 2026-07-18
+
+### Changed
+- Completed the library, application, and binding package boundary: reusable
+  OpenTimestamps verification is published as `trackone-ots`; deployable
+  evidence and gateway runtime packages live under `apps/`; and the optional
+  PyO3 bridge is isolated in the unpublished `trackone-python` leaf.
+- Moved the gateway image, Helm chart, local Kustomize assets, and migrations
+  with `trackone-gateway-svc`, so deployment source follows its application.
+- Added boundary checks and release workflow coverage for the supported
+  package, application, and binding layout.
+
 ## [0.1.0-beta.3] - 2026-07-17
 
 ### Added
@@ -28,6 +40,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   timestamp issuance for completed segment bundles.
 
 ### Changed
+- Split the workspace into reusable `crates/`, deployable `apps/`, and
+  optional `bindings/` layers under ADR-061. OTS verification now lives in
+  `trackone-ots`, the v2 runtime and deployment assets live in
+  `trackone-gateway-svc`, evidence lives under `apps/`, and PyO3 is confined
+  to the unpublished `trackone-python` leaf.
+- Modularized `trackone-ingest` and `trackone-evidence` internally while
+  preserving their crate-root APIs.
 - Public JSON Schema identifiers and references now use the real raw GitHub
   provider instead of `example.org`, while CI and archives resolve them
   offline through the checked-in catalog.
@@ -39,10 +58,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pulled archive without repository imports, and finishes with compact GitHub
   prerelease records.
 
+### Breaking changes
+- Removed the mixed `trackone-gateway` package and its mismatched `trackone`
+  library target. Rust callers must use `trackone_ots` for OTS helpers,
+  `trackone_gateway_svc` for service runtime types, or the opt-in
+  `trackone-python` binding package for PyO3 adapters.
+- Gateway Docker, Helm, local Kustomize, and migration source paths now live
+  beneath `apps/trackone-gateway-svc`.
+
 ### Fixed
-- Conformance assembly selects exactly the eight current-version crate
-  packages and one current-version Helm chart, preventing stale package-cache
-  artifacts from leaking into a release archive.
+- Conformance assembly selects exactly the nine publishable current-version
+  crate/application packages and one current-version Helm chart, preventing
+  stale package-cache artifacts from leaking into a release archive.
 - Anchor continuity now resumes only successful workflow state, rolls back
   interrupted proof advancement atomically, pins pending proofs to their
   qualified verifier commits, and retires terminal v1 receipts from repeated
