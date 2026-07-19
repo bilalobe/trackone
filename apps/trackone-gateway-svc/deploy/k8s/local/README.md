@@ -1,9 +1,12 @@
 # TrackOne local Kubernetes deployment
 
 This folder contains a **local/dev** Kubernetes setup (kustomize base + overlay).
+Run the commands below from the repository root; the deployment assets are
+owned by `apps/trackone-gateway-svc`.
 
 ## What gets deployed
-The `deploy/k8s/local/overlays/local` overlay deploys only these workloads:
+The `apps/trackone-gateway-svc/deploy/k8s/local/overlays/local` overlay
+deploys only these workloads:
 
 - `ots-calendar` (Deployment)
 - `trackone-gateway` (Deployment)
@@ -14,7 +17,7 @@ The `deploy/k8s/local/overlays/local` overlay deploys only these workloads:
 You can verify the rendered resources with:
 
 ```bash
-kubectl kustomize deploy/k8s/local/overlays/local | grep -E '^kind:'
+kubectl kustomize apps/trackone-gateway-svc/deploy/k8s/local/overlays/local | grep -E '^kind:'
 ```
 
 ## What the "other crates" are
@@ -55,3 +58,9 @@ docker run --rm trackone/pod-fw:local
 The pod firmware image defaults to a release-mode production build with default
 features disabled. That keeps the local image, Kustomize Job, and Helm Job
 aligned with the firmware feature policy in `trackone-pod-fw`.
+
+Render the complete overlay before applying it:
+
+```bash
+kubectl kustomize apps/trackone-gateway-svc/deploy/k8s/local/overlays/local
+```

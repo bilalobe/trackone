@@ -9,12 +9,12 @@ namespace:
 imagePullSecrets: []
 
 otsCalendar:
-  # Disabled for beta.3 until a release-supported Rust calendar image is
+  # Disabled for beta.2 until a release-supported Rust calendar image is
   # available.
   enabled: false
   image:
     repository: ghcr.io/bilalobe/trackone/ots-calendar
-    tag: 0.1.0-beta.3
+    tag: 0.1.0-beta.4
     pullPolicy: IfNotPresent
   port: 8468
   logLevel: info
@@ -77,7 +77,7 @@ gateway:
   existingSecret: ""
   image:
     repository: ghcr.io/bilalobe/trackone/gateway
-    tag: 0.1.0-beta.3
+    tag: 0.1.0-beta.4
     pullPolicy: IfNotPresent
   service:
     type: ClusterIP
@@ -88,6 +88,7 @@ gateway:
     otsCalendars: http://ots-calendar:8468
     # Rendered into the generated trackone-gateway-env Secret.
     databaseUrl: postgresql://trackone:trackone@postgres:5432/trackone
+    ledgerId: b7a1d5e40c6f438e9a75db27c96f31aa
     siteId: an-001
     intervalMs: "60000"
     batchRecordLimit: "1000"
@@ -122,7 +123,7 @@ jobs:
       repository: trackone/core
       tag: local
       pullPolicy: Never
-    features: "std,gateway"
+    features: "std"
     noDefaultFeatures: "0"
     resources:
       requests:

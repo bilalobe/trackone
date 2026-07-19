@@ -3,7 +3,7 @@
 # Build-only image for trackone-core.
 #
 # This image is intended to be used by a Kubernetes Job. The Job can set:
-# - TRACKONE_CORE_FEATURES="std,gateway"
+# - TRACKONE_CORE_FEATURES="std"
 # - TRACKONE_CORE_NO_DEFAULT_FEATURES="1"
 # to validate a specific compile-time feature set.
 
@@ -26,6 +26,8 @@ COPY Cargo.toml Cargo.lock ./
 COPY crates/trackone-core/Cargo.toml crates/trackone-core/Cargo.toml
 COPY crates/trackone-constants/Cargo.toml crates/trackone-constants/Cargo.toml
 COPY crates ./crates
+COPY apps ./apps
+COPY bindings ./bindings
 
 # Vendor dependencies at image build time so the in-cluster Job can run fully offline.
 RUN mkdir -p .cargo && \
@@ -35,13 +37,13 @@ RUN mkdir -p .cargo && \
 ENV TRACKONE_CORE_FEATURES=""
 ENV TRACKONE_CORE_NO_DEFAULT_FEATURES="0"
 
-CMD bash -lc 'set -euo pipefail; \
-  FEATURES="${TRACKONE_CORE_FEATURES:-}"; \
-  NODEFAULT="${TRACKONE_CORE_NO_DEFAULT_FEATURES:-0}"; \
-  echo "Building trackone-core (features=${FEATURES}, no_default_features=${NODEFAULT})"; \
-  EXTRA=" --offline"; \
-  if [ "${NODEFAULT}" = "1" ]; then EXTRA="$EXTRA --no-default-features"; fi; \
-  if [ -n "${FEATURES}" ]; then EXTRA="$EXTRA --features ${FEATURES}"; fi; \
+CMD ["bash", "-lc", "set -euo pipefail; \
+  FEATURES=\"${TRACKONE_CORE_FEATURES:-}\"; \
+  NODEFAULT=\"${TRACKONE_CORE_NO_DEFAULT_FEATURES:-0}\"; \
+  echo \"Building trackone-core (features=${FEATURES}, no_default_features=${NODEFAULT})\"; \
+  EXTRA=\" --offline\"; \
+  if [ \"${NODEFAULT}\" = \"1\" ]; then EXTRA=\"$EXTRA --no-default-features\"; fi; \
+  if [ -n \"${FEATURES}\" ]; then EXTRA=\"$EXTRA --features ${FEATURES}\"; fi; \
   cargo --version; rustc --version; \
   cargo build -p trackone-core ${EXTRA}; \
-  echo "trackone-core built successfully"'
+  echo \"trackone-core built successfully\""]

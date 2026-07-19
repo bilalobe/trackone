@@ -19,6 +19,6 @@ spec:
           imagePullPolicy: Never
           env:
             - name: TRACKONE_CORE_FEATURES
-              value: "std,gateway"
+              value: "std"
             - name: TRACKONE_CORE_NO_DEFAULT_FEATURES
               value: "0"

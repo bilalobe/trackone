@@ -4,8 +4,10 @@ FROM rust:1.93-slim AS builder
 WORKDIR /workspace
 COPY Cargo.toml Cargo.lock ./
 COPY crates ./crates
-RUN cargo build --locked --release --package trackone-gateway \
-    --features v2-service --bin trackone-v2-gateway
+COPY apps ./apps
+COPY bindings ./bindings
+RUN cargo build --locked --release --package trackone-gateway-svc \
+    --bin trackone-v2-gateway
 
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends \

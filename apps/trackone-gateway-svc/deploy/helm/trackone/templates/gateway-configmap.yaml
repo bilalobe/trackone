@@ -9,6 +9,7 @@ metadata:
     {{ include "trackone.commonLabels" . | nindent 4 }}
 data:
   OTS_CALENDARS: {{ .Values.gateway.env.otsCalendars | quote }}
+  TRACKONE_LEDGER_ID: {{ .Values.gateway.env.ledgerId | quote }}
   TRACKONE_SITE_ID: {{ .Values.gateway.env.siteId | quote }}
   TRACKONE_INTERVAL_MS: {{ .Values.gateway.env.intervalMs | quote }}
   TRACKONE_BATCH_RECORD_LIMIT: {{ .Values.gateway.env.batchRecordLimit | quote }}

@@ -3,6 +3,11 @@
 This chart now defaults to the published-artifact deployment model, and tagged
 releases publish the chart itself as an OCI artifact in GHCR.
 
+Unless a command says otherwise, run the examples from the repository root.
+The chart is application-owned at
+`apps/trackone-gateway-svc/deploy/helm/trackone`; reusable Rust build images
+remain at `deploy/docker/`.
+
 ## Recommended workflow: install the published chart artifact
 
 Use the published chart for normal deployments:
@@ -15,8 +20,8 @@ helm upgrade --install trackone oci://ghcr.io/bilalobe/trackone/charts/trackone 
   --set postgres.auth.existingSecret=<your-postgres-secret>
 ```
 
-For example, release tag `v0.1.0-beta.3` publishes chart version
-`0.1.0-beta.3`.
+For example, release tag `v0.1.0-beta.4` publishes chart version
+`0.1.0-beta.4`.
 
 The base [values.yaml](values.yaml)
 inside that OCI chart assumes:
@@ -33,7 +38,7 @@ helm upgrade --install trackone oci://ghcr.io/bilalobe/trackone/charts/trackone 
   --version <release-version> \
   --namespace trackone \
   --create-namespace \
-  -f deploy/helm/trackone/values-published.yaml \
+  -f apps/trackone-gateway-svc/deploy/helm/trackone/values-published.yaml \
   --set postgres.auth.existingSecret=<your-postgres-secret>
 ```
 
@@ -59,8 +64,8 @@ eval "$(minikube -p ${MINIKUBE_PROFILE:-minikube} docker-env)"
 docker build -t trackone/core:local -f deploy/docker/core/Dockerfile .
 docker build -t trackone/constants:local -f deploy/docker/constants/Dockerfile .
 docker build -t trackone/pod-fw:local -f deploy/docker/pod-fw/Dockerfile .
-helm upgrade --install trackone deploy/helm/trackone \
-  -f deploy/helm/trackone/values-local.yaml
+helm upgrade --install trackone apps/trackone-gateway-svc/deploy/helm/trackone \
+  -f apps/trackone-gateway-svc/deploy/helm/trackone/values-local.yaml
 ```
 
 `values-local.yaml` explicitly opts in to the stock local Postgres credentials.
@@ -75,13 +80,22 @@ Tagged releases publish the chart to:
 oci://ghcr.io/bilalobe/trackone/charts/trackone
 ```
 
-The release workflow packages `deploy/helm/trackone` with:
+The release workflow packages
+`apps/trackone-gateway-svc/deploy/helm/trackone` with:
 
 - chart `version = ${GITHUB_REF_NAME#v}`
 - chart `appVersion = ${GITHUB_REF_NAME#v}`
 
 That keeps the install version aligned with the release tag instead of the
 checked-in `Chart.yaml` version.
+
+Validate the chart locally with:
+
+```bash
+helm lint apps/trackone-gateway-svc/deploy/helm/trackone
+helm template trackone apps/trackone-gateway-svc/deploy/helm/trackone \
+  --values apps/trackone-gateway-svc/deploy/helm/trackone/values-local.yaml
+```
 
 ## Generated runtime config
 
@@ -93,9 +107,6 @@ The chart generates and manages these runtime config objects:
 
 The values still live in `values.yaml` and any overlays, but the pods now consume
 them via `configMapRef` / `secretKeyRef` instead of inline `env.value` entries.
-The gateway generates its ledger identifier from operating-system entropy for a
-site's first epoch and stores the active identity in PostgreSQL; the chart does
-not ship or inject a reusable ledger identifier.
 
 If you already manage non-secret gateway config elsewhere, set
 `gateway.existingConfigMap` and the chart will reuse that ConfigMap instead of
