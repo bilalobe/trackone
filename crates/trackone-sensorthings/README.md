@@ -19,8 +19,8 @@ This crate owns:
   sample types, and payload shapes.
 - [`trackone-ledger`](../trackone-ledger/README.md) owns commitment artifacts;
   SensorThings outputs are not Merkle leaves or CBOR commitment authorities.
-- [`trackone-gateway`](../trackone-gateway/README.md) may expose host-side
-  adapters for this crate but does not own projection semantics.
+- [`trackone-python`](../../bindings/trackone-python/README.md) may expose
+  optional host-side adapters but does not own projection semantics.
 
 ## Boundary watchlist
 
@@ -38,5 +38,5 @@ evidence.
 ## Check
 
 ```bash
-cargo test -p trackone-sensorthings
+cargo test --locked -p trackone-sensorthings
 ```

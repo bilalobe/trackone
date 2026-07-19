@@ -15,8 +15,7 @@ This crate owns:
 - Merkle leaf hashing and root construction
 - block-header and day-record construction for the current commitment profile
 - lowercase SHA-256 hex generation
-- `hex64` normalization and validation used by the alpha.11 integrity/manifest
-  path
+- `hex64` normalization and validation used by the integrity/manifest path
 - the isolated draft-08 v2 canonical-record and segment-artifact encoder,
   strict decoder, validated epoch/successor constructors, stable invariant
   categories, hash-sorted Merkle calculation, and embedded-batch invariants
@@ -33,12 +32,12 @@ projection and parity workflows.
   crypto-facing traits
 - [`trackone-ingest`](../trackone-ingest/README.md) owns framed Postcard wire
   profiles and admission helpers before facts enter commitment artifacts
-- [`trackone-gateway`](../trackone-gateway/README.md) exposes selected ledger
-  helpers to host-side gateway code
+- [`trackone-gateway-svc`](../../apps/trackone-gateway-svc/README.md) composes
+  v2 commitment rules into a durable deployable service
 - [`trackone-sensorthings`](../trackone-sensorthings/README.md) may use digest
   helpers for deterministic projection IDs, but those projections are not
   commitment artifacts
-- [`trackone-evidence`](../trackone-evidence/README.md) owns verifier/export
+- [`trackone-evidence`](../../apps/trackone-evidence/README.md) owns verifier/export
   policy for evidence bundles
 
 This split is intentional and matches
@@ -78,5 +77,5 @@ values.
 ## Check
 
 ```bash
-cargo test -p trackone-ledger
+cargo test --locked -p trackone-ledger
 ```

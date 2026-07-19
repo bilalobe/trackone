@@ -37,8 +37,8 @@ The crate remains `no_std`-capable when `std` is disabled.
   artifact construction, Merkle policy, and digest helpers.
 - [`trackone-ingest`](../trackone-ingest/README.md) owns framed Postcard wire
   profiles, nonce/AAD binding, fixture emission, replay, and framed admission.
-- [`trackone-gateway`](../trackone-gateway/README.md) exposes selected core and
-  ledger functionality to host-side gateway code.
+- [`trackone-python`](../../bindings/trackone-python/README.md) optionally
+  exposes selected core and ledger functionality through PyO3.
 - [`trackone-sensorthings`](../trackone-sensorthings/README.md) owns read-only
   SensorThings projection semantics over accepted facts.
 - [`trackone-pod-fw`](../trackone-pod-fw/README.md) builds firmware-side
@@ -64,5 +64,5 @@ admitted-telemetry boundary, not as ownership of the lifecycle plane itself.
 ## Typical use
 
 ```bash
-cargo test -p trackone-core --features std,postcard
+cargo test --locked -p trackone-core --features std,postcard
 ```

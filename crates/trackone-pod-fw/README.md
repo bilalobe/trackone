@@ -34,8 +34,8 @@ The default build stays `no_std`-friendly. Enable `std` for host-side tests and
 local development:
 
 ```bash
-cargo test -p trackone-pod-fw --features std
-cargo build -p trackone-pod-fw --no-default-features --features production
+cargo test --locked -p trackone-pod-fw --features std
+cargo build --locked -p trackone-pod-fw --no-default-features --features production
 ```
 
 ## Boundary with other crates

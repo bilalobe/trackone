@@ -10,7 +10,8 @@ This crate is for constants that need to stay aligned across:
 - `trackone-core`
 - `trackone-ingest`
 - `trackone-ledger`
-- `trackone-gateway`
+- `trackone-ots`
+- `trackone-gateway-svc`
 - `trackone-pod-fw`
 
 Current examples include:
@@ -45,13 +46,17 @@ paths.
   constants
 - [`trackone-ingest`](../trackone-ingest/README.md) uses sizing, nonce, and tag
   constants for framed admission and fixture emission
-- [`trackone-gateway`](../trackone-gateway/README.md) uses shared release and
-  verifier constants at the Python/native boundary
+- [`trackone-ots`](../trackone-ots/README.md) uses the bounded verifier timeout
+- [`trackone-python`](../../bindings/trackone-python/README.md) exposes shared
+  labels at the optional Python/native boundary
 - [`trackone-pod-fw`](../trackone-pod-fw/README.md) uses the same sizing and
   protocol policy as host-side code
+- [`trackone-evidence`](../../apps/trackone-evidence/README.md) and
+  [`trackone-gateway-svc`](../../apps/trackone-gateway-svc/README.md) consume
+  the shared profile and verifier defaults at application edges
 
 ## Check
 
 ```bash
-cargo test -p trackone-constants
+cargo test --locked -p trackone-constants
 ```
