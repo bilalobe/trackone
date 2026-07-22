@@ -205,9 +205,21 @@ impl<S: LedgerStore, C: ElapsedClock> V2LedgerProducer<S, C> {
         policy: ClosurePolicyV1,
     ) -> Result<Self, ProducerError> {
         validate_policy(&policy)?;
+        let ledger_id = ledger_id.into();
+        let site_id = site_id.into();
+        if ledger_id.len() != 32 || site_id.is_empty() {
+            return Err(ProducerError::InvalidConfiguration(
+                "ledger_id must be 16-byte lowercase hex and site_id must be non-empty",
+            ));
+        }
         if let Some(state) = store.load()? {
             validate_policy(&state.open.policy)?;
             validate_policy(&state.next_policy)?;
+            if state.ledger_id != ledger_id || state.site_id != site_id {
+                return Err(ProducerError::InvalidConfiguration(
+                    "configured ledger_id and site_id do not match existing ledger state",
+                ));
+            }
             return Ok(Self {
                 store,
                 clock,
@@ -217,8 +229,8 @@ impl<S: LedgerStore, C: ElapsedClock> V2LedgerProducer<S, C> {
         let now = clock.now_ms()?;
         let state = ProducerState {
             revision: 0,
-            ledger_id: ledger_id.into(),
-            site_id: site_id.into(),
+            ledger_id,
+            site_id,
             next_segment_number: 0,
             predecessor_cbor: None,
             open: OpenInterval {
@@ -230,11 +242,6 @@ impl<S: LedgerStore, C: ElapsedClock> V2LedgerProducer<S, C> {
             },
             next_policy: policy,
         };
-        if state.ledger_id.len() != 32 || state.site_id.is_empty() {
-            return Err(ProducerError::InvalidConfiguration(
-                "ledger_id must be 16-byte lowercase hex and site_id must be non-empty",
-            ));
-        }
         store.compare_and_swap(None, &state, &[], None)?;
         Ok(Self {
             store,
@@ -727,8 +734,8 @@ mod tests {
         let mut restarted = V2LedgerProducer::open_or_create(
             store,
             &clock,
-            "ignored",
-            "ignored",
+            "b7a1d5e40c6f438e9a75db27c96f31aa",
+            "an-001",
             policy(EmptyMode::Suppress),
         )
         .unwrap();
@@ -739,6 +746,26 @@ mod tests {
         let sealed = restarted.recover().unwrap();
         assert_eq!(sealed[0].close_reason, CloseReason::Recovery);
         restarted.admit(record(2)).unwrap();
+    }
+
+    #[test]
+    fn restart_rejects_a_site_that_does_not_match_the_existing_ledger() {
+        let clock = FakeClock::new(0);
+        let producer = producer(&clock, EmptyMode::Suppress);
+        let store = producer.into_store();
+
+        assert!(matches!(
+            V2LedgerProducer::open_or_create(
+                store,
+                &clock,
+                "b7a1d5e40c6f438e9a75db27c96f31aa",
+                "an-002",
+                policy(EmptyMode::Suppress),
+            ),
+            Err(ProducerError::InvalidConfiguration(
+                "configured ledger_id and site_id do not match existing ledger state"
+            ))
+        ));
     }
 
     #[test]

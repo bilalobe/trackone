@@ -55,6 +55,26 @@ where
         .with_state(state)
 }
 
+/// Attempt every durable pending timestamp once. Failures deliberately leave
+/// the segment pending so a later startup can retry it.
+pub fn drain_pending_tsa_segments<C>(
+    producer: &mut ServiceProducer<C>,
+    timestamp_authority: &Rfc3161TimestampAuthority,
+) -> Result<(), ProducerError>
+where
+    C: ElapsedClock,
+{
+    let pending = producer.store_mut().load_pending_tsa_segments()?;
+    for (segment_number, artifact, digest) in pending {
+        if let Ok(response) = timestamp_authority.stamp(&artifact) {
+            let _ = producer
+                .store_mut()
+                .attach_tsa_response(segment_number, &digest, &response);
+        }
+    }
+    Ok(())
+}
+
 async fn health() -> impl IntoResponse {
     Json(json!({"ok": true, "profile": "verifiable-telemetry-canonical-cbor-v2"}))
 }
@@ -94,27 +114,38 @@ where
     let producer = Arc::clone(&state.producer);
     let timestamp_authority = Arc::clone(&state.timestamp_authority);
     let result = tokio::task::spawn_blocking(move || {
-        let mut producer = producer
-            .lock()
-            .map_err(|_| ProducerError::Store("producer mutex is poisoned".to_string()))?;
-        let outcome = producer.admit_idempotent(key, body.to_vec())?;
-        let mut tsa_status = "not_applicable";
-        for segment_number in &outcome.sealed_segment_numbers {
-            if let Some((artifact, digest)) = producer
+        let (outcome, pending) = {
+            let mut producer = producer
+                .lock()
+                .map_err(|_| ProducerError::Store("producer mutex is poisoned".to_string()))?;
+            let outcome = producer.admit_idempotent(key, body.to_vec())?;
+            let pending = producer
                 .store_mut()
-                .load_pending_tsa_segment(*segment_number)?
-            {
+                .load_pending_tsa_segments()?
+                .into_iter()
+                .filter(|(segment_number, _, _)| {
+                    outcome.sealed_segment_numbers.contains(segment_number)
+                })
+                .collect::<Vec<_>>();
+            (outcome, pending)
+        };
+
+        let mut tsa_status = if outcome.sealed_segment_numbers.is_empty() {
+            "not_applicable"
+        } else {
+            "verified"
+        };
+        for (segment_number, artifact, digest) in pending {
+            let attached = timestamp_authority.stamp(&artifact).and_then(|response| {
+                let mut producer = producer
+                    .lock()
+                    .map_err(|_| ProducerError::Store("producer mutex is poisoned".to_string()))?;
+                producer
+                    .store_mut()
+                    .attach_tsa_response(segment_number, &digest, &response)
+            });
+            if attached.is_err() {
                 tsa_status = "pending";
-                if let Ok(response) = timestamp_authority.stamp(&artifact)
-                    && producer
-                        .store_mut()
-                        .attach_tsa_response(*segment_number, &digest, &response)
-                        .is_ok()
-                {
-                    tsa_status = "verified";
-                }
-            } else {
-                tsa_status = "verified";
             }
         }
         Ok::<_, ProducerError>((outcome, tsa_status))

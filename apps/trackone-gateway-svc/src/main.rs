@@ -5,7 +5,7 @@ use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use postgres::{Client, NoTls};
 use trackone_gateway_svc::postgres::PostgresLedgerStore;
 use trackone_gateway_svc::producer::{ElapsedClock, ProducerError, V2LedgerProducer};
-use trackone_gateway_svc::service::{GatewayHttpState, router};
+use trackone_gateway_svc::service::{GatewayHttpState, drain_pending_tsa_segments, router};
 use trackone_gateway_svc::tsa::Rfc3161TimestampAuthority;
 use trackone_ledger::v2::{ClosurePolicyV1, EmptyMode};
 
@@ -80,15 +80,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let client = Client::connect(&database_url, NoTls)?;
     let mut store = PostgresLedgerStore::new(client, &ledger_id);
     store.migrate()?;
+    let timestamp_authority = Rfc3161TimestampAuthority::new(tsa_url, tsa_ca_file, tsa_policy_oid);
     let clock = SystemElapsedClock::new()?;
     let continuity_id = clock.continuity_id();
     let mut producer = V2LedgerProducer::open_or_create(store, clock, ledger_id, site_id, policy)?;
     if producer.state().open.clock_continuity_id != continuity_id {
         producer.recover()?;
     }
+    drain_pending_tsa_segments(&mut producer, &timestamp_authority)?;
 
     let listener = tokio::net::TcpListener::bind(bind).await?;
-    let timestamp_authority = Rfc3161TimestampAuthority::new(tsa_url, tsa_ca_file, tsa_policy_oid);
     axum::serve(
         listener,
         router(GatewayHttpState::new(producer, timestamp_authority)),

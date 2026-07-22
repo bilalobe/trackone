@@ -30,19 +30,27 @@ impl PostgresLedgerStore {
         self.client
     }
 
-    pub fn load_pending_tsa_segment(
+    pub fn load_pending_tsa_segments(
         &mut self,
-        segment_number: u64,
-    ) -> Result<Option<(Vec<u8>, String)>, ProducerError> {
-        let segment_number = numeric(segment_number);
-        self.client
-            .query_opt(
-                "SELECT artifact_cbor, artifact_sha256 FROM trackone_v2_sealed_segment \
-                 WHERE ledger_id=$1 AND segment_number=$2::numeric AND tsa_status='pending'",
-                &[&self.ledger_id, &segment_number],
+    ) -> Result<Vec<(u64, Vec<u8>, String)>, ProducerError> {
+        let rows = self
+            .client
+            .query(
+                "SELECT segment_number::text, artifact_cbor, artifact_sha256 \
+                 FROM trackone_v2_sealed_segment \
+                 WHERE ledger_id=$1 AND tsa_status='pending' ORDER BY segment_number",
+                &[&self.ledger_id],
             )
-            .map(|row| row.map(|row| (row.get(0), row.get(1))))
-            .map_err(store_error)
+            .map_err(store_error)?;
+        rows.into_iter()
+            .map(|row| {
+                Ok((
+                    parse_u64(row.get(0), "segment_number")?,
+                    row.get(1),
+                    row.get(2),
+                ))
+            })
+            .collect()
     }
 
     pub fn attach_tsa_response(
