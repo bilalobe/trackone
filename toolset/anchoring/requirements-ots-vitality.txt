@@ -2,7 +2,7 @@
 opentimestamps-client==0.7.2
 opentimestamps==0.4.5
 python-bitcoinlib==0.12.2
-GitPython==3.1.51
+GitPython==3.1.52
 gitdb==4.0.12
 smmap==5.0.3
 PySocks==1.7.1
