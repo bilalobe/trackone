@@ -226,6 +226,7 @@ def check(repo: Path) -> dict[str, int]:
             "v2_durable_producer": True,
             "v2_disclosure_classes": True,
             "rfc3161_timestamp_channel": True,
+            "rfc5816_signer_certificate_binding": True,
             "negative_fixture_floor": True,
             "offline_schema_resolution": True,
         },

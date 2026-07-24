@@ -36,12 +36,41 @@
           "tsa_ca_file": {
             "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/portable_relative_path"
           },
+          "tsa_intermediates_file": {
+            "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/portable_relative_path"
+          },
+          "tsa_crls_file": {
+            "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/portable_relative_path"
+          },
           "tsa_policy_oid": {
             "type": "string",
             "pattern": "^[0-9]+(?:\\.[0-9]+)+$"
+          },
+          "tsa_signer_cert_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
           }
         },
         "allOf": [
+          {
+            "if": {
+              "anyOf": [
+                { "required": ["tsa_ca_file"] },
+                { "required": ["tsa_intermediates_file"] },
+                { "required": ["tsa_crls_file"] },
+                { "required": ["tsa_policy_oid"] },
+                { "required": ["tsa_signer_cert_sha256"] }
+              ]
+            },
+            "then": {
+              "required": [
+                "tsa_ca_file",
+                "tsa_crls_file",
+                "tsa_policy_oid",
+                "tsa_signer_cert_sha256"
+              ]
+            }
+          },
           {
             "if": {
               "properties": { "expect_success": { "const": true } },

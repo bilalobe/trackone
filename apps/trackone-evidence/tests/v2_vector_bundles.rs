@@ -24,7 +24,13 @@ struct Case {
     #[serde(default)]
     tsa_ca_file: Option<String>,
     #[serde(default)]
+    tsa_intermediates_file: Option<String>,
+    #[serde(default)]
+    tsa_crls_file: Option<String>,
+    #[serde(default)]
     tsa_policy_oid: Option<String>,
+    #[serde(default)]
+    tsa_signer_cert_sha256: Option<String>,
 }
 
 fn vector_root() -> PathBuf {
@@ -56,8 +62,19 @@ fn v2_vector_bundles_are_cli_runnable() {
         if let Some(ca_file) = &case.tsa_ca_file {
             command.arg("--tsa-ca-file").arg(root.join(ca_file));
         }
+        if let Some(intermediates_file) = &case.tsa_intermediates_file {
+            command
+                .arg("--tsa-intermediates-file")
+                .arg(root.join(intermediates_file));
+        }
+        if let Some(crls_file) = &case.tsa_crls_file {
+            command.arg("--tsa-crls-file").arg(root.join(crls_file));
+        }
         if let Some(policy_oid) = &case.tsa_policy_oid {
             command.arg("--tsa-policy").arg(policy_oid);
+        }
+        if let Some(signer_hash) = &case.tsa_signer_cert_sha256 {
+            command.arg("--tsa-signer-cert-sha256").arg(signer_hash);
         }
         let output = command.output().unwrap();
 
@@ -93,4 +110,39 @@ fn v2_vector_bundles_are_cli_runnable() {
             );
         }
     }
+}
+
+#[test]
+fn v2_cli_rejects_missing_or_wrong_tsa_signer_pin() {
+    let root = vector_root();
+    let bundle = root.join("fixtures/corrected-epoch-class-a");
+    if !bundle.is_dir() {
+        return;
+    }
+    let base = || {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_trackone-evidence"));
+        command
+            .args(["verify-v2", "--root"])
+            .arg(&bundle)
+            .arg("--tsa-ca-file")
+            .arg(root.join("trust/tsa-root.pem"))
+            .arg("--tsa-crls-file")
+            .arg(root.join("trust/tsa-crls.pem"))
+            .args(["--tsa-policy", "1.3.6.1.4.1.55555.1"]);
+        command
+    };
+
+    let missing = base().output().unwrap();
+    assert!(!missing.status.success());
+    assert!(
+        String::from_utf8_lossy(&missing.stderr)
+            .contains("signer certificate SHA-256 is not configured")
+    );
+
+    let wrong = base()
+        .args(["--tsa-signer-cert-sha256", &"00".repeat(32)])
+        .output()
+        .unwrap();
+    assert!(!wrong.status.success());
+    assert!(String::from_utf8_lossy(&wrong.stderr).contains("does not match the deployment pin"));
 }

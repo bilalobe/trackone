@@ -13,6 +13,15 @@
       "type": "object",
       "additionalProperties": {"$ref": "#/$defs/channel_result"}
     },
+    "tsa_generation_time": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "tsa_serial_number": {
+      "type": "string",
+      "pattern": "^(00|[0-9a-f]{2,40})$"
+    },
+    "tsa_accuracy": {"$ref": "#/$defs/tsa_accuracy"},
     "policy": {"type": "object"},
     "checks_executed": {
       "type": "array",
@@ -94,6 +103,16 @@
         "check": {"$ref": "#/$defs/check_name"}
       },
       "required": ["status"],
+      "additionalProperties": false
+    },
+    "tsa_accuracy": {
+      "type": "object",
+      "properties": {
+        "seconds": {"type": "integer", "minimum": 0},
+        "millis": {"type": "integer", "minimum": 1, "maximum": 999},
+        "micros": {"type": "integer", "minimum": 1, "maximum": 999}
+      },
+      "minProperties": 1,
       "additionalProperties": false
     }
   }

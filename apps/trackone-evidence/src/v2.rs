@@ -6,13 +6,16 @@ use std::collections::BTreeMap;
 use std::fs::{self, File};
 use std::io::Read;
 use std::path::{Component, Path, PathBuf};
-use std::process::Command;
 use trackone_ledger::{
-    hex_lower, sha256_hex,
+    hex_lower, sha256_digest, sha256_hex,
     v2::{
         COMMITMENT_PROFILE_ID, ZERO_SHA256, decode_segment_record_v2, merkle_root_from_records,
         validate_canonical_record_v2,
     },
+};
+use trackone_rfc3161::{
+    HistoricalValidationArchive, SignerCertificateSha256, TimestampAccuracy, VerificationPolicy,
+    VerifiedTimestamp, verify_response,
 };
 
 #[derive(Clone, Debug, Deserialize)]
@@ -106,7 +109,10 @@ pub struct V2VerifyPolicy {
     pub enforce_disclosure_requirements: bool,
     pub require_tsa: bool,
     pub tsa_ca_file: Option<PathBuf>,
+    pub tsa_intermediates_file: Option<PathBuf>,
+    pub tsa_crls_file: Option<PathBuf>,
     pub tsa_policy_oid: Option<String>,
+    pub tsa_signer_cert_sha256: Option<SignerCertificateSha256>,
     pub openssl_binary: PathBuf,
 }
 
@@ -116,7 +122,10 @@ impl Default for V2VerifyPolicy {
             enforce_disclosure_requirements: false,
             require_tsa: false,
             tsa_ca_file: None,
+            tsa_intermediates_file: None,
+            tsa_crls_file: None,
             tsa_policy_oid: None,
+            tsa_signer_cert_sha256: None,
             openssl_binary: PathBuf::from("openssl"),
         }
     }
@@ -241,61 +250,39 @@ fn validate_manifest(manifest: &Manifest) -> Result<()> {
     Ok(())
 }
 
-fn verify_rfc3161(response: &[u8], artifact_sha256: &str, policy: &V2VerifyPolicy) -> Result<()> {
+fn verify_rfc3161(
+    response: &[u8],
+    artifact_sha256: [u8; 32],
+    policy: &V2VerifyPolicy,
+) -> Result<VerifiedTimestamp> {
     let ca_file = policy
         .tsa_ca_file
         .as_ref()
         .ok_or_else(|| bad("RFC 3161 trust anchor is not configured"))?;
-    let unique = format!(
-        "trackone-tsr-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_err(|_| bad("system time is before the Unix epoch"))?
-            .as_nanos()
-    );
-    let response_path = std::env::temp_dir().join(unique);
-    fs::write(&response_path, response)?;
-    let verification = Command::new(&policy.openssl_binary)
-        .args(["ts", "-verify", "-in"])
-        .arg(&response_path)
-        .args(["-digest", artifact_sha256, "-CAfile"])
-        .arg(ca_file)
-        .output();
-    let details = Command::new(&policy.openssl_binary)
-        .args(["ts", "-reply", "-in"])
-        .arg(&response_path)
-        .arg("-text")
-        .output();
-    let _ = fs::remove_file(&response_path);
-    let verification = verification
-        .map_err(|error| bad(format!("cannot execute OpenSSL RFC 3161 verifier: {error}")))?;
-    if !verification.status.success() {
-        return Err(bad(format!(
-            "RFC 3161 verification failed: {}{}",
-            String::from_utf8_lossy(&verification.stdout),
-            String::from_utf8_lossy(&verification.stderr)
-        )));
-    }
-    let details =
-        details.map_err(|error| bad(format!("cannot inspect RFC 3161 response: {error}")))?;
-    if !details.status.success() {
-        return Err(bad("OpenSSL could not decode the RFC 3161 response"));
-    }
-    let text = String::from_utf8_lossy(&details.stdout);
-    if !text
-        .lines()
-        .any(|line| line.trim() == "Hash Algorithm: sha256")
-    {
-        return Err(bad("RFC 3161 message imprint is not SHA-256"));
-    }
-    if let Some(expected) = &policy.tsa_policy_oid {
-        let expected = format!("Policy OID: {expected}");
-        if !text.lines().any(|line| line.trim() == expected) {
-            return Err(bad("RFC 3161 TSA policy OID mismatch"));
-        }
-    }
-    Ok(())
+    let policy_oid = policy
+        .tsa_policy_oid
+        .as_ref()
+        .ok_or_else(|| bad("RFC 3161 TSA policy OID is not configured"))?;
+    let crls_file = policy
+        .tsa_crls_file
+        .as_ref()
+        .ok_or_else(|| bad("RFC 3161 historical CRL archive is not configured"))?;
+    let signer_certificate_sha256 = policy
+        .tsa_signer_cert_sha256
+        .ok_or_else(|| bad("RFC 3161 signer certificate SHA-256 is not configured"))?;
+    let verification_policy = VerificationPolicy::new(
+        HistoricalValidationArchive {
+            trust_anchors_file: ca_file.clone(),
+            intermediates_file: policy.tsa_intermediates_file.clone(),
+            crls_file: crls_file.clone(),
+        },
+        policy_oid,
+        signer_certificate_sha256,
+    )
+    .map_err(|error| bad(error.to_string()))?
+    .with_openssl_binary(policy.openssl_binary.clone());
+    verify_response(response, artifact_sha256, &verification_policy)
+        .map_err(|error| bad(error.to_string()))
 }
 
 /// Verify the portable v2 bundle envelope.  Segment CBOR and supplied record
@@ -405,7 +392,7 @@ pub fn verify_v2_bundle_with_policy(root: &Path, policy: &V2VerifyPolicy) -> Res
         executed.push("record_level_recompute");
         executed.push("batch_metadata_validation");
         executed.push("segment_digest_binding");
-        apply_timestamp_checks(
+        let mut tsa_fields = apply_timestamp_checks(
             root,
             &manifest,
             &segment_bytes,
@@ -414,9 +401,12 @@ pub fn verify_v2_bundle_with_policy(root: &Path, policy: &V2VerifyPolicy) -> Res
             &mut skipped,
             &mut channels,
         )?;
-        return Ok(
-            json!({"version":2,"artifact_sha256":sha256_hex(&segment_bytes),"commitment_profile_id":COMMITMENT_PROFILE_ID,"disclosure_class":"A","verification_scope":"public_recompute","channels":channels,"policy":{"require_tsa":policy.require_tsa},"checks_executed":executed,"checks_skipped":skipped,"record_multiset_root":recomputed_root,"overall":"success"}),
-        );
+        let mut result = json!({"version":2,"artifact_sha256":sha256_hex(&segment_bytes),"commitment_profile_id":COMMITMENT_PROFILE_ID,"disclosure_class":"A","verification_scope":"public_recompute","channels":channels,"policy":{"require_tsa":policy.require_tsa},"checks_executed":executed,"checks_skipped":skipped,"record_multiset_root":recomputed_root,"overall":"success"});
+        result
+            .as_object_mut()
+            .expect("verification result is an object")
+            .append(&mut tsa_fields);
+        return Ok(result);
     }
     skipped.push(json!({"check":"record_level_recompute","reason":format!("disclosure-class-{}",manifest.disclosure_class.to_ascii_lowercase())}));
     if manifest.disclosure_class == "C" {
@@ -428,7 +418,7 @@ pub fn verify_v2_bundle_with_policy(root: &Path, policy: &V2VerifyPolicy) -> Res
         skipped.push(json!({"check":"batch_metadata_validation","reason":"not_disclosed"}));
     }
     executed.push("segment_digest_binding");
-    apply_timestamp_checks(
+    let mut tsa_fields = apply_timestamp_checks(
         root,
         &manifest,
         &segment_bytes,
@@ -442,9 +432,12 @@ pub fn verify_v2_bundle_with_policy(root: &Path, policy: &V2VerifyPolicy) -> Res
     } else {
         "anchor_only"
     };
-    Ok(
-        json!({"version":2,"artifact_sha256":sha256_hex(&segment_bytes),"commitment_profile_id":COMMITMENT_PROFILE_ID,"disclosure_class":manifest.disclosure_class,"verification_scope":scope,"channels":channels,"policy":{"require_tsa":policy.require_tsa},"checks_executed":executed,"checks_skipped":skipped,"overall":"success"}),
-    )
+    let mut result = json!({"version":2,"artifact_sha256":sha256_hex(&segment_bytes),"commitment_profile_id":COMMITMENT_PROFILE_ID,"disclosure_class":manifest.disclosure_class,"verification_scope":scope,"channels":channels,"policy":{"require_tsa":policy.require_tsa},"checks_executed":executed,"checks_skipped":skipped,"overall":"success"});
+    result
+        .as_object_mut()
+        .expect("verification result is an object")
+        .append(&mut tsa_fields);
+    Ok(result)
 }
 
 fn validate_batch_projections(
@@ -474,6 +467,20 @@ fn validate_batch_projections(
     Ok(())
 }
 
+fn timestamp_accuracy_value(accuracy: TimestampAccuracy) -> Option<Value> {
+    let mut value = serde_json::Map::new();
+    if let Some(seconds) = accuracy.seconds {
+        value.insert("seconds".to_string(), json!(seconds));
+    }
+    if let Some(millis) = accuracy.millis {
+        value.insert("millis".to_string(), json!(millis));
+    }
+    if let Some(micros) = accuracy.micros {
+        value.insert("micros".to_string(), json!(micros));
+    }
+    (!value.is_empty()).then_some(Value::Object(value))
+}
+
 fn apply_timestamp_checks(
     root: &Path,
     manifest: &Manifest,
@@ -482,23 +489,32 @@ fn apply_timestamp_checks(
     executed: &mut Vec<&'static str>,
     skipped: &mut Vec<Value>,
     channels: &mut serde_json::Map<String, Value>,
-) -> Result<()> {
+) -> Result<serde_json::Map<String, Value>> {
+    let mut tsa_fields = serde_json::Map::new();
     if let Some(reference) = &manifest.artifacts.tsa_tsr {
         let response = artifact(root, reference)?;
-        match verify_rfc3161(&response, &sha256_hex(segment_bytes), policy) {
-            Ok(()) => {
+        match verify_rfc3161(&response, sha256_digest(segment_bytes), policy) {
+            Ok(verified) => {
                 executed.push("tsa_verification");
                 channels.insert("tsa".to_string(), json!({"status":"verified"}));
+                tsa_fields.insert(
+                    "tsa_generation_time".to_string(),
+                    json!(verified.generation_time.to_rfc3339()),
+                );
+                tsa_fields.insert(
+                    "tsa_serial_number".to_string(),
+                    json!(verified.serial_number.to_hex()),
+                );
+                if let Some(value) = verified.accuracy.and_then(timestamp_accuracy_value) {
+                    tsa_fields.insert("tsa_accuracy".to_string(), value);
+                }
             }
             Err(error) => {
                 channels.insert(
                     "tsa".to_string(),
                     json!({"status":"failed","diagnostic":error.to_string()}),
                 );
-                if policy.require_tsa {
-                    return Err(error);
-                }
-                skipped.push(json!({"check":"tsa_verification","reason":"validation_failed"}));
+                return Err(error);
             }
         }
     } else if policy.require_tsa {
@@ -527,7 +543,7 @@ fn apply_timestamp_checks(
         skipped.push(json!({"check":"x-peer-quorum-verification","reason":status}));
         channels.insert("peer".to_string(), json!({"status":status}));
     }
-    Ok(())
+    Ok(tsa_fields)
 }
 
 #[cfg(test)]
@@ -620,6 +636,30 @@ mod tests {
         .unwrap()
         .canonical_cbor_bytes()
         .unwrap()
+    }
+
+    #[test]
+    fn empty_timestamp_accuracy_is_omitted() {
+        assert_eq!(
+            timestamp_accuracy_value(TimestampAccuracy {
+                seconds: None,
+                millis: None,
+                micros: None,
+            }),
+            None
+        );
+    }
+
+    #[test]
+    fn timestamp_accuracy_components_are_projected() {
+        assert_eq!(
+            timestamp_accuracy_value(TimestampAccuracy {
+                seconds: Some(0),
+                millis: Some(12),
+                micros: Some(34),
+            }),
+            Some(json!({"seconds": 0, "millis": 12, "micros": 34}))
+        );
     }
 
     #[test]

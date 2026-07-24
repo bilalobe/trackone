@@ -132,6 +132,10 @@ pub enum ProducerError {
     SerialExhausted,
     CounterOverflow(&'static str),
     Store(String),
+    TimestampConfiguration(String),
+    TimestampSubmission(String),
+    TimestampVerification(String),
+    TimestampPersistence(String),
     ConcurrentWriter,
     IdempotencyConflict,
     Construction(String),
@@ -151,6 +155,18 @@ impl fmt::Display for ProducerError {
             Self::SerialExhausted => formatter.write_str("segment serial is exhausted"),
             Self::CounterOverflow(name) => write!(formatter, "{name} counter overflow"),
             Self::Store(message) => write!(formatter, "ledger store failed: {message}"),
+            Self::TimestampConfiguration(message) => {
+                write!(formatter, "timestamp configuration failed: {message}")
+            }
+            Self::TimestampSubmission(message) => {
+                write!(formatter, "timestamp submission failed: {message}")
+            }
+            Self::TimestampVerification(message) => {
+                write!(formatter, "timestamp verification failed: {message}")
+            }
+            Self::TimestampPersistence(message) => {
+                write!(formatter, "timestamp persistence failed: {message}")
+            }
             Self::ConcurrentWriter => formatter.write_str("concurrent ledger writer detected"),
             Self::IdempotencyConflict => {
                 formatter.write_str("idempotency key was already used for different bytes")

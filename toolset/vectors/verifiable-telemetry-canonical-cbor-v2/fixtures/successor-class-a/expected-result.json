@@ -5,6 +5,9 @@
   "disclosure_class": "A",
   "verification_scope": "public_recompute",
   "channels": {"tsa": {"status": "verified"}},
+  "tsa_generation_time": "2026-07-22T23:04:12Z",
+  "tsa_serial_number": "1004",
+  "tsa_accuracy": {"seconds": 1},
   "policy": {"require_tsa": true},
   "checks_executed": [
     "bundle_disclosure_validation",

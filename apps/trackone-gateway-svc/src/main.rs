@@ -8,6 +8,7 @@ use trackone_gateway_svc::producer::{ElapsedClock, ProducerError, V2LedgerProduc
 use trackone_gateway_svc::service::{GatewayHttpState, drain_pending_tsa_segments, router};
 use trackone_gateway_svc::tsa::Rfc3161TimestampAuthority;
 use trackone_ledger::v2::{ClosurePolicyV1, EmptyMode};
+use trackone_rfc3161::SignerCertificateSha256;
 
 struct SystemElapsedClock {
     origin: Instant,
@@ -53,7 +54,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let site_id = required("TRACKONE_SITE_ID")?;
     let tsa_url = required("TRACKONE_TSA_URL")?;
     let tsa_ca_file = required("TRACKONE_TSA_CA_FILE")?.into();
+    let tsa_intermediates_file = env::var("TRACKONE_TSA_INTERMEDIATES_FILE")
+        .ok()
+        .filter(|value| !value.is_empty())
+        .map(Into::into);
+    let tsa_crls_file = required("TRACKONE_TSA_CRLS_FILE")?.into();
     let tsa_policy_oid = required("TRACKONE_TSA_POLICY_OID")?;
+    let tsa_signer_certificate_sha256: SignerCertificateSha256 =
+        required("TRACKONE_TSA_SIGNER_CERT_SHA256")?.parse()?;
     let bind: SocketAddr = env::var("TRACKONE_BIND")
         .unwrap_or_else(|_| "0.0.0.0:8080".to_string())
         .parse()?;
@@ -80,7 +88,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let client = Client::connect(&database_url, NoTls)?;
     let mut store = PostgresLedgerStore::new(client, &ledger_id);
     store.migrate()?;
-    let timestamp_authority = Rfc3161TimestampAuthority::new(tsa_url, tsa_ca_file, tsa_policy_oid);
+    let timestamp_authority = Rfc3161TimestampAuthority::new(
+        tsa_url,
+        tsa_ca_file,
+        tsa_intermediates_file,
+        tsa_crls_file,
+        tsa_policy_oid,
+        tsa_signer_certificate_sha256,
+    )?;
     let clock = SystemElapsedClock::new()?;
     let continuity_id = clock.continuity_id();
     let mut producer = V2LedgerProducer::open_or_create(store, clock, ledger_id, site_id, policy)?;

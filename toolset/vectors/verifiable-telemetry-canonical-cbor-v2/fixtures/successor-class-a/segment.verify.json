@@ -30,7 +30,7 @@
     ],
     "tsa_tsr": {
       "path": "segments/segment-1.tsr",
-      "sha256": "36cb96ff674b15d96ff20d31b68209338894eff389b7dd16a236806fefe778bf"
+      "sha256": "4f2062de99762f9975192a483689a067bd4184012a24e7ba9776949c7d2c6b51"
     }
   },
   "anchoring": {

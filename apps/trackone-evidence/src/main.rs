@@ -6,7 +6,7 @@ use trackone_evidence::{ExportOptions, PolicyMode, VerifyOptions, export_bundle,
 
 fn usage() -> ! {
     eprintln!(
-        "usage:\n  trackone-evidence verify --root DIR --facts DIR [--json] [--policy-mode warn|strict] [--disclosure-class A|B|C] [--commitment-profile-id ID] [--require-ots]\n  trackone-evidence verify-v2 --root DIR [--json] [--tsa-ca-file FILE] [--tsa-policy OID] [--allow-missing-tsa]\n  trackone-evidence export --pipeline-dir DIR --evidence-repo DIR --site SITE --day YYYY-MM-DD [--include-frames] [--git-commit] [--tag] [--tag-name NAME] [--bundle-out PATH]"
+        "usage:\n  trackone-evidence verify --root DIR --facts DIR [--json] [--policy-mode warn|strict] [--disclosure-class A|B|C] [--commitment-profile-id ID] [--require-ots]\n  trackone-evidence verify-v2 --root DIR [--json] [--tsa-ca-file FILE] [--tsa-intermediates-file FILE] [--tsa-crls-file FILE] [--tsa-policy OID] [--tsa-signer-cert-sha256 HEX] [--allow-missing-tsa]\n  trackone-evidence export --pipeline-dir DIR --evidence-repo DIR --site SITE --day YYYY-MM-DD [--include-frames] [--git-commit] [--tag] [--tag-name NAME] [--bundle-out PATH]"
     );
     std::process::exit(2);
 }
@@ -49,8 +49,23 @@ fn run_verify_v2(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
                 policy.tsa_ca_file =
                     Some(PathBuf::from(take_value(args, &mut idx, "--tsa-ca-file")))
             }
+            "--tsa-intermediates-file" => {
+                policy.tsa_intermediates_file = Some(PathBuf::from(take_value(
+                    args,
+                    &mut idx,
+                    "--tsa-intermediates-file",
+                )))
+            }
+            "--tsa-crls-file" => {
+                policy.tsa_crls_file =
+                    Some(PathBuf::from(take_value(args, &mut idx, "--tsa-crls-file")))
+            }
             "--tsa-policy" => {
                 policy.tsa_policy_oid = Some(take_value(args, &mut idx, "--tsa-policy"))
+            }
+            "--tsa-signer-cert-sha256" => {
+                policy.tsa_signer_cert_sha256 =
+                    Some(take_value(args, &mut idx, "--tsa-signer-cert-sha256").parse()?)
             }
             "--allow-missing-tsa" => policy.require_tsa = false,
             _ => usage(),

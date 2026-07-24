@@ -152,9 +152,9 @@ def assemble(args: argparse.Namespace) -> dict[str, Any]:
             root / "software/helm",
             "Helm",
         )
-        if crate_count != 9:
+        if crate_count != 10:
             raise BuildError(
-                f"expected exactly 9 publishable workspace packages, found {crate_count}"
+                f"expected exactly 10 publishable workspace packages, found {crate_count}"
             )
         if helm_count != 1:
             raise BuildError(f"expected exactly one Helm chart, found {helm_count}")
@@ -200,6 +200,7 @@ def assemble(args: argparse.Namespace) -> dict[str, Any]:
                 "v2_durable_producer": True,
                 "v2_disclosure_classes": True,
                 "rfc3161_timestamp_channel": True,
+                "rfc5816_signer_certificate_binding": True,
                 "negative_fixture_floor": True,
                 "offline_schema_resolution": True,
             },

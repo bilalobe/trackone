@@ -67,9 +67,11 @@ where
     let pending = producer.store_mut().load_pending_tsa_segments()?;
     for (segment_number, artifact, digest) in pending {
         if let Ok(response) = timestamp_authority.stamp(&artifact) {
-            let _ = producer
-                .store_mut()
-                .attach_tsa_response(segment_number, &digest, &response);
+            let _ = producer.store_mut().attach_tsa_response(
+                segment_number,
+                &digest,
+                &response.response_der,
+            );
         }
     }
     Ok(())
@@ -140,9 +142,11 @@ where
                 let mut producer = producer
                     .lock()
                     .map_err(|_| ProducerError::Store("producer mutex is poisoned".to_string()))?;
-                producer
-                    .store_mut()
-                    .attach_tsa_response(segment_number, &digest, &response)
+                producer.store_mut().attach_tsa_response(
+                    segment_number,
+                    &digest,
+                    &response.response_der,
+                )
             });
             if attached.is_err() {
                 tsa_status = "pending";

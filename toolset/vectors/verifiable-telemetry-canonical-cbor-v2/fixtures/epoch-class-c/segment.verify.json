@@ -24,7 +24,7 @@
     },
     "tsa_tsr": {
       "path": "segments/segment-0.tsr",
-      "sha256": "3d9644e88cc9c4dcf43eb79355cbaac20f561016db74da18bee13700ac9e9c77"
+      "sha256": "962107eb926d21df6c848ba20f54400be94e5abed52549e978909b7256b08915"
     },
     "extensions": {
       "x-example": {

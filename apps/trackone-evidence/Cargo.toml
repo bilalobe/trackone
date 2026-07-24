@@ -18,6 +18,7 @@ trackone-constants.workspace = true
 trackone-ots.workspace = true
 trackone-ingest = { workspace = true, features = ["std"] }
 trackone-ledger.workspace = true
+trackone-rfc3161.workspace = true
 
 [lib]
 path = "src/lib.rs"

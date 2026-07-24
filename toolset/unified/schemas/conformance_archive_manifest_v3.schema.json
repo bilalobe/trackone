@@ -112,6 +112,7 @@
         "v2_durable_producer",
         "v2_disclosure_classes",
         "rfc3161_timestamp_channel",
+        "rfc5816_signer_certificate_binding",
         "negative_fixture_floor",
         "offline_schema_resolution"
       ],
@@ -122,6 +123,7 @@
         "v2_durable_producer": { "const": true },
         "v2_disclosure_classes": { "const": true },
         "rfc3161_timestamp_channel": { "const": true },
+        "rfc5816_signer_certificate_binding": { "const": true },
         "negative_fixture_floor": { "const": true },
         "offline_schema_resolution": { "const": true }
       }

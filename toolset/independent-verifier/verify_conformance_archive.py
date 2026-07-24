@@ -346,8 +346,20 @@ def verify_v2_bundles(vector_root: Path, binary: Path) -> int:
         if case.get("tsa_ca_file"):
             ca_file = portable(vector_root, case["tsa_ca_file"], "v2 TSA trust anchor")
             command.extend(["--tsa-ca-file", str(ca_file)])
+        if case.get("tsa_intermediates_file"):
+            intermediates_file = portable(
+                vector_root, case["tsa_intermediates_file"], "v2 TSA intermediates"
+            )
+            command.extend(["--tsa-intermediates-file", str(intermediates_file)])
+        if case.get("tsa_crls_file"):
+            crls_file = portable(vector_root, case["tsa_crls_file"], "v2 TSA CRLs")
+            command.extend(["--tsa-crls-file", str(crls_file)])
         if case.get("tsa_policy_oid"):
             command.extend(["--tsa-policy", case["tsa_policy_oid"]])
+        if case.get("tsa_signer_cert_sha256"):
+            command.extend(
+                ["--tsa-signer-cert-sha256", case["tsa_signer_cert_sha256"]]
+            )
         completed = subprocess.run(
             command,
             text=True,
@@ -441,6 +453,7 @@ def verify_root(root: Path) -> dict[str, Any]:
         "v2_durable_producer": True,
         "v2_disclosure_classes": True,
         "rfc3161_timestamp_channel": True,
+        "rfc5816_signer_certificate_binding": True,
         "negative_fixture_floor": True,
         "offline_schema_resolution": True,
     }
