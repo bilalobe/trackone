@@ -122,6 +122,9 @@
         "existingSecret": {
           "type": "string"
         },
+        "existingSecretHasTsaIntermediates": {
+          "type": "boolean"
+        },
         "image": {
           "$ref": "#/definitions/imageConfig"
         },
@@ -184,7 +187,22 @@
               "type": "string",
               "pattern": "^[0-9]+(?:\\.[0-9]+)+$"
             },
+            "tsaSignerCertSha256": {
+              "oneOf": [
+                { "const": "" },
+                {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                }
+              ]
+            },
             "tsaCaPem": {
+              "type": "string"
+            },
+            "tsaIntermediatesPem": {
+              "type": "string"
+            },
+            "tsaCrlsPem": {
               "type": "string"
             }
           }

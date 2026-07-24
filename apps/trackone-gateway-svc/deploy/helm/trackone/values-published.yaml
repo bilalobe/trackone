@@ -10,6 +10,7 @@
 # gateway:
 #   existingConfigMap: shared-trackone-gateway-config
 #   existingSecret: shared-trackone-gateway-env
+#   existingSecretHasTsaIntermediates: true # when tsa-intermediates.pem is present
 # postgres:
 #   auth:
 #     existingSecret: shared-postgres-auth

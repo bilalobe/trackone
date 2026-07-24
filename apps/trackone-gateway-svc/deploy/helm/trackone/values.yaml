@@ -75,6 +75,8 @@ gateway:
   # If set, the chart will not create trackone-gateway-env and will instead
   # reference this pre-existing Secret for sensitive gateway config.
   existingSecret: ""
+  # Set when existingSecret contains the optional tsa-intermediates.pem key.
+  existingSecretHasTsaIntermediates: false
   image:
     repository: ghcr.io/bilalobe/trackone/gateway
     tag: 0.1.0-beta.4
@@ -95,8 +97,14 @@ gateway:
     emptyMode: suppress
     tsaUrl: https://tsa.example.invalid/tsr
     tsaPolicyOid: 1.3.6.1.4.1.55555.1
+    # SHA-256 of the complete DER TSA signer certificate (not the CA certificate).
+    tsaSignerCertSha256: ""
     # Required when gateway.enabled=true; use --set-file or an existing Secret.
     tsaCaPem: ""
+    # Optional untrusted intermediate-certificate bundle retained by deployment policy.
+    tsaIntermediatesPem: ""
+    # Complete base CRLs covering every non-root certificate at TSA genTime.
+    tsaCrlsPem: ""
   probes:
     readinessPath: /healthz
     livenessPath: /healthz

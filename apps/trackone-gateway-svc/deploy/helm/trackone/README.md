@@ -102,7 +102,7 @@ helm template trackone apps/trackone-gateway-svc/deploy/helm/trackone \
 The chart generates and manages these runtime config objects:
 
 - `ConfigMap/trackone-gateway-config` for non-secret gateway config such as `OTS_CALENDARS`
-- `Secret/trackone-gateway-env` for `TRACKONE_DATABASE_URL` and the RFC 3161 trust root
+- `Secret/trackone-gateway-env` for `TRACKONE_DATABASE_URL` and RFC 3161 validation material
 - `Secret/postgres-auth` for Postgres bootstrap credentials
 
 The values still live in `values.yaml` and any overlays, but the pods now consume
@@ -111,14 +111,21 @@ them via `configMapRef` / `secretKeyRef` instead of inline `env.value` entries.
 If you already manage non-secret gateway config elsewhere, set
 `gateway.existingConfigMap` and the chart will reuse that ConfigMap instead of
 creating `trackone-gateway-config`. That ConfigMap must define an `OTS_CALENDARS` key to match the environment consumed via `envFrom`.
+It must also define `TRACKONE_TSA_URL`, `TRACKONE_TSA_POLICY_OID`, and
+`TRACKONE_TSA_SIGNER_CERT_SHA256` when the gateway RFC 3161 channel is enabled.
 
 If you already manage sensitive gateway config elsewhere, set
 `gateway.existingSecret` and the chart will reuse that Secret instead of
 creating `trackone-gateway-env`. That Secret must define
-`TRACKONE_DATABASE_URL` and `tsa-ca.pem`. The latter is mounted as the RFC 3161
-trust root. When the chart manages the Secret, set `gateway.env.tsaCaPem`
-(preferably with `--set-file`) and configure the TSA URL and policy OID in
-`gateway.env`.
+`TRACKONE_DATABASE_URL`, `tsa-ca.pem`, and `tsa-crls.pem`; it may also define
+`tsa-intermediates.pem`. Set `gateway.existingSecretHasTsaIntermediates=true`
+when that optional key is present so the chart mounts it and configures the
+gateway to consume it. These are mounted as deployment-managed RFC 3161
+historical path-validation material. When the chart manages the Secret, set
+`gateway.env.tsaCaPem` and `gateway.env.tsaCrlsPem` (preferably with
+`--set-file`), optionally set `gateway.env.tsaIntermediatesPem`, and configure
+the TSA URL, policy OID, and SHA-256 DER signer-certificate pin as
+`gateway.env.tsaSignerCertSha256`.
 
 If you already manage Postgres bootstrap credentials elsewhere, set
 `postgres.auth.existingSecret` and the chart will reuse that Secret instead of

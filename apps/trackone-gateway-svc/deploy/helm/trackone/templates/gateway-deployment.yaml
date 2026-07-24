@@ -1,4 +1,5 @@
 {{- if .Values.gateway.enabled }}
+{{- $mountTsaIntermediates := or .Values.gateway.env.tsaIntermediatesPem (and .Values.gateway.existingSecret .Values.gateway.existingSecretHasTsaIntermediates) }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -38,6 +39,12 @@ spec:
                   key: TRACKONE_DATABASE_URL
             - name: TRACKONE_TSA_CA_FILE
               value: /var/run/trackone-tsa/ca.pem
+            - name: TRACKONE_TSA_CRLS_FILE
+              value: /var/run/trackone-tsa/crls.pem
+            {{- if $mountTsaIntermediates }}
+            - name: TRACKONE_TSA_INTERMEDIATES_FILE
+              value: /var/run/trackone-tsa/intermediates.pem
+            {{- end }}
           ports:
             - name: http
               containerPort: {{ .Values.gateway.service.port }}
@@ -66,4 +73,10 @@ spec:
             items:
               - key: tsa-ca.pem
                 path: ca.pem
+              - key: tsa-crls.pem
+                path: crls.pem
+              {{- if $mountTsaIntermediates }}
+              - key: tsa-intermediates.pem
+                path: intermediates.pem
+              {{- end }}
 {{- end }}
