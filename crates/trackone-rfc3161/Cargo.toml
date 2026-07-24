@@ -1,0 +1,22 @@
+[package]
+name = "trackone-rfc3161"
+description = "RFC 3161 and RFC 5816 timestamp response verification for TrackOne"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+readme = "README.md"
+
+[dependencies]
+base64.workspace = true
+cms.workspace = true
+der.workspace = true
+sha2.workspace = true
+x509-cert.workspace = true
+
+[lib]
+path = "src/lib.rs"
+doctest = false

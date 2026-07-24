@@ -101,6 +101,7 @@ jobs:
             trackone-core
             trackone-ingest
             trackone-ots
+            trackone-rfc3161
             trackone-sensorthings
             trackone-pod-fw
             trackone-gateway-svc
