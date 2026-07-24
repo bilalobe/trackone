@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Shared RFC 3161 verification with RFC 5816 SigningCertificateV2 and
+  required SHA-256 TSA signer-certificate pinning across gateway production,
+  evidence verification, vectors, deployment configuration, and conformance
+  archives.
+
 ## [0.1.0-beta.4] - 2026-07-18
 
 ### Changed
@@ -38,6 +45,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added the draft-08 v2 gateway service: durable PostgreSQL-backed segment
   production, CBOR admission with idempotency handling, and optional RFC 3161
   timestamp issuance for completed segment bundles.
+- Added durable draft-08 v2 segment production backed by PostgreSQL, including
+  transaction-safe idempotency, segment closure, and recovery of persisted
+  producer state.
+- Added the `trackone-v2-gateway` CBOR admission service, which exposes the
+  v2 producer at the HTTP boundary with explicit idempotency semantics.
+- Added an optional RFC 3161 TSA client for timestamping completed v2 segment
+  bundles and publishing the resulting timestamp response with the evidence.
 
 ### Changed
 - Split the workspace into reusable `crates/`, deployable `apps/`, and
@@ -47,6 +61,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to the unpublished `trackone-python` leaf.
 - Modularized `trackone-ingest` and `trackone-evidence` internally while
   preserving their crate-root APIs.
+- Gateway container and Helm deployment configuration can now run the v2
+  admission service and supply its PostgreSQL and timestamping settings.
 - Public JSON Schema identifiers and references now use the real raw GitHub
   provider instead of `example.org`, while CI and archives resolve them
   offline through the checked-in catalog.

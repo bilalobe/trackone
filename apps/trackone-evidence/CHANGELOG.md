@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Add `--tsa-signer-cert-sha256` and require RFC 5816 signer-certificate
+  binding for every present RFC 3161 timestamp response.
+
 ## [0.1.0-beta.4] - 2026-07-18
 
 ### Added

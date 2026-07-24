@@ -7,6 +7,7 @@ Each ADR captures context, the decision, consequences, and alternatives.
 ## Current workspace boundary
 
 The current package allocation is defined by
+[ADR-062](ADR-062-rfc5816-signer-certificate-binding.md), building on
 [ADR-061](ADR-061-library-application-and-binding-package-boundaries.md):
 
 - reusable domain libraries live under `crates/`
@@ -85,6 +86,7 @@ unless an ADR explicitly supersedes them.
 - [ADR-060: Beta Anchor-Evidence Advancement and Verifier Sanity](ADR-060-beta-anchor-evidence-advancement-and-verifier-sanity.md)
 - [ADR-061: Full Draft-08 V2 Conformance and Conformance Archive V3](ADR-061-full-draft-08-v2-conformance-and-archive-v3.md)
 - [ADR-061: Library, Application, and Binding Package Boundaries](ADR-061-library-application-and-binding-package-boundaries.md)
+- [ADR-062: RFC 5816 Signer-Certificate Binding](ADR-062-rfc5816-signer-certificate-binding.md)
 
 ## Index Conventions
 
@@ -221,6 +223,10 @@ Entries list **Status** and **Summary**. Related references are grouped under **
 - **[ADR-061](ADR-061-library-application-and-binding-package-boundaries.md): Library, application, and binding package boundaries**
   **Status**: Accepted
   **Summary**: Separates reusable libraries, deployable applications, and optional bindings; extracts `trackone-ots`, establishes the gateway-service and evidence app boundaries, confines PyO3 to `trackone-python`, and assigns deployment assets to the service app.
+
+- **[ADR-062](ADR-062-rfc5816-signer-certificate-binding.md): RFC 5816 signer-certificate binding**
+  **Status**: Accepted, 2026-07-19
+  **Summary**: Adds shared RFC 3161 verification, requires SHA-256 SigningCertificateV2 and an external signer-certificate pin, and expands the coordinated release to ten publishable packages.
 
 ### Verification, Integrity & OTS Pipeline
 

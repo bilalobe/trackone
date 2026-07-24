@@ -12,7 +12,7 @@ The source tree makes the dependency direction explicit:
 
 | Layer | Packages | Purpose |
 | --- | --- | --- |
-| Reusable libraries | `trackone-core`, `trackone-constants`, `trackone-ingest`, `trackone-ledger`, `trackone-ots`, `trackone-sensorthings`, `trackone-pod-fw` | Protocol, framing, commitment, OTS, projection, and firmware logic |
+| Reusable libraries | `trackone-core`, `trackone-constants`, `trackone-ingest`, `trackone-ledger`, `trackone-ots`, `trackone-rfc3161`, `trackone-sensorthings`, `trackone-pod-fw` | Protocol, framing, commitment, timestamp verification, projection, and firmware logic |
 | Applications | `trackone-evidence`, `trackone-gateway-svc` | Supported verifier/export surface and deployable v2 gateway |
 | Binding | `trackone-python` | Unpublished, opt-in legacy PyO3 adapter |
 
@@ -112,6 +112,7 @@ Required environment variables:
 - `TRACKONE_TSA_URL`
 - `TRACKONE_TSA_CA_FILE`
 - `TRACKONE_TSA_POLICY_OID`
+- `TRACKONE_TSA_SIGNER_CERT_SHA256`
 
 Optional runtime settings include `TRACKONE_BIND` (default
 `0.0.0.0:8080`), `TRACKONE_EMPTY_MODE`, `TRACKONE_INTERVAL_MS`,
@@ -166,7 +167,7 @@ Dockerfiles remain under [`deploy/docker/`](deploy/docker/).
   verifies self-contained conformance archives without importing repository
   runtime code.
 
-The release workflow packages nine publishable Cargo artifacts and one Helm
+The release workflow packages ten publishable Cargo artifacts and one Helm
 chart. The unpublished Python binding is checked in the Rust matrix but is
 excluded from publication and conformance package counts.
 
