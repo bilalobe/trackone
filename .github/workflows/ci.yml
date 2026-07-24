@@ -205,8 +205,8 @@ jobs:
           mkdir -p dist/crates dist/helm
           shopt -s nullglob
           packages=(target/package/*-"${version}".crate)
-          # Seven reusable libraries and two publishable applications.
-          test "${#packages[@]}" -eq 9
+          # Eight reusable libraries and two publishable applications.
+          test "${#packages[@]}" -eq 10
           cp "${packages[@]}" dist/crates/
           helm lint apps/trackone-gateway-svc/deploy/helm/trackone
           helm package apps/trackone-gateway-svc/deploy/helm/trackone \
