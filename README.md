@@ -117,7 +117,9 @@ Required environment variables:
 Optional runtime settings include `TRACKONE_BIND` (default
 `0.0.0.0:8080`), `TRACKONE_EMPTY_MODE`, `TRACKONE_INTERVAL_MS`,
 `TRACKONE_BATCH_RECORD_LIMIT`, `TRACKONE_RECORD_LIMIT`, and
-`TRACKONE_SIZE_LIMIT_BYTES`.
+`TRACKONE_SIZE_LIMIT_BYTES`. HTTP admission is bounded by
+`TRACKONE_MAX_BATCH_RECORDS` (default 1,000) and
+`TRACKONE_MAX_ADMISSION_BYTES` (default 4 MiB).
 
 Run the service after supplying those values:
 
@@ -130,6 +132,13 @@ The HTTP surface is intentionally small:
 - `GET /healthz` returns the service/profile health document.
 - `POST /v2/records` accepts canonical record CBOR with
   `Content-Type: application/cbor` and a required `Idempotency-Key` header.
+- `POST /v2/record-batches` atomically accepts a definite CBOR array of exact
+  record byte strings, optionally with `Content-Encoding: gzip`.
+
+Evidence manifest v3 and `trackone-evidence compact-v2` provide deterministic
+`application/vnd.trackone.evidence-bundle.v3+gzip` carriers with packed Class
+A records. `verify-v2 --archive` applies the same v2 verification after
+bounded safe extraction; manifest v2 remains readable.
 
 The service's Dockerfile, migrations, Helm chart, and local Kustomize tree
 are owned by [`apps/trackone-gateway-svc/deploy/`](apps/trackone-gateway-svc/deploy/).

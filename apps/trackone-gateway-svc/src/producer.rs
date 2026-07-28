@@ -49,6 +49,27 @@ pub struct SealedSegment {
     pub records: Vec<Vec<u8>>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RecordDestination {
+    Open { ordinal: u64 },
+    Sealed { segment_number: u64, ordinal: u64 },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AdmittedRecordDelta {
+    pub record_cbor: Vec<u8>,
+    pub destination: RecordDestination,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LedgerTransition {
+    pub previous_open_count: u64,
+    pub admitted_records: Vec<AdmittedRecordDelta>,
+    pub next_state: ProducerState,
+    pub sealed: Vec<SealedSegment>,
+    pub idempotency: Option<IdempotencyRecord>,
+}
+
 /// The store must make the state and all sealed artifacts in one call durable
 /// as a single transaction before returning success.
 pub trait LedgerStore {
@@ -58,9 +79,7 @@ pub trait LedgerStore {
     fn compare_and_swap(
         &mut self,
         expected_revision: Option<u64>,
-        state: &ProducerState,
-        sealed: &[SealedSegment],
-        admission: Option<&IdempotencyRecord>,
+        transition: &LedgerTransition,
     ) -> Result<(), ProducerError>;
 }
 
@@ -109,16 +128,24 @@ impl CloseReason {
 pub struct AdmissionOutcome {
     pub state_revision: u64,
     pub admitted_segment_number: u64,
+    pub admitted_record_count: u64,
+    pub admission_runs: Vec<AdmissionRun>,
     pub sealed: Vec<SealedSegment>,
     pub sealed_segment_numbers: Vec<u64>,
     pub replayed: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AdmissionRun {
+    pub segment_number: u64,
+    pub record_count: u64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct IdempotencyRecord {
     pub key: String,
-    pub record_sha256: String,
-    pub admitted_segment_number: u64,
+    pub request_sha256: String,
+    pub admitted_segment_numbers: Vec<u64>,
     pub state_revision: u64,
     pub sealed_segment_numbers: Vec<u64>,
 }
@@ -258,7 +285,16 @@ impl<S: LedgerStore, C: ElapsedClock> V2LedgerProducer<S, C> {
             },
             next_policy: policy,
         };
-        store.compare_and_swap(None, &state, &[], None)?;
+        store.compare_and_swap(
+            None,
+            &LedgerTransition {
+                previous_open_count: 0,
+                admitted_records: Vec::new(),
+                next_state: state.clone(),
+                sealed: Vec::new(),
+                idempotency: None,
+            },
+        )?;
         Ok(Self {
             store,
             clock,
@@ -298,7 +334,7 @@ impl<S: LedgerStore, C: ElapsedClock> V2LedgerProducer<S, C> {
         } else {
             let mut next = self.state.clone();
             next.next_policy = policy;
-            self.commit(next, Vec::new(), None)?;
+            self.commit(next, Vec::new(), None, Vec::new())?;
             Ok(Vec::new())
         }
     }
@@ -309,7 +345,7 @@ impl<S: LedgerStore, C: ElapsedClock> V2LedgerProducer<S, C> {
     }
 
     pub fn admit(&mut self, record: Vec<u8>) -> Result<AdmissionOutcome, ProducerError> {
-        self.admit_inner(record, None)
+        self.admit_batch_inner(vec![record], None)
     }
 
     pub fn admit_idempotent(
@@ -324,69 +360,123 @@ impl<S: LedgerStore, C: ElapsedClock> V2LedgerProducer<S, C> {
             ));
         }
         let digest = sha256_hex(&record);
+        self.admit_batch_idempotent_digest(key, vec![record], digest)
+    }
+
+    pub fn admit_batch_idempotent(
+        &mut self,
+        key: impl Into<String>,
+        records: Vec<Vec<u8>>,
+        canonical_envelope: &[u8],
+    ) -> Result<AdmissionOutcome, ProducerError> {
+        self.admit_batch_idempotent_digest(key.into(), records, sha256_hex(canonical_envelope))
+    }
+
+    fn admit_batch_idempotent_digest(
+        &mut self,
+        key: String,
+        records: Vec<Vec<u8>>,
+        digest: String,
+    ) -> Result<AdmissionOutcome, ProducerError> {
+        if key.is_empty() || key.len() > 255 || key.chars().any(char::is_control) {
+            return Err(ProducerError::InvalidConfiguration(
+                "idempotency key must contain 1..255 non-control characters",
+            ));
+        }
         if let Some(existing) = self.store.lookup_idempotency(&key)? {
-            if existing.record_sha256 != digest {
+            if existing.request_sha256 != digest {
                 return Err(ProducerError::IdempotencyConflict);
             }
+            let admission_runs = admission_runs(&existing.admitted_segment_numbers)?;
             return Ok(AdmissionOutcome {
                 state_revision: existing.state_revision,
-                admitted_segment_number: existing.admitted_segment_number,
+                admitted_segment_number: existing
+                    .admitted_segment_numbers
+                    .first()
+                    .copied()
+                    .unwrap_or(0),
+                admitted_record_count: u64::try_from(existing.admitted_segment_numbers.len())
+                    .map_err(|_| ProducerError::CounterOverflow("admitted record"))?,
+                admission_runs,
                 sealed: Vec::new(),
                 sealed_segment_numbers: existing.sealed_segment_numbers,
                 replayed: true,
             });
         }
-        self.admit_inner(record, Some((key, digest)))
+        self.admit_batch_inner(records, Some((key, digest)))
     }
 
-    fn admit_inner(
+    fn admit_batch_inner(
         &mut self,
-        record: Vec<u8>,
+        records: Vec<Vec<u8>>,
         idempotency: Option<(String, String)>,
     ) -> Result<AdmissionOutcome, ProducerError> {
-        validate_canonical_record_v2(&record)
-            .map_err(|error| ProducerError::InvalidRecord(error.to_string()))?;
+        if records.is_empty() {
+            return Err(ProducerError::InvalidRecord(
+                "record batch must not be empty".to_string(),
+            ));
+        }
+        for (index, record) in records.iter().enumerate() {
+            validate_canonical_record_v2(record).map_err(|error| {
+                ProducerError::InvalidRecord(format!("record {index}: {error}"))
+            })?;
+        }
         let now = self.safe_now()?;
         let mut next = self.state.clone();
         let mut sealed = Self::close_expired(&mut next, now)?;
-        let admitted_segment_number = next.next_segment_number;
-        next.open.byte_count = next
-            .open
-            .byte_count
-            .checked_add(
-                u64::try_from(record.len())
-                    .map_err(|_| ProducerError::CounterOverflow("interval byte"))?,
-            )
-            .ok_or(ProducerError::CounterOverflow("interval byte"))?;
-        next.open.records.push(record);
+        let admitted_records = records.clone();
+        let mut admitted_segment_numbers = Vec::with_capacity(records.len());
+        for record in records {
+            admitted_segment_numbers.push(next.next_segment_number);
+            next.open.byte_count = next
+                .open
+                .byte_count
+                .checked_add(
+                    u64::try_from(record.len())
+                        .map_err(|_| ProducerError::CounterOverflow("interval byte"))?,
+                )
+                .ok_or(ProducerError::CounterOverflow("interval byte"))?;
+            next.open.records.push(record);
 
-        let record_limit = next
-            .open
-            .policy
-            .record_limit
-            .is_some_and(|limit| next.open.records.len() as u128 >= u128::from(limit));
-        let size_limit = next
-            .open
-            .policy
-            .size_limit_bytes
-            .is_some_and(|limit| next.open.byte_count >= limit);
-        if let Some(reason) = CloseReason::highest(
-            [
-                size_limit.then_some(CloseReason::SizeLimit),
-                record_limit.then_some(CloseReason::RecordLimit),
-            ]
-            .into_iter()
-            .flatten(),
-        ) && let Some(segment) = Self::seal_open(&mut next, now, reason)?
-        {
-            sealed.push(segment);
+            let record_limit = next
+                .open
+                .policy
+                .record_limit
+                .is_some_and(|limit| next.open.records.len() as u128 >= u128::from(limit));
+            let size_limit = next
+                .open
+                .policy
+                .size_limit_bytes
+                .is_some_and(|limit| next.open.byte_count >= limit);
+            if let Some(reason) = CloseReason::highest(
+                [
+                    size_limit.then_some(CloseReason::SizeLimit),
+                    record_limit.then_some(CloseReason::RecordLimit),
+                ]
+                .into_iter()
+                .flatten(),
+            ) && let Some(segment) = Self::seal_open(&mut next, now, reason)?
+            {
+                sealed.push(segment);
+            }
         }
+        let admitted_segment_number = admitted_segment_numbers[0];
+        let admission_runs = admission_runs(&admitted_segment_numbers)?;
+        let admitted_record_count = u64::try_from(admitted_segment_numbers.len())
+            .map_err(|_| ProducerError::CounterOverflow("admitted record"))?;
+        let record_deltas = record_deltas(
+            &self.state,
+            &next,
+            &sealed,
+            &admitted_records,
+            &admitted_segment_numbers,
+        )?;
         let admission = idempotency
-            .map(|(key, record_sha256)| {
+            .map(|(key, request_sha256)| {
                 Ok(IdempotencyRecord {
                     key,
-                    record_sha256,
-                    admitted_segment_number,
+                    request_sha256,
+                    admitted_segment_numbers,
                     state_revision: next
                         .revision
                         .checked_add(1)
@@ -398,10 +488,12 @@ impl<S: LedgerStore, C: ElapsedClock> V2LedgerProducer<S, C> {
                 })
             })
             .transpose()?;
-        self.commit(next, sealed.clone(), admission.as_ref())?;
+        self.commit(next, sealed.clone(), admission.as_ref(), record_deltas)?;
         Ok(AdmissionOutcome {
             state_revision: self.state.revision,
             admitted_segment_number,
+            admitted_record_count,
+            admission_runs,
             sealed_segment_numbers: sealed
                 .iter()
                 .map(|segment| segment.segment_number)
@@ -440,7 +532,7 @@ impl<S: LedgerStore, C: ElapsedClock> V2LedgerProducer<S, C> {
         }
         next.open.opened_at_ms = now;
         next.open.clock_continuity_id = self.clock.continuity_id();
-        self.commit(next, sealed.clone(), None)?;
+        self.commit(next, sealed.clone(), None, Vec::new())?;
         Ok(sealed)
     }
 
@@ -546,16 +638,110 @@ impl<S: LedgerStore, C: ElapsedClock> V2LedgerProducer<S, C> {
         mut next: ProducerState,
         sealed: Vec<SealedSegment>,
         admission: Option<&IdempotencyRecord>,
+        admitted_records: Vec<AdmittedRecordDelta>,
     ) -> Result<(), ProducerError> {
         let expected = self.state.revision;
         next.revision = expected
             .checked_add(1)
             .ok_or(ProducerError::CounterOverflow("state revision"))?;
-        self.store
-            .compare_and_swap(Some(expected), &next, &sealed, admission)?;
+        let transition = LedgerTransition {
+            previous_open_count: u64::try_from(self.state.open.records.len())
+                .map_err(|_| ProducerError::CounterOverflow("open record"))?,
+            admitted_records,
+            next_state: next.clone(),
+            sealed,
+            idempotency: admission.cloned(),
+        };
+        self.store.compare_and_swap(Some(expected), &transition)?;
         self.state = next;
         Ok(())
     }
+}
+
+fn record_deltas(
+    previous: &ProducerState,
+    next: &ProducerState,
+    sealed: &[SealedSegment],
+    records: &[Vec<u8>],
+    segment_numbers: &[u64],
+) -> Result<Vec<AdmittedRecordDelta>, ProducerError> {
+    let sealed_numbers = sealed
+        .iter()
+        .map(|segment| segment.segment_number)
+        .collect::<Vec<_>>();
+    let previous_was_sealed = !previous.open.records.is_empty()
+        && sealed
+            .iter()
+            .any(|segment| segment.records.starts_with(&previous.open.records));
+    let mut sealed_ordinals = BTreeMap::<u64, u64>::new();
+    if !previous.open.records.is_empty() && previous_was_sealed {
+        sealed_ordinals.insert(
+            previous.next_segment_number,
+            u64::try_from(previous.open.records.len())
+                .map_err(|_| ProducerError::CounterOverflow("sealed record"))?,
+        );
+    }
+    let admitted_open_count = segment_numbers
+        .iter()
+        .filter(|&&number| number == next.next_segment_number)
+        .count();
+    let existing_open_count = next
+        .open
+        .records
+        .len()
+        .checked_sub(admitted_open_count)
+        .ok_or(ProducerError::ConcurrentWriter)?;
+    let mut open_ordinal = u64::try_from(existing_open_count)
+        .map_err(|_| ProducerError::CounterOverflow("open record"))?;
+    records
+        .iter()
+        .zip(segment_numbers)
+        .map(|(record, &segment_number)| {
+            let destination = if sealed_numbers.contains(&segment_number) {
+                let ordinal = sealed_ordinals.entry(segment_number).or_default();
+                let destination = RecordDestination::Sealed {
+                    segment_number,
+                    ordinal: *ordinal,
+                };
+                *ordinal = ordinal
+                    .checked_add(1)
+                    .ok_or(ProducerError::CounterOverflow("sealed record"))?;
+                destination
+            } else {
+                let destination = RecordDestination::Open {
+                    ordinal: open_ordinal,
+                };
+                open_ordinal = open_ordinal
+                    .checked_add(1)
+                    .ok_or(ProducerError::CounterOverflow("open record"))?;
+                destination
+            };
+            Ok(AdmittedRecordDelta {
+                record_cbor: record.clone(),
+                destination,
+            })
+        })
+        .collect()
+}
+
+fn admission_runs(segment_numbers: &[u64]) -> Result<Vec<AdmissionRun>, ProducerError> {
+    let mut runs = Vec::<AdmissionRun>::new();
+    for &segment_number in segment_numbers {
+        if let Some(run) = runs.last_mut()
+            && run.segment_number == segment_number
+        {
+            run.record_count = run
+                .record_count
+                .checked_add(1)
+                .ok_or(ProducerError::CounterOverflow("admission run"))?;
+        } else {
+            runs.push(AdmissionRun {
+                segment_number,
+                record_count: 1,
+            });
+        }
+    }
+    Ok(runs)
 }
 
 #[derive(Clone, Debug, Default)]
@@ -563,6 +749,7 @@ pub struct MemoryLedgerStore {
     pub state: Option<ProducerState>,
     pub sealed: BTreeMap<u64, SealedSegment>,
     pub idempotency: BTreeMap<String, IdempotencyRecord>,
+    pub transitions: Vec<LedgerTransition>,
 }
 
 impl LedgerStore for MemoryLedgerStore {
@@ -580,10 +767,11 @@ impl LedgerStore for MemoryLedgerStore {
     fn compare_and_swap(
         &mut self,
         expected_revision: Option<u64>,
-        state: &ProducerState,
-        sealed: &[SealedSegment],
-        admission: Option<&IdempotencyRecord>,
+        transition: &LedgerTransition,
     ) -> Result<(), ProducerError> {
+        let state = &transition.next_state;
+        let sealed = &transition.sealed;
+        let admission = transition.idempotency.as_ref();
         if self.state.as_ref().map(|current| current.revision) != expected_revision {
             return Err(ProducerError::ConcurrentWriter);
         }
@@ -605,6 +793,7 @@ impl LedgerStore for MemoryLedgerStore {
             self.idempotency
                 .insert(admission.key.clone(), admission.clone());
         }
+        self.transitions.push(transition.clone());
         Ok(())
     }
 }
@@ -812,6 +1001,123 @@ mod tests {
         assert_eq!(producer.state().open.records.len(), 1);
         assert_eq!(
             producer.admit_idempotent("request-1", record(2)),
+            Err(ProducerError::IdempotencyConflict)
+        );
+    }
+
+    #[test]
+    fn atomic_batch_rolls_back_invalid_input_and_commits_one_revision() {
+        let clock = FakeClock::new(0);
+        let mut producer = producer(&clock, EmptyMode::Suppress);
+        let revision = producer.state().revision;
+        assert!(matches!(
+            producer.admit_batch_idempotent(
+                "batch-invalid",
+                vec![record(1), vec![0xff], record(2)],
+                b"envelope-invalid"
+            ),
+            Err(ProducerError::InvalidRecord(_))
+        ));
+        assert_eq!(producer.state().revision, revision);
+        assert!(producer.state().open.records.is_empty());
+
+        let outcome = producer
+            .admit_batch_idempotent(
+                "batch-valid",
+                vec![record(1), record(2), record(3)],
+                b"envelope-valid",
+            )
+            .unwrap();
+        assert_eq!(outcome.state_revision, revision + 1);
+        assert_eq!(outcome.admitted_record_count, 3);
+        assert_eq!(
+            outcome.admission_runs,
+            vec![AdmissionRun {
+                segment_number: 0,
+                record_count: 3
+            }]
+        );
+    }
+
+    #[test]
+    fn batch_preserves_sequential_closures_duplicates_and_delta_uniqueness() {
+        let clock = FakeClock::new(0);
+        let mut configured = policy(EmptyMode::Suppress);
+        configured.record_limit = Some(2);
+        let mut producer = V2LedgerProducer::open_or_create(
+            MemoryLedgerStore::default(),
+            &clock,
+            "b7a1d5e40c6f438e9a75db27c96f31aa",
+            "an-001",
+            configured,
+        )
+        .unwrap();
+        let duplicate = record(7);
+        let outcome = producer
+            .admit_batch_idempotent(
+                "batch-1",
+                vec![
+                    duplicate.clone(),
+                    duplicate.clone(),
+                    record(8),
+                    record(9),
+                    record(10),
+                ],
+                b"canonical-envelope",
+            )
+            .unwrap();
+        assert_eq!(
+            outcome.admission_runs,
+            vec![
+                AdmissionRun {
+                    segment_number: 0,
+                    record_count: 2
+                },
+                AdmissionRun {
+                    segment_number: 1,
+                    record_count: 2
+                },
+                AdmissionRun {
+                    segment_number: 2,
+                    record_count: 1
+                }
+            ]
+        );
+        assert_eq!(outcome.sealed_segment_numbers, vec![0, 1]);
+        assert_eq!(
+            outcome.sealed[0].records,
+            vec![duplicate.clone(), duplicate]
+        );
+        let store = producer.into_store();
+        let transition = store.transitions.last().unwrap();
+        assert_eq!(transition.admitted_records.len(), 5);
+        assert_eq!(
+            transition
+                .admitted_records
+                .iter()
+                .map(|delta| &delta.record_cbor)
+                .collect::<Vec<_>>()
+                .len(),
+            5
+        );
+    }
+
+    #[test]
+    fn batch_idempotency_hashes_the_expanded_envelope() {
+        let clock = FakeClock::new(0);
+        let mut producer = producer(&clock, EmptyMode::Suppress);
+        let records = vec![record(1), record(2)];
+        let first = producer
+            .admit_batch_idempotent("batch-replay", records.clone(), b"expanded")
+            .unwrap();
+        let replay = producer
+            .admit_batch_idempotent("batch-replay", records.clone(), b"expanded")
+            .unwrap();
+        assert!(!first.replayed);
+        assert!(replay.replayed);
+        assert_eq!(replay.admission_runs, first.admission_runs);
+        assert_eq!(
+            producer.admit_batch_idempotent("batch-replay", records, b"different"),
             Err(ProducerError::IdempotencyConflict)
         );
     }

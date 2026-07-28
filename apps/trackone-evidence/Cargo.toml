@@ -14,6 +14,9 @@ readme = "README.md"
 serde.workspace = true
 serde_json.workspace = true
 rustix.workspace = true
+flate2.workspace = true
+tar.workspace = true
+tempfile.workspace = true
 trackone-constants.workspace = true
 trackone-ots.workspace = true
 trackone-ingest = { workspace = true, features = ["std"] }

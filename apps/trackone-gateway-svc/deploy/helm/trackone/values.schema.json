@@ -176,6 +176,14 @@
               "type": "string",
               "pattern": "^[1-9][0-9]*$"
             },
+            "maxBatchRecords": {
+              "type": "string",
+              "pattern": "^(?:[1-9][0-9]{0,3}|10000)$"
+            },
+            "maxAdmissionBytes": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            },
             "emptyMode": {
               "enum": ["emit", "suppress"]
             },

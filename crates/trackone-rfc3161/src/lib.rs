@@ -1332,6 +1332,79 @@ mod tests {
         )
     }
 
+    fn signer_only_fixture_response() -> Result<Vec<u8>, VerificationError> {
+        let response = AnyRef::from_der(FIXTURE_RESPONSE).map_err(malformed)?;
+        let (status_der, mut content_info) = response
+            .sequence(|reader| {
+                let status: AnyRef<'_> = reader.decode()?;
+                let content_info: ContentInfo = reader.decode()?;
+                Ok((status.to_der()?, content_info))
+            })
+            .map_err(malformed)?;
+        let mut signed_data: SignedData = content_info.content.decode_as().map_err(malformed)?;
+        let signer = signed_data
+            .signer_infos
+            .0
+            .as_ref()
+            .first()
+            .ok_or_else(|| {
+                VerificationError::Profile(
+                    "signer-only fixture requires exactly one CMS SignerInfo".into(),
+                )
+            })?
+            .sid
+            .clone();
+        let certificates = signed_data.certificates.as_mut().ok_or_else(|| {
+            VerificationError::Profile(
+                "signer-only fixture requires an embedded certificate set".into(),
+            )
+        })?;
+        let matching = certificates
+            .0
+            .iter()
+            .filter_map(|choice| {
+                match choice {
+                    CertificateChoices::Certificate(certificate) => {
+                        signer_matches_certificate(&signer, certificate)
+                    }
+                    _ => false,
+                }
+                .then_some(choice.clone())
+            })
+            .collect::<Vec<_>>();
+        if matching.len() != 1 {
+            return Err(VerificationError::Profile(format!(
+                "signer-only fixture expected one matching certificate, found {}",
+                matching.len()
+            )));
+        }
+        certificates.0 = matching.try_into().map_err(malformed)?;
+        content_info.content =
+            Any::from_der(&signed_data.to_der().map_err(malformed)?).map_err(malformed)?;
+        let content_der = content_info.to_der().map_err(malformed)?;
+        let body_len = status_der
+            .len()
+            .checked_add(content_der.len())
+            .ok_or_else(|| VerificationError::Profile("fixture response is too large".into()))?;
+        let mut response_der = vec![0x30];
+        if body_len < 128 {
+            response_der.push(body_len as u8);
+        } else if body_len <= usize::from(u16::MAX) {
+            response_der.push(0x82);
+            response_der.extend_from_slice(&(body_len as u16).to_be_bytes());
+        } else if body_len <= 0x00ff_ffff {
+            response_der.push(0x83);
+            response_der.extend_from_slice(&(body_len as u32).to_be_bytes()[1..]);
+        } else {
+            return Err(VerificationError::Profile(
+                "fixture response exceeds the supported DER length".into(),
+            ));
+        }
+        response_der.extend_from_slice(&status_der);
+        response_der.extend_from_slice(&content_der);
+        Ok(response_der)
+    }
+
     #[test]
     fn signer_hash_is_canonical_lowercase_sha256() {
         let value = "ab2b1301f6fabdb26aad49d3d1e8b3ddeb31db166377cc29c7bf372d718fdc38";
@@ -1640,6 +1713,22 @@ mod tests {
                 micros: None,
             })
         );
+        assert_eq!(
+            verified.signer_certificate_sha256.to_string(),
+            FIXTURE_SIGNER
+        );
+    }
+
+    #[test]
+    fn signer_only_cms_response_verifies_with_the_configured_trust_archive() {
+        let response =
+            signer_only_fixture_response().expect("embedded signer-only fixture must be valid");
+        let verified = verify_response(
+            &response,
+            Sha256::digest(FIXTURE_SEGMENT).into(),
+            &fixture_policy(),
+        )
+        .unwrap();
         assert_eq!(
             verified.signer_certificate_sha256.to_string(),
             FIXTURE_SIGNER

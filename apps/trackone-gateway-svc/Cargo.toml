@@ -12,6 +12,7 @@ readme = "README.md"
 
 [dependencies]
 axum.workspace = true
+flate2.workspace = true
 postgres.workspace = true
 serde_json.workspace = true
 tokio.workspace = true

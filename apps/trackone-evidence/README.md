@@ -48,6 +48,25 @@ intermediate CA. JSON results expose the signed TSA-asserted generation time,
 serial number, and optional accuracy. Historical path evaluation at that time
 does not prove when the token was first observed.
 
+Create and verify a compact manifest-v3 gzip carrier while retaining the
+unchanged v2 commitment:
+
+```bash
+trackone-evidence compact-v2 --root BUNDLE --output bundle.v3.tar.gz \
+  --tsa-ca-file tsa-root.pem --tsa-crls-file tsa-crls.pem \
+  --tsa-policy 1.3.6.1.4.1.55555.1 --tsa-signer-cert-sha256 HEX
+trackone-evidence verify-v2 --archive bundle.v3.tar.gz \
+  --tsa-ca-file tsa-root.pem --tsa-crls-file tsa-crls.pem \
+  --tsa-policy 1.3.6.1.4.1.55555.1 --tsa-signer-cert-sha256 HEX
+```
+
+The carrier media type is
+`application/vnd.trackone.evidence-bundle.v3+gzip`. Class A records are
+packed as exact CBOR byte strings; duplicates are retained. Use
+`--include-extensions` only when extension artifacts are intentionally part
+of the compact disclosure. `--json` is minified for machines and `--pretty`
+opts into formatted output.
+
 Export a curated day-scoped bundle from pipeline output:
 
 ```bash

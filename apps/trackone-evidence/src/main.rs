@@ -1,12 +1,14 @@
 //! Command-line entry point for evidence verification and export.
 
 use std::path::PathBuf;
-use trackone_evidence::v2::{V2VerifyPolicy, verify_v2_bundle_with_policy};
+use trackone_evidence::v2::{
+    V2VerifyPolicy, compact_v2_bundle, verify_v2_archive, verify_v2_bundle_with_policy,
+};
 use trackone_evidence::{ExportOptions, PolicyMode, VerifyOptions, export_bundle, verify_bundle};
 
 fn usage() -> ! {
     eprintln!(
-        "usage:\n  trackone-evidence verify --root DIR --facts DIR [--json] [--policy-mode warn|strict] [--disclosure-class A|B|C] [--commitment-profile-id ID] [--require-ots]\n  trackone-evidence verify-v2 --root DIR [--json] [--tsa-ca-file FILE] [--tsa-intermediates-file FILE] [--tsa-crls-file FILE] [--tsa-policy OID] [--tsa-signer-cert-sha256 HEX] [--allow-missing-tsa]\n  trackone-evidence export --pipeline-dir DIR --evidence-repo DIR --site SITE --day YYYY-MM-DD [--include-frames] [--git-commit] [--tag] [--tag-name NAME] [--bundle-out PATH]"
+        "usage:\n  trackone-evidence verify --root DIR --facts DIR [--json] [--pretty] [--policy-mode warn|strict] [--disclosure-class A|B|C] [--commitment-profile-id ID] [--require-ots]\n  trackone-evidence verify-v2 (--root DIR | --archive FILE) [--json] [--pretty] [--tsa-ca-file FILE] [--tsa-intermediates-file FILE] [--tsa-crls-file FILE] [--tsa-policy OID] [--tsa-signer-cert-sha256 HEX] [--allow-missing-tsa]\n  trackone-evidence compact-v2 --root DIR --output FILE [--include-extensions] [--tsa-ca-file FILE] [--tsa-intermediates-file FILE] [--tsa-crls-file FILE] [--tsa-policy OID] [--tsa-signer-cert-sha256 HEX] [--allow-missing-tsa]\n  trackone-evidence export --pipeline-dir DIR --evidence-repo DIR --site SITE --day YYYY-MM-DD [--include-frames] [--git-commit] [--tag] [--tag-name NAME] [--bundle-out PATH]"
     );
     std::process::exit(2);
 }
@@ -27,6 +29,7 @@ fn main() {
     let result = match cmd {
         "verify" => run_verify(&args[2..]),
         "verify-v2" => run_verify_v2(&args[2..]),
+        "compact-v2" => run_compact_v2(&args[2..]),
         "export" => run_export(&args[2..]),
         _ => usage(),
     };
@@ -38,13 +41,17 @@ fn main() {
 
 fn run_verify_v2(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let mut root: Option<PathBuf> = None;
+    let mut archive: Option<PathBuf> = None;
     let mut json_mode = false;
+    let mut pretty = false;
     let mut policy = V2VerifyPolicy::baseline();
     let mut idx = 0;
     while idx < args.len() {
         match args[idx].as_str() {
             "--root" => root = Some(PathBuf::from(take_value(args, &mut idx, "--root"))),
+            "--archive" => archive = Some(PathBuf::from(take_value(args, &mut idx, "--archive"))),
             "--json" => json_mode = true,
+            "--pretty" => pretty = true,
             "--tsa-ca-file" => {
                 policy.tsa_ca_file =
                     Some(PathBuf::from(take_value(args, &mut idx, "--tsa-ca-file")))
@@ -72,9 +79,17 @@ fn run_verify_v2(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
         }
         idx += 1;
     }
-    let summary = verify_v2_bundle_with_policy(&root.unwrap_or_else(|| usage()), &policy)?;
+    let summary = match (root, archive) {
+        (Some(root), None) => verify_v2_bundle_with_policy(&root, &policy)?,
+        (None, Some(archive)) => verify_v2_archive(&archive, &policy)?,
+        _ => usage(),
+    };
     if json_mode {
-        println!("{}", serde_json::to_string_pretty(&summary)?);
+        if pretty {
+            println!("{}", serde_json::to_string_pretty(&summary)?);
+        } else {
+            println!("{}", serde_json::to_string(&summary)?);
+        }
     } else {
         println!(
             "Disclosure={} Overall={}",
@@ -87,10 +102,58 @@ fn run_verify_v2(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+fn run_compact_v2(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let mut root: Option<PathBuf> = None;
+    let mut output: Option<PathBuf> = None;
+    let mut include_extensions = false;
+    let mut policy = V2VerifyPolicy::baseline();
+    let mut idx = 0;
+    while idx < args.len() {
+        match args[idx].as_str() {
+            "--root" => root = Some(PathBuf::from(take_value(args, &mut idx, "--root"))),
+            "--output" => output = Some(PathBuf::from(take_value(args, &mut idx, "--output"))),
+            "--include-extensions" => include_extensions = true,
+            "--tsa-ca-file" => {
+                policy.tsa_ca_file =
+                    Some(PathBuf::from(take_value(args, &mut idx, "--tsa-ca-file")))
+            }
+            "--tsa-intermediates-file" => {
+                policy.tsa_intermediates_file = Some(PathBuf::from(take_value(
+                    args,
+                    &mut idx,
+                    "--tsa-intermediates-file",
+                )))
+            }
+            "--tsa-crls-file" => {
+                policy.tsa_crls_file =
+                    Some(PathBuf::from(take_value(args, &mut idx, "--tsa-crls-file")))
+            }
+            "--tsa-policy" => {
+                policy.tsa_policy_oid = Some(take_value(args, &mut idx, "--tsa-policy"))
+            }
+            "--tsa-signer-cert-sha256" => {
+                policy.tsa_signer_cert_sha256 =
+                    Some(take_value(args, &mut idx, "--tsa-signer-cert-sha256").parse()?)
+            }
+            "--allow-missing-tsa" => policy.require_tsa = false,
+            _ => usage(),
+        }
+        idx += 1;
+    }
+    compact_v2_bundle(
+        &root.unwrap_or_else(|| usage()),
+        &output.unwrap_or_else(|| usage()),
+        &policy,
+        include_extensions,
+    )?;
+    Ok(())
+}
+
 fn run_verify(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let mut root: Option<PathBuf> = None;
     let mut facts: Option<PathBuf> = None;
     let mut json_mode = false;
+    let mut pretty = false;
     let mut policy_mode = PolicyMode::Warn;
     let mut disclosure_class = "A".to_string();
     let mut commitment_profile_id =
@@ -104,6 +167,7 @@ fn run_verify(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
             "--root" => root = Some(PathBuf::from(take_value(args, &mut idx, "--root"))),
             "--facts" => facts = Some(PathBuf::from(take_value(args, &mut idx, "--facts"))),
             "--json" => json_mode = true,
+            "--pretty" => pretty = true,
             "--policy-mode" => {
                 policy_mode = PolicyMode::parse(&take_value(args, &mut idx, "--policy-mode"))?
             }
@@ -133,7 +197,11 @@ fn run_verify(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
         allow_placeholder,
     })?;
     if json_mode {
-        println!("{}", serde_json::to_string_pretty(&summary)?);
+        if pretty {
+            println!("{}", serde_json::to_string_pretty(&summary)?);
+        } else {
+            println!("{}", serde_json::to_string(&summary)?);
+        }
     } else {
         println!(
             "Policy={} Disclosure={} Overall={} RootMatch={} PubliclyRecomputable={} Manifest={}:{}",

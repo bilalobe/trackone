@@ -256,6 +256,7 @@ cargo run --locked -p trackone-evidence -- verify \
   --root toolset/vectors/trackone-beta-negative-v1/fixtures/<id> \
   --facts toolset/vectors/trackone-beta-negative-v1/fixtures/<id>/facts \
   --json \
+  --pretty \
   --policy-mode <warn|strict> \
   --disclosure-class <A|B|C>
 ```
@@ -414,6 +415,7 @@ fn public_beta_negative_fixture_corpus_is_cli_runnable() {
                 "--facts",
                 work.join("facts").to_str().unwrap(),
                 "--json",
+                "--pretty",
                 "--policy-mode",
                 &case.policy_mode,
                 "--disclosure-class",

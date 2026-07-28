@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added atomic CBOR batch admission, delta-based PostgreSQL persistence,
+  manifest-v3 packed-record bundles, and deterministic bounded gzip carriers
+  without changing authoritative v2 commitment bytes.
 - Shared RFC 3161 verification with RFC 5816 SigningCertificateV2 and
   required SHA-256 TSA signer-certificate pinning across gateway production,
   evidence verification, vectors, deployment configuration, and conformance

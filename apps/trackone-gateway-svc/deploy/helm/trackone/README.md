@@ -112,7 +112,10 @@ If you already manage non-secret gateway config elsewhere, set
 `gateway.existingConfigMap` and the chart will reuse that ConfigMap instead of
 creating `trackone-gateway-config`. That ConfigMap must define an `OTS_CALENDARS` key to match the environment consumed via `envFrom`.
 It must also define `TRACKONE_TSA_URL`, `TRACKONE_TSA_POLICY_OID`, and
-`TRACKONE_TSA_SIGNER_CERT_SHA256` when the gateway RFC 3161 channel is enabled.
+`TRACKONE_TSA_SIGNER_CERT_SHA256` when the gateway RFC 3161 channel is enabled,
+plus `TRACKONE_MAX_BATCH_RECORDS` and `TRACKONE_MAX_ADMISSION_BYTES` for the
+atomic admission resource bounds. The chart defaults these bounds to 1,000
+records and 4 MiB; the binary rejects values above 10,000 records or 16 MiB.
 
 If you already manage sensitive gateway config elsewhere, set
 `gateway.existingSecret` and the chart will reuse that Secret instead of

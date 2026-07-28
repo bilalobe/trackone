@@ -390,6 +390,7 @@ fn rust_cli_verify_exits_nonzero_for_failed_overall_summary() {
             "--policy-mode",
             "strict",
             "--json",
+            "--pretty",
         ])
         .output()
         .unwrap();

@@ -87,6 +87,7 @@ unless an ADR explicitly supersedes them.
 - [ADR-061: Full Draft-08 V2 Conformance and Conformance Archive V3](ADR-061-full-draft-08-v2-conformance-and-archive-v3.md)
 - [ADR-061: Library, Application, and Binding Package Boundaries](ADR-061-library-application-and-binding-package-boundaries.md)
 - [ADR-062: RFC 5816 Signer-Certificate Binding](ADR-062-rfc5816-signer-certificate-binding.md)
+- [ADR-063: V2-preserving Payload Minimization and Compact Bundle Envelopes](ADR-063-v2-preserving-payload-minimization-and-compact-bundle-envelopes.md)
 
 ## Index Conventions
 

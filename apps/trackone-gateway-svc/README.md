@@ -27,7 +27,10 @@ The binary requires:
 Optional settings are `TRACKONE_BIND` (default `0.0.0.0:8080`),
 `TRACKONE_EMPTY_MODE` (`suppress` or `emit`), `TRACKONE_INTERVAL_MS`,
 `TRACKONE_BATCH_RECORD_LIMIT`, `TRACKONE_RECORD_LIMIT`, and
-`TRACKONE_SIZE_LIMIT_BYTES`. `TRACKONE_TSA_INTERMEDIATES_FILE` supplies a
+`TRACKONE_SIZE_LIMIT_BYTES`. Admission bounds use
+`TRACKONE_MAX_BATCH_RECORDS` (default 1,000; hard maximum 10,000) and
+`TRACKONE_MAX_ADMISSION_BYTES` (default 4,194,304; hard maximum 16,777,216).
+`TRACKONE_TSA_INTERMEDIATES_FILE` supplies a
 deployment-managed intermediate bundle when the TSA path requires one.
 
 TSA configuration and validation material are loaded and validated at
@@ -48,10 +51,26 @@ cargo run --locked -p trackone-gateway-svc --bin trackone-v2-gateway
 - `GET /healthz` returns `{ "ok": true, "profile": "...v2" }`.
 - `POST /v2/records` accepts one canonical record as
   `application/cbor`. Every request must include an `Idempotency-Key`.
+- `POST /v2/record-batches` accepts a shortest-form definite CBOR array of
+  canonical-record byte strings as
+  `application/vnd.trackone.record-batch.v1+cbor`. This route also accepts
+  `Content-Encoding: gzip`; its idempotency digest covers the expanded
+  envelope, so compressed and identity requests replay identically.
 
 Successful admissions return `201 Created`; an idempotent replay returns
-`200 OK`. Invalid media type, missing idempotency keys, conflicting keys, and
-invalid records receive structured JSON error responses.
+`200 OK`. `Prefer: return=minimal` returns an empty success body with
+`Preference-Applied`. Batch responses contain ordered admission runs and
+sealed segment numbers. Invalid media or encoding receives 415, malformed
+envelopes 400, invalid inner records 422, and configured limit violations 413.
+
+The 60-second interval, `suppress` empty mode, and 1,000-record segment batch
+limit are conservative defaults. Lower intervals reduce timestamp latency but
+create more artifacts and finer disclosure boundaries; higher admission
+limits reduce request overhead but increase the atomic resource domain.
+Controlled TSAs should include the signer certificate and omit a root already
+present in the configured trust archive. Received responses are never
+rewritten, and valid historical responses with additional certificates remain
+accepted.
 
 ## Owned assets and checks
 

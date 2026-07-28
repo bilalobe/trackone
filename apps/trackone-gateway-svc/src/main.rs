@@ -5,6 +5,10 @@ use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use postgres::{Client, NoTls};
 use trackone_gateway_svc::postgres::PostgresLedgerStore;
 use trackone_gateway_svc::producer::{ElapsedClock, ProducerError, V2LedgerProducer};
+use trackone_gateway_svc::service::{
+    DEFAULT_MAX_ADMISSION_BYTES, DEFAULT_MAX_BATCH_RECORDS, HARD_MAX_ADMISSION_BYTES,
+    HARD_MAX_BATCH_RECORDS,
+};
 use trackone_gateway_svc::service::{GatewayHttpState, drain_pending_tsa_segments, router};
 use trackone_gateway_svc::tsa::Rfc3161TimestampAuthority;
 use trackone_ledger::v2::{ClosurePolicyV1, EmptyMode};
@@ -84,6 +88,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         size_limit_bytes: optional_u64("TRACKONE_SIZE_LIMIT_BYTES")?,
         empty_mode,
     };
+    let max_batch_records = env::var("TRACKONE_MAX_BATCH_RECORDS")
+        .unwrap_or_else(|_| DEFAULT_MAX_BATCH_RECORDS.to_string())
+        .parse::<usize>()?;
+    let max_admission_bytes = env::var("TRACKONE_MAX_ADMISSION_BYTES")
+        .unwrap_or_else(|_| DEFAULT_MAX_ADMISSION_BYTES.to_string())
+        .parse::<usize>()?;
+    if max_batch_records == 0 || max_batch_records > HARD_MAX_BATCH_RECORDS {
+        return Err("TRACKONE_MAX_BATCH_RECORDS must be between 1 and 10000".into());
+    }
+    if max_admission_bytes == 0 || max_admission_bytes > HARD_MAX_ADMISSION_BYTES {
+        return Err("TRACKONE_MAX_ADMISSION_BYTES must be between 1 and 16777216".into());
+    }
 
     let client = Client::connect(&database_url, NoTls)?;
     let mut store = PostgresLedgerStore::new(client, &ledger_id);
@@ -107,7 +123,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let listener = tokio::net::TcpListener::bind(bind).await?;
     axum::serve(
         listener,
-        router(GatewayHttpState::new(producer, timestamp_authority)),
+        router(GatewayHttpState::new(
+            producer,
+            timestamp_authority,
+            max_batch_records,
+            max_admission_bytes,
+        )),
     )
     .await?;
     Ok(())

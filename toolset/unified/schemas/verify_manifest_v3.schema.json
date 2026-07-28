@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/verify_manifest_v3.schema.json",
+  "title": "Verifiable Telemetry Segment Verification Manifest v3",
+  "type": "object",
+  "properties": {
+    "version": {"const": 3},
+    "ledger_id": {"type": "string", "pattern": "^[0-9a-f]{32}$"},
+    "site_id": {"type": "string", "minLength": 1},
+    "segment_number": {"type": "string", "pattern": "^(0|[1-9][0-9]*)$"},
+    "commitment_profile_id": {"const": "verifiable-telemetry-canonical-cbor-v2"},
+    "disclosure_class": {"enum": ["A", "B", "C"]},
+    "artifacts": {"$ref": "#/$defs/artifacts"},
+    "anchoring": {"$ref": "#/$defs/anchoring"},
+    "operational_summary": {"type": "object"},
+    "extensions": {"type": "object"}
+  },
+  "required": ["version", "ledger_id", "site_id", "segment_number", "commitment_profile_id", "disclosure_class", "artifacts", "anchoring"],
+  "allOf": [
+    {
+      "if": {"properties": {"disclosure_class": {"const": "A"}}, "required": ["disclosure_class"]},
+      "then": {
+        "properties": {
+          "artifacts": {
+            "oneOf": [
+              {"required": ["records"], "not": {"required": ["records_pack"]}},
+              {"required": ["records_pack"], "not": {"required": ["records"]}}
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "artifact_ref": {
+      "type": "object",
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      },
+      "required": ["path", "sha256"],
+      "additionalProperties": false
+    },
+    "artifacts": {
+      "type": "object",
+      "properties": {
+        "segment_cbor": {"$ref": "#/$defs/artifact_ref"},
+        "predecessor_segment_cbor": {"$ref": "#/$defs/artifact_ref"},
+        "records": {"type": "array", "items": {"$ref": "#/$defs/artifact_ref"}},
+        "records_pack": {"$ref": "#/$defs/artifact_ref"},
+        "batches": {"type": "array", "items": {"$ref": "#/$defs/artifact_ref"}},
+        "segment_json": {"$ref": "#/$defs/artifact_ref"},
+        "segment_sha256": {"$ref": "#/$defs/artifact_ref"},
+        "segment_ots": {"$ref": "#/$defs/artifact_ref"},
+        "segment_ots_meta": {"$ref": "#/$defs/artifact_ref"},
+        "peer_attest": {"$ref": "#/$defs/artifact_ref"},
+        "tsa_info": {"$ref": "#/$defs/artifact_ref"},
+        "tsa_tsr": {"$ref": "#/$defs/artifact_ref"},
+        "extensions": {"type": "object", "additionalProperties": {"$ref": "#/$defs/artifact_ref"}}
+      },
+      "required": ["segment_cbor"],
+      "additionalProperties": false
+    },
+    "channel_claim": {
+      "type": "object",
+      "properties": {"status": {"enum": ["verified", "pending", "missing", "failed", "skipped", "complete"]}},
+      "required": ["status"],
+      "additionalProperties": false
+    },
+    "anchoring": {
+      "type": "object",
+      "properties": {
+        "tsa": {"$ref": "#/$defs/channel_claim"},
+        "ots": {"$ref": "#/$defs/channel_claim"},
+        "peer": {"$ref": "#/$defs/channel_claim"}
+      },
+      "additionalProperties": false
+    }
+  }
+}

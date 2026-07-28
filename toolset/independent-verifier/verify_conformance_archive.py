@@ -381,6 +381,50 @@ def verify_v2_bundles(vector_root: Path, binary: Path) -> int:
                 raise VerifyError(f"v2 bundle {case.get('id')} emitted invalid JSON") from exc
             if actual != expected:
                 raise VerifyError(f"v2 bundle {case.get('id')} result drifted")
+            if count == 0:
+                with tempfile.TemporaryDirectory(prefix="trackone-compact-v2-") as temp:
+                    archive = Path(temp) / "bundle.v3.tar.gz"
+                    policy_args = command[5:]
+                    compact = subprocess.run(
+                        [
+                            str(binary),
+                            "compact-v2",
+                            "--root",
+                            str(fixture),
+                            "--output",
+                            str(archive),
+                            *policy_args,
+                        ],
+                        text=True,
+                        capture_output=True,
+                        timeout=60,
+                        check=False,
+                    )
+                    if compact.returncode != 0:
+                        raise VerifyError(
+                            f"v2 compact creation failed:\n{compact.stdout}{compact.stderr}"
+                        )
+                    replay = subprocess.run(
+                        [
+                            str(binary),
+                            "verify-v2",
+                            "--archive",
+                            str(archive),
+                            "--json",
+                            *policy_args,
+                        ],
+                        text=True,
+                        capture_output=True,
+                        timeout=60,
+                        check=False,
+                    )
+                    if replay.returncode != 0:
+                        raise VerifyError(
+                            f"v2 compact archive replay failed:\n{replay.stdout}{replay.stderr}"
+                        )
+                    compact_result = json.loads(replay.stdout)
+                    if compact_result.get("version") != 3 or compact_result.get("overall") != "success":
+                        raise VerifyError("v2 compact archive result is not manifest-v3 success")
         else:
             expected = read_json(portable(fixture, case.get("expected_error"), "v2 expected error"))
             if expected.get("error_contains") not in completed.stderr:

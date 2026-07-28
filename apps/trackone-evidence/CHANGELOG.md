@@ -7,8 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add readable manifest envelope v3 with exact-byte record packs,
+  `compact-v2`, bounded deterministic gzip carriers, and archive verification.
+
 ### Changed
 
+- Make `--json` compact and add explicit `--pretty` formatting.
 - Add `--tsa-signer-cert-sha256` and require RFC 5816 signer-certificate
   binding for every present RFC 3161 timestamp response.
 

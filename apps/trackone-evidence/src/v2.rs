@@ -1,10 +1,11 @@
 //! Additive verifier for draft-08 segment bundles owned by the evidence app.
 use super::{EvidenceError, Result};
-use serde::Deserialize;
+use flate2::{Compression, Decompress, FlushDecompress, GzBuilder, Status, read::GzDecoder};
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{self, File};
-use std::io::Read;
+use std::io::{Cursor, Read, Write};
 use std::path::{Component, Path, PathBuf};
 use trackone_ledger::{
     hex_lower, sha256_digest, sha256_hex,
@@ -18,13 +19,13 @@ use trackone_rfc3161::{
     VerifiedTimestamp, verify_response,
 };
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct ArtifactRef {
     path: String,
     sha256: String,
 }
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct Manifest {
     version: u8,
@@ -35,37 +36,39 @@ struct Manifest {
     disclosure_class: String,
     artifacts: Artifacts,
     anchoring: Anchoring,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     operational_summary: Option<Value>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     extensions: Option<Value>,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct Artifacts {
     segment_cbor: ArtifactRef,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     predecessor_segment_cbor: Option<ArtifactRef>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     records: Option<Vec<ArtifactRef>>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    records_pack: Option<ArtifactRef>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     batches: Option<Vec<ArtifactRef>>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     segment_json: Option<ArtifactRef>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     segment_sha256: Option<ArtifactRef>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     segment_ots: Option<ArtifactRef>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     segment_ots_meta: Option<ArtifactRef>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     peer_attest: Option<ArtifactRef>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     tsa_info: Option<ArtifactRef>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     tsa_tsr: Option<ArtifactRef>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     extensions: BTreeMap<String, ArtifactRef>,
 }
 
@@ -74,6 +77,7 @@ impl Artifacts {
         let mut references = vec![&self.segment_cbor];
         references.extend(self.predecessor_segment_cbor.iter());
         references.extend(self.records.iter().flatten());
+        references.extend(self.records_pack.iter());
         references.extend(self.batches.iter().flatten());
         references.extend(self.segment_json.iter());
         references.extend(self.segment_sha256.iter());
@@ -87,18 +91,18 @@ impl Artifacts {
     }
 }
 
-#[derive(Clone, Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct Anchoring {
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     tsa: Option<ChannelClaim>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     ots: Option<ChannelClaim>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     peer: Option<ChannelClaim>,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct ChannelClaim {
     status: String,
@@ -217,7 +221,7 @@ fn artifact(root: &Path, reference: &ArtifactRef) -> Result<Vec<u8>> {
 }
 
 fn validate_manifest(manifest: &Manifest) -> Result<()> {
-    if manifest.version != 2
+    if !matches!(manifest.version, 2 | 3)
         || manifest.commitment_profile_id != COMMITMENT_PROFILE_ID
         || !valid_hex(&manifest.ledger_id, 32)
         || manifest.site_id.is_empty()
@@ -225,6 +229,17 @@ fn validate_manifest(manifest: &Manifest) -> Result<()> {
         || !matches!(manifest.disclosure_class.as_str(), "A" | "B" | "C")
     {
         return Err(bad("v2 manifest identity is invalid"));
+    }
+    if manifest.version == 2 && manifest.artifacts.records_pack.is_some() {
+        return Err(bad("manifest v2 does not support records_pack"));
+    }
+    if manifest.version == 3
+        && manifest.disclosure_class == "A"
+        && (manifest.artifacts.records.is_some() == manifest.artifacts.records_pack.is_some())
+    {
+        return Err(bad(
+            "Class A manifest v3 requires exactly one of records or records_pack",
+        ));
     }
     for reference in manifest.artifacts.references() {
         validate_portable_path(&reference.path)?;
@@ -348,25 +363,7 @@ pub fn verify_v2_bundle_with_policy(root: &Path, policy: &V2VerifyPolicy) -> Res
             .push(json!({"check":"segment_chain_validation","reason":"predecessor-not-disclosed"}));
     }
     if manifest.disclosure_class == "A" {
-        let records = manifest
-            .artifacts
-            .records
-            .as_ref()
-            .ok_or_else(|| bad("Class A requires disclosed records"))?;
-        let bytes = records
-            .iter()
-            .enumerate()
-            .map(|(index, record)| {
-                let bytes = artifact(root, record)?;
-                validate_canonical_record_v2(&bytes).map_err(|err| {
-                    bad(format!(
-                        "invalid Class A canonical record {index} at {}: {err}",
-                        record.path
-                    ))
-                })?;
-                Ok(bytes)
-            })
-            .collect::<Result<Vec<_>>>()?;
+        let bytes = disclosed_records(root, &manifest)?;
         let merkle = merkle_root_from_records(&bytes);
         let recomputed_root = merkle.root_hex();
         let recomputed_leaves = merkle
@@ -401,7 +398,7 @@ pub fn verify_v2_bundle_with_policy(root: &Path, policy: &V2VerifyPolicy) -> Res
             &mut skipped,
             &mut channels,
         )?;
-        let mut result = json!({"version":2,"artifact_sha256":sha256_hex(&segment_bytes),"commitment_profile_id":COMMITMENT_PROFILE_ID,"disclosure_class":"A","verification_scope":"public_recompute","channels":channels,"policy":{"require_tsa":policy.require_tsa},"checks_executed":executed,"checks_skipped":skipped,"record_multiset_root":recomputed_root,"overall":"success"});
+        let mut result = json!({"version":manifest.version,"artifact_sha256":sha256_hex(&segment_bytes),"commitment_profile_id":COMMITMENT_PROFILE_ID,"disclosure_class":"A","verification_scope":"public_recompute","channels":channels,"policy":{"require_tsa":policy.require_tsa},"checks_executed":executed,"checks_skipped":skipped,"record_multiset_root":recomputed_root,"overall":"success"});
         result
             .as_object_mut()
             .expect("verification result is an object")
@@ -432,12 +429,137 @@ pub fn verify_v2_bundle_with_policy(root: &Path, policy: &V2VerifyPolicy) -> Res
     } else {
         "anchor_only"
     };
-    let mut result = json!({"version":2,"artifact_sha256":sha256_hex(&segment_bytes),"commitment_profile_id":COMMITMENT_PROFILE_ID,"disclosure_class":manifest.disclosure_class,"verification_scope":scope,"channels":channels,"policy":{"require_tsa":policy.require_tsa},"checks_executed":executed,"checks_skipped":skipped,"overall":"success"});
+    let mut result = json!({"version":manifest.version,"artifact_sha256":sha256_hex(&segment_bytes),"commitment_profile_id":COMMITMENT_PROFILE_ID,"disclosure_class":manifest.disclosure_class,"verification_scope":scope,"channels":channels,"policy":{"require_tsa":policy.require_tsa},"checks_executed":executed,"checks_skipped":skipped,"overall":"success"});
     result
         .as_object_mut()
         .expect("verification result is an object")
         .append(&mut tsa_fields);
     Ok(result)
+}
+
+fn disclosed_records(root: &Path, manifest: &Manifest) -> Result<Vec<Vec<u8>>> {
+    let records = if let Some(references) = &manifest.artifacts.records {
+        references
+            .iter()
+            .map(|reference| artifact(root, reference))
+            .collect::<Result<Vec<_>>>()?
+    } else if let Some(reference) = &manifest.artifacts.records_pack {
+        decode_records_pack(&artifact(root, reference)?)?
+    } else {
+        return Err(bad("Class A requires disclosed records"));
+    };
+    for (index, record) in records.iter().enumerate() {
+        validate_canonical_record_v2(record)
+            .map_err(|err| bad(format!("invalid Class A canonical record {index}: {err}")))?;
+    }
+    Ok(records)
+}
+
+fn encode_records_pack(records: &mut [Vec<u8>]) -> Result<Vec<u8>> {
+    records.sort_by(|left, right| {
+        sha256_digest(left)
+            .cmp(&sha256_digest(right))
+            .then_with(|| left.cmp(right))
+    });
+    let mut output = Vec::new();
+    encode_cbor_head(
+        4,
+        u64::try_from(records.len()).map_err(|_| bad("record pack is too large"))?,
+        &mut output,
+    );
+    for record in records {
+        encode_cbor_head(
+            2,
+            u64::try_from(record.len()).map_err(|_| bad("record is too large"))?,
+            &mut output,
+        );
+        output.extend_from_slice(record);
+    }
+    Ok(output)
+}
+
+fn decode_records_pack(bytes: &[u8]) -> Result<Vec<Vec<u8>>> {
+    let mut offset = 0;
+    let count = usize::try_from(decode_cbor_head(bytes, &mut offset, 4)?)
+        .map_err(|_| bad("record pack count is too large"))?;
+    let mut records = Vec::with_capacity(count);
+    for _ in 0..count {
+        let length = usize::try_from(decode_cbor_head(bytes, &mut offset, 2)?)
+            .map_err(|_| bad("packed record is too large"))?;
+        let end = offset
+            .checked_add(length)
+            .ok_or_else(|| bad("packed record length overflows"))?;
+        records.push(
+            bytes
+                .get(offset..end)
+                .ok_or_else(|| bad("record pack is truncated"))?
+                .to_vec(),
+        );
+        offset = end;
+    }
+    if offset != bytes.len() {
+        return Err(bad("record pack has trailing bytes"));
+    }
+    Ok(records)
+}
+
+fn encode_cbor_head(major: u8, value: u64, output: &mut Vec<u8>) {
+    match value {
+        0..=23 => output.push((major << 5) | value as u8),
+        24..=0xff => output.extend_from_slice(&[(major << 5) | 24, value as u8]),
+        0x100..=0xffff => {
+            output.push((major << 5) | 25);
+            output.extend_from_slice(&(value as u16).to_be_bytes());
+        }
+        0x1_0000..=0xffff_ffff => {
+            output.push((major << 5) | 26);
+            output.extend_from_slice(&(value as u32).to_be_bytes());
+        }
+        _ => {
+            output.push((major << 5) | 27);
+            output.extend_from_slice(&value.to_be_bytes());
+        }
+    }
+}
+
+fn decode_cbor_head(bytes: &[u8], offset: &mut usize, major: u8) -> Result<u64> {
+    let initial = *bytes
+        .get(*offset)
+        .ok_or_else(|| bad("record pack is truncated"))?;
+    *offset += 1;
+    if initial >> 5 != major {
+        return Err(bad("record pack must be a definite array of byte strings"));
+    }
+    let info = initial & 31;
+    let (value, width) = match info {
+        value @ 0..=23 => (u64::from(value), 0),
+        24 => (decode_uint(bytes, offset, 1)?, 1),
+        25 => (decode_uint(bytes, offset, 2)?, 2),
+        26 => (decode_uint(bytes, offset, 4)?, 4),
+        27 => (decode_uint(bytes, offset, 8)?, 8),
+        _ => return Err(bad("record pack uses an indefinite or reserved length")),
+    };
+    if (width == 1 && value < 24)
+        || (width == 2 && value <= u64::from(u8::MAX))
+        || (width == 4 && value <= u64::from(u16::MAX))
+        || (width == 8 && value <= u64::from(u32::MAX))
+    {
+        return Err(bad("record pack length is not shortest-form"));
+    }
+    Ok(value)
+}
+
+fn decode_uint(bytes: &[u8], offset: &mut usize, width: usize) -> Result<u64> {
+    let end = offset
+        .checked_add(width)
+        .ok_or_else(|| bad("record pack length overflows"))?;
+    let slice = bytes
+        .get(*offset..end)
+        .ok_or_else(|| bad("record pack is truncated"))?;
+    *offset = end;
+    Ok(slice
+        .iter()
+        .fold(0_u64, |value, byte| (value << 8) | u64::from(*byte)))
 }
 
 fn validate_batch_projections(
@@ -544,6 +666,253 @@ fn apply_timestamp_checks(
         channels.insert("peer".to_string(), json!({"status":status}));
     }
     Ok(tsa_fields)
+}
+
+const MAX_ARCHIVE_MEMBERS: usize = 10_000;
+const MAX_COMPRESSED_ARCHIVE: u64 = 64 * 1024 * 1024;
+const MAX_EXPANDED_ARCHIVE: u64 = 256 * 1024 * 1024;
+const MAX_ARCHIVE_MEMBER: u64 = 64 * 1024 * 1024;
+
+fn retain_artifact(
+    root: &Path,
+    members: &mut BTreeMap<String, Vec<u8>>,
+    reference: &ArtifactRef,
+) -> Result<ArtifactRef> {
+    members.insert(reference.path.clone(), artifact(root, reference)?);
+    Ok(reference.clone())
+}
+
+/// Verify a source bundle and emit its v2 commitments in a compact manifest-v3
+/// deterministic gzip carrier.
+pub fn compact_v2_bundle(
+    root: &Path,
+    output: &Path,
+    policy: &V2VerifyPolicy,
+    include_extensions: bool,
+) -> Result<()> {
+    verify_v2_bundle_with_policy(root, policy)?;
+    let mut manifest: Manifest =
+        serde_json::from_slice(&fs::read(root.join("segment.verify.json"))?)?;
+    validate_manifest(&manifest)?;
+    let mut members = BTreeMap::<String, Vec<u8>>::new();
+    let records_pack = if manifest.disclosure_class == "A" {
+        let mut records = disclosed_records(root, &manifest)?;
+        let pack = encode_records_pack(&mut records)?;
+        let reference = ArtifactRef {
+            path: "records.pack.cbor".to_string(),
+            sha256: sha256_hex(&pack),
+        };
+        members.insert(reference.path.clone(), pack);
+        Some(reference)
+    } else {
+        None
+    };
+    let mut extensions = BTreeMap::new();
+    if include_extensions {
+        for (name, reference) in &manifest.artifacts.extensions {
+            extensions.insert(
+                name.clone(),
+                retain_artifact(root, &mut members, reference)?,
+            );
+        }
+    }
+    let compact_artifacts = Artifacts {
+        segment_cbor: retain_artifact(root, &mut members, &manifest.artifacts.segment_cbor)?,
+        predecessor_segment_cbor: manifest
+            .artifacts
+            .predecessor_segment_cbor
+            .as_ref()
+            .map(|reference| retain_artifact(root, &mut members, reference))
+            .transpose()?,
+        records: None,
+        records_pack,
+        batches: None,
+        segment_json: None,
+        segment_sha256: None,
+        segment_ots: manifest
+            .artifacts
+            .segment_ots
+            .as_ref()
+            .map(|reference| retain_artifact(root, &mut members, reference))
+            .transpose()?,
+        segment_ots_meta: manifest
+            .artifacts
+            .segment_ots_meta
+            .as_ref()
+            .map(|reference| retain_artifact(root, &mut members, reference))
+            .transpose()?,
+        peer_attest: manifest
+            .artifacts
+            .peer_attest
+            .as_ref()
+            .map(|reference| retain_artifact(root, &mut members, reference))
+            .transpose()?,
+        tsa_info: None,
+        tsa_tsr: manifest
+            .artifacts
+            .tsa_tsr
+            .as_ref()
+            .map(|reference| retain_artifact(root, &mut members, reference))
+            .transpose()?,
+        extensions,
+    };
+    manifest.version = 3;
+    manifest.artifacts = compact_artifacts;
+    manifest.operational_summary = None;
+    if !include_extensions {
+        manifest.extensions = None;
+    }
+    members.insert(
+        "segment.verify.json".to_string(),
+        serde_json::to_vec(&manifest)?,
+    );
+    write_deterministic_archive(output, &members)
+}
+
+fn write_deterministic_archive(output: &Path, members: &BTreeMap<String, Vec<u8>>) -> Result<()> {
+    let gzip = GzBuilder::new()
+        .mtime(0)
+        .write(File::create(output)?, Compression::best());
+    let mut archive = tar::Builder::new(gzip);
+    archive.mode(tar::HeaderMode::Deterministic);
+    for (path, bytes) in members {
+        validate_portable_path(path)?;
+        let mut header = tar::Header::new_ustar();
+        header.set_size(u64::try_from(bytes.len()).map_err(|_| bad("artifact is too large"))?);
+        header.set_mode(0o644);
+        header.set_uid(0);
+        header.set_gid(0);
+        header.set_mtime(0);
+        header.set_entry_type(tar::EntryType::Regular);
+        header.set_cksum();
+        archive.append_data(&mut header, path, Cursor::new(bytes))?;
+    }
+    let gzip = archive.into_inner()?;
+    gzip.finish()?;
+    Ok(())
+}
+
+/// Safely extract and verify a compact v3 gzip carrier with fixed resource
+/// bounds. Only regular files with portable, unique paths are accepted.
+pub fn verify_v2_archive(archive_path: &Path, policy: &V2VerifyPolicy) -> Result<Value> {
+    if fs::metadata(archive_path)?.len() > MAX_COMPRESSED_ARCHIVE {
+        return Err(bad("compressed archive exceeds 64 MiB"));
+    }
+    let input = fs::read(archive_path)?;
+    validate_single_gzip_member(&input)?;
+    let mut decoder = GzDecoder::new(input.as_slice());
+    let mut expanded = Vec::new();
+    decoder
+        .by_ref()
+        .take(MAX_EXPANDED_ARCHIVE + 1)
+        .read_to_end(&mut expanded)?;
+    if expanded.len() as u64 > MAX_EXPANDED_ARCHIVE {
+        return Err(bad("expanded archive exceeds 256 MiB"));
+    }
+    let temporary = tempfile::tempdir()?;
+    let mut archive = tar::Archive::new(Cursor::new(expanded));
+    let mut paths = BTreeSet::new();
+    let mut count = 0_usize;
+    for entry in archive.entries()? {
+        let mut entry = entry?;
+        count += 1;
+        if count > MAX_ARCHIVE_MEMBERS {
+            return Err(bad("archive contains more than 10000 members"));
+        }
+        if !entry.header().entry_type().is_file() {
+            return Err(bad("archive contains a non-regular member"));
+        }
+        if entry.size() > MAX_ARCHIVE_MEMBER {
+            return Err(bad("archive member exceeds 64 MiB"));
+        }
+        let path = entry
+            .path()?
+            .to_str()
+            .ok_or_else(|| bad("archive path is not UTF-8"))?
+            .to_string();
+        validate_portable_path(&path)?;
+        if !paths.insert(path.clone()) {
+            return Err(bad("archive contains a duplicate path"));
+        }
+        let destination = temporary.path().join(path);
+        if let Some(parent) = destination.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        let mut file = File::create(destination)?;
+        std::io::copy(&mut entry, &mut file)?;
+        file.flush()?;
+    }
+    verify_v2_bundle_with_policy(temporary.path(), policy)
+}
+
+fn validate_single_gzip_member(input: &[u8]) -> Result<()> {
+    if input.len() < 18 || input[0..3] != [0x1f, 0x8b, 8] {
+        return Err(bad("archive is not a gzip carrier"));
+    }
+    let flags = input[3];
+    if flags & 0xe0 != 0 {
+        return Err(bad("gzip carrier uses reserved flags"));
+    }
+    let mut offset = 10_usize;
+    if flags & 0x04 != 0 {
+        let length_bytes = input
+            .get(offset..offset + 2)
+            .ok_or_else(|| bad("gzip extra field is truncated"))?;
+        offset += 2;
+        let length = usize::from(u16::from_le_bytes([length_bytes[0], length_bytes[1]]));
+        offset = offset
+            .checked_add(length)
+            .ok_or_else(|| bad("gzip extra field overflows"))?;
+    }
+    for flag in [0x08, 0x10] {
+        if flags & flag != 0 {
+            let tail = input
+                .get(offset..)
+                .ok_or_else(|| bad("gzip header is truncated"))?;
+            let end = tail
+                .iter()
+                .position(|byte| *byte == 0)
+                .ok_or_else(|| bad("gzip string field is unterminated"))?;
+            offset += end + 1;
+        }
+    }
+    if flags & 0x02 != 0 {
+        offset = offset
+            .checked_add(2)
+            .ok_or_else(|| bad("gzip header overflows"))?;
+    }
+    if offset + 8 > input.len() {
+        return Err(bad("gzip carrier is truncated"));
+    }
+    let mut decompressor = Decompress::new(false);
+    let mut consumed = 0_usize;
+    let mut scratch = [0_u8; 8192];
+    loop {
+        let before = decompressor.total_in();
+        let status = decompressor
+            .decompress(
+                &input[offset + consumed..],
+                &mut scratch,
+                FlushDecompress::None,
+            )
+            .map_err(|_| bad("gzip deflate stream is malformed"))?;
+        consumed = usize::try_from(decompressor.total_in())
+            .map_err(|_| bad("gzip stream is too large"))?;
+        if status == Status::StreamEnd {
+            break;
+        }
+        if decompressor.total_in() == before && status == Status::BufError {
+            return Err(bad("gzip deflate stream is truncated"));
+        }
+    }
+    let expected_end = offset
+        .checked_add(consumed)
+        .and_then(|value| value.checked_add(8))
+        .ok_or_else(|| bad("gzip member length overflows"))?;
+    if expected_end != input.len() {
+        return Err(bad("gzip carrier has trailing data or multiple members"));
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -660,6 +1029,45 @@ mod tests {
             }),
             Some(json!({"seconds": 0, "millis": 12, "micros": 34}))
         );
+    }
+
+    #[test]
+    fn record_pack_preserves_duplicates_and_rejects_noncanonical_lengths() {
+        let duplicate = vec![
+            0x87, 0x01, 0x48, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0xf6, 0, 0xf6,
+        ];
+        let other = vec![
+            0x87, 0x01, 0x48, 0, 0, 0, 0, 0, 0, 0, 2, 2, 0, 0xf6, 0, 0xf6,
+        ];
+        let mut records = vec![duplicate.clone(), other, duplicate.clone()];
+        let encoded = encode_records_pack(&mut records).unwrap();
+        let decoded = decode_records_pack(&encoded).unwrap();
+        assert_eq!(
+            decoded
+                .iter()
+                .filter(|record| **record == duplicate)
+                .count(),
+            2
+        );
+        assert!(decode_records_pack(&[0x98, 0x01, 0x40]).is_err());
+    }
+
+    #[test]
+    fn deterministic_archive_bytes_have_one_bounded_gzip_member() {
+        let root = tempfile::tempdir().unwrap();
+        let first = root.path().join("first.gz");
+        let second = root.path().join("second.gz");
+        let members = BTreeMap::from([
+            ("a".to_string(), b"one".to_vec()),
+            ("z/path".to_string(), b"two".to_vec()),
+        ]);
+        write_deterministic_archive(&first, &members).unwrap();
+        write_deterministic_archive(&second, &members).unwrap();
+        assert_eq!(fs::read(&first).unwrap(), fs::read(&second).unwrap());
+        validate_single_gzip_member(&fs::read(&first).unwrap()).unwrap();
+        let mut trailing = fs::read(first).unwrap();
+        trailing.push(0);
+        assert!(validate_single_gzip_member(&trailing).is_err());
     }
 
     #[test]

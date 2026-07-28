@@ -4,10 +4,15 @@ use postgres::{Client, IsolationLevel};
 use trackone_ledger::v2::{ClosurePolicyV1, EmptyMode};
 
 use crate::producer::{
-    IdempotencyRecord, LedgerStore, OpenInterval, ProducerError, ProducerState, SealedSegment,
+    IdempotencyRecord, LedgerStore, LedgerTransition, OpenInterval, ProducerError, ProducerState,
+    RecordDestination,
 };
 
-pub const MIGRATION: &str = include_str!("../migrations/0001_v2_ledger.sql");
+pub const MIGRATION: &str = concat!(
+    include_str!("../migrations/0001_v2_ledger.sql"),
+    "\n",
+    include_str!("../migrations/0002_payload_efficiency.sql")
+);
 
 pub struct PostgresLedgerStore {
     client: Client,
@@ -80,6 +85,22 @@ impl PostgresLedgerStore {
             ));
         }
         Ok(())
+    }
+
+    pub fn tsa_statuses(&mut self, segment_numbers: &[u64]) -> Result<Vec<String>, ProducerError> {
+        let segment_numbers = segment_numbers
+            .iter()
+            .map(|number| numeric(*number))
+            .collect::<Vec<_>>();
+        self.client
+            .query(
+                "SELECT tsa_status FROM trackone_v2_sealed_segment \
+                 WHERE ledger_id=$1 AND segment_number::text = ANY($2) \
+                 ORDER BY segment_number",
+                &[&self.ledger_id, &segment_numbers],
+            )
+            .map_err(store_error)
+            .map(|rows| rows.into_iter().map(|row| row.get(0)).collect())
     }
 }
 
@@ -191,18 +212,22 @@ impl LedgerStore for PostgresLedgerStore {
         let row = self
             .client
             .query_opt(
-                "SELECT record_sha256, admitted_segment_number::text, state_revision::text, \
+                "SELECT request_sha256, admitted_segment_numbers, state_revision::text, \
                  sealed_segment_numbers \
                  FROM trackone_v2_idempotency WHERE ledger_id=$1 AND idempotency_key=$2",
                 &[&self.ledger_id, &key],
             )
             .map_err(store_error)?;
         row.map(|row| {
+            let admitted: Vec<String> = row.get(1);
             let sealed: Vec<String> = row.get(3);
             Ok(IdempotencyRecord {
                 key: key.to_string(),
-                record_sha256: row.get(0),
-                admitted_segment_number: parse_u64(row.get(1), "admitted_segment_number")?,
+                request_sha256: row.get(0),
+                admitted_segment_numbers: admitted
+                    .into_iter()
+                    .map(|value| parse_u64(value, "admitted_segment_number"))
+                    .collect::<Result<Vec<_>, _>>()?,
                 state_revision: parse_u64(row.get(2), "state_revision")?,
                 sealed_segment_numbers: sealed
                     .into_iter()
@@ -216,10 +241,11 @@ impl LedgerStore for PostgresLedgerStore {
     fn compare_and_swap(
         &mut self,
         expected_revision: Option<u64>,
-        state: &ProducerState,
-        sealed: &[SealedSegment],
-        admission: Option<&IdempotencyRecord>,
+        transition: &LedgerTransition,
     ) -> Result<(), ProducerError> {
+        let state = &transition.next_state;
+        let sealed = &transition.sealed;
+        let admission = transition.idempotency.as_ref();
         if state.ledger_id != self.ledger_id {
             return Err(ProducerError::Store(
                 "store ledger_id does not match producer state".to_string(),
@@ -254,8 +280,43 @@ impl LedgerStore for PostgresLedgerStore {
 
         let changed = if let Some(expected) = expected_revision {
             let expected = numeric(expected);
-            transaction
-                .execute(
+            if sealed.is_empty() {
+                transaction
+                    .execute(
+                        "UPDATE trackone_v2_ledger_state SET revision=$2::numeric, site_id=$3, \
+                         next_segment_number=$4::numeric, opened_at_ms=$5::numeric, \
+                         clock_continuity_id=$6::numeric, open_interval_ms=$7::numeric, \
+                         open_batch_record_limit=$8::numeric, open_record_limit=$9::numeric, \
+                         open_size_limit_bytes=$10::numeric, open_empty_mode=$11, \
+                         byte_count=$12::numeric, next_interval_ms=$13::numeric, \
+                         next_batch_record_limit=$14::numeric, next_record_limit=$15::numeric, \
+                         next_size_limit_bytes=$16::numeric, next_empty_mode=$17 \
+                         WHERE ledger_id=$1 AND revision=$18::numeric",
+                        &[
+                            &state.ledger_id,
+                            &revision,
+                            &state.site_id,
+                            &next_segment_number,
+                            &opened_at_ms,
+                            &clock_continuity_id,
+                            &open_interval_ms,
+                            &open_batch_limit,
+                            &open_record_limit,
+                            &open_size_limit,
+                            &state.open.policy.empty_mode.as_str(),
+                            &byte_count,
+                            &next_interval_ms,
+                            &next_batch_limit,
+                            &next_record_limit,
+                            &next_size_limit,
+                            &state.next_policy.empty_mode.as_str(),
+                            &expected,
+                        ],
+                    )
+                    .map_err(store_error)?
+            } else {
+                transaction
+                    .execute(
                     "UPDATE trackone_v2_ledger_state SET revision=$2::numeric, site_id=$3, \
                      next_segment_number=$4::numeric, predecessor_cbor=$5, opened_at_ms=$6::numeric, \
                      clock_continuity_id=$7::numeric, open_interval_ms=$8::numeric, \
@@ -270,8 +331,9 @@ impl LedgerStore for PostgresLedgerStore {
                       &open_size_limit, &state.open.policy.empty_mode.as_str(), &byte_count,
                       &next_interval_ms, &next_batch_limit, &next_record_limit,
                       &next_size_limit, &state.next_policy.empty_mode.as_str(), &expected],
-                )
-                .map_err(store_error)?
+                    )
+                    .map_err(store_error)?
+            }
         } else {
             transaction
                 .execute(
@@ -311,22 +373,6 @@ impl LedgerStore for PostgresLedgerStore {
             return Err(ProducerError::ConcurrentWriter);
         }
 
-        transaction
-            .execute(
-                "DELETE FROM trackone_v2_open_record WHERE ledger_id=$1",
-                &[&state.ledger_id],
-            )
-            .map_err(store_error)?;
-        for (ordinal, record) in state.open.records.iter().enumerate() {
-            let ordinal = ordinal.to_string();
-            transaction
-                .execute(
-                    "INSERT INTO trackone_v2_open_record (ledger_id, ordinal, record_cbor) \
-                     VALUES ($1,$2::numeric,$3)",
-                    &[&state.ledger_id, &ordinal, record],
-                )
-                .map_err(store_error)?;
-        }
         for segment in sealed {
             let segment_number = numeric(segment.segment_number);
             transaction
@@ -343,20 +389,73 @@ impl LedgerStore for PostgresLedgerStore {
                     ],
                 )
                 .map_err(store_error)?;
-            for (ordinal, record) in segment.records.iter().enumerate() {
-                let ordinal = ordinal.to_string();
-                transaction
-                    .execute(
-                        "INSERT INTO trackone_v2_sealed_record \
-                         (ledger_id, segment_number, ordinal, record_cbor) \
-                         VALUES ($1,$2::numeric,$3::numeric,$4)",
-                        &[&state.ledger_id, &segment_number, &ordinal, record],
+        }
+        if !sealed.is_empty() && transition.previous_open_count > 0 {
+            let destination = sealed
+                .iter()
+                .find(|segment| !segment.records.is_empty())
+                .ok_or_else(|| {
+                    ProducerError::Store(
+                        "non-empty open interval was not present in a sealed segment".to_string(),
                     )
-                    .map_err(store_error)?;
+                })?;
+            let segment_number = numeric(destination.segment_number);
+            transaction
+                .execute(
+                    "INSERT INTO trackone_v2_sealed_record \
+                     (ledger_id, segment_number, ordinal, record_cbor) \
+                     SELECT ledger_id, $2::numeric, ordinal, record_cbor \
+                     FROM trackone_v2_open_record WHERE ledger_id=$1 ORDER BY ordinal",
+                    &[&state.ledger_id, &segment_number],
+                )
+                .map_err(store_error)?;
+            transaction
+                .execute(
+                    "DELETE FROM trackone_v2_open_record WHERE ledger_id=$1",
+                    &[&state.ledger_id],
+                )
+                .map_err(store_error)?;
+        }
+        for admitted in &transition.admitted_records {
+            match admitted.destination {
+                RecordDestination::Open { ordinal } => {
+                    let ordinal = numeric(ordinal);
+                    transaction
+                        .execute(
+                            "INSERT INTO trackone_v2_open_record \
+                             (ledger_id, ordinal, record_cbor) VALUES ($1,$2::numeric,$3)",
+                            &[&state.ledger_id, &ordinal, &admitted.record_cbor],
+                        )
+                        .map_err(store_error)?;
+                }
+                RecordDestination::Sealed {
+                    segment_number,
+                    ordinal,
+                } => {
+                    let segment_number = numeric(segment_number);
+                    let ordinal = numeric(ordinal);
+                    transaction
+                        .execute(
+                            "INSERT INTO trackone_v2_sealed_record \
+                             (ledger_id, segment_number, ordinal, record_cbor) \
+                             VALUES ($1,$2::numeric,$3::numeric,$4)",
+                            &[
+                                &state.ledger_id,
+                                &segment_number,
+                                &ordinal,
+                                &admitted.record_cbor,
+                            ],
+                        )
+                        .map_err(store_error)?;
+                }
             }
         }
         if let Some(admission) = admission {
-            let admitted_segment_number = numeric(admission.admitted_segment_number);
+            let admitted_segment_numbers = admission
+                .admitted_segment_numbers
+                .iter()
+                .map(|number| numeric(*number))
+                .collect::<Vec<_>>();
             let state_revision = numeric(admission.state_revision);
             let sealed_segment_numbers = admission
                 .sealed_segment_numbers
@@ -366,15 +465,15 @@ impl LedgerStore for PostgresLedgerStore {
             let inserted = transaction
                 .execute(
                     "INSERT INTO trackone_v2_idempotency \
-                     (ledger_id, idempotency_key, record_sha256, admitted_segment_number, \
+                     (ledger_id, idempotency_key, request_sha256, admitted_segment_numbers, \
                       state_revision, sealed_segment_numbers) \
-                     VALUES ($1,$2,$3,$4::numeric,$5::numeric,$6) \
+                     VALUES ($1,$2,$3,$4,$5::numeric,$6) \
                      ON CONFLICT DO NOTHING",
                     &[
                         &state.ledger_id,
                         &admission.key,
-                        &admission.record_sha256,
-                        &admitted_segment_number,
+                        &admission.request_sha256,
+                        &admitted_segment_numbers,
                         &state_revision,
                         &sealed_segment_numbers,
                     ],
