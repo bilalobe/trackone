@@ -624,12 +624,27 @@ fn disclosed_records(root: &Path, manifest: &Manifest) -> Result<Vec<Vec<u8>>> {
     Ok(records)
 }
 
+const MAX_PACKED_RECORDS: usize = 1_000_000;
+
+fn record_leaf_hash(record: &[u8]) -> [u8; 32] {
+    let mut bytes = Vec::with_capacity(record.len() + 1);
+    bytes.push(0);
+    bytes.extend_from_slice(record);
+    sha256_digest(&bytes)
+}
+
 fn encode_records_pack(records: &mut [Vec<u8>]) -> Result<Vec<u8>> {
-    records.sort_by(|left, right| {
-        sha256_digest(left)
-            .cmp(&sha256_digest(right))
-            .then_with(|| left.cmp(right))
-    });
+    records.sort_by_cached_key(|record| record_leaf_hash(record));
+    let mut start = 0;
+    while start < records.len() {
+        let hash = record_leaf_hash(&records[start]);
+        let mut end = start + 1;
+        while end < records.len() && record_leaf_hash(&records[end]) == hash {
+            end += 1;
+        }
+        records[start..end].sort_unstable();
+        start = end;
+    }
     let mut output = Vec::new();
     encode_cbor_head(
         4,
@@ -651,6 +666,12 @@ fn decode_records_pack(bytes: &[u8]) -> Result<Vec<Vec<u8>>> {
     let mut offset = 0;
     let count = usize::try_from(decode_cbor_head(bytes, &mut offset, 4)?)
         .map_err(|_| bad("record pack count is too large"))?;
+    if count > MAX_PACKED_RECORDS {
+        return Err(bad("record pack count exceeds the supported limit"));
+    }
+    if count > bytes.len().saturating_sub(offset) {
+        return Err(bad("record pack count exceeds remaining input"));
+    }
     let mut records = Vec::with_capacity(count);
     for _ in 0..count {
         let length = usize::try_from(decode_cbor_head(bytes, &mut offset, 2)?)
@@ -1284,6 +1305,42 @@ mod tests {
             2
         );
         assert!(decode_records_pack(&[0x98, 0x01, 0x40]).is_err());
+    }
+
+    #[test]
+    fn record_pack_uses_v2_leaf_order_and_bounds_declared_count() {
+        let mut inversion = None;
+        'outer: for left in 0_u8..=u8::MAX {
+            for right in left.saturating_add(1)..=u8::MAX {
+                let left = vec![left];
+                let right = vec![right];
+                if sha256_digest(&left).cmp(&sha256_digest(&right))
+                    != record_leaf_hash(&left).cmp(&record_leaf_hash(&right))
+                {
+                    inversion = Some((left, right));
+                    break 'outer;
+                }
+            }
+        }
+        let (left, right) = inversion.expect("test inputs contain a raw/leaf hash inversion");
+        let mut records = if sha256_digest(&left) < sha256_digest(&right) {
+            vec![left.clone(), right.clone()]
+        } else {
+            vec![right.clone(), left.clone()]
+        };
+        let expected = if record_leaf_hash(&left) < record_leaf_hash(&right) {
+            vec![left, right]
+        } else {
+            vec![right, left]
+        };
+        assert_ne!(records, expected);
+        let encoded = encode_records_pack(&mut records).unwrap();
+        assert_eq!(decode_records_pack(&encoded).unwrap(), expected);
+
+        let mut oversized = Vec::new();
+        encode_cbor_head(4, MAX_PACKED_RECORDS as u64 + 1, &mut oversized);
+        assert!(decode_records_pack(&oversized).is_err());
+        assert!(decode_records_pack(&[0x82, 0x40]).is_err());
     }
 
     #[test]

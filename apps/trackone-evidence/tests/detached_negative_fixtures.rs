@@ -220,7 +220,7 @@ fn write_cases_manifest(corpus: &Path) {
     let cases = json!({
         "schema": "trackone-beta-negative-fixtures-v1",
         "cases": [
-            {"id": "baseline-good-class-a", "path": "fixtures/baseline-good-class-a", "disclosure_class": "A", "policy_mode": "warn", "expect_success": true, "expect_contains": "\"overall\": \"success\""},
+            {"id": "baseline-good-class-a", "path": "fixtures/baseline-good-class-a", "disclosure_class": "A", "policy_mode": "warn", "expect_success": true, "expect_contains": "\"overall\":\"success\""},
             {"id": "manifest-missing-required-field", "path": "fixtures/manifest-missing-required-field", "disclosure_class": "A", "policy_mode": "warn", "expect_success": false, "expect_contains": "missing field"},
             {"id": "manifest-nonportable-path", "path": "fixtures/manifest-nonportable-path", "disclosure_class": "A", "policy_mode": "warn", "expect_success": false, "expect_contains": "manifest artifact path escapes root"},
             {"id": "manifest-digest-mismatch", "path": "fixtures/manifest-digest-mismatch", "disclosure_class": "A", "policy_mode": "warn", "expect_success": false, "expect_contains": "manifest artifact sha256 mismatch"},
@@ -228,13 +228,13 @@ fn write_cases_manifest(corpus: &Path) {
             {"id": "disclosure-class-a-empty-facts", "path": "fixtures/disclosure-class-a-empty-facts", "disclosure_class": "A", "policy_mode": "warn", "expect_success": false, "expect_contains": "CBOR facts are required"},
             {"id": "disclosure-class-b-skips-recompute", "path": "fixtures/disclosure-class-b-skips-recompute", "disclosure_class": "B", "policy_mode": "warn", "expect_success": true, "expect_contains": "disclosure-class-b"},
             {"id": "disclosure-class-c-skips-recompute", "path": "fixtures/disclosure-class-c-skips-recompute", "disclosure_class": "C", "policy_mode": "warn", "expect_success": true, "expect_contains": "disclosure-class-c"},
-            {"id": "replay-duplicate-rejection-audit", "path": "fixtures/replay-duplicate-rejection-audit", "disclosure_class": "A", "policy_mode": "warn", "expect_success": true, "expect_contains": "\"rejection_records\": 1"},
-            {"id": "replay-out-of-window-rejection-audit", "path": "fixtures/replay-out-of-window-rejection-audit", "disclosure_class": "A", "policy_mode": "warn", "expect_success": true, "expect_contains": "\"rejection_records\": 1"},
-            {"id": "malformed-frame-rejection-audit", "path": "fixtures/malformed-frame-rejection-audit", "disclosure_class": "A", "policy_mode": "warn", "expect_success": true, "expect_contains": "\"commitment_material\": false"},
+            {"id": "replay-duplicate-rejection-audit", "path": "fixtures/replay-duplicate-rejection-audit", "disclosure_class": "A", "policy_mode": "warn", "expect_success": true, "expect_contains": "\"rejection_records\":1"},
+            {"id": "replay-out-of-window-rejection-audit", "path": "fixtures/replay-out-of-window-rejection-audit", "disclosure_class": "A", "policy_mode": "warn", "expect_success": true, "expect_contains": "\"rejection_records\":1"},
+            {"id": "malformed-frame-rejection-audit", "path": "fixtures/malformed-frame-rejection-audit", "disclosure_class": "A", "policy_mode": "warn", "expect_success": true, "expect_contains": "\"commitment_material\":false"},
             {"id": "rejection-audit-as-commitment-material", "path": "fixtures/rejection-audit-as-commitment-material", "disclosure_class": "A", "policy_mode": "warn", "expect_success": false, "expect_contains": "rejection audit must not be commitment material"},
             {"id": "empty-batch-day", "path": "fixtures/empty-batch-day", "disclosure_class": "A", "policy_mode": "warn", "expect_success": false, "expect_contains": "exactly one batch"},
             {"id": "multi-batch-day", "path": "fixtures/multi-batch-day", "disclosure_class": "A", "policy_mode": "warn", "expect_success": false, "expect_contains": "exactly one batch"},
-            {"id": "nonzero-previous-day-root-chain-input", "path": "fixtures/nonzero-previous-day-root-chain-input", "disclosure_class": "A", "policy_mode": "warn", "expect_success": true, "expect_contains": "\"overall\": \"success\""},
+            {"id": "nonzero-previous-day-root-chain-input", "path": "fixtures/nonzero-previous-day-root-chain-input", "disclosure_class": "A", "policy_mode": "warn", "expect_success": true, "expect_contains": "\"overall\":\"success\""},
             {"id": "canonical-cbor-shortest-form-fact-failure", "path": "fixtures/canonical-cbor-shortest-form-fact-failure", "disclosure_class": "A", "policy_mode": "warn", "expect_success": false, "expect_contains": "not shortest-form"},
             {"id": "decoded-bundle-fact-contract-failure", "path": "fixtures/decoded-bundle-fact-contract-failure", "disclosure_class": "A", "policy_mode": "warn", "expect_success": false, "expect_contains": "fact artifact is not canonical CBOR"}
         ]
@@ -415,7 +415,6 @@ fn public_beta_negative_fixture_corpus_is_cli_runnable() {
                 "--facts",
                 work.join("facts").to_str().unwrap(),
                 "--json",
-                "--pretty",
                 "--policy-mode",
                 &case.policy_mode,
                 "--disclosure-class",
