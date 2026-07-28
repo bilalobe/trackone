@@ -172,9 +172,17 @@ def check(repo: Path) -> dict[str, int]:
             / "toolset/vectors/verifiable-telemetry-canonical-cbor-v2/fixtures"
         ).glob("*/segment.verify.json")
     ):
+        manifest_version = load_json(instance_path).get("version")
+        if manifest_version not in (2, 3):
+            raise ContractError(
+                f"{instance_path}: unsupported verification manifest version "
+                f"{manifest_version!r}"
+            )
         validate_instance(
             instance_path,
-            schemas[f"{PROVIDER}verify_manifest_v2.schema.json"],
+            schemas[
+                f"{PROVIDER}verify_manifest_v{manifest_version}.schema.json"
+            ],
             registry,
         )
         instance_count += 1

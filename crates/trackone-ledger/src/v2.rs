@@ -546,7 +546,7 @@ impl SegmentRecordV2 {
     }
 }
 
-/// Decode and validate one authoritative draft-08 segment artifact.
+/// Decode and validate one authoritative draft-09 segment artifact.
 ///
 /// This accepts only the constrained deterministic-CBOR subset used by the
 /// segment schema.  It never decodes and re-encodes a malformed input into a

@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "ledger_id": "b7a1d5e40c6f438e9a75db27c96f31aa",
   "site_id": "an-001",
   "segment_number": "0",
@@ -30,6 +30,6 @@
     }
   },
   "anchoring": {
-    "tsa": {"status": "complete"}
+    "tsa": {"status": "present"}
   }
 }

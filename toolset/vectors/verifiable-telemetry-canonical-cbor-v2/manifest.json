@@ -1,6 +1,6 @@
 {
   "schema": "trackone-v2-vector-manifest-2",
-  "draft_revision": "draft-elkhatabi-verifiable-telemetry-ledgers-08",
+  "draft_revision": "draft-elkhatabi-verifiable-telemetry-ledgers-09",
   "commitment_profile_id": "verifiable-telemetry-canonical-cbor-v2",
   "records": [
     {

@@ -4,11 +4,8 @@
   "commitment_profile_id": "verifiable-telemetry-canonical-cbor-v2",
   "disclosure_class": "A",
   "verification_scope": "public_recompute",
-  "channels": {"tsa": {"status": "verified"}},
-  "tsa_generation_time": "2026-07-22T23:04:12Z",
-  "tsa_serial_number": "1001",
-  "tsa_accuracy": {"seconds": 1},
-  "policy": {"require_tsa": true},
+  "channels": {"tsa": {"check": "tsa_verification", "status": "verified"}},
+  "verifier_policy_id": "verifiable-telemetry-baseline-v2",
   "checks_executed": [
     "bundle_disclosure_validation",
     "verification_manifest_validation",
@@ -20,6 +17,5 @@
     "tsa_verification"
   ],
   "checks_skipped": [],
-  "record_multiset_root": "bc6502552ed0c515f58d1c632e54db37594042609b59838eb0d5b3d5842aa054",
   "overall": "success"
 }

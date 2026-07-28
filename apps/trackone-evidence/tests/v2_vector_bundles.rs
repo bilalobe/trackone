@@ -135,14 +135,21 @@ fn v2_cli_rejects_missing_or_wrong_tsa_signer_pin() {
     let missing = base().output().unwrap();
     assert!(!missing.status.success());
     assert!(
-        String::from_utf8_lossy(&missing.stderr)
-            .contains("signer certificate SHA-256 is not configured")
+        String::from_utf8_lossy(&missing.stderr).contains("RFC 3161 verifier policy is incomplete")
     );
 
     let wrong = base()
+        .arg("--json")
         .args(["--tsa-signer-cert-sha256", &"00".repeat(32)])
         .output()
         .unwrap();
     assert!(!wrong.status.success());
-    assert!(String::from_utf8_lossy(&wrong.stderr).contains("does not match the deployment pin"));
+    let failure: Value = serde_json::from_slice(&wrong.stdout).unwrap();
+    assert_eq!(failure["overall"], "failure");
+    assert!(
+        failure["channels"]["tsa"]["reason"]
+            .as_str()
+            .unwrap()
+            .contains("does not match the deployment pin")
+    );
 }

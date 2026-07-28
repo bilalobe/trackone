@@ -1,4 +1,4 @@
-//! Additive verifier for draft-08 segment bundles owned by the evidence app.
+//! Verifier for draft-09 segment bundles owned by the evidence app.
 use super::{EvidenceError, Result};
 use flate2::{Compression, Decompress, FlushDecompress, GzBuilder, Status, read::GzDecoder};
 use serde::{Deserialize, Serialize};
@@ -15,8 +15,8 @@ use trackone_ledger::{
     },
 };
 use trackone_rfc3161::{
-    HistoricalValidationArchive, SignerCertificateSha256, TimestampAccuracy, VerificationPolicy,
-    VerifiedTimestamp, verify_response,
+    HistoricalValidationArchive, SignerCertificateSha256, VerificationPolicy, VerifiedTimestamp,
+    verify_response,
 };
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -36,6 +36,7 @@ struct Manifest {
     disclosure_class: String,
     artifacts: Artifacts,
     anchoring: Anchoring,
+    // Legacy manifest-v2 field. Manifest v3 rejects it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     operational_summary: Option<Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -52,6 +53,8 @@ struct Artifacts {
     records: Option<Vec<ArtifactRef>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     records_pack: Option<ArtifactRef>,
+    // The following convenience projections are accepted only when reading
+    // legacy manifest v2.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     batches: Option<Vec<ArtifactRef>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -118,6 +121,8 @@ pub struct V2VerifyPolicy {
     pub tsa_policy_oid: Option<String>,
     pub tsa_signer_cert_sha256: Option<SignerCertificateSha256>,
     pub openssl_binary: PathBuf,
+    pub verifier_policy_id: Option<String>,
+    pub verifier_policy_artifact: Option<PathBuf>,
 }
 
 impl Default for V2VerifyPolicy {
@@ -131,6 +136,8 @@ impl Default for V2VerifyPolicy {
             tsa_policy_oid: None,
             tsa_signer_cert_sha256: None,
             openssl_binary: PathBuf::from("openssl"),
+            verifier_policy_id: Some("trackone-v2-permissive".to_string()),
+            verifier_policy_artifact: None,
         }
     }
 }
@@ -140,6 +147,7 @@ impl V2VerifyPolicy {
         Self {
             enforce_disclosure_requirements: true,
             require_tsa: true,
+            verifier_policy_id: Some("verifiable-telemetry-baseline-v2".to_string()),
             ..Self::default()
         }
     }
@@ -194,7 +202,13 @@ fn safe_read(root: &Path, rel: &str) -> Result<Vec<u8>> {
         Mode::empty(),
         ResolveFlags::BENEATH | ResolveFlags::NO_SYMLINKS | ResolveFlags::NO_MAGICLINKS,
     )
-    .map_err(|error| bad(format!("cannot safely open v2 artifact {rel}: {error}")))?;
+    .map_err(|error| {
+        if error == rustix::io::Errno::NOENT {
+            EvidenceError::VerificationFailed(format!("referenced v2 artifact is missing: {rel}"))
+        } else {
+            bad(format!("cannot safely open v2 artifact {rel}: {error}"))
+        }
+    })?;
     let mut file = File::from(descriptor);
     let mut bytes = Vec::new();
     file.read_to_end(&mut bytes)?;
@@ -215,7 +229,9 @@ fn artifact(root: &Path, reference: &ArtifactRef) -> Result<Vec<u8>> {
     }
     let bytes = safe_read(root, &reference.path)?;
     if sha256_hex(&bytes) != reference.sha256 {
-        return Err(bad("v2 artifact digest mismatch"));
+        return Err(EvidenceError::VerificationFailed(
+            "v2 artifact digest mismatch".to_string(),
+        ));
     }
     Ok(bytes)
 }
@@ -234,11 +250,23 @@ fn validate_manifest(manifest: &Manifest) -> Result<()> {
         return Err(bad("manifest v2 does not support records_pack"));
     }
     if manifest.version == 3
-        && manifest.disclosure_class == "A"
-        && (manifest.artifacts.records.is_some() == manifest.artifacts.records_pack.is_some())
+        && (manifest.operational_summary.is_some()
+            || manifest.artifacts.batches.is_some()
+            || manifest.artifacts.segment_json.is_some()
+            || manifest.artifacts.segment_sha256.is_some()
+            || manifest.artifacts.tsa_info.is_some())
     {
         return Err(bad(
-            "Class A manifest v3 requires exactly one of records or records_pack",
+            "manifest v3 contains a legacy convenience or operational field",
+        ));
+    }
+    if manifest.version == 3
+        && manifest.disclosure_class == "A"
+        && manifest.artifacts.records.is_some()
+        && manifest.artifacts.records_pack.is_some()
+    {
+        return Err(bad(
+            "Class A manifest v3 cannot contain both records and records_pack",
         ));
     }
     for reference in manifest.artifacts.references() {
@@ -255,12 +283,83 @@ fn validate_manifest(manifest: &Manifest) -> Result<()> {
     .into_iter()
     .flatten()
     {
-        if !matches!(
-            claim.status.as_str(),
-            "verified" | "pending" | "missing" | "failed" | "skipped" | "complete"
-        ) {
+        let valid = if manifest.version == 3 {
+            matches!(claim.status.as_str(), "present" | "pending")
+        } else {
+            matches!(
+                claim.status.as_str(),
+                "verified" | "pending" | "missing" | "failed" | "skipped" | "complete"
+            )
+        };
+        if !valid {
             return Err(bad("v2 manifest anchoring status is unsupported"));
         }
+    }
+    if manifest.version == 3 {
+        if manifest.artifacts.segment_ots.is_some() != manifest.artifacts.segment_ots_meta.is_some()
+        {
+            return Err(bad(
+                "manifest v3 requires paired OTS proof and binding metadata",
+            ));
+        }
+        validate_channel_artifact(
+            "tsa",
+            manifest.anchoring.tsa.as_ref(),
+            manifest.artifacts.tsa_tsr.is_some(),
+        )?;
+        validate_channel_artifact(
+            "ots",
+            manifest.anchoring.ots.as_ref(),
+            manifest.artifacts.segment_ots.is_some(),
+        )?;
+        validate_channel_artifact(
+            "peer",
+            manifest.anchoring.peer.as_ref(),
+            manifest.artifacts.peer_attest.is_some(),
+        )?;
+    }
+    Ok(())
+}
+
+fn validate_channel_artifact(
+    name: &str,
+    claim: Option<&ChannelClaim>,
+    artifact_present: bool,
+) -> Result<()> {
+    match (claim.map(|claim| claim.status.as_str()), artifact_present) {
+        (Some("present"), true) | (Some("pending"), false) | (None, false) => Ok(()),
+        (Some("present"), false) => Err(bad(format!(
+            "manifest v3 {name} channel claims present without evidence"
+        ))),
+        (Some("pending"), true) => Err(bad(format!(
+            "manifest v3 {name} channel claims pending while evidence is present"
+        ))),
+        (None, true) => Err(bad(format!(
+            "manifest v3 {name} evidence lacks a producer channel claim"
+        ))),
+        _ => Err(bad(format!(
+            "manifest v3 {name} channel status is unsupported"
+        ))),
+    }
+}
+
+fn validate_verifier_policy(policy: &V2VerifyPolicy) -> Result<()> {
+    let policy_id = policy
+        .verifier_policy_id
+        .as_deref()
+        .ok_or_else(|| bad("verifier policy identifier is required"))?;
+    if policy_id.is_empty() {
+        return Err(bad("verifier policy identifier must not be empty"));
+    }
+    if !policy.require_tsa && policy_id == "verifiable-telemetry-baseline-v2" {
+        return Err(bad(
+            "a custom verifier policy identifier is required when TSA applicability changes",
+        ));
+    }
+    if let Some(path) = &policy.verifier_policy_artifact
+        && !path.is_file()
+    {
+        return Err(bad("verifier policy artifact is not available for hashing"));
     }
     Ok(())
 }
@@ -308,32 +407,27 @@ pub fn verify_v2_bundle(root: &Path) -> Result<Value> {
 }
 
 pub fn verify_v2_bundle_with_policy(root: &Path, policy: &V2VerifyPolicy) -> Result<Value> {
+    validate_verifier_policy(policy)?;
     let manifest_path = root.join("segment.verify.json");
     let manifest: Manifest = serde_json::from_slice(&fs::read(&manifest_path)?)?;
     validate_manifest(&manifest)?;
-    let _ = (&manifest.operational_summary, &manifest.extensions);
-    for reference in manifest.artifacts.references() {
-        artifact(root, reference)?;
-    }
-    let segment_bytes = artifact(root, &manifest.artifacts.segment_cbor)?;
+    let segment_bytes = safe_read(root, &manifest.artifacts.segment_cbor.path)?;
+    let segment_digest_matches =
+        sha256_hex(&segment_bytes) == manifest.artifacts.segment_cbor.sha256;
     let segment = decode_segment_record_v2(&segment_bytes)
         .map_err(|err| bad(format!("invalid v2 segment artifact: {err}")))?;
-    if segment.ledger_id != manifest.ledger_id
-        || segment.site_id != manifest.site_id
-        || segment.segment_number.to_string() != manifest.segment_number
-    {
-        return Err(bad(
-            "manifest identity does not match decoded segment artifact",
-        ));
-    }
-    let has_tsa = manifest.artifacts.tsa_tsr.is_some();
-    let has_ots =
-        manifest.artifacts.segment_ots.is_some() && manifest.artifacts.segment_ots_meta.is_some();
-    if policy.enforce_disclosure_requirements && !has_tsa && !has_ots {
-        return Err(bad(
-            "claimed disclosure class requires a timestamp proof and binding metadata",
-        ));
-    }
+    let artifact_sha256 = sha256_hex(&segment_bytes);
+    let scope = match manifest.disclosure_class.as_str() {
+        "A" => "public_recompute",
+        "B" => "partial_verification",
+        _ => "anchor_only",
+    };
+    let result_context = VerificationResultContext {
+        manifest: &manifest,
+        policy,
+        artifact_sha256: &artifact_sha256,
+        scope,
+    };
     let mut executed = vec![
         "bundle_disclosure_validation",
         "verification_manifest_validation",
@@ -341,9 +435,48 @@ pub fn verify_v2_bundle_with_policy(root: &Path, policy: &V2VerifyPolicy) -> Res
     ];
     let mut skipped = Vec::<Value>::new();
     let mut channels = serde_json::Map::new();
+    if !segment_digest_matches {
+        executed.push("segment_digest_binding");
+        return verification_result(&result_context, executed, skipped, channels, "failure");
+    }
+    for reference in manifest.artifacts.references() {
+        if reference.path == manifest.artifacts.segment_cbor.path {
+            continue;
+        }
+        match artifact(root, reference) {
+            Ok(_) => {}
+            Err(EvidenceError::VerificationFailed(_)) => {
+                executed.push("segment_digest_binding");
+                return verification_result(
+                    &result_context,
+                    executed,
+                    skipped,
+                    channels,
+                    "failure",
+                );
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    if segment.ledger_id != manifest.ledger_id
+        || segment.site_id != manifest.site_id
+        || segment.segment_number.to_string() != manifest.segment_number
+    {
+        return verification_result(&result_context, executed, skipped, channels, "failure");
+    }
+    let has_tsa = manifest.artifacts.tsa_tsr.is_some();
+    let has_ots =
+        manifest.artifacts.segment_ots.is_some() && manifest.artifacts.segment_ots_meta.is_some();
+    if policy.enforce_disclosure_requirements && !has_tsa && !has_ots {
+        skipped.push(json!({
+            "check": "segment_digest_binding",
+            "reason": "missing_binding_metadata"
+        }));
+        return verification_result(&result_context, executed, skipped, channels, "failure");
+    }
     if segment.segment_number == 0 {
         if segment.prev_segment_sha256 != ZERO_SHA256 {
-            return Err(bad("epoch segment does not use the zero predecessor"));
+            return verification_result(&result_context, executed, skipped, channels, "failure");
         }
         executed.push("segment_chain_validation");
     } else if let Some(predecessor) = &manifest.artifacts.predecessor_segment_cbor {
@@ -355,14 +488,19 @@ pub fn verify_v2_bundle_with_policy(root: &Path, policy: &V2VerifyPolicy) -> Res
             || previous.segment_number.checked_add(1) != Some(segment.segment_number)
             || segment.prev_segment_sha256 != sha256_hex(&predecessor_bytes)
         {
-            return Err(bad("segment predecessor linkage is invalid"));
+            return verification_result(&result_context, executed, skipped, channels, "failure");
         }
         executed.push("segment_chain_validation");
     } else {
         skipped
-            .push(json!({"check":"segment_chain_validation","reason":"predecessor-not-disclosed"}));
+            .push(json!({"check":"segment_chain_validation","reason":"predecessor_not_disclosed"}));
     }
     if manifest.disclosure_class == "A" {
+        if manifest.artifacts.records.is_none() && manifest.artifacts.records_pack.is_none() {
+            skipped
+                .push(json!({"check":"record_level_recompute","reason":"records_not_disclosed"}));
+            return verification_result(&result_context, executed, skipped, channels, "failure");
+        }
         let bytes = disclosed_records(root, &manifest)?;
         let merkle = merkle_root_from_records(&bytes);
         let recomputed_root = merkle.root_hex();
@@ -377,45 +515,31 @@ pub fn verify_v2_bundle_with_policy(root: &Path, policy: &V2VerifyPolicy) -> Res
             .flat_map(|batch| batch.leaf_hashes.iter().cloned())
             .collect::<Vec<_>>();
         if recomputed_leaves != embedded_leaves {
-            return Err(EvidenceError::VerificationFailed(
-                "Class A record leaves do not match authoritative batches".to_string(),
-            ));
+            executed.push("record_level_recompute");
+            return verification_result(&result_context, executed, skipped, channels, "failure");
         }
         if recomputed_root != segment.segment_root {
-            return Err(EvidenceError::VerificationFailed(
-                "Class A record root does not match segment root".to_string(),
-            ));
+            executed.push("record_level_recompute");
+            return verification_result(&result_context, executed, skipped, channels, "failure");
         }
         executed.push("record_level_recompute");
         executed.push("batch_metadata_validation");
-        executed.push("segment_digest_binding");
-        let mut tsa_fields = apply_timestamp_checks(
-            root,
-            &manifest,
-            &segment_bytes,
-            policy,
-            &mut executed,
-            &mut skipped,
-            &mut channels,
-        )?;
-        let mut result = json!({"version":manifest.version,"artifact_sha256":sha256_hex(&segment_bytes),"commitment_profile_id":COMMITMENT_PROFILE_ID,"disclosure_class":"A","verification_scope":"public_recompute","channels":channels,"policy":{"require_tsa":policy.require_tsa},"checks_executed":executed,"checks_skipped":skipped,"record_multiset_root":recomputed_root,"overall":"success"});
-        result
-            .as_object_mut()
-            .expect("verification result is an object")
-            .append(&mut tsa_fields);
-        return Ok(result);
-    }
-    skipped.push(json!({"check":"record_level_recompute","reason":format!("disclosure-class-{}",manifest.disclosure_class.to_ascii_lowercase())}));
-    if manifest.disclosure_class == "C" {
-        skipped.push(json!({"check":"batch_metadata_validation","reason":"out_of_scope"}));
-    } else if let Some(batch_refs) = &manifest.artifacts.batches {
-        validate_batch_projections(root, batch_refs, &segment)?;
-        executed.push("batch_metadata_validation");
     } else {
-        skipped.push(json!({"check":"batch_metadata_validation","reason":"not_disclosed"}));
+        skipped.push(json!({
+            "check":"record_level_recompute",
+            "reason":format!("disclosure_class_{}", manifest.disclosure_class.to_ascii_lowercase())
+        }));
+        if manifest.disclosure_class == "C" {
+            skipped.push(json!({"check":"batch_metadata_validation","reason":"out_of_scope"}));
+        } else if let Some(batch_refs) = &manifest.artifacts.batches {
+            validate_batch_projections(root, batch_refs, &segment)?;
+            executed.push("batch_metadata_validation");
+        } else {
+            skipped.push(json!({"check":"batch_metadata_validation","reason":"not_disclosed"}));
+        }
     }
     executed.push("segment_digest_binding");
-    let mut tsa_fields = apply_timestamp_checks(
+    let channel_outcome = apply_timestamp_checks(
         root,
         &manifest,
         &segment_bytes,
@@ -424,17 +548,62 @@ pub fn verify_v2_bundle_with_policy(root: &Path, policy: &V2VerifyPolicy) -> Res
         &mut skipped,
         &mut channels,
     )?;
-    let scope = if manifest.disclosure_class == "B" {
-        "partial_verification"
+    let overall = if channel_outcome.failed {
+        "failure"
+    } else if channel_outcome.partial {
+        "partial"
     } else {
-        "anchor_only"
+        "success"
     };
-    let mut result = json!({"version":manifest.version,"artifact_sha256":sha256_hex(&segment_bytes),"commitment_profile_id":COMMITMENT_PROFILE_ID,"disclosure_class":manifest.disclosure_class,"verification_scope":scope,"channels":channels,"policy":{"require_tsa":policy.require_tsa},"checks_executed":executed,"checks_skipped":skipped,"overall":"success"});
-    result
-        .as_object_mut()
-        .expect("verification result is an object")
-        .append(&mut tsa_fields);
-    Ok(result)
+    verification_result(&result_context, executed, skipped, channels, overall)
+}
+
+struct VerificationResultContext<'a> {
+    manifest: &'a Manifest,
+    policy: &'a V2VerifyPolicy,
+    artifact_sha256: &'a str,
+    scope: &'a str,
+}
+
+fn verification_result(
+    context: &VerificationResultContext<'_>,
+    executed: Vec<&'static str>,
+    skipped: Vec<Value>,
+    channels: serde_json::Map<String, Value>,
+    overall: &str,
+) -> Result<Value> {
+    let mut result = serde_json::Map::from_iter([
+        ("version".to_string(), json!(2)),
+        (
+            "artifact_sha256".to_string(),
+            json!(context.artifact_sha256),
+        ),
+        (
+            "commitment_profile_id".to_string(),
+            json!(COMMITMENT_PROFILE_ID),
+        ),
+        (
+            "disclosure_class".to_string(),
+            json!(context.manifest.disclosure_class),
+        ),
+        ("verification_scope".to_string(), json!(context.scope)),
+        ("checks_executed".to_string(), json!(executed)),
+        ("checks_skipped".to_string(), Value::Array(skipped)),
+        ("overall".to_string(), json!(overall)),
+    ]);
+    if !channels.is_empty() {
+        result.insert("channels".to_string(), Value::Object(channels));
+    }
+    if let Some(policy_id) = &context.policy.verifier_policy_id {
+        result.insert("verifier_policy_id".to_string(), json!(policy_id));
+    }
+    if let Some(path) = &context.policy.verifier_policy_artifact {
+        result.insert(
+            "verifier_policy_sha256".to_string(),
+            json!(sha256_hex(&fs::read(path)?)),
+        );
+    }
+    Ok(Value::Object(result))
 }
 
 fn disclosed_records(root: &Path, manifest: &Manifest) -> Result<Vec<Vec<u8>>> {
@@ -589,18 +758,10 @@ fn validate_batch_projections(
     Ok(())
 }
 
-fn timestamp_accuracy_value(accuracy: TimestampAccuracy) -> Option<Value> {
-    let mut value = serde_json::Map::new();
-    if let Some(seconds) = accuracy.seconds {
-        value.insert("seconds".to_string(), json!(seconds));
-    }
-    if let Some(millis) = accuracy.millis {
-        value.insert("millis".to_string(), json!(millis));
-    }
-    if let Some(micros) = accuracy.micros {
-        value.insert("micros".to_string(), json!(micros));
-    }
-    (!value.is_empty()).then_some(Value::Object(value))
+#[derive(Clone, Copy, Debug, Default)]
+struct ChannelOutcome {
+    failed: bool,
+    partial: bool,
 }
 
 fn apply_timestamp_checks(
@@ -611,61 +772,117 @@ fn apply_timestamp_checks(
     executed: &mut Vec<&'static str>,
     skipped: &mut Vec<Value>,
     channels: &mut serde_json::Map<String, Value>,
-) -> Result<serde_json::Map<String, Value>> {
-    let mut tsa_fields = serde_json::Map::new();
+) -> Result<ChannelOutcome> {
+    let mut outcome = ChannelOutcome::default();
     if let Some(reference) = &manifest.artifacts.tsa_tsr {
+        validate_tsa_configuration(policy)?;
         let response = artifact(root, reference)?;
+        executed.push("tsa_verification");
         match verify_rfc3161(&response, sha256_digest(segment_bytes), policy) {
-            Ok(verified) => {
-                executed.push("tsa_verification");
-                channels.insert("tsa".to_string(), json!({"status":"verified"}));
-                tsa_fields.insert(
-                    "tsa_generation_time".to_string(),
-                    json!(verified.generation_time.to_rfc3339()),
+            Ok(_) => {
+                channels.insert(
+                    "tsa".to_string(),
+                    json!({"check":"tsa_verification","status":"verified"}),
                 );
-                tsa_fields.insert(
-                    "tsa_serial_number".to_string(),
-                    json!(verified.serial_number.to_hex()),
-                );
-                if let Some(value) = verified.accuracy.and_then(timestamp_accuracy_value) {
-                    tsa_fields.insert("tsa_accuracy".to_string(), value);
-                }
             }
             Err(error) => {
                 channels.insert(
                     "tsa".to_string(),
-                    json!({"status":"failed","diagnostic":error.to_string()}),
+                    json!({
+                        "check":"tsa_verification",
+                        "status":"failed",
+                        "reason":error.to_string()
+                    }),
                 );
-                return Err(error);
+                outcome.failed = true;
             }
+        }
+    } else if manifest
+        .anchoring
+        .tsa
+        .as_ref()
+        .is_some_and(|claim| claim.status == "pending")
+    {
+        skipped.push(json!({"check":"tsa_verification","reason":"pending"}));
+        channels.insert(
+            "tsa".to_string(),
+            json!({"check":"tsa_verification","status":"pending","reason":"producer_pending"}),
+        );
+        if policy.require_tsa {
+            outcome.failed = true;
+        } else {
+            outcome.partial = true;
         }
     } else if policy.require_tsa {
         skipped.push(json!({"check":"tsa_verification","reason":"missing_proof"}));
-        return Err(bad("required RFC 3161 timestamp response is missing"));
+        channels.insert(
+            "tsa".to_string(),
+            json!({"check":"tsa_verification","status":"missing","reason":"required_proof_missing"}),
+        );
+        outcome.failed = true;
     } else if manifest.anchoring.tsa.is_some() {
         skipped.push(json!({"check":"tsa_verification","reason":"missing_proof"}));
-        channels.insert("tsa".to_string(), json!({"status":"missing"}));
+        channels.insert(
+            "tsa".to_string(),
+            json!({"check":"tsa_verification","status":"missing","reason":"selected_proof_missing"}),
+        );
+        outcome.partial = true;
     }
 
     if manifest.artifacts.segment_ots.is_some() || manifest.anchoring.ots.is_some() {
-        let status = manifest
+        let producer_status = manifest
             .anchoring
             .ots
             .as_ref()
             .map_or("missing", |claim| claim.status.as_str());
+        let status = if producer_status == "pending" {
+            "pending"
+        } else if manifest.artifacts.segment_ots.is_some() {
+            "skipped"
+        } else {
+            "missing"
+        };
         skipped.push(json!({"check":"x-ots-verification","reason":status}));
-        channels.insert("ots".to_string(), json!({"status":status}));
+        channels.insert(
+            "ots".to_string(),
+            json!({"check":"x-ots-verification","status":status,"reason":"optional_channel_not_verified"}),
+        );
+        outcome.partial = true;
     }
     if manifest.artifacts.peer_attest.is_some() || manifest.anchoring.peer.is_some() {
-        let status = manifest
+        let producer_status = manifest
             .anchoring
             .peer
             .as_ref()
             .map_or("missing", |claim| claim.status.as_str());
+        let status = if producer_status == "pending" {
+            "pending"
+        } else if manifest.artifacts.peer_attest.is_some() {
+            "skipped"
+        } else {
+            "missing"
+        };
         skipped.push(json!({"check":"x-peer-quorum-verification","reason":status}));
-        channels.insert("peer".to_string(), json!({"status":status}));
+        channels.insert(
+            "peer".to_string(),
+            json!({"check":"x-peer-quorum-verification","status":status,"reason":"optional_channel_not_verified"}),
+        );
+        outcome.partial = true;
     }
-    Ok(tsa_fields)
+    Ok(outcome)
+}
+
+fn validate_tsa_configuration(policy: &V2VerifyPolicy) -> Result<()> {
+    if policy.tsa_ca_file.is_none()
+        || policy.tsa_crls_file.is_none()
+        || policy.tsa_policy_oid.is_none()
+        || policy.tsa_signer_cert_sha256.is_none()
+    {
+        return Err(bad(
+            "RFC 3161 verifier policy is incomplete for the selected TSA channel",
+        ));
+    }
+    Ok(())
 }
 
 const MAX_ARCHIVE_MEMBERS: usize = 10_000;
@@ -690,7 +907,16 @@ pub fn compact_v2_bundle(
     policy: &V2VerifyPolicy,
     include_extensions: bool,
 ) -> Result<()> {
-    verify_v2_bundle_with_policy(root, policy)?;
+    let verification = verify_v2_bundle_with_policy(root, policy)?;
+    if !matches!(
+        verification["overall"].as_str(),
+        Some("success" | "partial")
+    ) {
+        return Err(EvidenceError::VerificationFailed(format!(
+            "compact-v2 requires non-failing source verification, got {}",
+            verification["overall"]
+        )));
+    }
     let mut manifest: Manifest =
         serde_json::from_slice(&fs::read(root.join("segment.verify.json"))?)?;
     validate_manifest(&manifest)?;
@@ -759,14 +985,46 @@ pub fn compact_v2_bundle(
     manifest.version = 3;
     manifest.artifacts = compact_artifacts;
     manifest.operational_summary = None;
+    manifest.anchoring = Anchoring {
+        tsa: channel_claim_for_artifact(
+            manifest.artifacts.tsa_tsr.is_some(),
+            manifest.anchoring.tsa.as_ref(),
+        ),
+        ots: channel_claim_for_artifact(
+            manifest.artifacts.segment_ots.is_some(),
+            manifest.anchoring.ots.as_ref(),
+        ),
+        peer: channel_claim_for_artifact(
+            manifest.artifacts.peer_attest.is_some(),
+            manifest.anchoring.peer.as_ref(),
+        ),
+    };
     if !include_extensions {
         manifest.extensions = None;
     }
+    validate_manifest(&manifest)?;
     members.insert(
         "segment.verify.json".to_string(),
         serde_json::to_vec(&manifest)?,
     );
     write_deterministic_archive(output, &members)
+}
+
+fn channel_claim_for_artifact(
+    artifact_present: bool,
+    previous: Option<&ChannelClaim>,
+) -> Option<ChannelClaim> {
+    if artifact_present {
+        Some(ChannelClaim {
+            status: "present".to_string(),
+        })
+    } else if previous.is_some_and(|claim| claim.status == "pending") {
+        Some(ChannelClaim {
+            status: "pending".to_string(),
+        })
+    } else {
+        None
+    }
 }
 
 fn write_deterministic_archive(output: &Path, members: &BTreeMap<String, Vec<u8>>) -> Result<()> {
@@ -1008,30 +1266,6 @@ mod tests {
     }
 
     #[test]
-    fn empty_timestamp_accuracy_is_omitted() {
-        assert_eq!(
-            timestamp_accuracy_value(TimestampAccuracy {
-                seconds: None,
-                millis: None,
-                micros: None,
-            }),
-            None
-        );
-    }
-
-    #[test]
-    fn timestamp_accuracy_components_are_projected() {
-        assert_eq!(
-            timestamp_accuracy_value(TimestampAccuracy {
-                seconds: Some(0),
-                millis: Some(12),
-                micros: Some(34),
-            }),
-            Some(json!({"seconds": 0, "millis": 12, "micros": 34}))
-        );
-    }
-
-    #[test]
     fn record_pack_preserves_duplicates_and_rejects_noncanonical_lengths() {
         let duplicate = vec![
             0x87, 0x01, 0x48, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0xf6, 0, 0xf6,
@@ -1109,12 +1343,222 @@ mod tests {
         )
         .unwrap();
         let result = verify_v2_bundle(&root).unwrap();
+        assert_eq!(result["overall"], "success");
+        assert!(result.get("channels").is_none());
         assert!(
             result["checks_executed"]
                 .as_array()
                 .unwrap()
                 .iter()
                 .any(|value| value == "segment_chain_validation")
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn manifest_v3_rejects_legacy_convenience_fields_and_mixed_record_forms() {
+        let base = json!({
+            "version": 3,
+            "ledger_id": "b7a1d5e40c6f438e9a75db27c96f31aa",
+            "site_id": "an-001",
+            "segment_number": "0",
+            "commitment_profile_id": COMMITMENT_PROFILE_ID,
+            "disclosure_class": "A",
+            "anchoring": {},
+            "artifacts": {
+                "segment_cbor": {"path": "segment.cbor", "sha256": "0".repeat(64)},
+                "records": [],
+                "records_pack": {"path": "records.pack.cbor", "sha256": "0".repeat(64)}
+            }
+        });
+        let manifest: Manifest = serde_json::from_value(base).unwrap();
+        assert!(validate_manifest(&manifest).is_err());
+
+        let legacy_projection = json!({
+            "version": 3,
+            "ledger_id": "b7a1d5e40c6f438e9a75db27c96f31aa",
+            "site_id": "an-001",
+            "segment_number": "0",
+            "commitment_profile_id": COMMITMENT_PROFILE_ID,
+            "disclosure_class": "C",
+            "anchoring": {},
+            "artifacts": {
+                "segment_cbor": {"path": "segment.cbor", "sha256": "0".repeat(64)},
+                "segment_json": {"path": "segment.json", "sha256": "0".repeat(64)}
+            }
+        });
+        let manifest: Manifest = serde_json::from_value(legacy_projection).unwrap();
+        assert!(validate_manifest(&manifest).is_err());
+    }
+
+    #[test]
+    fn applicability_change_requires_a_distinct_policy_identifier() {
+        let mut policy = V2VerifyPolicy::baseline();
+        policy.require_tsa = false;
+        assert!(validate_verifier_policy(&policy).is_err());
+        policy.verifier_policy_id = Some("local-no-tsa-policy".to_string());
+        assert!(validate_verifier_policy(&policy).is_ok());
+        policy.verifier_policy_artifact = Some(PathBuf::from("missing-policy.json"));
+        assert!(validate_verifier_policy(&policy).is_err());
+    }
+
+    #[test]
+    fn selected_pending_channel_is_partial_but_unselected_channels_are_ignored() {
+        let root = std::env::temp_dir().join(format!(
+            "trackone-v3-pending-channel-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        let segment = epoch_segment_bytes();
+        fs::write(root.join("segment.cbor"), &segment).unwrap();
+        let manifest = json!({
+            "version": 3,
+            "ledger_id": "b7a1d5e40c6f438e9a75db27c96f31aa",
+            "site_id": "an-001",
+            "segment_number": "0",
+            "commitment_profile_id": COMMITMENT_PROFILE_ID,
+            "disclosure_class": "C",
+            "anchoring": {"tsa": {"status": "pending"}},
+            "artifacts": {
+                "segment_cbor": {"path": "segment.cbor", "sha256": sha256_hex(&segment)}
+            }
+        });
+        fs::write(
+            root.join("segment.verify.json"),
+            serde_json::to_vec(&manifest).unwrap(),
+        )
+        .unwrap();
+        let result = verify_v2_bundle(&root).unwrap();
+        assert_eq!(result["overall"], "partial");
+        assert_eq!(result["channels"]["tsa"]["status"], "pending");
+        assert!(result["channels"].get("peer").is_none());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn compaction_accepts_and_retains_partial_optional_channels() {
+        let root = tempfile::tempdir().unwrap();
+        let segment = epoch_segment_bytes();
+        let ots = b"pending ots proof";
+        let ots_meta = b"ots binding metadata";
+        let peer = b"peer attestation";
+        fs::write(root.path().join("segment.cbor"), &segment).unwrap();
+        fs::write(root.path().join("segment.ots"), ots).unwrap();
+        fs::write(root.path().join("segment.ots.json"), ots_meta).unwrap();
+        fs::write(root.path().join("peer.attest"), peer).unwrap();
+        let manifest = json!({
+            "version": 2,
+            "ledger_id": "b7a1d5e40c6f438e9a75db27c96f31aa",
+            "site_id": "an-001",
+            "segment_number": "0",
+            "commitment_profile_id": COMMITMENT_PROFILE_ID,
+            "disclosure_class": "C",
+            "anchoring": {},
+            "artifacts": {
+                "segment_cbor": {
+                    "path": "segment.cbor",
+                    "sha256": sha256_hex(&segment)
+                },
+                "segment_ots": {
+                    "path": "segment.ots",
+                    "sha256": sha256_hex(ots)
+                },
+                "segment_ots_meta": {
+                    "path": "segment.ots.json",
+                    "sha256": sha256_hex(ots_meta)
+                },
+                "peer_attest": {
+                    "path": "peer.attest",
+                    "sha256": sha256_hex(peer)
+                }
+            }
+        });
+        fs::write(
+            root.path().join("segment.verify.json"),
+            serde_json::to_vec(&manifest).unwrap(),
+        )
+        .unwrap();
+        let output = root.path().join("compact.tar.gz");
+
+        compact_v2_bundle(root.path(), &output, &V2VerifyPolicy::default(), false).unwrap();
+
+        let result = verify_v2_archive(&output, &V2VerifyPolicy::default()).unwrap();
+        assert_eq!(result["overall"], "partial");
+        assert_eq!(result["channels"]["ots"]["status"], "skipped");
+        assert_eq!(result["channels"]["peer"]["status"], "skipped");
+    }
+
+    #[test]
+    fn compaction_accepts_and_retains_pending_channel_claims() {
+        let root = tempfile::tempdir().unwrap();
+        let segment = epoch_segment_bytes();
+        fs::write(root.path().join("segment.cbor"), &segment).unwrap();
+        let manifest = json!({
+            "version": 2,
+            "ledger_id": "b7a1d5e40c6f438e9a75db27c96f31aa",
+            "site_id": "an-001",
+            "segment_number": "0",
+            "commitment_profile_id": COMMITMENT_PROFILE_ID,
+            "disclosure_class": "C",
+            "anchoring": {
+                "ots": {"status": "pending"},
+                "peer": {"status": "pending"}
+            },
+            "artifacts": {
+                "segment_cbor": {
+                    "path": "segment.cbor",
+                    "sha256": sha256_hex(&segment)
+                }
+            }
+        });
+        fs::write(
+            root.path().join("segment.verify.json"),
+            serde_json::to_vec(&manifest).unwrap(),
+        )
+        .unwrap();
+        let output = root.path().join("compact.tar.gz");
+
+        compact_v2_bundle(root.path(), &output, &V2VerifyPolicy::default(), false).unwrap();
+
+        let result = verify_v2_archive(&output, &V2VerifyPolicy::default()).unwrap();
+        assert_eq!(result["overall"], "partial");
+        assert_eq!(result["channels"]["ots"]["status"], "pending");
+        assert_eq!(result["channels"]["peer"]["status"], "pending");
+    }
+
+    #[test]
+    fn class_a_missing_records_returns_a_structured_failure() {
+        let root = std::env::temp_dir().join(format!(
+            "trackone-v3-missing-records-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        let segment = epoch_segment_bytes();
+        fs::write(root.join("segment.cbor"), &segment).unwrap();
+        let manifest = json!({
+            "version": 3,
+            "ledger_id": "b7a1d5e40c6f438e9a75db27c96f31aa",
+            "site_id": "an-001",
+            "segment_number": "0",
+            "commitment_profile_id": COMMITMENT_PROFILE_ID,
+            "disclosure_class": "A",
+            "anchoring": {},
+            "artifacts": {
+                "segment_cbor": {"path": "segment.cbor", "sha256": sha256_hex(&segment)}
+            }
+        });
+        fs::write(
+            root.join("segment.verify.json"),
+            serde_json::to_vec(&manifest).unwrap(),
+        )
+        .unwrap();
+        let result = verify_v2_bundle(&root).unwrap();
+        assert_eq!(result["overall"], "failure");
+        assert_eq!(
+            result["checks_skipped"][0]["reason"],
+            "records_not_disclosed"
         );
         fs::remove_dir_all(root).unwrap();
     }
@@ -1166,7 +1610,10 @@ mod tests {
         .unwrap();
         assert!(verify_v2_bundle(&root).is_ok());
         fs::write(root.join("segment-0.cbor"), b"unrelated bytes").unwrap();
-        assert!(verify_v2_bundle(&root).is_err());
+        assert_eq!(
+            verify_v2_bundle(&root).unwrap()["overall"],
+            Value::String("failure".to_string())
+        );
         fs::remove_dir_all(root).unwrap();
     }
 

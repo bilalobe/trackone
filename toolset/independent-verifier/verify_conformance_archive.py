@@ -404,6 +404,19 @@ def verify_v2_bundles(vector_root: Path, binary: Path) -> int:
                         raise VerifyError(
                             f"v2 compact creation failed:\n{compact.stdout}{compact.stderr}"
                         )
+                    with tarfile.open(archive, mode="r:gz") as compact_tar:
+                        manifest_member = compact_tar.extractfile("segment.verify.json")
+                        if manifest_member is None:
+                            raise VerifyError("v2 compact archive has no manifest")
+                        compact_manifest = json.load(manifest_member)
+                    if (
+                        compact_manifest.get("version") != 3
+                        or "records_pack"
+                        not in compact_manifest.get("artifacts", {})
+                    ):
+                        raise VerifyError(
+                            "v2 compact archive is not an active packed manifest-v3 envelope"
+                        )
                     replay = subprocess.run(
                         [
                             str(binary),
@@ -423,8 +436,13 @@ def verify_v2_bundles(vector_root: Path, binary: Path) -> int:
                             f"v2 compact archive replay failed:\n{replay.stdout}{replay.stderr}"
                         )
                     compact_result = json.loads(replay.stdout)
-                    if compact_result.get("version") != 3 or compact_result.get("overall") != "success":
-                        raise VerifyError("v2 compact archive result is not manifest-v3 success")
+                    if (
+                        compact_result.get("version") != 2
+                        or compact_result.get("overall") != "success"
+                    ):
+                        raise VerifyError(
+                            "v2 compact archive did not emit a successful v2 result"
+                        )
         else:
             expected = read_json(portable(fixture, case.get("expected_error"), "v2 expected error"))
             if expected.get("error_contains") not in completed.stderr:

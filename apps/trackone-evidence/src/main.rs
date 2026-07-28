@@ -8,7 +8,7 @@ use trackone_evidence::{ExportOptions, PolicyMode, VerifyOptions, export_bundle,
 
 fn usage() -> ! {
     eprintln!(
-        "usage:\n  trackone-evidence verify --root DIR --facts DIR [--json] [--pretty] [--policy-mode warn|strict] [--disclosure-class A|B|C] [--commitment-profile-id ID] [--require-ots]\n  trackone-evidence verify-v2 (--root DIR | --archive FILE) [--json] [--pretty] [--tsa-ca-file FILE] [--tsa-intermediates-file FILE] [--tsa-crls-file FILE] [--tsa-policy OID] [--tsa-signer-cert-sha256 HEX] [--allow-missing-tsa]\n  trackone-evidence compact-v2 --root DIR --output FILE [--include-extensions] [--tsa-ca-file FILE] [--tsa-intermediates-file FILE] [--tsa-crls-file FILE] [--tsa-policy OID] [--tsa-signer-cert-sha256 HEX] [--allow-missing-tsa]\n  trackone-evidence export --pipeline-dir DIR --evidence-repo DIR --site SITE --day YYYY-MM-DD [--include-frames] [--git-commit] [--tag] [--tag-name NAME] [--bundle-out PATH]"
+        "usage:\n  trackone-evidence verify --root DIR --facts DIR [--json] [--pretty] [--policy-mode warn|strict] [--disclosure-class A|B|C] [--commitment-profile-id ID] [--require-ots]\n  trackone-evidence verify-v2 (--root DIR | --archive FILE) [--json] [--pretty] [--tsa-ca-file FILE] [--tsa-intermediates-file FILE] [--tsa-crls-file FILE] [--tsa-policy OID] [--tsa-signer-cert-sha256 HEX] [--allow-missing-tsa] [--verifier-policy-id ID] [--verifier-policy-file FILE]\n  trackone-evidence compact-v2 --root DIR --output FILE [--include-extensions] [--tsa-ca-file FILE] [--tsa-intermediates-file FILE] [--tsa-crls-file FILE] [--tsa-policy OID] [--tsa-signer-cert-sha256 HEX] [--allow-missing-tsa] [--verifier-policy-id ID] [--verifier-policy-file FILE]\n  trackone-evidence export --pipeline-dir DIR --evidence-repo DIR --site SITE --day YYYY-MM-DD [--include-frames] [--git-commit] [--tag] [--tag-name NAME] [--bundle-out PATH]"
     );
     std::process::exit(2);
 }
@@ -75,6 +75,16 @@ fn run_verify_v2(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
                     Some(take_value(args, &mut idx, "--tsa-signer-cert-sha256").parse()?)
             }
             "--allow-missing-tsa" => policy.require_tsa = false,
+            "--verifier-policy-id" => {
+                policy.verifier_policy_id = Some(take_value(args, &mut idx, "--verifier-policy-id"))
+            }
+            "--verifier-policy-file" => {
+                policy.verifier_policy_artifact = Some(PathBuf::from(take_value(
+                    args,
+                    &mut idx,
+                    "--verifier-policy-file",
+                )))
+            }
             _ => usage(),
         }
         idx += 1;
@@ -136,6 +146,16 @@ fn run_compact_v2(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
                     Some(take_value(args, &mut idx, "--tsa-signer-cert-sha256").parse()?)
             }
             "--allow-missing-tsa" => policy.require_tsa = false,
+            "--verifier-policy-id" => {
+                policy.verifier_policy_id = Some(take_value(args, &mut idx, "--verifier-policy-id"))
+            }
+            "--verifier-policy-file" => {
+                policy.verifier_policy_artifact = Some(PathBuf::from(take_value(
+                    args,
+                    &mut idx,
+                    "--verifier-policy-file",
+                )))
+            }
             _ => usage(),
         }
         idx += 1;

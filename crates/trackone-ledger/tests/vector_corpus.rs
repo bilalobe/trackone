@@ -175,18 +175,18 @@ fn rust_reproduces_published_commitment_vectors() {
     assert_eq!(hex_sha256(&expected_day_cbor), manifest.day_cbor_sha256);
 }
 
-/// Verify the corrected draft-08 v2 record, Merkle, batch, segment, and strict
+/// Verify the corrected draft-09 v2 record, Merkle, batch, segment, and strict
 /// chain-position vectors from exact on-disk artifacts.
 #[test]
 #[ignore = "requires the monorepo's toolset/vectors corpus – run with --ignored"]
-fn rust_reproduces_draft_08_v2_segment_vectors() {
+fn rust_reproduces_draft_09_v2_segment_vectors() {
     let root = v2_vector_root();
     let manifest: V2Manifest =
         serde_json::from_slice(&fs::read(root.join("manifest.json")).unwrap()).unwrap();
     assert_eq!(manifest.schema, "trackone-v2-vector-manifest-2");
     assert_eq!(
         manifest.draft_revision,
-        "draft-elkhatabi-verifiable-telemetry-ledgers-08"
+        "draft-elkhatabi-verifiable-telemetry-ledgers-09"
     );
     assert_eq!(
         manifest.commitment_profile_id,

@@ -4,7 +4,7 @@ These repository vectors exercise `verifiable-telemetry-canonical-cbor-v2`.
 They are release-bound TrackOne engineering inputs, not normative dependencies
 of the Internet-Draft.
 
-The corpus carries the complete corrected draft-08 compact epoch artifact,
+The corpus carries the complete corrected draft-09 compact epoch artifact,
 its three exact canonical records, embedded batch expectations, artifact
 digest, and CLI-runnable Class A, B, and C bundles. The positive bundles carry
 real RFC 3161 timestamp responses over the authoritative segment artifact and
@@ -18,6 +18,11 @@ segment-7/zero-predecessor artifact as a required negative case. The negative
 bytes remain exactly hash-reproducible but must never decode as a valid v2
 segment. A second Class-A bundle proves a valid segment-1 successor against
 the exact corrected epoch artifact.
+
+The corrected epoch Class A case is the active manifest-v3 baseline for the
+v2 commitment corpus. The remaining bundles retain manifest-v2 coverage as
+read-only compatibility cases. Detached conformance compacts the active case
+into a v3 `records_pack` carrier and verifies the resulting archive.
 
 Layout:
 
