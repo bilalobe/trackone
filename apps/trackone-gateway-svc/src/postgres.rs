@@ -1,4 +1,4 @@
-//! PostgreSQL durable store for the draft-08 v2 producer.
+//! PostgreSQL durable store for the draft-09 v2 producer.
 
 use postgres::{Client, IsolationLevel};
 use trackone_ledger::v2::{ClosurePolicyV1, EmptyMode};

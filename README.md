@@ -34,7 +34,7 @@ pod-fw -> ingest -> gateway-svc -> ledger -> evidence verifier
 
 Canonical evidence is CBOR-backed. JSON and SensorThings outputs are
 read-only projections, and OTS/TSA responses attest to already-created
-artifacts rather than changing their bytes. The current v1 and draft-08 v2
+artifacts rather than changing their bytes. The current v1 and draft-09 v2
 commitment contracts are represented by checked-in schemas, CDDL, vectors, and
 detached-verifier fixtures under [`toolset/`](toolset/).
 
@@ -87,12 +87,15 @@ cargo run --locked -p trackone-evidence -- export \
   --day 2025-10-07
 ```
 
-Draft-08 v2 bundles use the separate policy surface:
+Draft-09 v2 bundles use the separate policy surface:
 
 ```bash
 cargo run --locked -p trackone-evidence -- verify-v2 \
   --root toolset/vectors/verifiable-telemetry-canonical-cbor-v2/fixtures/corrected-epoch-class-a \
-  --allow-missing-tsa
+  --tsa-ca-file toolset/vectors/verifiable-telemetry-canonical-cbor-v2/trust/tsa-root.pem \
+  --tsa-crls-file toolset/vectors/verifiable-telemetry-canonical-cbor-v2/trust/tsa-crls.pem \
+  --tsa-policy 1.3.6.1.4.1.55555.1 \
+  --tsa-signer-cert-sha256 14ab98cafe09d9d1d01562af42d69a904b01023d9cd5b03bd07e5779710c8014
 ```
 
 Use `--json` for machine-readable summaries. Strict v1 verification can
@@ -100,7 +103,7 @@ require an attested OTS proof with `--policy-mode strict --require-ots`.
 
 ## Gateway service
 
-`trackone-gateway-svc` owns the draft-08 v2 HTTP runtime, PostgreSQL state,
+`trackone-gateway-svc` owns the draft-09 v2 HTTP runtime, PostgreSQL state,
 migrations, elapsed-time producer, idempotency handling, and RFC 3161
 submission. The binary is `trackone-v2-gateway`.
 
@@ -138,7 +141,11 @@ The HTTP surface is intentionally small:
 Evidence manifest v3 and `trackone-evidence compact-v2` provide deterministic
 `application/vnd.trackone.evidence-bundle.v3+gzip` carriers with packed Class
 A records. `verify-v2 --archive` applies the same v2 verification after
-bounded safe extraction; manifest v2 remains readable.
+bounded safe extraction; manifest v2 remains readable. Manifest v3 carries
+only verification-critical discovery references and producer
+`present`/`pending` claims. Verifier-authored result v2 reports scoped
+success, partial, or failure without duplicating TSA diagnostics or
+`segment_root`.
 
 The service's Dockerfile, migrations, Helm chart, and local Kustomize tree
 are owned by [`apps/trackone-gateway-svc/deploy/`](apps/trackone-gateway-svc/deploy/).

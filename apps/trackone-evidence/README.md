@@ -32,7 +32,7 @@ Use `--policy-mode strict --require-ots` when a complete OTS attestation is
 required. `--disclosure-class A|B|C`, `--commitment-profile-id ID`, and
 `--json` control the verification policy and output shape.
 
-Verify a draft-08 v2 bundle:
+Verify a draft-09 v2 bundle:
 
 ```bash
 cargo run --locked -p trackone-evidence -- verify-v2 \
@@ -44,9 +44,10 @@ cargo run --locked -p trackone-evidence -- verify-v2 \
 ```
 
 Use `--tsa-intermediates-file` when the deployment validation archive has an
-intermediate CA. JSON results expose the signed TSA-asserted generation time,
-serial number, and optional accuracy. Historical path evaluation at that time
-does not prove when the token was first observed.
+intermediate CA. Baseline JSON results identify the evaluated artifact,
+profile, disclosure scope, executed and skipped checks, per-channel status,
+verifier policy, and overall outcome. TSA-specific diagnostics belong in
+channel extensions rather than the baseline result.
 
 Create and verify a compact manifest-v3 gzip carrier while retaining the
 unchanged v2 commitment:
@@ -66,6 +67,12 @@ packed as exact CBOR byte strings; duplicates are retained. Use
 `--include-extensions` only when extension artifacts are intentionally part
 of the compact disclosure. `--json` is minified for machines and `--pretty`
 opts into formatted output.
+
+Manifest v3 is the active output envelope. It omits operational summaries,
+JSON/digest projections, standalone batch projections, and TSA-info
+projections. Producer channel claims are `present` or `pending`; only verifier
+results use `verified`, `failed`, `missing`, or `skipped`. Legacy manifest v2
+remains read-only input.
 
 Export a curated day-scoped bundle from pipeline output:
 

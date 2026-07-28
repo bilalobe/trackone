@@ -11,12 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add readable manifest envelope v3 with exact-byte record packs,
   `compact-v2`, bounded deterministic gzip carriers, and archive verification.
+  Manifest v3 is active for the canonical Class A vector and compact output;
+  manifest v2 remains readable compatibility input.
 
 ### Changed
 
 - Make `--json` compact and add explicit `--pretty` formatting.
 - Add `--tsa-signer-cert-sha256` and require RFC 5816 signer-certificate
   binding for every present RFC 3161 timestamp response.
+- Narrow manifest v3 to discovery-critical artifacts and producer
+  `present`/`pending` claims. Narrow verification-result v2 to scope, checks,
+  channel outcomes, policy identity, and overall outcome; evaluable failures
+  now produce `overall=failure` before the CLI exits nonzero.
 
 ## [0.1.0-beta.4] - 2026-07-18
 

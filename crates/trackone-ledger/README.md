@@ -16,7 +16,7 @@ This crate owns:
 - block-header and day-record construction for the current commitment profile
 - lowercase SHA-256 hex generation
 - `hex64` normalization and validation used by the integrity/manifest path
-- the isolated draft-08 v2 canonical-record and segment-artifact encoder,
+- the isolated draft-09 v2 canonical-record and segment-artifact encoder,
   strict decoder, validated epoch/successor constructors, stable invariant
   categories, hash-sorted Merkle calculation, and embedded-batch invariants
 

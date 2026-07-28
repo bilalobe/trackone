@@ -1,6 +1,6 @@
 # trackone-gateway-svc
 
-Deployable draft-08 v2 gateway application. It owns the HTTP handoff,
+Deployable draft-09 v2 gateway application. It owns the HTTP handoff,
 PostgreSQL durability and migrations, elapsed-time producer state machine,
 idempotency handling, RFC 3161 submission, and the `trackone-v2-gateway`
 binary.

@@ -51,12 +51,30 @@ duplicates. Verification checks the pack digest, validates slices without
 re-encoding, and applies the existing Class A leaf and Merkle comparisons.
 Manifest v2 remains readable.
 
+Manifest envelope v3 is active under this ADR; it is not deferred. Newly
+curated Class A vectors and compact output use v3. Manifest v2 is retained as
+read-only compatibility input. Envelope v3 changes only portable disclosure:
+canonical records, segment bytes, Merkle rules, predecessor hashes, and the
+`verifiable-telemetry-canonical-cbor-v2` commitment identifier remain
+unchanged.
+
+The verification-result schema remains version 2. Result-schema version and
+manifest-envelope version are independent; accepting a v3 envelope does not
+create or imply a commitment-profile v3. Before publication, result v2 is
+narrowed to the evaluated artifact, profile, disclosure class and scope,
+executed/skipped checks, per-channel verifier status, policy identity, and
+overall outcome. TSA diagnostics and deployment-specific material use
+extensions; `record_multiset_root` is omitted because it duplicates the
+authoritative `segment_root`.
+
 `application/vnd.trackone.evidence-bundle.v3+gzip` is the compact carrier.
 Members are sorted and have zero time/owner metadata and fixed regular-file
 modes; gzip has no filename and uses time zero. The minified v3 manifest keeps
 the segment, disclosed predecessor, TSA response, paired OTS proof and
 metadata, peer attestation, identity, anchoring claims, and disclosure class.
 Operational projections and summaries are omitted. Extensions are opt-in.
+Producer channel claims are limited to `present` and `pending`; verification
+states remain verifier-authored.
 Archive verification rejects non-regular members, links, devices, duplicate
 or non-portable paths, over 10,000 members, compressed data over 64 MiB,
 expanded data over 256 MiB, and members over 64 MiB.
@@ -77,6 +95,10 @@ nonce-tail ingest frames, compact `EnvFact` variants, a new compact
 commitment, and general framed-ingest encodings are deliberately not shipped.
 Each changes bytes or interpretation and therefore requires its own versioned
 contract, vectors, migration policy, and ADR.
+
+A future **commitment profile v3** is part of this deferral. It must use a new
+commitment-profile identifier and must not silently reinterpret v2 artifacts.
+This does not defer the manifest-v3 envelope or v3 gzip carrier enabled above.
 
 ## Consequences
 

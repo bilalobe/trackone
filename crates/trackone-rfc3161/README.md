@@ -1,6 +1,6 @@
 # trackone-rfc3161
 
-Verification of the strict VTL RFC 3161 archived timestamp profile using RFC
+Verification of the VTL RFC 3161 timestamp channel using RFC
 5816 `SigningCertificateV2`, SHA-256 signer-certificate pinning, and historical
 CRL-based certificate-path evaluation.
 

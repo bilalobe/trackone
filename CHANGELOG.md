@@ -17,6 +17,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   evidence verification, vectors, deployment configuration, and conformance
   archives.
 
+### Changed
+
+- Stabilized the draft-09 evidence surface around manifest v3 and the
+  unchanged v2 commitment: producer and verifier states are separated,
+  convenience projections and duplicate result fields are removed, and
+  evaluable verification failures receive structured outcomes.
+
 ## [0.1.0-beta.4] - 2026-07-18
 
 ### Changed
