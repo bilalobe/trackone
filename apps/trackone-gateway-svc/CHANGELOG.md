@@ -4,6 +4,8 @@ All notable changes to trackone-gateway-svc will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.0-beta.5] - 2026-08-08
+
 ### Added
 
 - Add atomic `POST /v2/record-batches`, gzip batch carriers, admission bounds,

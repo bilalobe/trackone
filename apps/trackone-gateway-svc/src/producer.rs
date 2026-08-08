@@ -1,4 +1,4 @@
-//! Draft-08 gateway-service ledger producer state machine.
+//! Draft-09 gateway-service ledger producer state machine.
 //!
 //! The protocol rules live here independently of a concrete database. A store
 //! commits the complete state transition and any sealed artifacts atomically;

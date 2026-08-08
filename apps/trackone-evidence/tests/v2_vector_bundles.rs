@@ -1,4 +1,4 @@
-//! Draft-08 detached bundle vector coverage.
+//! Draft-09 detached bundle vector coverage.
 
 use serde::Deserialize;
 use serde_json::Value;

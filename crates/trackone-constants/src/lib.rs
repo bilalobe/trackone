@@ -51,7 +51,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn alpha14_release_constants_match_manifest_contract() {
+    fn release_constants_match_manifest_contract() {
         assert_eq!(
             COMMITMENT_PROFILE_ID_CANONICAL_CBOR_V1,
             "verifiable-telemetry-canonical-cbor-v1"

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [0.1.0-beta.5] - 2026-08-08
+
 - Migrate CMS parsing and certificate handling to `cms 0.3.0-pre.2`, DER
   0.8.1, and `x509-cert 0.3.0-rc.4`; update nested decoder error typing,
   tag-peeking, and public X.509 accessors for the supported APIs.

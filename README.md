@@ -81,9 +81,11 @@ cargo run --locked -p trackone-evidence -- verify \
 
 Use `--json` for machine-readable summaries. `compact` emits the active
 manifest-v3 gzip carrier, and `verify --archive FILE` verifies that carrier.
-Manifest v2 remains read-only input for the same v2 commitment profile. The
-legacy v1 verifier/export CLI and the old `verify-v2`/`compact-v2` command
-names are removed.
+Manifest v2 remains read-only input for the same v2 commitment profile, and
+the v1 commitment contract remains covered by its schemas and conformance
+vectors. The legacy v1 verifier/export CLI and the old
+`verify-v2`/`compact-v2` command names are intentionally not part of the
+supported application surface.
 
 ## Gateway service
 
