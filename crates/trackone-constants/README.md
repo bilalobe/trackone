@@ -47,8 +47,6 @@ paths.
 - [`trackone-ingest`](../trackone-ingest/README.md) uses sizing, nonce, and tag
   constants for framed admission and fixture emission
 - [`trackone-ots`](../trackone-ots/README.md) uses the bounded verifier timeout
-- [`trackone-python`](../../bindings/trackone-python/README.md) exposes shared
-  labels at the optional Python/native boundary
 - [`trackone-pod-fw`](../trackone-pod-fw/README.md) uses the same sizing and
   protocol policy as host-side code
 - [`trackone-evidence`](../../apps/trackone-evidence/README.md) and

@@ -11,7 +11,7 @@
           "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/base64_string"
         },
         "version": {
-          "const": "1.0"
+          "const": "1.1"
         }
       },
       "required": [
@@ -25,6 +25,10 @@
     "device_entry": {
       "type": "object",
       "properties": {
+        "pod_id": {
+          "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/pod_id_hex16",
+          "description": "Authoritative full device identity bound to this entry's key material. Never derive it from an incoming frame or payload."
+        },
         "salt8": {
           "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/base64_string"
         },
@@ -62,6 +66,7 @@
         }
       },
       "required": [
+        "pod_id",
         "salt8",
         "ck_up"
       ],

@@ -1,5 +1,5 @@
 use serde_json::json;
-use trackone_core::{Fact, FactKind, FactPayload, SampleType};
+use trackone_core::{Fact, FactKind, FactPayload, FactValidationError, SampleType};
 use trackone_ledger::sha256_hex;
 
 use super::mapping::{
@@ -21,6 +21,7 @@ pub struct EnvObservationAdapterContext {
 #[derive(Debug)]
 pub enum AdapterError {
     NotEnvFact,
+    InvalidFact(FactValidationError),
     MissingSensorIdentity {
         pod_id: String,
         observed_property_key: &'static str,
@@ -33,6 +34,7 @@ impl core::fmt::Display for AdapterError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::NotEnvFact => f.write_str("fact is not an environmental observation"),
+            Self::InvalidFact(err) => write!(f, "invalid canonical fact: {err}"),
             Self::MissingSensorIdentity {
                 pod_id,
                 observed_property_key,
@@ -59,6 +61,7 @@ pub fn adapt_env_fact_input(
     fact: &Fact,
     ctx: &EnvObservationAdapterContext,
 ) -> Result<EnvObservationProjectionInput, AdapterError> {
+    fact.validate().map_err(AdapterError::InvalidFact)?;
     let env = match (&fact.kind, &fact.payload) {
         (FactKind::Env, FactPayload::Env(env)) => env,
         _ => return Err(AdapterError::NotEnvFact),
@@ -83,6 +86,7 @@ pub fn adapt_env_fact_input(
 
     Ok(EnvObservationProjectionInput {
         pod_id: fact.pod_id.to_string(),
+        frame_counter: fact.fc,
         site_id: ctx.site_id.clone(),
         sensor_key,
         observed_property_key: observed_property_key.to_owned(),
@@ -207,11 +211,9 @@ mod tests {
             ingest_time: 1_709_251_501,
             pod_time: None,
             kind: FactKind::Env,
-            payload: FactPayload::Env(EnvFact::instant(
-                SampleType::AmbientAirTemperature,
-                1_709_251_500,
-                21.5,
-            )),
+            payload: FactPayload::Env(
+                EnvFact::instant(SampleType::AmbientAirTemperature, 1_709_251_500, 21.5).unwrap(),
+            ),
         };
 
         let input = adapt_env_fact_input(
@@ -227,6 +229,7 @@ mod tests {
         .expect("adapter should succeed");
 
         assert_eq!(input.pod_id, "0000000000000007");
+        assert_eq!(input.frame_counter, 1);
         assert_eq!(input.observed_property_key, "temperature_air");
         assert_eq!(input.stream_key, "raw");
         assert_eq!(
@@ -243,15 +246,18 @@ mod tests {
             ingest_time: 1_709_251_860,
             pod_time: None,
             kind: FactKind::Env,
-            payload: FactPayload::Env(EnvFact::summary(
-                SampleType::AmbientRelativeHumidity,
-                1_709_251_500,
-                1_709_251_800,
-                40.0,
-                45.0,
-                42.0,
-                4,
-            )),
+            payload: FactPayload::Env(
+                EnvFact::summary(
+                    SampleType::AmbientRelativeHumidity,
+                    1_709_251_500,
+                    1_709_251_800,
+                    40.0,
+                    45.0,
+                    42.0,
+                    4,
+                )
+                .unwrap(),
+            ),
         };
 
         let projection = project_fact_env_observation(
@@ -278,11 +284,9 @@ mod tests {
             ingest_time: 1_709_251_860,
             pod_time: None,
             kind: FactKind::Env,
-            payload: FactPayload::Env(EnvFact::instant(
-                SampleType::AmbientAirTemperature,
-                1_709_251_800,
-                19.5,
-            )),
+            payload: FactPayload::Env(
+                EnvFact::instant(SampleType::AmbientAirTemperature, 1_709_251_800, 19.5).unwrap(),
+            ),
         };
 
         let input = adapt_env_fact_input(
@@ -308,11 +312,9 @@ mod tests {
             ingest_time: 1_709_251_860,
             pod_time: None,
             kind: FactKind::Env,
-            payload: FactPayload::Env(EnvFact::instant(
-                SampleType::AmbientAirTemperature,
-                1_709_251_800,
-                20.0,
-            )),
+            payload: FactPayload::Env(
+                EnvFact::instant(SampleType::AmbientAirTemperature, 1_709_251_800, 20.0).unwrap(),
+            ),
         };
 
         let input = adapt_env_fact_input(
@@ -346,11 +348,9 @@ mod tests {
             ingest_time: 1_709_251_860,
             pod_time: None,
             kind: FactKind::Env,
-            payload: FactPayload::Env(EnvFact::instant(
-                SampleType::AmbientAirTemperature,
-                1_709_251_800,
-                20.5,
-            )),
+            payload: FactPayload::Env(
+                EnvFact::instant(SampleType::AmbientAirTemperature, 1_709_251_800, 20.5).unwrap(),
+            ),
         };
 
         let err = adapt_env_fact_input(&fact, &EnvObservationAdapterContext::default())

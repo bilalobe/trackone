@@ -35,11 +35,10 @@ make dev-setup
 pytest -q
 ```
 
-## Python support
+## Python tooling
 
-TrackOne follows a rolling three-minor CPython support window (ADR-013). The
-current default matrix is Python 3.12, 3.13, and 3.14; keep `pyproject.toml`,
-`tox.ini`, and CI aligned when a new CPython minor enters the window.
+Python is used for repository tooling, contract checks, and detached
+verification. It is not a TrackOne product package or runtime binding surface.
 
 ## Code structure
 

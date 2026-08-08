@@ -1,7 +1,7 @@
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 
-use super::mapping::EnvObservationProjectionInput;
+use super::mapping::{EnvObservationProjectionInput, ObservationResult};
 use super::timefmt::{Timestamp, format_rfc3339_utc, parse_rfc3339_timestamp};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -9,6 +9,7 @@ pub enum ValidationError {
     MissingField(&'static str),
     InvalidRfc3339(&'static str),
     InvalidTimeRange,
+    NonFiniteScalarResult,
 }
 
 impl Display for ValidationError {
@@ -17,6 +18,9 @@ impl Display for ValidationError {
             Self::MissingField(field) => write!(f, "missing required field: {field}"),
             Self::InvalidRfc3339(field) => write!(f, "invalid RFC3339 UTC timestamp: {field}"),
             Self::InvalidTimeRange => write!(f, "phenomenon time end must not be before start"),
+            Self::NonFiniteScalarResult => {
+                write!(f, "scalar observation result must be finite")
+            }
         }
     }
 }
@@ -54,6 +58,9 @@ pub fn validate_env_observation_input(
     if phenomenon_end < phenomenon_start {
         return Err(ValidationError::InvalidTimeRange);
     }
+    if matches!(&input.result, ObservationResult::Scalar(value) if !value.is_finite()) {
+        return Err(ValidationError::NonFiniteScalarResult);
+    }
 
     Ok(())
 }
@@ -83,6 +90,7 @@ mod tests {
     fn rejects_empty_fields() {
         let input = EnvObservationProjectionInput {
             pod_id: String::new(),
+            frame_counter: 1,
             site_id: None,
             sensor_key: "shtc3".to_owned(),
             observed_property_key: "temperature_air".to_owned(),
@@ -102,6 +110,7 @@ mod tests {
     fn rejects_invalid_rfc3339() {
         let input = EnvObservationProjectionInput {
             pod_id: "0000000000000007".to_owned(),
+            frame_counter: 1,
             site_id: None,
             sensor_key: "shtc3".to_owned(),
             observed_property_key: "temperature_air".to_owned(),
@@ -123,6 +132,7 @@ mod tests {
     fn rejects_non_canonical_utc_offset_timestamp() {
         let input = EnvObservationProjectionInput {
             pod_id: "0000000000000007".to_owned(),
+            frame_counter: 1,
             site_id: None,
             sensor_key: "shtc3".to_owned(),
             observed_property_key: "temperature_air".to_owned(),
@@ -144,6 +154,7 @@ mod tests {
     fn rejects_non_canonical_fractional_seconds() {
         let input = EnvObservationProjectionInput {
             pod_id: "0000000000000007".to_owned(),
+            frame_counter: 1,
             site_id: None,
             sensor_key: "shtc3".to_owned(),
             observed_property_key: "temperature_air".to_owned(),
@@ -165,6 +176,7 @@ mod tests {
     fn rejects_reverse_time_range_after_parsing() {
         let input = EnvObservationProjectionInput {
             pod_id: "0000000000000007".to_owned(),
+            frame_counter: 1,
             site_id: None,
             sensor_key: "shtc3".to_owned(),
             observed_property_key: "temperature_air".to_owned(),
@@ -177,6 +189,27 @@ mod tests {
         assert_eq!(
             validate_env_observation_input(&input),
             Err(ValidationError::InvalidTimeRange)
+        );
+    }
+
+    #[test]
+    fn rejects_non_finite_scalar_results() {
+        let input = EnvObservationProjectionInput {
+            pod_id: "0000000000000007".to_owned(),
+            frame_counter: 1,
+            site_id: None,
+            sensor_key: "shtc3".to_owned(),
+            observed_property_key: "temperature_air".to_owned(),
+            stream_key: "raw".to_owned(),
+            phenomenon_time_start_rfc3339_utc: "2026-03-06T00:00:00Z".to_owned(),
+            phenomenon_time_end_rfc3339_utc: "2026-03-06T00:00:00Z".to_owned(),
+            result_time_rfc3339_utc: "2026-03-06T00:05:01Z".to_owned(),
+            result: ObservationResult::Scalar(f64::INFINITY),
+        };
+
+        assert_eq!(
+            validate_env_observation_input(&input),
+            Err(ValidationError::NonFiniteScalarResult)
         );
     }
 }

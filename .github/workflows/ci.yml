@@ -200,7 +200,7 @@ jobs:
           # release. Verification already ran in the rust job; verifying each
           # tarball here would resolve siblings from the previous crates.io
           # release instead of this coordinated source set.
-          cargo package --workspace --exclude trackone-python --locked --no-verify
+          cargo package --workspace --locked --no-verify
           cargo build --release --locked -p trackone-evidence
           mkdir -p dist/crates dist/helm
           shopt -s nullglob
@@ -208,7 +208,21 @@ jobs:
           # Eight reusable libraries and two publishable applications.
           test "${#packages[@]}" -eq 10
           cp "${packages[@]}" dist/crates/
-          helm lint apps/trackone-gateway-svc/deploy/helm/trackone
+          helm lint apps/trackone-gateway-svc/deploy/helm/trackone \
+            --set postgres.auth.existingSecret=postgres-auth
+          helm_render="$(mktemp)"
+          helm template trackone apps/trackone-gateway-svc/deploy/helm/trackone \
+            --set postgres.auth.existingSecret=postgres-auth \
+            --set gateway.enabled=true \
+            --set-string gateway.auth.bearerToken=0123456789abcdef0123456789abcdef \
+            --set-string gateway.env.tsaSignerCertSha256=14ab98cafe09d9d1d01562af42d69a904b01023d9cd5b03bd07e5779710c8014 \
+            --set-file gateway.env.tsaCaPem=toolset/vectors/verifiable-telemetry-canonical-cbor-v2/trust/tsa-root.pem \
+            --set-file gateway.env.tsaCrlsPem=toolset/vectors/verifiable-telemetry-canonical-cbor-v2/trust/tsa-crls.pem \
+            >"${helm_render}"
+          grep -Fq 'ssl=on' "${helm_render}"
+          grep -Fq 'hostnossl all all  0.0.0.0/0' "${helm_render}"
+          grep -Fq 'TRACKONE_POSTGRES_CA_FILE: /var/run/trackone-postgres/ca.pem' "${helm_render}"
+          grep -Fq 'secretName: trackone-postgres-tls' "${helm_render}"
           helm package apps/trackone-gateway-svc/deploy/helm/trackone \
             --version "${version}" \
             --app-version "${version}" \

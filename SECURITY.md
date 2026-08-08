@@ -7,8 +7,8 @@ for:
 
 - the current `main` branch
 - the latest tagged alpha release
-- the published Python/Rust packaging surfaces
-- the gateway, verifier, evidence export, and commitment tooling
+- the published Rust packaging surfaces and repository tooling
+- the gateway, verifier, evidence compaction, and commitment tooling
 
 This repository includes experimental and prototype-oriented components. A
 report against those components is still useful, but the expected remediation
@@ -41,11 +41,11 @@ When reporting, include as much of the following as possible:
 - expected impact
 - whether the issue affects confidentiality, integrity, availability, or
   release authenticity
-- any relevant environment details such as Python version, Rust toolchain,
-  operating system, and whether the native extension was installed
+- any relevant environment details such as Python version, Rust toolchain, and
+  operating system
 
 If the issue relates to cryptography, framing, replay handling, artifact
-verification, or publication/export integrity, please say so explicitly.
+verification, or publication/compaction integrity, please say so explicitly.
 
 ## Response Expectations
 
@@ -64,15 +64,14 @@ Because TrackOne is in alpha, some reports may be resolved by:
 ## Security Posture Notes
 
 TrackOne is centered on integrity, replay resistance, deterministic artifact
-generation, and verifier-gated evidence export. The most security-sensitive
+generation, and verifier-gated evidence compaction. The most security-sensitive
 areas include:
 
 - frame admission and anti-replay behavior
 - canonical CBOR commitment generation
 - day artifact verification and manifest validation
 - anchoring and proof sidecar handling
-- export/publication gating
-- native Python/Rust boundary behavior
+- compaction/publication gating
 
 Automated security tooling in CI, including `tox -e security`, is helpful but
 not a substitute for responsible disclosure. Some CI security checks are

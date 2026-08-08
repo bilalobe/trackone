@@ -6,11 +6,11 @@
 default:
     @just --list
 
-# Re-run verifier checks against a pipeline output root
-verify out_dir="out/site_demo":
-    cargo run --package trackone-evidence -- verify --root {{out_dir}} --facts {{out_dir}}/facts
+# Re-run the v2 verifier against the checked-in signed Class-A fixture.
+verify bundle_dir="toolset/vectors/verifiable-telemetry-canonical-cbor-v2/fixtures/corrected-epoch-class-a":
+    cargo run --locked --package trackone-evidence -- verify --root {{bundle_dir}} --tsa-ca-file toolset/vectors/verifiable-telemetry-canonical-cbor-v2/trust/tsa-root.pem --tsa-crls-file toolset/vectors/verifiable-telemetry-canonical-cbor-v2/trust/tsa-crls.pem --tsa-policy 1.3.6.1.4.1.55555.1 --tsa-signer-cert-sha256 14ab98cafe09d9d1d01562af42d69a904b01023d9cd5b03bd07e5779710c8014
 
-# Enforce reusable-library, application, and binding dependency direction.
+# Enforce reusable-library and application dependency direction.
 boundaries:
     python3 toolset/ci/check_workspace_boundaries.py
 
@@ -20,7 +20,6 @@ test:
     cargo test --locked --package trackone-core --features std,postcard,dummy-aead
     cargo test --locked --package trackone-ingest --features std,xchacha
     cargo test --locked --package trackone-pod-fw --features std
-    cargo test --locked --package trackone-python --features python
     cargo test --locked --package trackone-ledger --test vector_corpus -- --ignored
 
 # Run clippy with correct features (avoid --all-features due to production+dummy-aead conflict)
@@ -29,7 +28,6 @@ clippy:
     cargo clippy --locked --package trackone-core --all-targets --features std,postcard,dummy-aead -- -D warnings
     cargo clippy --locked --package trackone-ingest --all-targets --features std,xchacha -- -D warnings
     cargo clippy --locked --package trackone-pod-fw --all-targets --features std -- -D warnings
-    cargo clippy --locked --package trackone-python --all-targets --features python -- -D warnings
 
 # Build all packages in release mode
 build-release:
@@ -39,6 +37,7 @@ build-release:
 build-production:
     cargo build --locked --package trackone-core --no-default-features --features std,production
     cargo build --locked --package trackone-pod-fw --no-default-features --features production
+    ! cargo check --locked --package trackone-pod-fw --no-default-features --features production,trackone-core/dummy-aead
     cargo build --locked --package trackone-gateway-svc --release --bin trackone-v2-gateway
 
 # Run Rust-side serialization benchmarks

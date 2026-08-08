@@ -18,7 +18,7 @@ The conformance boundary consists of:
   recovery, and contiguous segment allocation;
 - `trackone-gateway-svc::postgres`, which provides serializable atomic
   transitions and per-ledger advisory single-writer fencing over PostgreSQL;
-- `trackone-evidence verify-v2`, which performs disclosure-aware Class A, B,
+- `trackone-evidence verify`, which performs disclosure-aware Class A, B,
   and C validation, race-resistant Linux `openat2` artifact access, segment
   and predecessor validation, exact-byte recomputation, and OpenSSL-backed
   RFC 3161 signature, trust-path, imprint, hash-algorithm, and policy checks;
@@ -56,15 +56,17 @@ continuity identifier and invoke recovery before accepting telemetry.
 
 Build the `trackone-gateway-svc` package and run the `trackone-v2-gateway`
 binary. It requires `TRACKONE_DATABASE_URL`,
-`TRACKONE_LEDGER_ID`, `TRACKONE_SITE_ID`, `TRACKONE_TSA_URL`,
-`TRACKONE_TSA_CA_FILE`, and `TRACKONE_TSA_POLICY_OID`; interval, batch, record,
-size, empty-mode, and bind settings use the corresponding `TRACKONE_*`
-environment variables shown by the binary source. `POST /v2/records` accepts only
-`application/cbor` and requires `Idempotency-Key`. Identical bytes replay the
-durably recorded outcome; reuse of the key for different bytes returns HTTP
-409. Exact canonical bytes, interval membership, counters, sealed artifacts,
-serial advancement, and the idempotency outcome share one database
-transaction.
+`TRACKONE_INGEST_BEARER_TOKEN`, `TRACKONE_LEDGER_ID`, `TRACKONE_SITE_ID`,
+`TRACKONE_TSA_URL`, `TRACKONE_TSA_CA_FILE`, `TRACKONE_TSA_CRLS_FILE`, and
+`TRACKONE_TSA_POLICY_OID`; interval, batch, record, size, empty-mode, and bind
+settings use the corresponding `TRACKONE_*` environment variables shown by
+the binary source. PostgreSQL connections use verified TLS unless the
+development-only `TRACKONE_POSTGRES_TLS_MODE=disable` setting is explicit.
+`POST /v2/records` accepts only `application/cbor` and requires both
+`Idempotency-Key` and bearer authentication. Identical bytes replay the durably
+recorded outcome; reuse of the key for different bytes returns HTTP 409. Exact
+canonical bytes, interval membership, counters, sealed artifacts, serial
+advancement, and the idempotency outcome share one database transaction.
 On a site's first epoch, the gateway generates a 16-byte ledger identifier from
 the operating-system CSPRNG and persists it in the PostgreSQL active-epoch
 table. Restarts reuse that durable mapping. During upgrades from databases that

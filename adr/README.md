@@ -12,15 +12,13 @@ The current package allocation is defined by
 
 - reusable domain libraries live under `crates/`
 - deployable/operator-facing packages live under `apps/`
-- optional language adapters live under `bindings/`
 - cross-cutting schemas, vectors, and detached-verifier tooling live under
   `toolset/`
 
 When an older ADR mentions the former `trackone-gateway` package, the
-application-owned `trackone-gateway-svc`, reusable `trackone-ots`, and
-unpublished `trackone-python` packages described by ADR-061 are the current
-implementation. Historical protocol and security decisions remain in force
-unless an ADR explicitly supersedes them.
+application-owned `trackone-gateway-svc` and reusable `trackone-ots` packages
+described by ADR-061 are the current implementation. Historical protocol and
+security decisions remain in force unless an ADR explicitly supersedes them.
 
 ## Index (Project)
 
@@ -221,9 +219,9 @@ Entries list **Status** and **Summary**. Related references are grouped under **
   **Status**: Accepted
   **Summary**: Keeps convenience dependencies from hardening into architecture boundaries; its former mixed-gateway package allocation is superseded by ADR-061.
 
-- **[ADR-061](ADR-061-library-application-and-binding-package-boundaries.md): Library, application, and binding package boundaries**
+- **[ADR-061](ADR-061-library-application-and-binding-package-boundaries.md): Library and application package boundaries**
   **Status**: Accepted
-  **Summary**: Separates reusable libraries, deployable applications, and optional bindings; extracts `trackone-ots`, establishes the gateway-service and evidence app boundaries, confines PyO3 to `trackone-python`, and assigns deployment assets to the service app.
+  **Summary**: Separates reusable libraries and deployable applications, extracts `trackone-ots`, establishes the gateway-service and evidence app boundaries, removes the legacy PyO3 binding, and assigns deployment assets to the service app.
 
 - **[ADR-062](ADR-062-rfc5816-signer-certificate-binding.md): RFC 5816 signer-certificate binding**
   **Status**: Accepted, 2026-07-19

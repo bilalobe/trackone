@@ -9,7 +9,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-LAYERS = {"crates", "apps", "bindings"}
+LAYERS = {"crates", "apps"}
 
 
 def layer_for(path: Path) -> str:
@@ -56,9 +56,6 @@ def check() -> tuple[int, int]:
     for package in packages:
         name = package["name"]
         source_layer = package_layers[name]
-        if source_layer == "bindings" and package["publish"] != []:
-            errors.append(f"{name}: binding packages must set publish = false")
-
         for target in package["targets"]:
             if "lib" in target["kind"]:
                 expected = name.replace("-", "_")
@@ -82,11 +79,6 @@ def check() -> tuple[int, int]:
                 errors.append(
                     f"{name}: {source_layer} packages may not depend on "
                     f"{target_layer} package {target['name']}"
-                )
-            if source_layer == "bindings" and target_layer != "crates":
-                errors.append(
-                    f"{name}: bindings may depend only on reusable crates, "
-                    f"not {target_layer} package {target['name']}"
                 )
 
     if errors:
