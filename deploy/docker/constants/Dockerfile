@@ -15,7 +15,6 @@ COPY Cargo.toml Cargo.lock ./
 COPY crates/trackone-constants/Cargo.toml crates/trackone-constants/Cargo.toml
 COPY crates ./crates
 COPY apps ./apps
-COPY bindings ./bindings
 
 RUN cargo build -p trackone-constants
 

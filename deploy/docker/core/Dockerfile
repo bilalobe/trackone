@@ -27,7 +27,6 @@ COPY crates/trackone-core/Cargo.toml crates/trackone-core/Cargo.toml
 COPY crates/trackone-constants/Cargo.toml crates/trackone-constants/Cargo.toml
 COPY crates ./crates
 COPY apps ./apps
-COPY bindings ./bindings
 
 # Vendor dependencies at image build time so the in-cluster Job can run fully offline.
 RUN mkdir -p .cargo && \

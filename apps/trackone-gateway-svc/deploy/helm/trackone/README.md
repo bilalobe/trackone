@@ -171,6 +171,11 @@ present. When the chart manages the Secret, set `gateway.env.tsaCaPem` and
 `gateway.env.tsaIntermediatesPem`, and configure the TSA URL, policy OID, and
 SHA-256 DER signer-certificate pin as `gateway.env.tsaSignerCertSha256`.
 
+Do not combine `gateway.existingSecret` with an inline
+`gateway.postgres.caPem` when using an external PostgreSQL server. Put the CA
+in the existing gateway Secret as `postgres-ca.pem` and set
+`gateway.existingSecretHasPostgresCa=true` instead.
+
 The gateway defaults to `gateway.postgres.tlsMode=verify-full`. When the
 chart-managed PostgreSQL workload is enabled, its CA is mounted into the
 gateway automatically. `gateway.postgres.caPem` (preferably with `--set-file`)
