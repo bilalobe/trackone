@@ -20,11 +20,9 @@ fn sample_fact() -> Fact {
         ingest_time: 0,
         pod_time: Some(1_700_000_000),
         kind: FactKind::Env,
-        payload: FactPayload::Env(EnvFact::instant(
-            SampleType::AmbientAirTemperature,
-            1_700_000_000,
-            21.5,
-        )),
+        payload: FactPayload::Env(
+            EnvFact::instant(SampleType::AmbientAirTemperature, 1_700_000_000, 21.5).unwrap(),
+        ),
     }
 }
 
@@ -125,16 +123,50 @@ fn postcard_fact_roundtrips_and_validates_frame_binding() {
     let fact = sample_fact();
     let (encoded, used) = encode_fact_postcard_buf(&fact).expect("encode");
     let decoded = decode_fact_postcard(&encoded[..used]).expect("decode");
+    let expected_pod_id = PodId::from(0x1234u32);
 
     assert_eq!(decoded, fact);
-    assert_eq!(validate_fact_binding(&decoded, 0x1234, 7), Ok(()));
+    assert_eq!(validate_fact_binding(&decoded, expected_pod_id, 7), Ok(()));
     assert_eq!(
-        validate_fact_binding(&decoded, 0x5678, 7),
+        validate_fact_binding(&decoded, PodId::from(0x5678u32), 7),
         Err(FramedFactBindingError::PodIdMismatch)
     );
     assert_eq!(
-        validate_fact_binding(&decoded, 0x1234, 8),
+        validate_fact_binding(&decoded, expected_pod_id, 8),
         Err(FramedFactBindingError::FrameCounterMismatch)
+    );
+}
+
+#[test]
+fn postcard_fact_decode_rejects_invalid_semantics() {
+    let mut fact = sample_fact();
+    fact.kind = FactKind::Health;
+    let mut encoded = [0u8; MAX_FACT_LEN];
+    let used = postcard::to_slice(&fact, &mut encoded).expect("serialize invalid fixture");
+
+    assert!(matches!(
+        decode_fact_postcard(used),
+        Err(Error::InvalidFact(_))
+    ));
+    assert!(matches!(
+        encode_fact_postcard(&fact, &mut encoded),
+        Err(Error::InvalidFact(_))
+    ));
+}
+
+#[test]
+fn fact_binding_rejects_a_different_full_pod_id_with_the_same_legacy_suffix() {
+    let expected_pod_id = PodId::from([0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0x12, 0x34]);
+    let mut fact = sample_fact();
+    fact.pod_id = PodId::from([0xff, 0xee, 0xdd, 0xcc, 0xbb, 0xaa, 0x12, 0x34]);
+
+    assert_eq!(
+        legacy_dev_id_from_pod_id(fact.pod_id),
+        legacy_dev_id_from_pod_id(expected_pod_id)
+    );
+    assert_eq!(
+        validate_fact_binding(&fact, expected_pod_id, 7),
+        Err(FramedFactBindingError::PodIdMismatch)
     );
 }
 
@@ -145,18 +177,47 @@ fn fact_encrypt_decrypt_roundtrip() {
     let fact = make_fact(
         PodId::from(5u32),
         1,
-        FactPayload::Env(EnvFact::instant(
-            SampleType::AmbientAirTemperature,
-            1_700_000_000,
-            20.0,
-        )),
-    );
+        FactPayload::Env(
+            EnvFact::instant(SampleType::AmbientAirTemperature, 1_700_000_000, 20.0).unwrap(),
+        ),
+    )
+    .unwrap();
 
     let nonce = [0u8; AEAD_NONCE_LEN];
     let enc = encrypt_fact::<128, _>(&cipher, nonce, &fact).expect("encrypt fact");
-    let dec = decrypt_fact::<128, _>(&cipher, &enc).expect("decrypt fact");
+    let dec = decrypt_fact::<128, _>(&cipher, &enc, fact.pod_id).expect("decrypt fact");
 
     assert_eq!(fact, dec);
+}
+
+#[test]
+fn generic_decrypt_rejects_same_suffix_full_identity_substitution() {
+    let expected_pod_id = PodId::from([0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0x12, 0x34]);
+    let forged_pod_id = PodId::from([0xff, 0xee, 0xdd, 0xcc, 0xbb, 0xaa, 0x12, 0x34]);
+    let cipher = DummyAead::new(b"frame-test-key");
+    let fact = make_fact(
+        forged_pod_id,
+        1,
+        FactPayload::Env(
+            EnvFact::instant(SampleType::AmbientAirTemperature, 1_700_000_000, 20.0).unwrap(),
+        ),
+    )
+    .unwrap();
+    let mut frame =
+        encrypt_fact::<128, _>(&cipher, [0; AEAD_NONCE_LEN], &fact).expect("encrypt fact");
+
+    // The legacy AAD is unchanged because both identities have the same
+    // suffix. Exact post-decryption binding must still reject the payload.
+    assert_eq!(
+        legacy_dev_id_from_pod_id(expected_pod_id),
+        legacy_dev_id_from_pod_id(forged_pod_id)
+    );
+    frame.pod_id = expected_pod_id;
+
+    assert_eq!(
+        decrypt_fact::<128, _>(&cipher, &frame, expected_pod_id),
+        Err(Error::CryptoError)
+    );
 }
 
 #[test]
@@ -165,16 +226,15 @@ fn fact_encrypt_decrypt_use_dev_id_msg_type_flags_aad() {
     let fact = make_fact(
         PodId::from(0x1234u32),
         1,
-        FactPayload::Env(EnvFact::instant(
-            SampleType::AmbientAirTemperature,
-            1_700_000_000,
-            20.0,
-        )),
-    );
+        FactPayload::Env(
+            EnvFact::instant(SampleType::AmbientAirTemperature, 1_700_000_000, 20.0).unwrap(),
+        ),
+    )
+    .unwrap();
 
     let nonce = [0u8; AEAD_NONCE_LEN];
     let enc = encrypt_fact::<128, _>(&cipher, nonce, &fact).expect("encrypt fact");
-    let dec = decrypt_fact::<128, _>(&cipher, &enc).expect("decrypt fact");
+    let dec = decrypt_fact::<128, _>(&cipher, &enc, fact.pod_id).expect("decrypt fact");
 
     assert_eq!(fact, dec);
 }
@@ -184,16 +244,20 @@ fn fact_serialization_within_max_len() {
     let fact = make_fact(
         PodId::from(99u32),
         12345,
-        FactPayload::Env(EnvFact::summary(
-            SampleType::AmbientRelativeHumidity,
-            1_700_000_000,
-            1_700_003_600,
-            50.0,
-            70.0,
-            60.0,
-            144,
-        )),
-    );
+        FactPayload::Env(
+            EnvFact::summary(
+                SampleType::AmbientRelativeHumidity,
+                1_700_000_000,
+                1_700_003_600,
+                50.0,
+                70.0,
+                60.0,
+                144,
+            )
+            .unwrap(),
+        ),
+    )
+    .unwrap();
 
     let mut buf = [0u8; MAX_FACT_LEN];
     let used = postcard::to_slice(&fact, &mut buf).expect("serialize fact");
@@ -211,12 +275,11 @@ fn encrypt_fact_ciphertext_buffer_too_small() {
     let fact = make_fact(
         PodId::from(1u32),
         1,
-        FactPayload::Env(EnvFact::instant(
-            SampleType::AmbientAirTemperature,
-            1_700_000_000,
-            20.0,
-        )),
-    );
+        FactPayload::Env(
+            EnvFact::instant(SampleType::AmbientAirTemperature, 1_700_000_000, 20.0).unwrap(),
+        ),
+    )
+    .unwrap();
 
     let result = encrypt_fact::<1, _>(&cipher, [0u8; AEAD_NONCE_LEN], &fact);
     assert!(result.is_err(), "should fail with small buffer");
@@ -229,12 +292,11 @@ fn decrypt_fact_corrupted_ciphertext() {
     let fact = make_fact(
         PodId::from(5u32),
         1,
-        FactPayload::Env(EnvFact::instant(
-            SampleType::AmbientAirTemperature,
-            1_700_000_000,
-            20.0,
-        )),
-    );
+        FactPayload::Env(
+            EnvFact::instant(SampleType::AmbientAirTemperature, 1_700_000_000, 20.0).unwrap(),
+        ),
+    )
+    .unwrap();
 
     let mut enc =
         encrypt_fact::<128, _>(&cipher, [0u8; AEAD_NONCE_LEN], &fact).expect("encrypt fact");
@@ -242,7 +304,7 @@ fn decrypt_fact_corrupted_ciphertext() {
         enc.ciphertext[0] ^= 0xFF;
     }
 
-    let result = decrypt_fact::<128, _>(&cipher, &enc);
+    let result = decrypt_fact::<128, _>(&cipher, &enc, fact.pod_id);
     if let Ok(decoded) = result {
         assert_ne!(decoded, fact);
     }
@@ -263,7 +325,7 @@ fn decrypt_fact_buffer_size_mismatch() {
         ciphertext: large_ciphertext,
     };
 
-    let result = decrypt_fact::<512, _>(&cipher, &frame);
+    let result = decrypt_fact::<512, _>(&cipher, &frame, frame.pod_id);
     assert!(result.is_err());
     assert_eq!(result.unwrap_err(), Error::DeserializeError);
 }
@@ -307,27 +369,45 @@ fn replay_snapshot_preserves_reordered_observations() {
     let mut state = ReplayWindow::new(4, None);
     state.check_and_update(10).unwrap();
     state.check_and_update(8).unwrap();
-    let restored = ReplayWindow::from_snapshot(state.snapshot("device-101:epoch-1")).unwrap();
+    let snapshot = state.snapshot("device-101:epoch-1").unwrap();
+    let restored = ReplayWindow::from_snapshot("device-101:epoch-1", snapshot).unwrap();
     let mut restored = restored;
     assert_eq!(restored.check_and_update(10), Err(RejectReason::Duplicate));
     assert_eq!(restored.check_and_update(8), Err(RejectReason::Duplicate));
 }
 
+#[cfg(feature = "std")]
+#[test]
+fn replay_snapshot_requires_the_expected_nonempty_namespace() {
+    let state = ReplayWindow::new(4, Some(10));
+    assert_eq!(state.snapshot(""), Err(RejectReason::ReplayNamespaceEmpty));
+
+    let snapshot = state.snapshot("device-101:epoch-1").unwrap();
+    assert_eq!(
+        ReplayWindow::from_snapshot("", snapshot.clone()),
+        Err(RejectReason::ReplayNamespaceEmpty)
+    );
+    assert_eq!(
+        ReplayWindow::from_snapshot("device-101:epoch-2", snapshot),
+        Err(RejectReason::ReplayNamespaceMismatch)
+    );
+}
+
 #[cfg(feature = "xchacha")]
-fn sample_frame_and_device() -> (FrameInput<'static>, [u8; 8], [u8; 32]) {
+fn frame_and_device_for_fact_pod_id(
+    fact_pod_id: PodId,
+) -> (FrameInput<'static>, [u8; 8], [u8; 32]) {
     let key = [7u8; 32];
     let salt8 = *b"salt0001";
     let fact = Fact {
-        pod_id: PodId::from(1u32),
+        pod_id: fact_pod_id,
         fc: 3,
         ingest_time: 0,
         pod_time: Some(1_700_000_000),
         kind: FactKind::Env,
-        payload: FactPayload::Env(EnvFact::instant(
-            SampleType::AmbientAirTemperature,
-            1_700_000_000,
-            21.5,
-        )),
+        payload: FactPayload::Env(
+            EnvFact::instant(SampleType::AmbientAirTemperature, 1_700_000_000, 21.5).unwrap(),
+        ),
     };
     let (plaintext, used) = encode_fact_postcard_buf(&fact).expect("encode");
     let nonce = framed_nonce(salt8, 3, *b"rand0001");
@@ -360,21 +440,53 @@ fn sample_frame_and_device() -> (FrameInput<'static>, [u8; 8], [u8; 32]) {
 }
 
 #[cfg(feature = "xchacha")]
+fn sample_frame_and_device() -> (FrameInput<'static>, [u8; 8], [u8; 32]) {
+    frame_and_device_for_fact_pod_id(PodId::from(1u32))
+}
+
+#[cfg(feature = "xchacha")]
+fn sample_device_material<'a>(salt8: &'a [u8], ck_up: &'a [u8]) -> DeviceMaterial<'a> {
+    DeviceMaterial::new(PodId::from(1u32), salt8, ck_up)
+}
+
+#[cfg(feature = "xchacha")]
 #[test]
 fn validate_and_decrypt_succeeds_for_valid_frame() {
     let (frame, salt8, key) = sample_frame_and_device();
-    let accepted = validate_and_decrypt(
-        frame,
-        DeviceMaterial {
-            salt8: &salt8,
-            ck_up: &key,
-        },
-    )
-    .expect("postcard fact");
+    let accepted =
+        validate_and_decrypt(frame, sample_device_material(&salt8, &key)).expect("postcard fact");
 
     assert_eq!(accepted.fact.pod_id, PodId::from(1u32));
     assert_eq!(accepted.fact.fc, 3);
     assert_eq!(accepted.fact.kind, FactKind::Env);
+}
+
+#[cfg(feature = "xchacha")]
+#[test]
+fn admission_rejects_a_forged_full_pod_id_with_the_same_legacy_suffix() {
+    let expected_pod_id = PodId::from(1u32);
+    let forged_pod_id = PodId::from([0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x00, 0x01]);
+    assert_eq!(
+        legacy_dev_id_from_pod_id(forged_pod_id),
+        legacy_dev_id_from_pod_id(expected_pod_id)
+    );
+    let (frame, salt8, key) = frame_and_device_for_fact_pod_id(forged_pod_id);
+
+    let err = validate_and_decrypt(frame, DeviceMaterial::new(expected_pod_id, &salt8, &key))
+        .unwrap_err();
+
+    assert_eq!(err, RejectReason::PayloadDeviceIdMismatch);
+}
+
+#[cfg(feature = "xchacha")]
+#[test]
+fn admission_rejects_key_material_selected_for_a_different_header_identity() {
+    let (frame, salt8, key) = sample_frame_and_device();
+
+    let err = validate_and_decrypt(frame, DeviceMaterial::new(PodId::from(2u32), &salt8, &key))
+        .unwrap_err();
+
+    assert_eq!(err, RejectReason::HeaderDeviceIdMismatch);
 }
 
 #[cfg(feature = "xchacha")]
@@ -389,13 +501,29 @@ fn validate_and_decrypt_rejects_nonzero_flags() {
             },
             ..frame
         },
-        DeviceMaterial {
-            salt8: &salt8,
-            ck_up: &key,
-        },
+        sample_device_material(&salt8, &key),
     )
     .unwrap_err();
     assert_eq!(err, RejectReason::UnsupportedFlags);
+}
+
+#[cfg(feature = "xchacha")]
+#[test]
+fn validate_and_decrypt_rejects_non_fact_message_type_before_decryption() {
+    let (frame, salt8, key) = sample_frame_and_device();
+    let err = validate_and_decrypt(
+        FrameInput {
+            header: FrameHeader {
+                msg_type: FRAMED_FACT_MSG_TYPE.wrapping_add(1),
+                ..frame.header
+            },
+            ..frame
+        },
+        sample_device_material(&salt8, &key),
+    )
+    .unwrap_err();
+
+    assert_eq!(err, RejectReason::UnsupportedMessageType);
 }
 
 #[cfg(feature = "xchacha")]
@@ -430,14 +558,7 @@ fn rust_postcard_profile_rejects_legacy_tlv_plaintext() {
         ct,
         tag,
     };
-    let err = validate_and_decrypt(
-        frame,
-        DeviceMaterial {
-            salt8: &salt8,
-            ck_up: &key,
-        },
-    )
-    .unwrap_err();
+    let err = validate_and_decrypt(frame, sample_device_material(&salt8, &key)).unwrap_err();
     assert_eq!(err, RejectReason::DecryptFailed);
 }
 
@@ -477,10 +598,7 @@ fn postcard_fact_counter_must_match_frame_counter() {
             ct,
             tag,
         },
-        DeviceMaterial {
-            salt8: &salt8,
-            ck_up: &key,
-        },
+        sample_device_material(&salt8, &key),
     )
     .unwrap_err();
     assert_eq!(err, RejectReason::PayloadFcMismatch);
@@ -496,10 +614,7 @@ fn validate_and_decrypt_rejects_oversized_ciphertext() {
             ct: &oversized,
             ..frame
         },
-        DeviceMaterial {
-            salt8: &salt8,
-            ck_up: &key,
-        },
+        sample_device_material(&salt8, &key),
     )
     .unwrap_err();
     assert_eq!(err, RejectReason::CiphertextTooLarge);
@@ -513,10 +628,7 @@ fn emit_fixture_produces_admissible_frame() {
     let fixture = emit_fixture(
         1,
         3,
-        DeviceMaterial {
-            salt8: &salt8,
-            ck_up: &key,
-        },
+        sample_device_material(&salt8, &key),
         1,
         0,
         Some(1_700_000_000),
@@ -535,15 +647,61 @@ fn emit_fixture_produces_admissible_frame() {
             ct: &fixture.ct,
             tag: &fixture.tag,
         },
-        DeviceMaterial {
-            salt8: &salt8,
-            ck_up: &key,
-        },
+        sample_device_material(&salt8, &key),
     )
     .expect("fixture decrypt");
 
     assert_eq!(accepted.fact.pod_id, PodId::from(1u32));
     assert_eq!(accepted.fact.fc, 3);
+}
+
+#[cfg(feature = "xchacha")]
+#[test]
+fn emit_fixture_preserves_the_complete_provisioned_pod_id() {
+    let salt8 = *b"salt0001";
+    let key = [7u8; 32];
+    let expected_pod_id = PodId::from([0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0x00, 0x01]);
+    let device = DeviceMaterial::new(expected_pod_id, &salt8, &key);
+    let fixture = emit_fixture(1, 3, device, 1, 0, Some(1_700_000_000)).expect("fixture");
+
+    let accepted = validate_and_decrypt(
+        FrameInput {
+            header: FrameHeader {
+                dev_id: fixture.dev_id,
+                msg_type: fixture.msg_type,
+                fc: fixture.fc,
+                flags: fixture.flags,
+            },
+            nonce: &fixture.nonce,
+            ct: &fixture.ct,
+            tag: &fixture.tag,
+        },
+        device,
+    )
+    .expect("fixture decrypt");
+
+    assert_eq!(accepted.fact.pod_id, expected_pod_id);
+}
+
+#[cfg(feature = "xchacha")]
+#[test]
+fn emit_fixture_rejects_a_header_for_different_provisioned_material() {
+    let salt8 = *b"salt0001";
+    let key = [7u8; 32];
+    let err = emit_fixture(
+        1,
+        3,
+        DeviceMaterial::new(PodId::from(2u32), &salt8, &key),
+        1,
+        0,
+        Some(1_700_000_000),
+    )
+    .unwrap_err();
+
+    assert_eq!(
+        err,
+        FixtureError::Reject(RejectReason::HeaderDeviceIdMismatch)
+    );
 }
 
 #[cfg(feature = "xchacha")]
@@ -554,10 +712,7 @@ fn emit_fixture_rejects_nonzero_flags() {
     let err = emit_fixture(
         1,
         3,
-        DeviceMaterial {
-            salt8: &salt8,
-            ck_up: &key,
-        },
+        sample_device_material(&salt8, &key),
         1,
         1,
         Some(1_700_000_000),
