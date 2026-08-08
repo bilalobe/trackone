@@ -15,6 +15,7 @@ no binding-layer dependency.
 The binary requires:
 
 - `TRACKONE_DATABASE_URL`
+- `TRACKONE_INGEST_BEARER_TOKEN` — 32–256 visible ASCII characters
 - `TRACKONE_LEDGER_ID` — 32 lowercase hexadecimal characters
 - `TRACKONE_SITE_ID`
 - `TRACKONE_TSA_URL`
@@ -32,6 +33,17 @@ Optional settings are `TRACKONE_BIND` (default `0.0.0.0:8080`),
 `TRACKONE_MAX_ADMISSION_BYTES` (default 4,194,304; hard maximum 16,777,216).
 `TRACKONE_TSA_INTERMEDIATES_FILE` supplies a
 deployment-managed intermediate bundle when the TSA path requires one.
+`TRACKONE_INGEST_BEARER_TOKEN_PREVIOUS` optionally keeps the prior credential
+valid during a bounded two-token rotation window.
+
+PostgreSQL uses hostname-verified TLS by default
+(`TRACKONE_POSTGRES_TLS_MODE=verify-full`). Set
+`TRACKONE_POSTGRES_CA_FILE` when a private CA must be added to the platform
+trust store. Plaintext is accepted only when
+`TRACKONE_POSTGRES_TLS_MODE=disable` is explicitly selected for development.
+The app-owned Helm chart enables TLS and TLS-only host authentication on its
+bundled PostgreSQL workload and mounts that workload's CA into the gateway
+automatically.
 
 TSA configuration and validation material are loaded and validated at
 startup. Stamping derives one SHA-256 digest from the authoritative artifact,
@@ -50,12 +62,14 @@ cargo run --locked -p trackone-gateway-svc --bin trackone-v2-gateway
 
 - `GET /healthz` returns `{ "ok": true, "profile": "...v2" }`.
 - `POST /v2/records` accepts one canonical record as
-  `application/cbor`. Every request must include an `Idempotency-Key`.
+  `application/cbor`. Every request must include `Idempotency-Key` and
+  `Authorization: Bearer <token>`.
 - `POST /v2/record-batches` accepts a shortest-form definite CBOR array of
   canonical-record byte strings as
   `application/vnd.trackone.record-batch.v1+cbor`. This route also accepts
   `Content-Encoding: gzip`; its idempotency digest covers the expanded
-  envelope, so compressed and identity requests replay identically.
+  envelope, so compressed and identity requests replay identically. Both POST
+  routes require bearer authentication; `/healthz` remains public.
 
 Successful admissions return `201 Created`; an idempotent replay returns
 `200 OK`. `Prefer: return=minimal` returns an empty success body with
@@ -74,12 +88,15 @@ accepted.
 
 ## Owned assets and checks
 
-The package owns its production [Dockerfile](deploy/Dockerfile), Helm chart,
-local Kustomize tree, and PostgreSQL migration under `migrations/`.
+The package owns its production [Dockerfile](deploy/Dockerfile), Helm runtime
+chart, and PostgreSQL migration under `migrations/`. The local Kustomize tree
+is retained only for reusable build-check Jobs and does not define runtime
+gateway, Postgres, or OTS resources.
 
 ```bash
 cargo test --locked -p trackone-gateway-svc
 cargo build --locked -p trackone-gateway-svc --release --bin trackone-v2-gateway
-helm lint apps/trackone-gateway-svc/deploy/helm/trackone
+helm lint apps/trackone-gateway-svc/deploy/helm/trackone \
+  --set postgres.auth.existingSecret=postgres-auth
 kubectl kustomize apps/trackone-gateway-svc/deploy/k8s/local/overlays/local
 ```

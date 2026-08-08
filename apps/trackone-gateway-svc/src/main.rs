@@ -1,15 +1,22 @@
 use std::env;
+use std::fs;
 use std::net::SocketAddr;
+use std::str::FromStr;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
-use postgres::{Client, NoTls};
+use native_tls::{Certificate, TlsConnector};
+use postgres::config::SslMode;
+use postgres::{Client, Config, NoTls};
+use postgres_native_tls::MakeTlsConnector;
 use trackone_gateway_svc::postgres::PostgresLedgerStore;
 use trackone_gateway_svc::producer::{ElapsedClock, ProducerError, V2LedgerProducer};
+use trackone_gateway_svc::service::{
+    AdmissionAuth, GatewayHttpState, drain_pending_tsa_segments, router,
+};
 use trackone_gateway_svc::service::{
     DEFAULT_MAX_ADMISSION_BYTES, DEFAULT_MAX_BATCH_RECORDS, HARD_MAX_ADMISSION_BYTES,
     HARD_MAX_BATCH_RECORDS,
 };
-use trackone_gateway_svc::service::{GatewayHttpState, drain_pending_tsa_segments, router};
 use trackone_gateway_svc::tsa::Rfc3161TimestampAuthority;
 use trackone_ledger::v2::{ClosurePolicyV1, EmptyMode};
 use trackone_rfc3161::SignerCertificateSha256;
@@ -51,9 +58,61 @@ fn optional_u64(name: &str) -> Result<Option<u64>, Box<dyn std::error::Error>> {
         .transpose()
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum PostgresTlsMode {
+    VerifyFull,
+    Disable,
+}
+
+impl PostgresTlsMode {
+    fn parse(raw: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        match raw {
+            "verify-full" => Ok(Self::VerifyFull),
+            "disable" => Ok(Self::Disable),
+            _ => Err(
+                "TRACKONE_POSTGRES_TLS_MODE must be verify-full or disable (development only)"
+                    .into(),
+            ),
+        }
+    }
+}
+
+fn connect_postgres(
+    database_url: &str,
+    mode: PostgresTlsMode,
+    ca_file: Option<&str>,
+) -> Result<Client, Box<dyn std::error::Error>> {
+    let mut config = Config::from_str(database_url)?;
+    match mode {
+        PostgresTlsMode::VerifyFull => {
+            config.ssl_mode(SslMode::Require);
+            let mut builder = TlsConnector::builder();
+            if let Some(path) = ca_file {
+                builder.add_root_certificate(Certificate::from_pem(&fs::read(path)?)?);
+            }
+            Ok(config.connect(MakeTlsConnector::new(builder.build()?))?)
+        }
+        PostgresTlsMode::Disable => {
+            config.ssl_mode(SslMode::Disable);
+            Ok(config.connect(NoTls)?)
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let database_url = required("TRACKONE_DATABASE_URL")?;
+    let postgres_tls_mode = PostgresTlsMode::parse(
+        &env::var("TRACKONE_POSTGRES_TLS_MODE").unwrap_or_else(|_| "verify-full".to_string()),
+    )?;
+    let postgres_ca_file = env::var("TRACKONE_POSTGRES_CA_FILE")
+        .ok()
+        .filter(|value| !value.is_empty());
+    let bearer_token = required("TRACKONE_INGEST_BEARER_TOKEN")?;
+    let previous_bearer_token = env::var("TRACKONE_INGEST_BEARER_TOKEN_PREVIOUS")
+        .ok()
+        .filter(|value| !value.is_empty());
+    let admission_auth = AdmissionAuth::new(&bearer_token, previous_bearer_token.as_deref())?;
     let ledger_id = required("TRACKONE_LEDGER_ID")?;
     let site_id = required("TRACKONE_SITE_ID")?;
     let tsa_url = required("TRACKONE_TSA_URL")?;
@@ -101,7 +160,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Err("TRACKONE_MAX_ADMISSION_BYTES must be between 1 and 16777216".into());
     }
 
-    let client = Client::connect(&database_url, NoTls)?;
+    let client = connect_postgres(
+        &database_url,
+        postgres_tls_mode,
+        postgres_ca_file.as_deref(),
+    )?;
     let mut store = PostgresLedgerStore::new(client, &ledger_id);
     store.migrate()?;
     let timestamp_authority = Rfc3161TimestampAuthority::new(
@@ -126,10 +189,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         router(GatewayHttpState::new(
             producer,
             timestamp_authority,
+            admission_auth,
             max_batch_records,
             max_admission_bytes,
         )),
     )
     .await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::PostgresTlsMode;
+
+    #[test]
+    fn postgres_tls_mode_accepts_only_explicit_supported_values() {
+        assert_eq!(
+            PostgresTlsMode::parse("verify-full").unwrap(),
+            PostgresTlsMode::VerifyFull
+        );
+        assert_eq!(
+            PostgresTlsMode::parse("disable").unwrap(),
+            PostgresTlsMode::Disable
+        );
+        assert!(PostgresTlsMode::parse("prefer").is_err());
+    }
 }
