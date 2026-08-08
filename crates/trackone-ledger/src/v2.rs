@@ -163,6 +163,7 @@ pub struct MerkleResultV2 {
 pub enum V2DecodeError {
     Malformed(&'static str),
     NonCanonical(&'static str),
+    ResourceLimit(&'static str),
     MissingField(&'static str),
     UnexpectedField(String),
     InvalidField(&'static str),
@@ -174,6 +175,7 @@ impl core::fmt::Display for V2DecodeError {
         match self {
             Self::Malformed(message)
             | Self::NonCanonical(message)
+            | Self::ResourceLimit(message)
             | Self::MissingField(message)
             | Self::InvalidField(message) => f.write_str(message),
             Self::UnexpectedField(field) => write!(f, "unexpected v2 segment field: {field}"),
@@ -218,6 +220,28 @@ impl core::fmt::Display for V2ConstructionError {
 impl std::error::Error for V2ConstructionError {}
 
 type DecodeResult<T> = core::result::Result<T, V2DecodeError>;
+
+const MAX_CBOR_NESTING_DEPTH: usize = 32;
+
+struct DecodeBudget {
+    remaining_items: usize,
+}
+
+impl DecodeBudget {
+    fn for_input(bytes: &[u8]) -> Self {
+        Self {
+            remaining_items: bytes.len(),
+        }
+    }
+
+    fn consume_item(&mut self) -> DecodeResult<()> {
+        self.remaining_items = self
+            .remaining_items
+            .checked_sub(1)
+            .ok_or(V2DecodeError::ResourceLimit("CBOR item budget exceeded"))?;
+        Ok(())
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum CborValue {
@@ -554,7 +578,8 @@ impl SegmentRecordV2 {
 /// bytes exactly.
 pub fn decode_segment_record_v2(bytes: &[u8]) -> DecodeResult<SegmentRecordV2> {
     let mut pos = 0;
-    let value = parse_cbor_value(bytes, &mut pos)?;
+    let mut budget = DecodeBudget::for_input(bytes);
+    let value = parse_cbor_value(bytes, &mut pos, 0, &mut budget)?;
     if pos != bytes.len() {
         return Err(V2DecodeError::Malformed("segment CBOR has trailing bytes"));
     }
@@ -628,7 +653,8 @@ pub fn validate_canonical_record_v2(bytes: &[u8]) -> DecodeResult<CanonicalRecor
         Some(read_uint_item(bytes, &mut pos, "device_time")?)
     };
     let kind = read_uint_item(bytes, &mut pos, "kind")?;
-    validate_commitment_value(bytes, &mut pos)?;
+    let mut budget = DecodeBudget::for_input(bytes);
+    validate_commitment_value(bytes, &mut pos, 0, &mut budget)?;
     if pos != bytes.len() {
         return Err(V2DecodeError::Malformed(
             "canonical record has trailing bytes",
@@ -680,7 +706,18 @@ fn read_device_id(bytes: &[u8], pos: &mut usize) -> DecodeResult<[u8; 8]> {
     Ok(device_id)
 }
 
-fn validate_commitment_value(bytes: &[u8], pos: &mut usize) -> DecodeResult<()> {
+fn validate_commitment_value(
+    bytes: &[u8],
+    pos: &mut usize,
+    depth: usize,
+    budget: &mut DecodeBudget,
+) -> DecodeResult<()> {
+    if depth > MAX_CBOR_NESTING_DEPTH {
+        return Err(V2DecodeError::ResourceLimit(
+            "CBOR nesting depth exceeds the supported limit",
+        ));
+    }
+    budget.consume_item()?;
     let start = *pos;
     let initial = *bytes
         .get(*pos)
@@ -709,12 +746,13 @@ fn validate_commitment_value(bytes: &[u8], pos: &mut usize) -> DecodeResult<()> 
             Ok(())
         }
         4 => {
+            ensure_collection_fits(bytes, *pos, len, 1)?;
             for _ in 0..len {
-                validate_commitment_value(bytes, pos)?;
+                validate_commitment_value(bytes, pos, depth + 1, budget)?;
             }
             Ok(())
         }
-        5 => validate_commitment_map(bytes, pos, len),
+        5 => validate_commitment_map(bytes, pos, len, depth, budget),
         6 => Err(V2DecodeError::InvalidField(
             "CBOR tags are not permitted in commitment bytes",
         )),
@@ -722,7 +760,14 @@ fn validate_commitment_value(bytes: &[u8], pos: &mut usize) -> DecodeResult<()> 
     }
 }
 
-fn validate_commitment_map(bytes: &[u8], pos: &mut usize, len: u64) -> DecodeResult<()> {
+fn validate_commitment_map(
+    bytes: &[u8],
+    pos: &mut usize,
+    len: u64,
+    depth: usize,
+    budget: &mut DecodeBudget,
+) -> DecodeResult<()> {
+    ensure_collection_fits(bytes, *pos, len, 2)?;
     let mut previous_key: Option<Vec<u8>> = None;
     for _ in 0..len {
         let key_start = *pos;
@@ -745,7 +790,11 @@ fn validate_commitment_map(bytes: &[u8], pos: &mut usize, len: u64) -> DecodeRes
         core::str::from_utf8(&bytes[*pos..end])
             .map_err(|_| V2DecodeError::Malformed("CBOR map key is not UTF-8"))?;
         *pos = end;
-        let raw_key = bytes[key_start..end].to_vec();
+        let mut raw_key = Vec::new();
+        raw_key
+            .try_reserve_exact(end - key_start)
+            .map_err(|_| V2DecodeError::ResourceLimit("CBOR map key allocation failed"))?;
+        raw_key.extend_from_slice(&bytes[key_start..end]);
         if let Some(previous) = &previous_key
             && (previous.len() > raw_key.len()
                 || (previous.len() == raw_key.len() && previous >= &raw_key))
@@ -755,7 +804,7 @@ fn validate_commitment_map(bytes: &[u8], pos: &mut usize, len: u64) -> DecodeRes
             ));
         }
         previous_key = Some(raw_key);
-        validate_commitment_value(bytes, pos)?;
+        validate_commitment_value(bytes, pos, depth + 1, budget)?;
     }
     Ok(())
 }
@@ -823,7 +872,41 @@ fn validate_float_encoding(bytes: &[u8], start: usize, end: usize, value: f64) -
     Ok(())
 }
 
-fn parse_cbor_value(bytes: &[u8], pos: &mut usize) -> DecodeResult<CborValue> {
+fn ensure_collection_fits(
+    bytes: &[u8],
+    pos: usize,
+    len: u64,
+    minimum_items_per_entry: usize,
+) -> DecodeResult<usize> {
+    let count = usize::try_from(len)
+        .map_err(|_| V2DecodeError::ResourceLimit("CBOR collection length overflows platform"))?;
+    let minimum_bytes =
+        count
+            .checked_mul(minimum_items_per_entry)
+            .ok_or(V2DecodeError::ResourceLimit(
+                "CBOR collection size overflows platform",
+            ))?;
+    let remaining = bytes.len().saturating_sub(pos);
+    if minimum_bytes > remaining {
+        return Err(V2DecodeError::Malformed(
+            "CBOR collection length exceeds remaining input",
+        ));
+    }
+    Ok(count)
+}
+
+fn parse_cbor_value(
+    bytes: &[u8],
+    pos: &mut usize,
+    depth: usize,
+    budget: &mut DecodeBudget,
+) -> DecodeResult<CborValue> {
+    if depth > MAX_CBOR_NESTING_DEPTH {
+        return Err(V2DecodeError::ResourceLimit(
+            "CBOR nesting depth exceeds the supported limit",
+        ));
+    }
+    budget.consume_item()?;
     let initial = *bytes
         .get(*pos)
         .ok_or(V2DecodeError::Malformed("truncated CBOR item"))?;
@@ -839,32 +922,41 @@ fn parse_cbor_value(bytes: &[u8], pos: &mut usize) -> DecodeResult<CborValue> {
                 })?)
                 .filter(|end| *end <= bytes.len())
                 .ok_or(V2DecodeError::Malformed("truncated CBOR text"))?;
-            let text = core::str::from_utf8(&bytes[*pos..end])
-                .map_err(|_| V2DecodeError::Malformed("CBOR text is not UTF-8"))?
-                .to_owned();
+            let raw = core::str::from_utf8(&bytes[*pos..end])
+                .map_err(|_| V2DecodeError::Malformed("CBOR text is not UTF-8"))?;
+            let mut text = String::new();
+            text.try_reserve_exact(raw.len())
+                .map_err(|_| V2DecodeError::ResourceLimit("CBOR text allocation failed"))?;
+            text.push_str(raw);
             *pos = end;
             Ok(CborValue::Text(text))
         }
         4 => {
-            let mut items =
-                Vec::with_capacity(usize::try_from(len).map_err(|_| {
-                    V2DecodeError::Malformed("CBOR array length overflows platform")
-                })?);
+            let count = ensure_collection_fits(bytes, *pos, len, 1)?;
+            let mut items = Vec::new();
+            items
+                .try_reserve_exact(count)
+                .map_err(|_| V2DecodeError::ResourceLimit("CBOR array allocation failed"))?;
             for _ in 0..len {
-                items.push(parse_cbor_value(bytes, pos)?);
+                items.push(parse_cbor_value(bytes, pos, depth + 1, budget)?);
             }
             Ok(CborValue::Array(items))
         }
         5 => {
-            let mut entries = Vec::with_capacity(
-                usize::try_from(len)
-                    .map_err(|_| V2DecodeError::Malformed("CBOR map length overflows platform"))?,
-            );
+            let count = ensure_collection_fits(bytes, *pos, len, 2)?;
+            let mut entries = Vec::new();
+            entries
+                .try_reserve_exact(count)
+                .map_err(|_| V2DecodeError::ResourceLimit("CBOR map allocation failed"))?;
             let mut previous_key: Option<Vec<u8>> = None;
             for _ in 0..len {
                 let start = *pos;
-                let key = parse_cbor_value(bytes, pos)?;
-                let raw_key = bytes[start..*pos].to_vec();
+                let key = parse_cbor_value(bytes, pos, depth + 1, budget)?;
+                let mut raw_key = Vec::new();
+                raw_key
+                    .try_reserve_exact(*pos - start)
+                    .map_err(|_| V2DecodeError::ResourceLimit("CBOR map key allocation failed"))?;
+                raw_key.extend_from_slice(&bytes[start..*pos]);
                 if let Some(previous) = &previous_key
                     && (previous.len() > raw_key.len()
                         || (previous.len() == raw_key.len() && previous >= &raw_key))
@@ -877,7 +969,7 @@ fn parse_cbor_value(bytes: &[u8], pos: &mut usize) -> DecodeResult<CborValue> {
                     return Err(V2DecodeError::InvalidField("segment map keys must be text"));
                 };
                 previous_key = Some(raw_key);
-                entries.push((key, parse_cbor_value(bytes, pos)?));
+                entries.push((key, parse_cbor_value(bytes, pos, depth + 1, budget)?));
             }
             Ok(CborValue::Map(entries))
         }
@@ -1220,6 +1312,37 @@ mod tests {
         );
         assert!(validate_canonical_record_v2(&record_with_payload(&[0x61, 0xff])).is_err());
         assert!(validate_canonical_record_v2(&record_with_payload(&[0x9f, 0xff])).is_err());
+    }
+
+    #[test]
+    fn canonical_record_decoder_rejects_excessive_nesting_without_panicking() {
+        let mut payload = vec![0x81; MAX_CBOR_NESTING_DEPTH + 1];
+        payload.push(0xf6);
+        let record = record_with_payload(&payload);
+        let result = std::panic::catch_unwind(|| validate_canonical_record_v2(&record));
+        assert!(result.is_ok());
+        assert!(matches!(
+            result.unwrap(),
+            Err(V2DecodeError::ResourceLimit(
+                "CBOR nesting depth exceeds the supported limit"
+            ))
+        ));
+    }
+
+    #[test]
+    fn segment_decoder_rejects_attacker_sized_collection_without_panicking() {
+        let mut malicious = vec![0xbb];
+        malicious.extend_from_slice(&u64::MAX.to_be_bytes());
+        let result = std::panic::catch_unwind(|| decode_segment_record_v2(&malicious));
+        assert!(result.is_ok());
+        assert!(matches!(
+            result.unwrap(),
+            Err(V2DecodeError::ResourceLimit(
+                "CBOR collection size overflows platform"
+            )) | Err(V2DecodeError::Malformed(
+                "CBOR collection length exceeds remaining input"
+            ))
+        ));
     }
 
     #[test]
