@@ -29,14 +29,14 @@
 use std::vec::Vec;
 
 use crate::identity_input::ProvisioningRecord;
-use crate::types::{EnvFact, Fact, FactPayload};
+use crate::types::{CoreResult, EnvFact, Error, Fact, FactPayload};
 
 /// Encodes a value to CBOR using deterministic/canonical rules.
 ///
 /// This is the function you want for hashing, commitments, and reproducible
 /// size measurements.
 #[cfg(feature = "std")]
-pub fn to_canonical_cbor_vec<T: CanonicalCbor>(value: &T) -> Vec<u8> {
+pub fn to_canonical_cbor_vec<T: CanonicalCbor>(value: &T) -> CoreResult<Vec<u8>> {
     value.to_canonical_cbor_vec()
 }
 
@@ -46,7 +46,7 @@ pub fn to_canonical_cbor_vec<T: CanonicalCbor>(value: &T) -> Vec<u8> {
 /// treat a generic serde CBOR encoding as a commitment.
 #[cfg(feature = "std")]
 pub trait CanonicalCbor {
-    fn to_canonical_cbor_vec(&self) -> Vec<u8>;
+    fn to_canonical_cbor_vec(&self) -> CoreResult<Vec<u8>>;
 }
 
 // --- Internal CBOR helpers (minimal, canonical subset) ---------------------
@@ -139,7 +139,7 @@ const SCHEMA_VERSION_FACT: u64 = 1;
 
 #[cfg(feature = "std")]
 impl CanonicalCbor for ProvisioningRecord {
-    fn to_canonical_cbor_vec(&self) -> Vec<u8> {
+    fn to_canonical_cbor_vec(&self) -> CoreResult<Vec<u8>> {
         // Array encoding (positional), schema v1:
         // [0] schema_version (uint)
         // [1] device_id (bstr, 8)
@@ -165,13 +165,15 @@ impl CanonicalCbor for ProvisioningRecord {
             None => cbor_null(&mut buf),
         }
 
-        buf
+        Ok(buf)
     }
 }
 
 #[cfg(feature = "std")]
 impl CanonicalCbor for EnvFact {
-    fn to_canonical_cbor_vec(&self) -> Vec<u8> {
+    fn to_canonical_cbor_vec(&self) -> CoreResult<Vec<u8>> {
+        self.validate().map_err(Error::InvalidFact)?;
+
         // Array encoding (positional), schema v1:
         // [0] schema_version (uint)
         // [1] sample_type (uint)
@@ -227,13 +229,15 @@ impl CanonicalCbor for EnvFact {
             None => cbor_null(&mut buf),
         }
 
-        buf
+        Ok(buf)
     }
 }
 
 #[cfg(feature = "std")]
 impl CanonicalCbor for Fact {
-    fn to_canonical_cbor_vec(&self) -> Vec<u8> {
+    fn to_canonical_cbor_vec(&self) -> CoreResult<Vec<u8>> {
+        self.validate().map_err(Error::InvalidFact)?;
+
         // Array encoding (positional), schema v1:
         // [0] schema_version (uint)
         // [1] pod_id (bstr, 8)
@@ -268,7 +272,7 @@ impl CanonicalCbor for Fact {
                 cbor_array_len(&mut buf, 2);
                 cbor_uint(&mut buf, 0); // discriminant: 0 = Env
                 // env_bytes already begins with its own array header (schema v1)
-                let env_bytes = env.to_canonical_cbor_vec();
+                let env_bytes = env.to_canonical_cbor_vec()?;
                 buf.extend_from_slice(&env_bytes);
             }
             FactPayload::Custom(v) => {
@@ -278,7 +282,7 @@ impl CanonicalCbor for Fact {
             }
         }
 
-        buf
+        Ok(buf)
     }
 }
 
@@ -289,33 +293,97 @@ mod tests {
     use crate::types::FactKind;
 
     #[test]
-    fn canonical_cbor_is_stable_for_envfact() {
+    fn canonical_cbor_envfact_matches_golden_bytes() {
         let env = EnvFact::instant(
             crate::types::SampleType::AmbientAirTemperature,
             1_700_000_000,
             25.0,
+        )
+        .unwrap();
+        assert_eq!(
+            env.to_canonical_cbor_vec().unwrap(),
+            [
+                0x8B, // array(11)
+                0x01, // schema version
+                0x01, // AmbientAirTemperature
+                0x1A, 0x65, 0x53, 0xF1, 0x00, // phenomenon_time_start
+                0x1A, 0x65, 0x53, 0xF1, 0x00, // phenomenon_time_end
+                0xFA, 0x41, 0xC8, 0x00, 0x00, // value: 25.0f32
+                0xF6, // min
+                0xF6, // max
+                0xF6, // mean
+                0x01, // count
+                0xF6, // quality
+                0xF6, // sensor_channel
+            ]
         );
-        let a = env.to_canonical_cbor_vec();
-        let b = env.to_canonical_cbor_vec();
-        assert_eq!(a, b);
     }
 
     #[test]
-    fn canonical_cbor_is_stable_for_fact_env_payload() {
+    fn canonical_cbor_fact_env_payload_matches_golden_bytes() {
         let fact = Fact {
             pod_id: crate::types::PodId::from(7u32),
             fc: 1,
             ingest_time: 1_700_000_000,
             pod_time: None,
             kind: FactKind::Env,
-            payload: FactPayload::Env(EnvFact::instant(
-                crate::types::SampleType::AmbientAirTemperature,
-                1_700_000_000,
-                25.0,
-            )),
+            payload: FactPayload::Env(
+                EnvFact::instant(
+                    crate::types::SampleType::AmbientAirTemperature,
+                    1_700_000_000,
+                    25.0,
+                )
+                .unwrap(),
+            ),
         };
-        let a = fact.to_canonical_cbor_vec();
-        let b = fact.to_canonical_cbor_vec();
-        assert_eq!(a, b);
+        assert_eq!(
+            fact.to_canonical_cbor_vec().unwrap(),
+            [
+                0x87, // array(7)
+                0x01, // schema version
+                0x48, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x07, // pod_id
+                0x01, // fc
+                0x1A, 0x65, 0x53, 0xF1, 0x00, // ingest_time
+                0xF6, // pod_time
+                0x01, // kind: Env
+                0x82, 0x00, // payload: [Env discriminant, EnvFact]
+                0x8B, // EnvFact array(11)
+                0x01, // schema version
+                0x01, // AmbientAirTemperature
+                0x1A, 0x65, 0x53, 0xF1, 0x00, // phenomenon_time_start
+                0x1A, 0x65, 0x53, 0xF1, 0x00, // phenomenon_time_end
+                0xFA, 0x41, 0xC8, 0x00, 0x00, // value: 25.0f32
+                0xF6, // min
+                0xF6, // max
+                0xF6, // mean
+                0x01, // count
+                0xF6, // quality
+                0xF6, // sensor_channel
+            ]
+        );
+    }
+
+    #[test]
+    fn canonical_cbor_rejects_invalid_fact_semantics() {
+        let fact = Fact {
+            pod_id: crate::types::PodId::from(7u32),
+            fc: 1,
+            ingest_time: 1_700_000_000,
+            pod_time: None,
+            kind: FactKind::Custom,
+            payload: FactPayload::Env(
+                EnvFact::instant(
+                    crate::types::SampleType::AmbientAirTemperature,
+                    1_700_000_000,
+                    25.0,
+                )
+                .unwrap(),
+            ),
+        };
+
+        assert!(matches!(
+            fact.to_canonical_cbor_vec(),
+            Err(Error::InvalidFact(_))
+        ));
     }
 }

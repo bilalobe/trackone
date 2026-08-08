@@ -10,6 +10,8 @@ This crate owns:
 
 - core identifiers and bounded types such as `PodId`, `FrameCounter`, and fact
   payload shapes
+- no-std semantic validation for fact kind/payload pairing, finite
+  environmental values, time ranges, and raw-versus-summary shape
 - AEAD traits and crypto-adjacent type contracts
 - identity/admission input types used to carry external lifecycle state into
   the TrackOne evidence path
@@ -31,14 +33,16 @@ This crate owns:
 
 The crate remains `no_std`-capable when `std` is disabled.
 
+`EnvFact::instant` and `EnvFact::summary` are fallible. Postcard-facing callers
+and commitment callers must propagate `FactValidationError`; canonical CBOR
+encoding returns `CoreResult<Vec<u8>>` and never commits an invalid fact.
+
 ## Boundary with other crates
 
 - [`trackone-ledger`](../trackone-ledger/README.md) owns commitment-specific
   artifact construction, Merkle policy, and digest helpers.
 - [`trackone-ingest`](../trackone-ingest/README.md) owns framed Postcard wire
   profiles, nonce/AAD binding, fixture emission, replay, and framed admission.
-- [`trackone-python`](../../bindings/trackone-python/README.md) optionally
-  exposes selected core and ledger functionality through PyO3.
 - [`trackone-sensorthings`](../trackone-sensorthings/README.md) owns read-only
   SensorThings projection semantics over accepted facts.
 - [`trackone-pod-fw`](../trackone-pod-fw/README.md) builds firmware-side

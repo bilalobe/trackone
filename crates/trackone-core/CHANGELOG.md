@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Remove the optional Python binding boundary; core semantics remain exposed
+  through the Rust crate API.
+- Make environmental constructors and canonical CBOR encoding fallible, and
+  enforce no-std fact invariants for kind/payload pairing, finite values,
+  time ranges, and raw/summary shapes.
+
 ## [0.1.0-beta.4] - 2026-07-18
 
 ### Changed
