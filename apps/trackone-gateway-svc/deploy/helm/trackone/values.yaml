@@ -50,6 +50,14 @@ postgres:
     database: trackone
     username: trackone
     password: trackone
+  tls:
+    # Network clients are TLS-only by default. The chart generates and retains
+    # a private CA and a hostname-valid server certificate when existingSecret
+    # is empty.
+    enabled: true
+    # Optional pre-existing kubernetes.io/tls Secret containing ca.crt,
+    # tls.crt, and tls.key.
+    existingSecret: ""
   service:
     port: 5432
   persistence:
@@ -77,6 +85,21 @@ gateway:
   existingSecret: ""
   # Set when existingSecret contains the optional tsa-intermediates.pem key.
   existingSecretHasTsaIntermediates: false
+  # Set when existingSecret contains the optional postgres-ca.pem key.
+  existingSecretHasPostgresCa: false
+  auth:
+    # Required when gateway.enabled=true unless existingSecret supplies it.
+    bearerToken: ""
+    # Optional prior token accepted during a rolling credential rotation.
+    previousBearerToken: ""
+  postgres:
+    # Must match postgres.tls.enabled when the chart-managed database is used.
+    # Verified TLS is the runtime default. Use disable only together with
+    # postgres.tls.enabled=false for explicit local development.
+    tlsMode: verify-full
+    # Optional additional PEM trust anchor for an external PostgreSQL CA.
+    # The chart-managed database CA is mounted automatically.
+    caPem: ""
   image:
     repository: ghcr.io/bilalobe/trackone/gateway
     tag: 0.1.0-beta.4
@@ -86,8 +109,6 @@ gateway:
     port: 8080
     nodePort: 30080
   env:
-    # Rendered into the generated trackone-gateway-config ConfigMap.
-    otsCalendars: http://ots-calendar:8468
     # Rendered into the generated trackone-gateway-env Secret.
     databaseUrl: postgresql://trackone:trackone@postgres:5432/trackone
     ledgerId: b7a1d5e40c6f438e9a75db27c96f31aa

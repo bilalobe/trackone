@@ -1,66 +1,20 @@
-# TrackOne local Kubernetes deployment
+# Local Kubernetes build checks
 
-This folder contains a **local/dev** Kubernetes setup (kustomize base + overlay).
-Run the commands below from the repository root; the deployment assets are
-owned by `apps/trackone-gateway-svc`.
+This Kustomize tree owns build-only Jobs for the reusable Rust packages. It
+does not deploy the TrackOne gateway, PostgreSQL, or timestamp services.
 
-## What gets deployed
-The `apps/trackone-gateway-svc/deploy/k8s/local/overlays/local` overlay
-deploys only these workloads:
+Use the Helm chart in `apps/trackone-gateway-svc/deploy/helm/trackone` for the
+supported runtime deployment. Keeping one runtime manifest owner prevents
+local examples from drifting away from the gateway's authentication, TLS, and
+RFC 3161 configuration contract.
 
-- `ots-calendar` (Deployment)
-- `trackone-gateway` (Deployment)
-- `postgres` (StatefulSet)
-- Rust build-only checks for `trackone-core`, `trackone-constants`, and
-  `trackone-pod-fw` (Jobs)
-
-You can verify the rendered resources with:
-
-```bash
-kubectl kustomize apps/trackone-gateway-svc/deploy/k8s/local/overlays/local | grep -E '^kind:'
-```
-
-## What the "other crates" are
-The other Rust workspace crates (`trackone-core`, `trackone-constants`, `trackone-pod-fw`) are **libraries / firmware**, not long-running services.
-
-They do have Dockerfiles (build-only images) so you can build them reproducibly
-and load them into Minikube, but they are **not** deployed as `Deployment`s by
-default.
-
-Images:
-
-- `trackone/core:local`
-- `trackone/constants:local`
-- `trackone/pod-fw:local`
-
-Build the Rust build-only images into Minikube's Docker daemon (docker driver)
-with:
-
-```bash
-eval "$(minikube -p ${MINIKUBE_PROFILE:-minikube} docker-env)"
-docker build -t trackone/core:local -f deploy/docker/core/Dockerfile .
-docker build -t trackone/constants:local -f deploy/docker/constants/Dockerfile .
-docker build -t trackone/pod-fw:local -f deploy/docker/pod-fw/Dockerfile .
-```
-
-The `trackone-gateway` and `ots-calendar` workloads are placeholders in this
-local Kustomize tree. Point those images at a registry artifact or provide local
-images before applying the overlay.
-
-Run one to sanity-check it:
-
-```bash
-eval "$(minikube -p ${MINIKUBE_PROFILE:-minikube} docker-env)"
-docker run --rm trackone/core:local
-docker run --rm trackone/pod-fw:local
-```
-
-The pod firmware image defaults to a release-mode production build with default
-features disabled. That keeps the local image, Kustomize Job, and Helm Job
-aligned with the firmware feature policy in `trackone-pod-fw`.
-
-Render the complete overlay before applying it:
+Build and load the check images into a local cluster, then render or apply the
+overlay:
 
 ```bash
 kubectl kustomize apps/trackone-gateway-svc/deploy/k8s/local/overlays/local
+kubectl apply -k apps/trackone-gateway-svc/deploy/k8s/local/overlays/local
 ```
+
+The rendered resources are the `trackone` Namespace plus build Jobs for
+`trackone-core`, `trackone-constants`, and `trackone-pod-fw`.

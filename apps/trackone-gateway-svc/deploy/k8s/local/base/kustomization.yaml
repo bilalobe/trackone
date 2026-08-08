@@ -3,19 +3,6 @@ kind: Kustomization
 
 resources:
   - namespace.yaml
-
-  - ots/calendar-deployment.yaml
-  - ots/calendar-service.yaml
-  - ots/calendar-pvc.yaml
-
-  - postgres/postgres-secret.yaml
-  - postgres/postgres-statefulset.yaml
-  - postgres/postgres-service.yaml
-  - postgres/postgres-pvc.yaml
-
-  - gateway/gateway-deployment.yaml
-  - gateway/gateway-service.yaml
-
   - jobs/core-build-job.yaml
   - jobs/constants-build-job.yaml
   - jobs/pod-fw-build-job.yaml

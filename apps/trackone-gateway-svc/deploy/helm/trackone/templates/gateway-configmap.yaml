@@ -1,4 +1,7 @@
 {{- if and .Values.gateway.enabled (not .Values.gateway.existingConfigMap) }}
+{{- $verifyPostgresTls := eq .Values.gateway.postgres.tlsMode "verify-full" }}
+{{- $useManagedPostgresCa := and $verifyPostgresTls .Values.postgres.enabled .Values.postgres.tls.enabled }}
+{{- $useExternalPostgresCa := and $verifyPostgresTls (not $useManagedPostgresCa) (or .Values.gateway.postgres.caPem (and .Values.gateway.existingSecret .Values.gateway.existingSecretHasPostgresCa)) }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -8,7 +11,10 @@ metadata:
     app.kubernetes.io/name: trackone-gateway
     {{ include "trackone.commonLabels" . | nindent 4 }}
 data:
-  OTS_CALENDARS: {{ .Values.gateway.env.otsCalendars | quote }}
+  TRACKONE_POSTGRES_TLS_MODE: {{ .Values.gateway.postgres.tlsMode | quote }}
+  {{- if or $useManagedPostgresCa $useExternalPostgresCa }}
+  TRACKONE_POSTGRES_CA_FILE: /var/run/trackone-postgres/ca.pem
+  {{- end }}
   TRACKONE_LEDGER_ID: {{ .Values.gateway.env.ledgerId | quote }}
   TRACKONE_SITE_ID: {{ .Values.gateway.env.siteId | quote }}
   TRACKONE_INTERVAL_MS: {{ .Values.gateway.env.intervalMs | quote }}

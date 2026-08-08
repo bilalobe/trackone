@@ -92,6 +92,18 @@
             }
           }
         },
+        "tls": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "existingSecret": {
+              "type": "string"
+            }
+          }
+        },
         "service": {
           "type": "object",
           "additionalProperties": false,
@@ -125,6 +137,41 @@
         "existingSecretHasTsaIntermediates": {
           "type": "boolean"
         },
+        "existingSecretHasPostgresCa": {
+          "type": "boolean"
+        },
+        "auth": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "bearerToken": {
+              "type": "string",
+              "oneOf": [
+                { "const": "" },
+                { "pattern": "^[!-~]{32,256}$" }
+              ]
+            },
+            "previousBearerToken": {
+              "type": "string",
+              "oneOf": [
+                { "const": "" },
+                { "pattern": "^[!-~]{32,256}$" }
+              ]
+            }
+          }
+        },
+        "postgres": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "tlsMode": {
+              "enum": ["verify-full", "disable"]
+            },
+            "caPem": {
+              "type": "string"
+            }
+          }
+        },
         "image": {
           "$ref": "#/definitions/imageConfig"
         },
@@ -152,10 +199,6 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "otsCalendars": {
-              "type": "string",
-              "minLength": 1
-            },
             "databaseUrl": {
               "type": "string",
               "minLength": 1

@@ -11,9 +11,13 @@
 #   existingConfigMap: shared-trackone-gateway-config
 #   existingSecret: shared-trackone-gateway-env
 #   existingSecretHasTsaIntermediates: true # when tsa-intermediates.pem is present
+#   existingSecretHasPostgresCa: true # when postgres-ca.pem is present
+#   # The existing Secret must also contain TRACKONE_INGEST_BEARER_TOKEN.
 # postgres:
 #   auth:
 #     existingSecret: shared-postgres-auth
+#   tls:
+#     existingSecret: shared-postgres-tls # ca.crt, tls.crt, and tls.key
 
 imagePullSecrets:
   # GHCR package images are often private; create this secret in the namespace:
