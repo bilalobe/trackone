@@ -1,6 +1,6 @@
 [package]
 name = "trackone-evidence"
-description = "Rust-native verifier/export application for TrackOne evidence bundles"
+description = "Rust-native verifier and deterministic compactor for TrackOne v2 evidence bundles"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -17,9 +17,6 @@ rustix.workspace = true
 flate2.workspace = true
 tar.workspace = true
 tempfile.workspace = true
-trackone-constants.workspace = true
-trackone-ots.workspace = true
-trackone-ingest = { workspace = true, features = ["std"] }
 trackone-ledger.workspace = true
 trackone-rfc3161.workspace = true
 

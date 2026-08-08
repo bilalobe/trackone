@@ -1,92 +1,64 @@
 # trackone-evidence application
 
-Rust-native verifier and export application for the supported TrackOne
-evidence-bundle contract. The package provides both the `trackone-evidence`
-CLI and a reusable Rust library for callers that need the same verification
-and export policy.
+Rust-native verification and deterministic compaction for the active TrackOne
+v2 evidence-bundle contract. The package provides the `trackone-evidence` CLI
+and a reusable Rust `v2` module.
 
 ## Boundary and ownership
 
-This application starts from an existing evidence bundle or pipeline output.
-It does not ingest telemetry, own gateway state, or publish lifecycle data. It
-depends directly on [`trackone-ots`](../../crates/trackone-ots/README.md) and
-[`trackone-rfc3161`](../../crates/trackone-rfc3161/README.md) for timestamp
-proof, metadata, and TSA signer-certificate verification; it never reaches through the
-gateway service and contains no PyO3 or Python runtime dependency.
+This application starts from an existing v2 evidence bundle. It does not
+ingest telemetry, own gateway state, export legacy day bundles, or publish
+lifecycle data. Timestamp proof verification is delegated to
+[`trackone-ots`](../../crates/trackone-ots/README.md) and
+[`trackone-rfc3161`](../../crates/trackone-rfc3161/README.md); the application
+has no Python runtime dependency.
 
-The library implementation is split into `verify`, `export`, `policy`,
-`manifest`, `bundle`, `git_ops`, and `v2` modules. Stable public types and entry
-points remain re-exported from the crate root.
+Manifest v3 is the only emitted envelope. Manifest v2 remains supported as
+read-only input for the unchanged v2 commitment profile. The removed legacy
+v1 `verify` and `export` surfaces have no aliases or compatibility shims.
 
-## CLI
+## Verify
 
-Verify a v1 bundle:
+Verify a directory bundle:
 
 ```bash
 cargo run --locked -p trackone-evidence -- verify \
-  --root out/site_demo \
-  --facts out/site_demo/facts
-```
-
-Use `--policy-mode strict --require-ots` when a complete OTS attestation is
-required. `--disclosure-class A|B|C`, `--commitment-profile-id ID`, and
-`--json` control the verification policy and output shape.
-
-Verify a draft-09 v2 bundle:
-
-```bash
-cargo run --locked -p trackone-evidence -- verify-v2 \
   --root toolset/vectors/verifiable-telemetry-canonical-cbor-v2/fixtures/corrected-epoch-class-a \
   --tsa-ca-file toolset/vectors/verifiable-telemetry-canonical-cbor-v2/trust/tsa-root.pem \
   --tsa-crls-file toolset/vectors/verifiable-telemetry-canonical-cbor-v2/trust/tsa-crls.pem \
   --tsa-policy 1.3.6.1.4.1.55555.1 \
-  --tsa-signer-cert-sha256 14ab98cafe09d9d1d01562af42d69a904b01023d9cd5b03bd07e5779710c8014
+  --tsa-signer-cert-sha256 14ab98cafe09d9d1d01562af42d69a904b01023d9cd5b03bd07e5779710c8014 \
+  --json --pretty
 ```
 
 Use `--tsa-intermediates-file` when the deployment validation archive has an
-intermediate CA. Baseline JSON results identify the evaluated artifact,
-profile, disclosure scope, executed and skipped checks, per-channel status,
-verifier policy, and overall outcome. TSA-specific diagnostics belong in
-channel extensions rather than the baseline result.
+intermediate CA. `--allow-missing-tsa` changes only the missing-channel
+requirement; it does not bypass validation of a supplied timestamp.
+`--verifier-policy-id` and `--verifier-policy-file` bind an explicit verifier
+policy. JSON results report disclosure scope, executed and skipped checks,
+channel states, and the overall outcome.
 
-Create and verify a compact manifest-v3 gzip carrier while retaining the
-unchanged v2 commitment:
+## Compact and replay
+
+Create a deterministic manifest-v3 gzip carrier and verify it through the same
+policy:
 
 ```bash
-trackone-evidence compact-v2 --root BUNDLE --output bundle.v3.tar.gz \
+trackone-evidence compact --root BUNDLE --output bundle.v3.tar.gz \
   --tsa-ca-file tsa-root.pem --tsa-crls-file tsa-crls.pem \
   --tsa-policy 1.3.6.1.4.1.55555.1 --tsa-signer-cert-sha256 HEX
-trackone-evidence verify-v2 --archive bundle.v3.tar.gz \
+
+trackone-evidence verify --archive bundle.v3.tar.gz \
   --tsa-ca-file tsa-root.pem --tsa-crls-file tsa-crls.pem \
-  --tsa-policy 1.3.6.1.4.1.55555.1 --tsa-signer-cert-sha256 HEX
+  --tsa-policy 1.3.6.1.4.1.55555.1 --tsa-signer-cert-sha256 HEX \
+  --json
 ```
 
 The carrier media type is
-`application/vnd.trackone.evidence-bundle.v3+gzip`. Class A records are
-packed as exact CBOR byte strings; duplicates are retained. Use
-`--include-extensions` only when extension artifacts are intentionally part
-of the compact disclosure. `--json` is minified for machines and `--pretty`
-opts into formatted output.
-
-Manifest v3 is the active output envelope. It omits operational summaries,
-JSON/digest projections, standalone batch projections, and TSA-info
-projections. Producer channel claims are `present` or `pending`; only verifier
-results use `verified`, `failed`, `missing`, or `skipped`. Legacy manifest v2
-remains read-only input.
-
-Export a curated day-scoped bundle from pipeline output:
-
-```bash
-cargo run --locked -p trackone-evidence -- export \
-  --pipeline-dir out/site_demo \
-  --evidence-repo /path/to/evidence \
-  --site an-001 \
-  --day 2025-10-07
-```
-
-Export options include `--include-frames`, `--git-commit`, `--tag`,
-`--tag-name`, and `--bundle-out`. The command prints the resulting bundle path
-on success.
+`application/vnd.trackone.evidence-bundle.v3+gzip`. It contains exactly one
+bounded gzip member. Class A records are packed as exact CBOR byte strings and
+duplicates are retained. Use `--include-extensions` only when extension
+artifacts intentionally belong in the disclosure.
 
 ## Checks
 

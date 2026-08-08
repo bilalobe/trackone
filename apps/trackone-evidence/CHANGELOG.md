@@ -10,12 +10,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Add readable manifest envelope v3 with exact-byte record packs,
-  `compact-v2`, bounded deterministic gzip carriers, and archive verification.
+  `compact`, bounded deterministic gzip carriers, and archive verification.
   Manifest v3 is active for the canonical Class A vector and compact output;
   manifest v2 remains readable compatibility input.
 
 ### Changed
 
+- Align the application with the Rust-only workspace product boundary after
+  removal of the unpublished `trackone-python` binding leaf.
+- Remove the legacy v1 verification/export implementation and expose only the
+  forward-only v2 `verify` and `compact` commands, with no aliases.
 - Make `--json` compact and add explicit `--pretty` formatting.
 - Add `--tsa-signer-cert-sha256` and require RFC 5816 signer-certificate
   binding for every present RFC 3161 timestamp response.
@@ -23,6 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `present`/`pending` claims. Narrow verification-result v2 to scope, checks,
   channel outcomes, policy identity, and overall outcome; evaluable failures
   now produce `overall=failure` before the CLI exits nonzero.
+- Bound every artifact read, validate gzip in one pass, reject concatenated or
+  trailing members, and retain manifest v2 only as read-only input.
 
 ## [0.1.0-beta.4] - 2026-07-18
 

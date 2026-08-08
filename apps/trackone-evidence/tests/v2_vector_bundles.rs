@@ -56,7 +56,7 @@ fn v2_vector_bundles_are_cli_runnable() {
         let bundle = root.join(&case.path);
         let mut command = Command::new(env!("CARGO_BIN_EXE_trackone-evidence"));
         command
-            .args(["verify-v2", "--root"])
+            .args(["verify", "--root"])
             .arg(&bundle)
             .arg("--json");
         if let Some(ca_file) = &case.tsa_ca_file {
@@ -122,7 +122,7 @@ fn v2_cli_rejects_missing_or_wrong_tsa_signer_pin() {
     let base = || {
         let mut command = Command::new(env!("CARGO_BIN_EXE_trackone-evidence"));
         command
-            .args(["verify-v2", "--root"])
+            .args(["verify", "--root"])
             .arg(&bundle)
             .arg("--tsa-ca-file")
             .arg(root.join("trust/tsa-root.pem"))
