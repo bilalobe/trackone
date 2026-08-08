@@ -14,6 +14,10 @@ extracts an explicitly untrusted candidate `genTime`, runs `openssl ts
 -verify`, then runs `openssl verify` on the exact CMS-selected signer using
 `-purpose timestampsign`, `-attime`, `-CRLfile`, and `-crl_check_all`. Rust
 parsing finally enforces the strict VTL representation and RFC 5816 binding.
+OpenSSL stdout and stderr are drained concurrently to avoid pipe deadlocks.
+Each retained diagnostic stream is capped at 64 KiB while excess bytes are
+discarded, and timeout cleanup kills/reaps the isolated verifier process group
+before joining both readers.
 
 Historical path evaluation uses the signed TSA-asserted `genTime`. It does not
 prove first observation, prevent every post-compromise backdating attack, or

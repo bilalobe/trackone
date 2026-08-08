@@ -19,7 +19,12 @@ logic depends on the gateway service to reach OTS behavior.
 
 The implementation recognizes placeholder, stationary, pending, and verified
 proof states without fabricating external Bitcoin or TSA claims. Strict
-external verification remains bounded by the shared timeout constant.
+external verification remains bounded by the shared timeout constant. When a
+caller supplies an expected artifact digest, every proof path first hashes the
+sibling artifact and fails closed if it is missing or different. Fallback to
+an external `ots` binary always uses private staged copies of both artifact and
+proof, so an external zero exit status or a concurrent replacement of the
+original siblings cannot override the verified snapshot.
 
 ## Checks
 
