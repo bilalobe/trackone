@@ -37,8 +37,8 @@ projection and parity workflows.
 - [`trackone-sensorthings`](../trackone-sensorthings/README.md) may use digest
   helpers for deterministic projection IDs, but those projections are not
   commitment artifacts
-- [`trackone-evidence`](../../apps/trackone-evidence/README.md) owns verifier/export
-  policy for evidence bundles
+- [`trackone-evidence`](../../apps/trackone-evidence/README.md) owns v2
+  verification and deterministic bundle compaction
 
 This split is intentional and matches
 [`ADR-046`](../../adr/ADR-046-sealed-trust-root-boundary-and-deferring-trackone-seal.md):
