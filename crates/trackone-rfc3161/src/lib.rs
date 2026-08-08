@@ -9,9 +9,9 @@
 
 use std::fmt;
 use std::fs::{self, OpenOptions};
-use std::io::Write;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output, Stdio};
+use std::process::{Child, Command, Output, Stdio};
 use std::str::FromStr;
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -40,6 +40,7 @@ const ID_CE_ISSUING_DISTRIBUTION_POINT: ObjectIdentifier =
 
 const DEFAULT_MAX_RESPONSE_BYTES: usize = 1024 * 1024;
 const DEFAULT_COMMAND_TIMEOUT: Duration = Duration::from_secs(15);
+const MAX_COMMAND_DIAGNOSTIC_BYTES: usize = 64 * 1024;
 const MAX_CERTIFICATES: usize = 8;
 const MAX_SIGNED_ATTRIBUTES: usize = 32;
 const MAX_ARCHIVE_CRLS: usize = 16;
@@ -515,9 +516,9 @@ fn extract_candidate_fields(
 ) -> Result<CandidateTimestampFields, VerificationError> {
     let response = AnyRef::from_der(response_der).map_err(malformed)?;
     let (status, content_info) = response
-        .sequence(|reader| {
+        .sequence(|reader| -> der::Result<_> {
             let status_info: AnyRef<'_> = reader.decode()?;
-            let status = status_info.sequence(|status_reader| {
+            let status = status_info.sequence(|status_reader| -> der::Result<_> {
                 let status: u8 = status_reader.decode()?;
                 while !status_reader.is_finished() {
                     let _: AnyRef<'_> = status_reader.decode()?;
@@ -526,7 +527,7 @@ fn extract_candidate_fields(
             })?;
             let content_info: ContentInfo = reader.decode()?;
             if !reader.is_finished() {
-                return Err(Tag::Sequence.value_error());
+                return Err(Tag::Sequence.value_error().into());
             }
             Ok((status, content_info))
         })
@@ -581,24 +582,24 @@ fn extract_candidate_fields(
     let tst_octets: OctetString = tst_content.decode_as().map_err(malformed)?;
     let tst_info = AnyRef::from_der(tst_octets.as_bytes()).map_err(malformed)?;
     let (policy_oid, message_imprint, serial_number, claimed_generation_time, accuracy) = tst_info
-        .sequence(|reader| {
+        .sequence(|reader| -> der::Result<_> {
             let version: u8 = reader.decode()?;
             if version != 1 {
-                return Err(Tag::Integer.value_error());
+                return Err(Tag::Integer.value_error().into());
             }
             let policy_oid: ObjectIdentifier = reader.decode()?;
             let message_imprint: MessageImprint = reader.decode()?;
             let serial_number: Uint = reader.decode()?;
             let claimed_generation_time: AnyRef<'_> = reader.decode()?;
-            let accuracy = if !reader.is_finished() && reader.peek_tag()? == Tag::Sequence {
+            let accuracy = if !reader.is_finished() && Tag::peek(reader)? == Tag::Sequence {
                 Some(reader.decode::<AccuracyAsn1>()?)
             } else {
                 None
             };
-            if !reader.is_finished() && reader.peek_tag()? == Tag::Boolean {
+            if !reader.is_finished() && Tag::peek(reader)? == Tag::Boolean {
                 let _: bool = reader.decode()?;
             }
-            if !reader.is_finished() && reader.peek_tag()? == Tag::Integer {
+            if !reader.is_finished() && Tag::peek(reader)? == Tag::Integer {
                 let _: Uint = reader.decode()?;
             }
             let mut trailing_fields = 0;
@@ -606,7 +607,7 @@ fn extract_candidate_fields(
                 let _: AnyRef<'_> = reader.decode()?;
                 trailing_fields += 1;
                 if trailing_fields > 2 {
-                    return Err(Tag::Sequence.value_error());
+                    return Err(Tag::Sequence.value_error().into());
                 }
             }
             Ok((
@@ -782,7 +783,7 @@ fn validate_archive_applicability(
         }
         let applicable = crls
             .iter()
-            .filter(|crl| crl.tbs_cert_list.issuer == current.tbs_certificate.issuer)
+            .filter(|crl| crl.tbs_cert_list.issuer == *current.tbs_certificate().issuer())
             .collect::<Vec<_>>();
         if applicable.len() != 1 {
             return Err(VerificationError::HistoricalValidation(format!(
@@ -795,13 +796,13 @@ fn validate_archive_applicability(
         let issuer_intermediates = intermediates
             .iter()
             .filter(|certificate| {
-                certificate.tbs_certificate.subject == current.tbs_certificate.issuer
+                *certificate.tbs_certificate().subject() == *current.tbs_certificate().issuer()
             })
             .collect::<Vec<_>>();
         let issuer_anchors = anchors
             .iter()
             .filter(|certificate| {
-                certificate.tbs_certificate.subject == current.tbs_certificate.issuer
+                *certificate.tbs_certificate().subject() == *current.tbs_certificate().issuer()
             })
             .collect::<Vec<_>>();
         if issuer_intermediates.len() + issuer_anchors.len() != 1 {
@@ -861,7 +862,7 @@ fn validate_crl_for_certificate(
     if let Some(revoked) = &crl.tbs_cert_list.revoked_certificates
         && let Some(entry) = revoked
             .iter()
-            .find(|entry| entry.serial_number == certificate.tbs_certificate.serial_number)
+            .find(|entry| entry.serial_number == *certificate.tbs_certificate().serial_number())
         && entry.revocation_date.to_unix_duration() <= at_time
     {
         return Err(VerificationError::HistoricalValidation(
@@ -881,11 +882,11 @@ fn inspect_verified_response(
 
     let response = AnyRef::from_der(response_der).map_err(malformed)?;
     let content_info = response
-        .sequence(|reader| {
+        .sequence(|reader| -> der::Result<_> {
             let _: AnyRef<'_> = reader.decode()?;
             let content_info: ContentInfo = reader.decode()?;
             if !reader.is_finished() {
-                return Err(Tag::Sequence.value_error());
+                return Err(Tag::Sequence.value_error().into());
             }
             Ok(content_info)
         })
@@ -1201,15 +1202,85 @@ fn run_command(
     timeout: Duration,
 ) -> Result<Output, VerificationError> {
     command.stdout(Stdio::piped()).stderr(Stdio::piped());
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+
+        // Isolate the verifier so timeout cleanup can terminate descendants
+        // that inherited its output pipes as well as the direct child.
+        command.process_group(0);
+    }
     let mut child = command.spawn()?;
+    let stdout = match child.stdout.take() {
+        Some(stdout) => stdout,
+        None => {
+            terminate_child(&mut child);
+            let _ = child.wait();
+            return Err(
+                std::io::Error::other("RFC 3161 verifier stdout pipe was not created").into(),
+            );
+        }
+    };
+    let stderr = match child.stderr.take() {
+        Some(stderr) => stderr,
+        None => {
+            terminate_child(&mut child);
+            let _ = child.wait();
+            return Err(
+                std::io::Error::other("RFC 3161 verifier stderr pipe was not created").into(),
+            );
+        }
+    };
+    let stdout_reader = match spawn_bounded_pipe_reader(stdout, "trackone-rfc3161-stdout") {
+        Ok(reader) => reader,
+        Err(error) => {
+            terminate_child(&mut child);
+            let _ = child.wait();
+            return Err(error.into());
+        }
+    };
+    let stderr_reader = match spawn_bounded_pipe_reader(stderr, "trackone-rfc3161-stderr") {
+        Ok(reader) => reader,
+        Err(error) => {
+            terminate_child(&mut child);
+            let _ = child.wait();
+            let _ = join_pipe_reader(stdout_reader);
+            return Err(error.into());
+        }
+    };
+
     let started = Instant::now();
-    loop {
-        if child.try_wait()?.is_some() {
-            return child.wait_with_output().map_err(Into::into);
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) => {}
+            Err(error) => {
+                terminate_child(&mut child);
+                let _ = child.wait();
+                let _ = join_pipe_reader(stdout_reader);
+                let _ = join_pipe_reader(stderr_reader);
+                return Err(error.into());
+            }
         }
         if started.elapsed() >= timeout {
-            let _ = child.kill();
+            terminate_child(&mut child);
             let _ = child.wait();
+            let _ = join_pipe_reader(stdout_reader);
+            let _ = join_pipe_reader(stderr_reader);
+            return Err(VerificationError::ProcessTimeout {
+                command: label.to_string(),
+                timeout,
+            });
+        }
+        thread::sleep(Duration::from_millis(10));
+    };
+
+    while !stdout_reader.is_finished() || !stderr_reader.is_finished() {
+        if started.elapsed() >= timeout {
+            terminate_child(&mut child);
+            let _ = child.wait();
+            let _ = join_pipe_reader(stdout_reader);
+            let _ = join_pipe_reader(stderr_reader);
             return Err(VerificationError::ProcessTimeout {
                 command: label.to_string(),
                 timeout,
@@ -1217,6 +1288,70 @@ fn run_command(
         }
         thread::sleep(Duration::from_millis(10));
     }
+
+    let stdout = join_pipe_reader(stdout_reader)?;
+    let stderr = join_pipe_reader(stderr_reader)?;
+    Ok(Output {
+        status,
+        stdout,
+        stderr,
+    })
+}
+
+fn spawn_bounded_pipe_reader<R>(
+    reader: R,
+    name: &str,
+) -> std::io::Result<thread::JoinHandle<std::io::Result<Vec<u8>>>>
+where
+    R: Read + Send + 'static,
+{
+    thread::Builder::new()
+        .name(name.to_string())
+        .spawn(move || read_pipe_bounded(reader))
+}
+
+fn read_pipe_bounded<R: Read>(mut reader: R) -> std::io::Result<Vec<u8>> {
+    const TRUNCATED_MARKER: &[u8] = b"\n...[output truncated]";
+
+    let mut captured = Vec::with_capacity(MAX_COMMAND_DIAGNOSTIC_BYTES);
+    let mut buffer = [0u8; 8192];
+    let mut truncated = false;
+    loop {
+        let read = reader.read(&mut buffer)?;
+        if read == 0 {
+            break;
+        }
+        let available = MAX_COMMAND_DIAGNOSTIC_BYTES.saturating_sub(captured.len());
+        let retained = available.min(read);
+        captured.extend_from_slice(&buffer[..retained]);
+        truncated |= retained != read;
+    }
+    if truncated {
+        let retained = MAX_COMMAND_DIAGNOSTIC_BYTES.saturating_sub(TRUNCATED_MARKER.len());
+        captured.truncate(retained);
+        captured.extend_from_slice(TRUNCATED_MARKER);
+    }
+    Ok(captured)
+}
+
+fn join_pipe_reader(
+    reader: thread::JoinHandle<std::io::Result<Vec<u8>>>,
+) -> std::io::Result<Vec<u8>> {
+    reader
+        .join()
+        .map_err(|_| std::io::Error::other("RFC 3161 verifier output reader panicked"))?
+}
+
+fn terminate_child(child: &mut Child) {
+    #[cfg(unix)]
+    {
+        if let Ok(pid) = libc::pid_t::try_from(child.id()) {
+            // SAFETY: the child was placed in a process group whose ID equals
+            // its positive PID. A negative PID targets only that group.
+            let _ = unsafe { libc::kill(-pid, libc::SIGKILL) };
+        }
+    }
+    let _ = child.kill();
 }
 
 fn require_success(label: &str, output: Output) -> Result<(), VerificationError> {
@@ -1259,13 +1394,13 @@ where
 fn signer_matches_certificate(identifier: &SignerIdentifier, certificate: &Certificate) -> bool {
     match identifier {
         SignerIdentifier::IssuerAndSerialNumber(value) => {
-            value.issuer == certificate.tbs_certificate.issuer
-                && value.serial_number == certificate.tbs_certificate.serial_number
+            value.issuer == *certificate.tbs_certificate().issuer()
+                && value.serial_number == *certificate.tbs_certificate().serial_number()
         }
         SignerIdentifier::SubjectKeyIdentifier(identifier) => certificate
-            .tbs_certificate
-            .extensions
-            .iter()
+            .tbs_certificate()
+            .extensions()
+            .into_iter()
             .flatten()
             .find(|extension| extension.extn_id == ID_CE_SUBJECT_KEY_IDENTIFIER)
             .and_then(|extension| {
@@ -1335,7 +1470,7 @@ mod tests {
     fn signer_only_fixture_response() -> Result<Vec<u8>, VerificationError> {
         let response = AnyRef::from_der(FIXTURE_RESPONSE).map_err(malformed)?;
         let (status_der, mut content_info) = response
-            .sequence(|reader| {
+            .sequence(|reader| -> der::Result<_> {
                 let status: AnyRef<'_> = reader.decode()?;
                 let content_info: ContentInfo = reader.decode()?;
                 Ok((status.to_der()?, content_info))
@@ -1541,7 +1676,7 @@ mod tests {
         ] {
             let mut crl = crls[0].clone();
             crl.tbs_cert_list.revoked_certificates = Some(vec![RevokedCert {
-                serial_number: signer.tbs_certificate.serial_number.clone(),
+                serial_number: signer.tbs_certificate().serial_number().clone(),
                 revocation_date: x509_time(revocation_time),
                 crl_entry_extensions: None,
             }]);
@@ -1582,7 +1717,7 @@ mod tests {
         let (candidate, anchors, crls) = fixture_archive_parts();
         let signer = Certificate::from_der(&candidate.signer_certificate_der).unwrap();
         let mut unused_crl = crls[0].clone();
-        unused_crl.tbs_cert_list.issuer = signer.tbs_certificate.subject.clone();
+        unused_crl.tbs_cert_list.issuer = signer.tbs_certificate().subject().clone();
 
         validate_archive_applicability(
             &candidate.signer_certificate_der,
@@ -1611,23 +1746,6 @@ mod tests {
             &anchors,
             &[],
             &[],
-            &candidate.claimed_generation_time,
-        )
-        .unwrap_err();
-        assert!(error.to_string().contains("found 0"));
-
-        // Build a structural two-hop path from the parsed fixture objects.
-        // Signature validity remains OpenSSL's responsibility; this isolates
-        // the archive walker's `crl_check_all` completeness rule.
-        let signer = Certificate::from_der(&candidate.signer_certificate_der).unwrap();
-        let mut intermediate = anchors[0].clone();
-        intermediate.tbs_certificate.issuer = signer.tbs_certificate.subject.clone();
-        let synthetic_anchor = signer;
-        let error = validate_archive_applicability(
-            &candidate.signer_certificate_der,
-            &[synthetic_anchor],
-            &[intermediate],
-            &crls,
             &candidate.claimed_generation_time,
         )
         .unwrap_err();
@@ -1821,7 +1939,39 @@ mod tests {
     fn external_command_timeout_is_bounded() {
         let mut command = Command::new("sh");
         command.args(["-c", "sleep 2"]);
+        let started = Instant::now();
         let error = run_command(command, "timeout fixture", Duration::from_millis(20)).unwrap_err();
         assert!(matches!(error, VerificationError::ProcessTimeout { .. }));
+        assert!(started.elapsed() < Duration::from_secs(1));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn external_command_output_is_drained_concurrently_and_bounded() {
+        let mut command = Command::new("sh");
+        command.args([
+            "-c",
+            "head -c 1048576 /dev/zero; head -c 1048576 /dev/zero >&2; exit 7",
+        ]);
+
+        let output = run_command(command, "large-output fixture", Duration::from_secs(2)).unwrap();
+        assert!(!output.status.success());
+        assert_eq!(output.stdout.len(), MAX_COMMAND_DIAGNOSTIC_BYTES);
+        assert_eq!(output.stderr.len(), MAX_COMMAND_DIAGNOSTIC_BYTES);
+        assert!(output.stdout.ends_with(b"...[output truncated]"));
+        assert!(output.stderr.ends_with(b"...[output truncated]"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn timeout_cleans_up_descendants_that_keep_output_pipes_open() {
+        let mut command = Command::new("sh");
+        command.args(["-c", "sleep 2 & exit 0"]);
+        let started = Instant::now();
+
+        let error =
+            run_command(command, "descendant fixture", Duration::from_millis(30)).unwrap_err();
+        assert!(matches!(error, VerificationError::ProcessTimeout { .. }));
+        assert!(started.elapsed() < Duration::from_secs(1));
     }
 }

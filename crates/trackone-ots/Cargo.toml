@@ -12,6 +12,7 @@ readme = "README.md"
 
 [dependencies]
 serde_json.workspace = true
+tempfile.workspace = true
 trackone-constants.workspace = true
 trackone-ledger.workspace = true
 
