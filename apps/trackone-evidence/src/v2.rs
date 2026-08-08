@@ -1,6 +1,6 @@
 //! Verifier for draft-09 segment bundles owned by the evidence app.
 use super::{EvidenceError, Result};
-use flate2::{Compression, Decompress, FlushDecompress, GzBuilder, Status, read::GzDecoder};
+use flate2::{Compression, Crc, Decompress, FlushDecompress, GzBuilder, Status};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
@@ -189,6 +189,19 @@ fn validate_portable_path(rel: &str) -> Result<()> {
     Ok(())
 }
 
+fn read_file_bounded(path: &Path, limit: u64, label: &str) -> Result<Vec<u8>> {
+    read_handle_bounded(File::open(path)?, limit, label)
+}
+
+fn read_handle_bounded(file: File, limit: u64, label: &str) -> Result<Vec<u8>> {
+    let mut bytes = Vec::new();
+    file.take(limit + 1).read_to_end(&mut bytes)?;
+    if bytes.len() as u64 > limit {
+        return Err(bad(format!("{label} exceeds 64 MiB")));
+    }
+    Ok(bytes)
+}
+
 #[cfg(target_os = "linux")]
 fn safe_read(root: &Path, rel: &str) -> Result<Vec<u8>> {
     use rustix::fs::{Mode, OFlags, ResolveFlags, openat2};
@@ -209,10 +222,7 @@ fn safe_read(root: &Path, rel: &str) -> Result<Vec<u8>> {
             bad(format!("cannot safely open v2 artifact {rel}: {error}"))
         }
     })?;
-    let mut file = File::from(descriptor);
-    let mut bytes = Vec::new();
-    file.read_to_end(&mut bytes)?;
-    Ok(bytes)
+    read_handle_bounded(File::from(descriptor), MAX_ARCHIVE_MEMBER, "v2 artifact")
 }
 
 #[cfg(not(target_os = "linux"))]
@@ -409,7 +419,11 @@ pub fn verify_v2_bundle(root: &Path) -> Result<Value> {
 pub fn verify_v2_bundle_with_policy(root: &Path, policy: &V2VerifyPolicy) -> Result<Value> {
     validate_verifier_policy(policy)?;
     let manifest_path = root.join("segment.verify.json");
-    let manifest: Manifest = serde_json::from_slice(&fs::read(&manifest_path)?)?;
+    let manifest: Manifest = serde_json::from_slice(&read_file_bounded(
+        &manifest_path,
+        MAX_ARCHIVE_MEMBER,
+        "v2 manifest",
+    )?)?;
     validate_manifest(&manifest)?;
     let segment_bytes = safe_read(root, &manifest.artifacts.segment_cbor.path)?;
     let segment_digest_matches =
@@ -600,7 +614,11 @@ fn verification_result(
     if let Some(path) = &context.policy.verifier_policy_artifact {
         result.insert(
             "verifier_policy_sha256".to_string(),
-            json!(sha256_hex(&fs::read(path)?)),
+            json!(sha256_hex(&read_file_bounded(
+                path,
+                MAX_ARCHIVE_MEMBER,
+                "verifier policy artifact"
+            )?)),
         );
     }
     Ok(Value::Object(result))
@@ -934,12 +952,15 @@ pub fn compact_v2_bundle(
         Some("success" | "partial")
     ) {
         return Err(EvidenceError::VerificationFailed(format!(
-            "compact-v2 requires non-failing source verification, got {}",
+            "compact requires non-failing source verification, got {}",
             verification["overall"]
         )));
     }
-    let mut manifest: Manifest =
-        serde_json::from_slice(&fs::read(root.join("segment.verify.json"))?)?;
+    let mut manifest: Manifest = serde_json::from_slice(&read_file_bounded(
+        &root.join("segment.verify.json"),
+        MAX_ARCHIVE_MEMBER,
+        "v2 manifest",
+    )?)?;
     validate_manifest(&manifest)?;
     let mut members = BTreeMap::<String, Vec<u8>>::new();
     let records_pack = if manifest.disclosure_class == "A" {
@@ -1077,17 +1098,8 @@ pub fn verify_v2_archive(archive_path: &Path, policy: &V2VerifyPolicy) -> Result
     if fs::metadata(archive_path)?.len() > MAX_COMPRESSED_ARCHIVE {
         return Err(bad("compressed archive exceeds 64 MiB"));
     }
-    let input = fs::read(archive_path)?;
-    validate_single_gzip_member(&input)?;
-    let mut decoder = GzDecoder::new(input.as_slice());
-    let mut expanded = Vec::new();
-    decoder
-        .by_ref()
-        .take(MAX_EXPANDED_ARCHIVE + 1)
-        .read_to_end(&mut expanded)?;
-    if expanded.len() as u64 > MAX_EXPANDED_ARCHIVE {
-        return Err(bad("expanded archive exceeds 256 MiB"));
-    }
+    let input = read_file_bounded(archive_path, MAX_COMPRESSED_ARCHIVE, "compressed archive")?;
+    let expanded = expand_single_gzip_member(&input, MAX_EXPANDED_ARCHIVE)?;
     let temporary = tempfile::tempdir()?;
     let mut archive = tar::Archive::new(Cursor::new(expanded));
     let mut paths = BTreeSet::new();
@@ -1124,8 +1136,75 @@ pub fn verify_v2_archive(archive_path: &Path, policy: &V2VerifyPolicy) -> Result
     verify_v2_bundle_with_policy(temporary.path(), policy)
 }
 
-fn validate_single_gzip_member(input: &[u8]) -> Result<()> {
-    if input.len() < 18 || input[0..3] != [0x1f, 0x8b, 8] {
+fn expand_single_gzip_member(input: &[u8], limit: u64) -> Result<Vec<u8>> {
+    let offset = gzip_deflate_offset(input)?;
+    let limit =
+        usize::try_from(limit).map_err(|_| bad("gzip expansion limit overflows platform"))?;
+    let mut decompressor = Decompress::new(false);
+    let mut expanded = Vec::new();
+    let mut crc = Crc::new();
+    let mut scratch = [0_u8; 8192];
+    loop {
+        let before_in = decompressor.total_in();
+        let before_out = decompressor.total_out();
+        let remaining = limit.saturating_sub(expanded.len()).saturating_add(1);
+        let output_width = remaining.min(scratch.len());
+        let consumed = usize::try_from(before_in).map_err(|_| bad("gzip stream is too large"))?;
+        let input_offset = offset
+            .checked_add(consumed)
+            .ok_or_else(|| bad("gzip member length overflows"))?;
+        let status = decompressor
+            .decompress(
+                input
+                    .get(input_offset..)
+                    .ok_or_else(|| bad("gzip deflate stream is truncated"))?,
+                &mut scratch[..output_width],
+                FlushDecompress::None,
+            )
+            .map_err(|_| bad("gzip deflate stream is malformed"))?;
+        let produced = usize::try_from(decompressor.total_out() - before_out)
+            .map_err(|_| bad("gzip output is too large"))?;
+        crc.update(&scratch[..produced]);
+        expanded.extend_from_slice(&scratch[..produced]);
+        if expanded.len() > limit {
+            return Err(bad("expanded archive exceeds 256 MiB"));
+        }
+        if status == Status::StreamEnd {
+            break;
+        }
+        if decompressor.total_in() == before_in && decompressor.total_out() == before_out {
+            return Err(bad("gzip deflate stream is truncated"));
+        }
+    }
+    let consumed =
+        usize::try_from(decompressor.total_in()).map_err(|_| bad("gzip stream is too large"))?;
+    let trailer = offset
+        .checked_add(consumed)
+        .ok_or_else(|| bad("gzip member length overflows"))?;
+    let expected_end = trailer
+        .checked_add(8)
+        .ok_or_else(|| bad("gzip member length overflows"))?;
+    if expected_end != input.len() {
+        return Err(bad("gzip carrier has trailing data or multiple members"));
+    }
+    let expected_crc = u32::from_le_bytes(
+        input[trailer..trailer + 4]
+            .try_into()
+            .expect("checked gzip trailer"),
+    );
+    let expected_size = u32::from_le_bytes(
+        input[trailer + 4..expected_end]
+            .try_into()
+            .expect("checked gzip trailer"),
+    );
+    if crc.sum() != expected_crc || crc.amount() != expected_size {
+        return Err(bad("gzip data checksum or size is invalid"));
+    }
+    Ok(expanded)
+}
+
+fn gzip_deflate_offset(input: &[u8]) -> Result<usize> {
+    if input.len() < 18 || input.get(0..3) != Some(&[0x1f, 0x8b, 8]) {
         return Err(bad("archive is not a gzip carrier"));
     }
     let flags = input[3];
@@ -1142,6 +1221,9 @@ fn validate_single_gzip_member(input: &[u8]) -> Result<()> {
         offset = offset
             .checked_add(length)
             .ok_or_else(|| bad("gzip extra field overflows"))?;
+        if offset > input.len() {
+            return Err(bad("gzip extra field is truncated"));
+        }
     }
     for flag in [0x08, 0x10] {
         if flags & flag != 0 {
@@ -1156,6 +1238,15 @@ fn validate_single_gzip_member(input: &[u8]) -> Result<()> {
         }
     }
     if flags & 0x02 != 0 {
+        let expected = input
+            .get(offset..offset + 2)
+            .map(|bytes| u16::from_le_bytes([bytes[0], bytes[1]]))
+            .ok_or_else(|| bad("gzip header checksum is truncated"))?;
+        let mut crc = Crc::new();
+        crc.update(&input[..offset]);
+        if crc.sum() as u16 != expected {
+            return Err(bad("gzip header checksum is invalid"));
+        }
         offset = offset
             .checked_add(2)
             .ok_or_else(|| bad("gzip header overflows"))?;
@@ -1163,35 +1254,7 @@ fn validate_single_gzip_member(input: &[u8]) -> Result<()> {
     if offset + 8 > input.len() {
         return Err(bad("gzip carrier is truncated"));
     }
-    let mut decompressor = Decompress::new(false);
-    let mut consumed = 0_usize;
-    let mut scratch = [0_u8; 8192];
-    loop {
-        let before = decompressor.total_in();
-        let status = decompressor
-            .decompress(
-                &input[offset + consumed..],
-                &mut scratch,
-                FlushDecompress::None,
-            )
-            .map_err(|_| bad("gzip deflate stream is malformed"))?;
-        consumed = usize::try_from(decompressor.total_in())
-            .map_err(|_| bad("gzip stream is too large"))?;
-        if status == Status::StreamEnd {
-            break;
-        }
-        if decompressor.total_in() == before && status == Status::BufError {
-            return Err(bad("gzip deflate stream is truncated"));
-        }
-    }
-    let expected_end = offset
-        .checked_add(consumed)
-        .and_then(|value| value.checked_add(8))
-        .ok_or_else(|| bad("gzip member length overflows"))?;
-    if expected_end != input.len() {
-        return Err(bad("gzip carrier has trailing data or multiple members"));
-    }
-    Ok(())
+    Ok(offset)
 }
 
 #[cfg(test)]
@@ -1355,10 +1418,25 @@ mod tests {
         write_deterministic_archive(&first, &members).unwrap();
         write_deterministic_archive(&second, &members).unwrap();
         assert_eq!(fs::read(&first).unwrap(), fs::read(&second).unwrap());
-        validate_single_gzip_member(&fs::read(&first).unwrap()).unwrap();
-        let mut trailing = fs::read(first).unwrap();
+        let compressed = fs::read(&first).unwrap();
+        assert!(
+            !expand_single_gzip_member(&compressed, MAX_EXPANDED_ARCHIVE)
+                .unwrap()
+                .is_empty()
+        );
+        let mut trailing = compressed.clone();
         trailing.push(0);
-        assert!(validate_single_gzip_member(&trailing).is_err());
+        assert!(expand_single_gzip_member(&trailing, MAX_EXPANDED_ARCHIVE).is_err());
+
+        let mut corrupt = compressed.clone();
+        let trailer = corrupt.len() - 8;
+        corrupt[trailer] ^= 0x01;
+        assert!(expand_single_gzip_member(&corrupt, MAX_EXPANDED_ARCHIVE).is_err());
+
+        let mut multiple = compressed.clone();
+        multiple.extend_from_slice(&compressed);
+        assert!(expand_single_gzip_member(&multiple, MAX_EXPANDED_ARCHIVE).is_err());
+        assert!(expand_single_gzip_member(&compressed, 1).is_err());
     }
 
     #[test]
