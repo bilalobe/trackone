@@ -11,6 +11,7 @@ repository.workspace = true
 readme = "README.md"
 
 [dependencies]
+portable-atomic.workspace = true
 trackone-core.workspace = true
 trackone-ingest.workspace = true
 
@@ -24,7 +25,7 @@ wdg = []
 mock-hal = []
 mock = ["mock-hal"]
 mock-log = ["mock-hal", "std"]
-production = ["wdg"]
+production = ["wdg", "trackone-core/production"]
 
 # Future: when targeting embedded platforms
 # [profile.release]
