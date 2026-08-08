@@ -108,6 +108,16 @@ fn store_error(error: postgres::Error) -> ProducerError {
     ProducerError::Store(error.to_string())
 }
 
+fn require_row_count(operation: &str, actual: u64, expected: u64) -> Result<(), ProducerError> {
+    if actual == expected {
+        Ok(())
+    } else {
+        Err(ProducerError::Store(format!(
+            "{operation} affected {actual} rows; expected {expected}"
+        )))
+    }
+}
+
 fn parse_u64(value: String, field: &'static str) -> Result<u64, ProducerError> {
     value
         .parse()
@@ -390,31 +400,44 @@ impl LedgerStore for PostgresLedgerStore {
                 )
                 .map_err(store_error)?;
         }
-        if !sealed.is_empty() && transition.previous_open_count > 0 {
-            let destination = sealed
-                .iter()
-                .find(|segment| !segment.records.is_empty())
-                .ok_or_else(|| {
-                    ProducerError::Store(
-                        "non-empty open interval was not present in a sealed segment".to_string(),
+        if !sealed.is_empty() {
+            if transition.previous_open_count > 0 {
+                let destination = sealed
+                    .iter()
+                    .find(|segment| !segment.records.is_empty())
+                    .ok_or_else(|| {
+                        ProducerError::Store(
+                            "non-empty open interval was not present in a sealed segment"
+                                .to_string(),
+                        )
+                    })?;
+                let segment_number = numeric(destination.segment_number);
+                let copied = transaction
+                    .execute(
+                        "INSERT INTO trackone_v2_sealed_record \
+                         (ledger_id, segment_number, ordinal, record_cbor) \
+                         SELECT ledger_id, $2::numeric, ordinal, record_cbor \
+                         FROM trackone_v2_open_record WHERE ledger_id=$1 ORDER BY ordinal",
+                        &[&state.ledger_id, &segment_number],
                     )
-                })?;
-            let segment_number = numeric(destination.segment_number);
-            transaction
-                .execute(
-                    "INSERT INTO trackone_v2_sealed_record \
-                     (ledger_id, segment_number, ordinal, record_cbor) \
-                     SELECT ledger_id, $2::numeric, ordinal, record_cbor \
-                     FROM trackone_v2_open_record WHERE ledger_id=$1 ORDER BY ordinal",
-                    &[&state.ledger_id, &segment_number],
-                )
-                .map_err(store_error)?;
-            transaction
+                    .map_err(store_error)?;
+                require_row_count(
+                    "sealed-record transfer",
+                    copied,
+                    transition.previous_open_count,
+                )?;
+            }
+            let deleted = transaction
                 .execute(
                     "DELETE FROM trackone_v2_open_record WHERE ledger_id=$1",
                     &[&state.ledger_id],
                 )
                 .map_err(store_error)?;
+            require_row_count(
+                "open-record deletion",
+                deleted,
+                transition.previous_open_count,
+            )?;
         }
         for admitted in &transition.admitted_records {
             match admitted.destination {
@@ -484,5 +507,21 @@ impl LedgerStore for PostgresLedgerStore {
             }
         }
         transaction.commit().map_err(store_error)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::require_row_count;
+
+    #[test]
+    fn row_count_guard_rejects_partial_transfers() {
+        assert!(require_row_count("transfer", 3, 3).is_ok());
+        let error = require_row_count("transfer", 2, 3).unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "ledger store failed: transfer affected 2 rows; expected 3"
+        );
+        assert!(require_row_count("delete-empty", 1, 0).is_err());
     }
 }
