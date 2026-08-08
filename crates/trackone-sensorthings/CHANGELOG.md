@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Remove the optional Python binding boundary; SensorThings projection remains
+  a Rust-native read-only adapter.
+- Derive entity IDs from a versioned domain and length-prefixed components,
+  require the canonical frame counter in projection inputs, and bind
+  observation IDs to datastream, complete pod identity, and frame counter.
+- Reject non-finite scalar projection results.
+
 ## [0.1.0-beta.4] - 2026-07-18
 
 ### Notes

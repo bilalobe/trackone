@@ -2,7 +2,7 @@
 
 **Status**: Accepted
 **Date**: 2025-10-06
-**Updated**: 2026-04-18
+**Updated**: 2026-07-28
 
 ## Context
 
@@ -16,6 +16,9 @@
 - **Frame type:** Compact binary record with fixed header + AEAD payload
 - **Endianness:** Network byte order (big‑endian) for integers
 - **AAD (associated data):** `dev_id || msg_type` (2 B + 1 B)
+- **Identity authority:** the 16-bit `dev_id` is a routing hint only. The
+  provisioned key record carries the authoritative 8-byte `PodId`; admission
+  requires the decrypted fact's complete `PodId` to match it exactly.
 - **Current nonce layout:** XChaCha20-Poly1305 nonce bytes are
   `salt8 || fc32_as_u64_be || tail8`. `salt8` is provisioned per device,
   `fc32_as_u64_be` binds the 32-bit frame header counter into the nonce by
@@ -68,15 +71,19 @@ production.
 ## Replay Policy
 
 - Gateway maintains `device_table[dev_id]`:
+  - `pod_id` (authoritative 8-byte canonical identity encoded as hex16)
   - `highest_fc_seen` (u32 for M#2, u64 for production)
   - `fc_window` (default 64; accept if `|fc - highest_fc_seen| <= window_size`)
   - `salt4`/`salt8` for nonce reconstruction
   - `ck_up` (32-byte AEAD key)
 - On receipt:
+  1. Verify that the selected device record's `pod_id` suffix matches the
+     header `dev_id`; a mismatch indicates incorrect key routing
   1. Validate nonce prefix/counter against stored salt and header frame counter
   1. Verify AEAD with AAD = `dev_id || msg_type`; if fails → drop
-  1. Decode the selected plaintext profile; if profile semantics conflict with
-     the frame header → drop
+  1. Decode the selected plaintext profile and require its full `pod_id` to
+     equal the provisioned device record's `pod_id`; suffix-only equality is
+     forbidden
   1. Check replay window; if duplicate or outside window → drop and log
   1. If accepted → update `highest_fc_seen`, persist device_table
 - **FC rollback handling:**
@@ -85,6 +92,7 @@ production.
 ## Device Table (Gateway)
 
 - **Fields (per device_id):**
+  - `pod_id`: full canonical identity authorized to use the entry's key
   - `salt4` (M#2) or `salt8` (production): nonce salt
   - `ck_up`: 32-byte uplink AEAD key
   - `highest_fc_seen`: last accepted frame counter

@@ -1,7 +1,8 @@
-# ADR-061: Library, Application, and Binding Package Boundaries
+# ADR-061: Library and Application Package Boundaries
 
 **Status**: Accepted
 **Date**: 2026-07-15
+**Amended**: 2026-08-08
 
 ## Related ADRs
 
@@ -30,37 +31,35 @@ otherwise sound internal boundaries.
 
 ## Decision
 
-The workspace uses three explicit source layers:
+The workspace uses two explicit source layers:
 
 1. `crates/` contains reusable domain libraries only.
 2. `apps/` contains deployable or operator-facing application packages.
-3. `bindings/` contains optional language adapters and conversion code.
 
 The concrete allocation is:
 
 - `trackone-ots` owns native OTS parsing, verification, and sidecar binding;
 - `trackone-gateway-svc` owns the v2 producer, PostgreSQL store, HTTP service,
   RFC 3161 submission, service binary, migrations, Dockerfile, Helm chart, and
-  local Kustomize assets;
-- `trackone-evidence` remains the supported verifier/export library and CLI
+  build-only local Kustomize assets; Helm is the sole runtime deployment
+  surface;
+- `trackone-evidence` is the supported v2 verifier/compactor library and CLI
   but lives under `apps/` and depends directly on `trackone-ots`;
-- `trackone-python` is an unpublished, opt-in PyO3 leaf package; and
 - the mixed `trackone-gateway` package and its mismatched `trackone` library
   target are removed.
 
 Reusable crates may depend only on other reusable crates. Applications may
-compose reusable crates. Bindings may depend on reusable crates but reusable
-crates and applications must not depend on bindings.
+compose reusable crates.
 
 `trackone-ingest` exposes its existing crate-root API from internal
 `profile`, `frame`, `aad`, `nonce`, `fixture`, `replay`, and
-`admission` modules. The evidence library similarly re-exports its existing
-public entry points from `verify`, `export`, `policy`, `manifest`,
-`bundle`, and `git_ops` modules.
+`admission` modules. The evidence library exposes its forward-only v2
+verification and compaction surface from the `v2` module. Its former v1
+verification/export modules and compatibility command names are removed.
 
-The coordinated release contains seven reusable libraries and two publishable
-applications. The unpublished binding is checked in CI but excluded from crate
-publication and conformance-package counts.
+The coordinated release contains eight reusable libraries and two publishable
+applications. The legacy `trackone-python` PyO3 leaf is removed; Python
+remains only for repository tooling and detached verification.
 
 This ADR supersedes the package-allocation parts of ADR-051 and the
 `trackone-gateway` Python-exposure statements in ADR-046. Their protocol and
@@ -71,7 +70,6 @@ dependency-direction decisions remain in force.
 ### Positive
 
 - Evidence no longer depends upward on a service or binding package.
-- PyO3, ABI, and Python conversion concerns are confined to one leaf.
 - The deployable service has one manifest, binary, migration owner, and deploy
   subtree.
 - Package names and Rust import names are aligned.
@@ -95,21 +93,19 @@ dependency-direction decisions remain in force.
   reusable gateway implementation remained after moving OTS, service, and
   binding concerns.
 - Add more features to the old package. Rejected because additive Cargo feature
-  unification does not express mutually exclusive application and binding
-  ownership.
-- Remove the legacy Python code entirely. Deferred; isolating it as unpublished
-  code preserves the adapter for deliberate users without making it a product
-  dependency.
+  unification does not express mutually exclusive application ownership.
+- Retain the legacy Python leaf. Rejected after the Rust-native applications
+  and reusable crates became the supported product surface.
 
 ## Testing & Migration
 
 1. Check the full workspace and the no-std ingest base.
-2. Test the supported `std,xchacha` ingest path and opt-in Python binding.
+2. Test the supported `std,xchacha` ingest path.
 3. Test the OTS, evidence, and gateway-service packages independently.
 4. Run the curated workspace test, Clippy, format, and production-build gates.
 5. Package the nine publishable packages, lint/package the app-owned Helm
    chart, and assemble the conformance archive.
 6. Verify searches and Cargo metadata show no dependency on the removed
    `trackone-gateway` package.
-7. Run `just boundaries` so layer direction, binding publication, and Cargo
-   library-target naming remain checked in CI.
+7. Run `just boundaries` so layer direction and Cargo library-target naming
+   remain checked in CI.

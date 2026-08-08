@@ -7,7 +7,6 @@ import argparse
 import hashlib
 import json
 import math
-import os
 import re
 import struct
 import subprocess
@@ -330,11 +329,12 @@ def verify_v2_vectors(vector_root: Path) -> int:
     return len(leaves)
 
 
-def verify_v2_bundles(vector_root: Path, binary: Path) -> int:
+def verify_v2_bundles(vector_root: Path, binary: Path) -> tuple[int, int]:
     cases = read_json(vector_root / "cases.json")
     if cases.get("schema") != "trackone-v2-bundle-cases-1":
         raise VerifyError("v2 bundle case schema token mismatch")
     count = 0
+    rejected = 0
     for case in cases.get("cases", []):
         fixture = portable(
             vector_root,
@@ -342,7 +342,7 @@ def verify_v2_bundles(vector_root: Path, binary: Path) -> int:
             f"v2 bundle {case.get('id')}",
             directory=True,
         )
-        command = [str(binary), "verify-v2", "--root", str(fixture), "--json"]
+        command = [str(binary), "verify", "--root", str(fixture), "--json"]
         if case.get("tsa_ca_file"):
             ca_file = portable(vector_root, case["tsa_ca_file"], "v2 TSA trust anchor")
             command.extend(["--tsa-ca-file", str(ca_file)])
@@ -382,13 +382,13 @@ def verify_v2_bundles(vector_root: Path, binary: Path) -> int:
             if actual != expected:
                 raise VerifyError(f"v2 bundle {case.get('id')} result drifted")
             if count == 0:
-                with tempfile.TemporaryDirectory(prefix="trackone-compact-v2-") as temp:
+                with tempfile.TemporaryDirectory(prefix="trackone-compact-") as temp:
                     archive = Path(temp) / "bundle.v3.tar.gz"
                     policy_args = command[5:]
                     compact = subprocess.run(
                         [
                             str(binary),
-                            "compact-v2",
+                            "compact",
                             "--root",
                             str(fixture),
                             "--output",
@@ -420,7 +420,7 @@ def verify_v2_bundles(vector_root: Path, binary: Path) -> int:
                     replay = subprocess.run(
                         [
                             str(binary),
-                            "verify-v2",
+                            "verify",
                             "--archive",
                             str(archive),
                             "--json",
@@ -444,56 +444,16 @@ def verify_v2_bundles(vector_root: Path, binary: Path) -> int:
                             "v2 compact archive did not emit a successful v2 result"
                         )
         else:
+            rejected += 1
             expected = read_json(portable(fixture, case.get("expected_error"), "v2 expected error"))
             if expected.get("error_contains") not in completed.stderr:
                 raise VerifyError(f"v2 bundle {case.get('id')} diagnostic drifted")
         count += 1
     if count == 0:
         raise VerifyError("v2 detached bundle corpus is empty")
-    return count
-
-
-def verify_negative_fixtures(root: Path, manifest: dict[str, Any]) -> int:
-    vector_root = portable(root, manifest["contents"]["vectors"], "vectors", directory=True)
-    corpus = vector_root / "trackone-beta-negative-v1"
-    cases = read_json(corpus / "cases.json")
-    if cases.get("schema") != "trackone-beta-negative-fixtures-v1":
-        raise VerifyError("negative fixture schema token mismatch")
-    binary = portable(root, manifest["contents"]["detached_verifier"], "detached verifier")
-    if not os.access(binary, os.X_OK):
-        raise VerifyError("detached verifier is not executable")
-    count = 0
-    for case in cases.get("cases", []):
-        fixture = portable(corpus, case.get("path"), f"negative fixture {case.get('id')}", directory=True)
-        command = [
-            str(binary),
-            "verify",
-            "--root",
-            str(fixture),
-            "--facts",
-            str(fixture / "facts"),
-            "--json",
-            "--policy-mode",
-            case["policy_mode"],
-            "--disclosure-class",
-            case["disclosure_class"],
-        ]
-        completed = subprocess.run(command, text=True, capture_output=True, timeout=60, check=False)
-        output = completed.stdout + completed.stderr
-        succeeded = completed.returncode == 0
-        if succeeded != case.get("expect_success"):
-            raise VerifyError(
-                f"negative fixture {case.get('id')} exit mismatch: {completed.returncode}\n{output}"
-            )
-        if case.get("expect_contains") not in output:
-            raise VerifyError(
-                f"negative fixture {case.get('id')} diagnostic mismatch; expected "
-                f"{case.get('expect_contains')!r}"
-            )
-        count += 1
-    if count == 0:
-        raise VerifyError("negative fixture corpus is empty")
-    return count
+    if rejected == 0:
+        raise VerifyError("v2 detached bundle corpus has no rejection cases")
+    return count, rejected
 
 
 def verify_root(root: Path) -> dict[str, Any]:
@@ -527,8 +487,7 @@ def verify_root(root: Path) -> dict[str, Any]:
     v2_root = vectors / "verifiable-telemetry-canonical-cbor-v2"
     v2_records = verify_v2_vectors(v2_root)
     binary = portable(root, manifest["contents"]["detached_verifier"], "detached verifier")
-    v2_bundles = verify_v2_bundles(v2_root, binary)
-    negative_cases = verify_negative_fixtures(root, manifest)
+    v2_bundles, negative_cases = verify_v2_bundles(v2_root, binary)
     return {
         "ok": True,
         "schema": ARCHIVE_SCHEMA,

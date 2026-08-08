@@ -17,6 +17,7 @@ pub enum ObservationResult {
 #[derive(Clone, Debug, PartialEq)]
 pub struct EnvObservationProjectionInput {
     pub pod_id: String,
+    pub frame_counter: u64,
     pub site_id: Option<String>,
     pub sensor_key: String,
     pub observed_property_key: String,
@@ -68,14 +69,10 @@ pub fn project_env_observation(
             &input.stream_key,
         ],
     );
+    let frame_counter = input.frame_counter.to_string();
     let observation_id = entity_id(
         SensorThingsEntityKind::Observation,
-        &[
-            &datastream_id,
-            &phenomenon_time_start_rfc3339_utc,
-            &phenomenon_time_end_rfc3339_utc,
-            &result_time_rfc3339_utc,
-        ],
+        &[&datastream_id, &input.pod_id, &frame_counter],
     );
 
     let ids = SensorThingsEntityIds {
@@ -136,6 +133,7 @@ mod tests {
     fn projects_ids_and_observation() {
         let input = EnvObservationProjectionInput {
             pod_id: "pod-01".to_owned(),
+            frame_counter: 42,
             site_id: Some("site-a".to_owned()),
             sensor_key: "shtc3-0".to_owned(),
             observed_property_key: "temperature_air".to_owned(),
@@ -152,6 +150,42 @@ mod tests {
         assert_eq!(
             projection.observation.phenomenon_time.end_rfc3339_utc,
             "2026-03-06T00:05:00Z"
+        );
+    }
+
+    #[test]
+    fn observation_identity_uses_frame_counter_not_timestamps() {
+        let base = EnvObservationProjectionInput {
+            pod_id: "pod-01".to_owned(),
+            frame_counter: 42,
+            site_id: None,
+            sensor_key: "shtc3-0".to_owned(),
+            observed_property_key: "temperature_air".to_owned(),
+            stream_key: "raw".to_owned(),
+            phenomenon_time_start_rfc3339_utc: "2026-03-06T00:00:00Z".to_owned(),
+            phenomenon_time_end_rfc3339_utc: "2026-03-06T00:00:00Z".to_owned(),
+            result_time_rfc3339_utc: "2026-03-06T00:05:01Z".to_owned(),
+            result: ObservationResult::Scalar(21.5),
+        };
+        let mut other_counter = base.clone();
+        other_counter.frame_counter = 43;
+        let mut other_time = base.clone();
+        other_time.result_time_rfc3339_utc = "2026-03-06T00:05:02Z".to_owned();
+
+        let base_id = project_env_observation(&base).unwrap().ids.observation_id;
+        assert_ne!(
+            base_id,
+            project_env_observation(&other_counter)
+                .unwrap()
+                .ids
+                .observation_id
+        );
+        assert_eq!(
+            base_id,
+            project_env_observation(&other_time)
+                .unwrap()
+                .ids
+                .observation_id
         );
     }
 }

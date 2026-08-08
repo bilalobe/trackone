@@ -38,7 +38,11 @@
         "flags_range",
         "invalid_ingest_profile",
         "unsupported_flags",
+        "unsupported_message_type",
+        "header_device_id_mismatch",
         "unknown_device",
+        "missing_pod_id",
+        "invalid_pod_id",
         "missing_salt8",
         "invalid_base64",
         "salt8_length",
@@ -50,12 +54,15 @@
         "nonce_salt_mismatch",
         "nonce_fc_mismatch",
         "decrypt_failed",
+        "invalid_fact",
         "payload_device_id_mismatch",
         "payload_fc_mismatch",
         "duplicate",
         "out_of_window",
         "continuity_break",
-        "resync_required"
+        "resync_required",
+        "replay_namespace_empty",
+        "replay_namespace_mismatch"
       ]
     },
     "observed_at_utc": {

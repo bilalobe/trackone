@@ -16,13 +16,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   required SHA-256 TSA signer-certificate pinning across gateway production,
   evidence verification, vectors, deployment configuration, and conformance
   archives.
+- Added required bearer authentication with two-token rotation, verified
+  PostgreSQL TLS defaults and chart-managed server TLS, bounded recursive
+  decoding, bounded single-pass gzip handling, and bounded concurrent
+  subprocess diagnostics.
 
 ### Changed
 
+- Removed the unpublished legacy `trackone-python` PyO3 binding leaf; Python
+  remains only for repository tooling and detached verification.
+- Migrated RFC 3161 CMS parsing to the supported `cms 0.3.0-pre.2`, DER 0.8,
+  and X.509 0.3 API line, with the shared verifier updated for its public
+  accessors and decoding/error APIs.
 - Stabilized the draft-09 evidence surface around manifest v3 and the
   unchanged v2 commitment: producer and verifier states are separated,
   convenience projections and duplicate result fields are removed, and
   evaluable verification failures receive structured outcomes.
+- Upgraded the runtime device-table contract to version 1.1 and made the full
+  provisioned `PodId` mandatory for framed admission.
+- Replaced the evidence CLI with the forward-only v2 `verify` and `compact`
+  surface, made fact construction/serialization semantically fallible, made
+  firmware counters exhaust instead of wrap, and versioned SensorThings ID
+  inputs around complete component boundaries and frame counters.
+- Made Helm the sole runtime Kubernetes surface; the retained Kustomize tree
+  contains build-check Jobs only.
+
+### Security
+
+- Fixed an identity-substitution flaw in Rust-native framed admission by
+  binding decrypted facts to the complete provisioned `PodId`. The legacy
+  16-bit `dev_id` is now used only for routing consistency and can no longer
+  authorize a same-suffix canonical identity.
+- Bound external OTS verification to the expected sibling artifact, reject
+  replay-snapshot namespace confusion, and reject invalid/non-finite facts
+  before commitment, admission, or projection.
 
 ## [0.1.0-beta.4] - 2026-07-18
 

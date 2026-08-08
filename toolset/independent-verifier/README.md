@@ -3,8 +3,10 @@
 `verify_conformance_archive.py` is a standard-library archive v3 runner. It
 checks the complete `SHA256SUMS` inventory, resolves every public schema through
 the archive-local catalog, replays the v1 and draft-09 v2 commitment vectors,
-and executes the bundled `trackone-evidence` binary against the ADR-055
-negative-fixture floor.
+and executes the bundled v2-only `trackone-evidence` binary against the
+positive and rejection bundle corpus. The legacy v1 command-line verifier is
+not part of the archive; immutable v1 commitment vectors are replayed directly
+by this standard-library runner.
 
 From outside the source checkout:
 

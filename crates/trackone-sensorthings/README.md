@@ -7,11 +7,16 @@ read-only OGC SensorThings projection semantics.
 
 This crate owns:
 
-- deterministic SensorThings entity ID derivation
+- domain-separated, length-prefixed SensorThings entity ID derivation
 - RFC3339 UTC validation and normalization used by projection outputs
 - SensorThings projection types for Things, Datastreams, Observations, and IDs
 - deterministic environmental observation projection from accepted facts
 - provisioning/deployment-backed sensor identity selection for projection inputs
+
+Observation projection inputs require the canonical `frame_counter`.
+Observation IDs bind the datastream, complete pod identifier, and frame
+counter; timestamp reuse cannot collapse distinct accepted facts. Scalar
+results must be finite.
 
 ## Boundary with other crates
 
@@ -19,8 +24,6 @@ This crate owns:
   sample types, and payload shapes.
 - [`trackone-ledger`](../trackone-ledger/README.md) owns commitment artifacts;
   SensorThings outputs are not Merkle leaves or CBOR commitment authorities.
-- [`trackone-python`](../../bindings/trackone-python/README.md) may expose
-  optional host-side adapters but does not own projection semantics.
 
 ## Boundary watchlist
 
