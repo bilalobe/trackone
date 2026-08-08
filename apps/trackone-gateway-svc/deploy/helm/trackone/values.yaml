@@ -14,7 +14,7 @@ otsCalendar:
   enabled: false
   image:
     repository: ghcr.io/bilalobe/trackone/ots-calendar
-    tag: 0.1.0-beta.4
+    tag: 0.1.0-beta.5
     pullPolicy: IfNotPresent
   port: 8468
   logLevel: info
@@ -102,7 +102,7 @@ gateway:
     caPem: ""
   image:
     repository: ghcr.io/bilalobe/trackone/gateway
-    tag: 0.1.0-beta.4
+    tag: 0.1.0-beta.5
     pullPolicy: IfNotPresent
   service:
     type: ClusterIP

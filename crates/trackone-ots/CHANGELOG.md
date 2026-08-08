@@ -4,6 +4,8 @@ All notable changes to trackone-ots will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.0-beta.5] - 2026-08-08
+
 ### Changed
 
 - Remove the unpublished Python binding boundary; OTS verification remains

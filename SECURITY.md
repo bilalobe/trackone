@@ -2,11 +2,11 @@
 
 ## Scope
 
-TrackOne is currently in an **alpha** release line. Security reports are welcome
+TrackOne is currently in a **beta** release line. Security reports are welcome
 for:
 
 - the current `main` branch
-- the latest tagged alpha release
+- the latest tagged beta release
 - the published Rust packaging surfaces and repository tooling
 - the gateway, verifier, evidence compaction, and commitment tooling
 
@@ -19,10 +19,10 @@ compatibility."
 
 Security fixes are expected on:
 
-- the latest tagged alpha release
+- the latest tagged beta release
 - `main`, when it is ahead of the latest tag
 
-Older alpha tags should be treated as historical snapshots unless explicitly
+Older alpha and beta tags should be treated as historical snapshots unless explicitly
 called out in release notes.
 
 ## Reporting a Vulnerability
@@ -55,11 +55,11 @@ Best effort expectations for initial handling:
 - follow-up triage after reproducing or bounding the report
 - coordinated disclosure after a fix or mitigation is available
 
-Because TrackOne is in alpha, some reports may be resolved by:
+Because TrackOne is in beta, some reports may be resolved by:
 
 - removing or narrowing an unstable surface
 - documenting a boundary more clearly
-- shipping the fix only on the latest alpha line and `main`
+- shipping the fix only on the latest beta line and `main`
 
 ## Security Posture Notes
 
@@ -75,7 +75,7 @@ areas include:
 
 Automated security tooling in CI, including `tox -e security`, is helpful but
 not a substitute for responsible disclosure. Some CI security checks are
-currently non-blocking to avoid noisy failures in the alpha line; private
+currently non-blocking to avoid noisy failures in the beta line; private
 reports remain the preferred path for real vulnerabilities.
 
 ## Disclosure Preference
