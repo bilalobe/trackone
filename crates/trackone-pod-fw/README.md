@@ -9,10 +9,12 @@ concerns such as low-power waiting and watchdog coordination.
 
 This crate currently provides:
 
-- `Pod` for constructing and emitting framed telemetry from payloads
-- `CounterNonce24` for frame-counter-bound 24-byte nonce generation
+- `Pod` for constructing and emitting framed telemetry with a monotonic,
+  exhaustible v1 `u32` counter
+- fallible `CounterNonce24` frame-counter-bound nonce generation
 - small HAL-facing traits and optional mock implementations
-- low-power helpers such as `idle_wait` and `enter_low_power`
+- low-power helpers such as `idle_wait`, `enter_low_power`, and an atomic
+  SEV/WFE `EventWaiter`
 - stress utilities such as stack-guard paint/scan
 - watchdog/liveness helpers behind the `wdg` feature
 
@@ -28,7 +30,14 @@ This crate currently provides:
 - `mock-log`
   Adds `std`-backed logging to the mock HAL path.
 - `production`
-  Intended for embedded builds; implies `wdg` and rejects mock HAL usage.
+  Intended for embedded builds; implies `wdg`, forwards
+  `trackone-core/production`, and rejects mock HAL or dummy AEAD usage.
+
+`Pod::restore_next_frame_counter` accepts monotonic `Option<u32>` durable state,
+including a persistable exhausted `None`.
+`Pod::emit_fact` requires the exact pod identity and next counter, advances
+only after successful encryption, and leaves the pod permanently exhausted
+after emitting `u32::MAX`.
 
 The default build stays `no_std`-friendly. Enable `std` for host-side tests and
 local development:

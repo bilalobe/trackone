@@ -32,8 +32,8 @@ pub mod stress;
 #[cfg(feature = "wdg")]
 pub mod watchdog;
 
-pub use crate::nonce::{CounterNonce24, Nonce24};
-pub use crate::pod::Pod;
+pub use crate::nonce::{CounterNonce24, Nonce24, NonceError};
+pub use crate::pod::{Pod, PodError, PodResult};
 pub use crate::power::{EventWaiter, LowPowerMode, enter_low_power, idle_wait};
 #[cfg(feature = "wdg")]
 pub use crate::watchdog::{

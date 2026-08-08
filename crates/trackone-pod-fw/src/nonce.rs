@@ -10,9 +10,15 @@
 use trackone_core::{AEAD_NONCE_LEN, FrameCounter};
 use trackone_ingest::framed_nonce;
 
+/// Failure to derive a nonce for the v1 framed transport.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NonceError {
+    FrameCounterOutOfRange,
+}
+
 /// A 24-byte nonce source for an already-selected frame counter.
 pub trait Nonce24 {
-    fn nonce_for_frame(&mut self, fc: FrameCounter) -> [u8; AEAD_NONCE_LEN];
+    fn nonce_for_frame(&self, fc: FrameCounter) -> Result<[u8; AEAD_NONCE_LEN], NonceError>;
 }
 
 /// Frame-counter-bound 24-byte nonce generator.
@@ -44,10 +50,9 @@ impl CounterNonce24 {
 }
 
 impl Nonce24 for CounterNonce24 {
-    fn nonce_for_frame(&mut self, fc: FrameCounter) -> [u8; AEAD_NONCE_LEN] {
-        let fc32 = u32::try_from(fc)
-            .expect("CounterNonce24 requires frame counters that fit the v1 u32 frame header");
-        framed_nonce(self.salt8, fc32, self.tail8)
+    fn nonce_for_frame(&self, fc: FrameCounter) -> Result<[u8; AEAD_NONCE_LEN], NonceError> {
+        let fc32 = u32::try_from(fc).map_err(|_| NonceError::FrameCounterOutOfRange)?;
+        Ok(framed_nonce(self.salt8, fc32, self.tail8))
     }
 }
 
@@ -57,9 +62,9 @@ mod tests {
 
     #[test]
     fn nonce_is_bound_to_supplied_frame_counter() {
-        let mut nonce_gen = CounterNonce24::new([0u8; 8], [0u8; 8]);
-        let nonce1 = nonce_gen.nonce_for_frame(7);
-        let nonce2 = nonce_gen.nonce_for_frame(8);
+        let nonce_gen = CounterNonce24::new([0u8; 8], [0u8; 8]);
+        let nonce1 = nonce_gen.nonce_for_frame(7).unwrap();
+        let nonce2 = nonce_gen.nonce_for_frame(8).unwrap();
         assert_ne!(nonce1, nonce2);
         assert_eq!(&nonce1[..8], &[0u8; 8]);
         assert_eq!(&nonce1[16..24], &[0u8; 8]);
@@ -77,8 +82,8 @@ mod tests {
     fn provisioned_salt_constructor_keeps_validated_prefix_stable() {
         let provisioned_salt8 = [0x42u8; 8];
         let boot_tail8 = [0x99u8; 8];
-        let mut nonce_gen = CounterNonce24::from_provisioned_salt(provisioned_salt8, boot_tail8);
-        let nonce = nonce_gen.nonce_for_frame(7);
+        let nonce_gen = CounterNonce24::from_provisioned_salt(provisioned_salt8, boot_tail8);
+        let nonce = nonce_gen.nonce_for_frame(7).unwrap();
 
         assert_eq!(&nonce[..8], &provisioned_salt8);
         assert_eq!(
@@ -89,9 +94,11 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "fit the v1 u32 frame header")]
-    fn nonce_panics_when_frame_counter_exceeds_v1_header() {
-        let mut nonce_gen = CounterNonce24::new([0u8; 8], [0u8; 8]);
-        nonce_gen.nonce_for_frame(u64::from(u32::MAX) + 1);
+    fn nonce_rejects_frame_counter_beyond_v1_header() {
+        let nonce_gen = CounterNonce24::new([0u8; 8], [0u8; 8]);
+        assert_eq!(
+            nonce_gen.nonce_for_frame(u64::from(u32::MAX) + 1),
+            Err(NonceError::FrameCounterOutOfRange)
+        );
     }
 }

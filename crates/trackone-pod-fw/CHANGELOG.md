@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Remove the optional Python binding boundary from the workspace; firmware
+  remains independent of host-language adapters.
+- Replace the mutable counter setter with monotonic restoration, represent v1
+  exhaustion explicitly, make nonce derivation fallible, and advance
+  `emit_fact` state only after a fully bound successful encryption.
+- Make `EventWaiter` safe for interrupt/shared-reference signaling with
+  portable atomics and ARM SEV/WFE wakeups.
+- Forward the core production feature so dummy AEAD cannot be unified into a
+  production firmware build.
+
 ## [0.1.0-beta.4] - 2026-07-18
 
 ### Notes

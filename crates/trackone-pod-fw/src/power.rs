@@ -4,6 +4,8 @@
 //! Platform-specific HAL code is still responsible for configuring clocks,
 //! peripheral wake sources, and deep-sleep behavior.
 
+use portable_atomic::{AtomicU8, Ordering};
+
 /// Pod-side low-power modes (informational).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LowPowerMode {
@@ -33,39 +35,96 @@ pub fn idle_wait() {
 
 /// Event-driven sleep helper.
 pub struct EventWaiter {
-    events_pending: u8,
+    events_pending: AtomicU8,
 }
 
 impl EventWaiter {
     pub const fn new() -> Self {
-        Self { events_pending: 0 }
+        Self {
+            events_pending: AtomicU8::new(0),
+        }
     }
 
     #[inline]
-    pub fn signal(&mut self) {
-        self.events_pending = self.events_pending.saturating_add(1);
+    pub fn signal(&self) {
+        let _ = self
+            .events_pending
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |pending| {
+                Some(pending.saturating_add(1))
+            });
+        signal_event();
     }
 
     /// Wait until at least one event is pending, then return the number of
     /// pending events and reset the counter.
     ///
-    /// This method spins on `idle_wait()` until `events_pending` becomes non-zero.
-    /// The caller is expected to call `signal()` from an interrupt handler or
-    /// another execution context to set `events_pending` and wake the CPU.
+    /// The caller may invoke `signal()` from an interrupt handler or another
+    /// execution context. ARM targets use the SEV/WFE event protocol so a
+    /// signal racing with the transition to sleep is not lost.
     #[inline]
-    #[allow(clippy::while_immutable_condition)]
-    pub fn wait(&mut self) -> u8 {
-        while self.events_pending == 0 {
-            idle_wait();
+    pub fn wait(&self) -> u8 {
+        loop {
+            let pending = self.events_pending.swap(0, Ordering::Acquire);
+            if pending != 0 {
+                return pending;
+            }
+            wait_for_event();
         }
-        let pending = self.events_pending;
-        self.events_pending = 0;
-        pending
     }
+}
+
+#[inline]
+fn signal_event() {
+    #[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
+    unsafe {
+        core::arch::asm!("sev", options(nomem, nostack));
+    }
+}
+
+#[inline]
+fn wait_for_event() {
+    #[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
+    unsafe {
+        core::arch::asm!("wfe", options(nomem, nostack));
+    }
+
+    #[cfg(not(any(target_arch = "arm", target_arch = "aarch64")))]
+    core::hint::spin_loop();
 }
 
 impl Default for EventWaiter {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    extern crate std;
+
+    use super::*;
+    use std::sync::Arc;
+    use std::thread;
+
+    #[test]
+    fn event_waiter_can_be_signaled_through_a_shared_reference() {
+        let waiter = Arc::new(EventWaiter::new());
+        let signaler = Arc::clone(&waiter);
+        let thread = thread::spawn(move || {
+            signaler.signal();
+            signaler.signal();
+        });
+
+        thread.join().unwrap();
+        assert_eq!(waiter.wait(), 2);
+    }
+
+    #[test]
+    fn event_counter_saturates() {
+        let waiter = EventWaiter::new();
+        for _ in 0..=u8::MAX {
+            waiter.signal();
+        }
+        assert_eq!(waiter.wait(), u8::MAX);
     }
 }
