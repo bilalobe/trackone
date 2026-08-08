@@ -172,8 +172,12 @@ pub struct EnvFact {
 
 impl EnvFact {
     /// Instantaneous sample at time `t` with `value`.
-    pub fn instant(sample_type: SampleType, t: i64, value: f32) -> Self {
-        Self {
+    pub fn instant(
+        sample_type: SampleType,
+        t: i64,
+        value: f32,
+    ) -> Result<Self, FactValidationError> {
+        let fact = Self {
             sample_type,
             phenomenon_time_start: t,
             phenomenon_time_end: t,
@@ -184,7 +188,9 @@ impl EnvFact {
             count: Some(1),
             quality: None,
             sensor_channel: None,
-        }
+        };
+        fact.validate()?;
+        Ok(fact)
     }
 
     /// Window summary over `[t0, t1]`.
@@ -196,14 +202,8 @@ impl EnvFact {
         max: f32,
         mean: f32,
         count: u32,
-    ) -> Self {
-        assert!(
-            t0 <= t1,
-            "phenomenon_time_start must be <= phenomenon_time_end"
-        );
-        assert!(count >= 1, "count must be >= 1");
-
-        Self {
+    ) -> Result<Self, FactValidationError> {
+        let fact = Self {
             sample_type,
             phenomenon_time_start: t0,
             phenomenon_time_end: t1,
@@ -214,7 +214,54 @@ impl EnvFact {
             count: Some(count),
             quality: None,
             sensor_channel: None,
+        };
+        fact.validate()?;
+        Ok(fact)
+    }
+
+    /// Validate the semantic shape shared by every wire and commitment surface.
+    pub fn validate(&self) -> Result<(), FactValidationError> {
+        if self.phenomenon_time_start > self.phenomenon_time_end {
+            return Err(FactValidationError::PhenomenonTimeReversed);
         }
+        if self.quality.is_some_and(|quality| !quality.is_finite()) {
+            return Err(FactValidationError::NonFiniteQuality);
+        }
+
+        match self.value {
+            Some(value) => {
+                if self.phenomenon_time_start != self.phenomenon_time_end {
+                    return Err(FactValidationError::InstantTimeRange);
+                }
+                if !value.is_finite() {
+                    return Err(FactValidationError::NonFiniteInstantValue);
+                }
+                if self.min.is_some() || self.max.is_some() || self.mean.is_some() {
+                    return Err(FactValidationError::InstantHasAggregates);
+                }
+                if !matches!(self.count, None | Some(1)) {
+                    return Err(FactValidationError::InstantCount);
+                }
+            }
+            None => {
+                let (Some(min), Some(max), Some(mean), Some(count)) =
+                    (self.min, self.max, self.mean, self.count)
+                else {
+                    return Err(FactValidationError::IncompleteSummary);
+                };
+                if count == 0 {
+                    return Err(FactValidationError::SummaryCount);
+                }
+                if !min.is_finite() || !max.is_finite() || !mean.is_finite() {
+                    return Err(FactValidationError::NonFiniteSummaryValue);
+                }
+                if min > mean || mean > max {
+                    return Err(FactValidationError::SummaryOrder);
+                }
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -250,6 +297,54 @@ pub struct Fact {
     pub payload: FactPayload,
 }
 
+impl Fact {
+    /// Validate the kind/payload pairing and all payload-level invariants.
+    pub fn validate(&self) -> Result<(), FactValidationError> {
+        match (&self.kind, &self.payload) {
+            (FactKind::Env, FactPayload::Env(env)) => env.validate(),
+            (FactKind::Pipeline | FactKind::Health | FactKind::Custom, FactPayload::Custom(_)) => {
+                Ok(())
+            }
+            _ => Err(FactValidationError::KindPayloadMismatch),
+        }
+    }
+}
+
+/// Stable semantic validation failures for canonical telemetry facts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FactValidationError {
+    KindPayloadMismatch,
+    PhenomenonTimeReversed,
+    InstantTimeRange,
+    NonFiniteInstantValue,
+    InstantHasAggregates,
+    InstantCount,
+    IncompleteSummary,
+    SummaryCount,
+    NonFiniteSummaryValue,
+    SummaryOrder,
+    NonFiniteQuality,
+}
+
+impl fmt::Display for FactValidationError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let message = match self {
+            Self::KindPayloadMismatch => "fact kind does not match its payload",
+            Self::PhenomenonTimeReversed => "phenomenon_time_start must be <= phenomenon_time_end",
+            Self::InstantTimeRange => "instant fact must use equal phenomenon times",
+            Self::NonFiniteInstantValue => "instant value must be finite",
+            Self::InstantHasAggregates => "instant fact must not contain aggregate values",
+            Self::InstantCount => "instant count must be absent or equal to one",
+            Self::IncompleteSummary => "summary fact requires min, max, mean, and count",
+            Self::SummaryCount => "summary count must be positive",
+            Self::NonFiniteSummaryValue => "summary values must be finite",
+            Self::SummaryOrder => "summary values must satisfy min <= mean <= max",
+            Self::NonFiniteQuality => "quality must be finite when present",
+        };
+        f.write_str(message)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Error {
     CryptoError,
@@ -257,6 +352,7 @@ pub enum Error {
     SerializeError,
     DeserializeError,
     CiphertextTooLarge,
+    InvalidFact(FactValidationError),
 }
 
 pub type CoreResult<T> = Result<T, Error>;
@@ -270,6 +366,7 @@ impl fmt::Display for Error {
             SerializeError => write!(f, "serialize error"),
             DeserializeError => write!(f, "deserialize error"),
             CiphertextTooLarge => write!(f, "ciphertext too large for frame capacity"),
+            InvalidFact(reason) => write!(f, "invalid fact: {reason}"),
         }
     }
 }
@@ -304,11 +401,10 @@ mod tests {
             ingest_time: 0,
             pod_time: None,
             kind: FactKind::Env,
-            payload: FactPayload::Env(EnvFact::instant(
-                SampleType::AmbientAirTemperature,
-                1_700_000_000,
-                25.0,
-            )),
+            payload: FactPayload::Env(
+                EnvFact::instant(SampleType::AmbientAirTemperature, 1_700_000_000, 25.0)
+                    .expect("valid instant fact"),
+            ),
         };
 
         let mut buf = [0u8; 256];
@@ -340,30 +436,82 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "phenomenon_time_start must be <= phenomenon_time_end")]
     fn env_fact_summary_rejects_reversed_window() {
-        let _ = EnvFact::summary(
-            SampleType::AmbientAirTemperature,
-            2,
-            1,
-            -10.0,
-            50.0,
-            20.0,
-            10,
+        assert_eq!(
+            EnvFact::summary(
+                SampleType::AmbientAirTemperature,
+                2,
+                1,
+                -10.0,
+                50.0,
+                20.0,
+                10,
+            ),
+            Err(FactValidationError::PhenomenonTimeReversed)
         );
     }
 
     #[test]
-    #[should_panic(expected = "count must be >= 1")]
     fn env_fact_summary_rejects_zero_count() {
-        let _ = EnvFact::summary(
-            SampleType::AmbientAirTemperature,
-            1,
-            1,
-            -10.0,
-            50.0,
-            20.0,
-            0,
+        assert_eq!(
+            EnvFact::summary(
+                SampleType::AmbientAirTemperature,
+                1,
+                1,
+                -10.0,
+                50.0,
+                20.0,
+                0,
+            ),
+            Err(FactValidationError::SummaryCount)
+        );
+    }
+
+    #[test]
+    fn fact_validation_rejects_kind_payload_mismatch() {
+        let fact = Fact {
+            pod_id: PodId::from(7u32),
+            fc: 1,
+            ingest_time: 0,
+            pod_time: None,
+            kind: FactKind::Health,
+            payload: FactPayload::Env(
+                EnvFact::instant(SampleType::AmbientAirTemperature, 1_700_000_000, 25.0).unwrap(),
+            ),
+        };
+
+        assert_eq!(
+            fact.validate(),
+            Err(FactValidationError::KindPayloadMismatch)
+        );
+    }
+
+    #[test]
+    fn env_fact_validation_rejects_non_finite_and_mixed_shapes() {
+        assert_eq!(
+            EnvFact::instant(SampleType::AmbientAirTemperature, 1_700_000_000, f32::NAN,),
+            Err(FactValidationError::NonFiniteInstantValue)
+        );
+        assert_eq!(
+            EnvFact::summary(SampleType::AmbientAirTemperature, 1, 2, 10.0, 20.0, 9.0, 2,),
+            Err(FactValidationError::SummaryOrder)
+        );
+
+        let invalid = EnvFact {
+            sample_type: SampleType::AmbientAirTemperature,
+            phenomenon_time_start: 1,
+            phenomenon_time_end: 1,
+            value: Some(1.0),
+            min: Some(1.0),
+            max: None,
+            mean: None,
+            count: Some(1),
+            quality: None,
+            sensor_channel: None,
+        };
+        assert_eq!(
+            invalid.validate(),
+            Err(FactValidationError::InstantHasAggregates)
         );
     }
 }

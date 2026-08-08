@@ -17,8 +17,8 @@ pub mod types;
 
 /// Re-export common types for ergonomic access from other crates.
 pub use crate::types::{
-    CoreResult, DeviceId, EnvFact, Error, Fact, FactKind, FactPayload, FrameCounter, PodId,
-    SampleType, SensorCapability,
+    CoreResult, DeviceId, EnvFact, Error, Fact, FactKind, FactPayload, FactValidationError,
+    FrameCounter, PodId, SampleType, SensorCapability,
 };
 
 /// Cryptographic abstractions and key/nonce types.
