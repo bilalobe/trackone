@@ -1,8 +1,9 @@
 #
-# Legacy local/Minikube override.
+# Local/Minikube build-check override.
 # Applies on top of the published-artifact defaults in values.yaml.
 # Runtime config and credentials still come from the chart-managed
-# ConfigMap/Secret objects; this file only changes deployment behavior.
+# ConfigMap/Secret objects; this file changes deployment behavior and opts
+# into explicit local-only security exceptions.
 #
 namespace:
   create: true
@@ -23,12 +24,18 @@ otsCalendar:
 postgres:
   auth:
     allowInsecureDefaults: true
+  # Explicit local-development exception: the bundled database and gateway
+  # both use plaintext when the gateway is enabled with this override.
+  tls:
+    enabled: false
   persistence:
     enabled: true
     size: 5Gi
 
 gateway:
   enabled: false
+  postgres:
+    tlsMode: disable
   image:
     repository: trackone/gateway
     tag: local

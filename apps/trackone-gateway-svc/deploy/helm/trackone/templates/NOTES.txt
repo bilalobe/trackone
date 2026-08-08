@@ -3,6 +3,14 @@ TrackOne Helm chart installed.
 Namespace:
   {{ include "trackone.namespace" . }}
 
+{{ if .Values.postgres.enabled }}
+PostgreSQL TLS:
+  Mode: {{ ternary "TLS-only" "plaintext development mode" .Values.postgres.tls.enabled }}
+  {{ if .Values.postgres.tls.enabled }}
+  CA Secret: {{ include "trackone.postgresTlsSecretName" . }}
+  {{ end }}
+{{ end }}
+
 Gateway endpoint:
   Service: trackone-gateway
   Port: {{ .Values.gateway.service.port }}

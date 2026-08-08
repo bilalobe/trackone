@@ -20,10 +20,55 @@ spec:
         {{ include "trackone.commonLabels" . | nindent 8 }}
     spec:
       automountServiceAccountToken: false
+      {{- if .Values.postgres.tls.enabled }}
+      initContainers:
+        - name: prepare-postgres-tls
+          image: {{ .Values.postgres.image.repository }}:{{ .Values.postgres.image.tag }}
+          imagePullPolicy: {{ .Values.postgres.image.pullPolicy }}
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |
+              umask 077
+              cp /var/run/trackone-postgres-source/tls.crt /var/run/trackone-postgres/tls.crt
+              cp /var/run/trackone-postgres-source/tls.key /var/run/trackone-postgres/tls.key
+              chmod 0644 /var/run/trackone-postgres/tls.crt
+              chmod 0600 /var/run/trackone-postgres/tls.key
+              chown postgres:postgres /var/run/trackone-postgres/tls.crt /var/run/trackone-postgres/tls.key
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+              add: ["CHOWN"]
+            readOnlyRootFilesystem: true
+            runAsUser: 0
+          resources:
+            {{ toYaml .Values.postgres.resources | nindent 12 }}
+          volumeMounts:
+            - name: postgres-tls-source
+              mountPath: /var/run/trackone-postgres-source
+              readOnly: true
+            - name: postgres-tls
+              mountPath: /var/run/trackone-postgres
+      {{- end }}
       containers:
         - name: postgres
           image: {{ .Values.postgres.image.repository }}:{{ .Values.postgres.image.tag }}
           imagePullPolicy: {{ .Values.postgres.image.pullPolicy }}
+          {{- if .Values.postgres.tls.enabled }}
+          args:
+            - -c
+            - ssl=on
+            - -c
+            - ssl_min_protocol_version=TLSv1.2
+            - -c
+            - ssl_cert_file=/var/run/trackone-postgres/tls.crt
+            - -c
+            - ssl_key_file=/var/run/trackone-postgres/tls.key
+            - -c
+            - hba_file=/etc/trackone-postgres/pg_hba.conf
+            - -c
+            - password_encryption=scram-sha-256
+          {{- end }}
           ports:
             - name: pg
               containerPort: {{ .Values.postgres.service.port }}
@@ -35,6 +80,14 @@ spec:
           volumeMounts:
             - name: pgdata
               mountPath: /var/lib/postgresql/data
+            {{- if .Values.postgres.tls.enabled }}
+            - name: postgres-tls
+              mountPath: /var/run/trackone-postgres
+              readOnly: true
+            - name: postgres-tls-config
+              mountPath: /etc/trackone-postgres
+              readOnly: true
+            {{- end }}
       volumes:
         - name: pgdata
           {{- if .Values.postgres.persistence.enabled }}
@@ -43,4 +96,23 @@ spec:
           {{- else }}
           emptyDir: { }
           {{- end }}
+        {{- if .Values.postgres.tls.enabled }}
+        - name: postgres-tls-source
+          secret:
+            secretName: {{ include "trackone.postgresTlsSecretName" . }}
+            defaultMode: 0444
+            items:
+              - key: tls.crt
+                path: tls.crt
+              - key: tls.key
+                path: tls.key
+        - name: postgres-tls
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Mi
+        - name: postgres-tls-config
+          configMap:
+            name: {{ include "trackone.postgresTlsConfigMapName" . }}
+            defaultMode: 0444
+        {{- end }}
 {{- end }}

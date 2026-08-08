@@ -1,5 +1,9 @@
 {{- if .Values.gateway.enabled }}
 {{- $mountTsaIntermediates := or .Values.gateway.env.tsaIntermediatesPem (and .Values.gateway.existingSecret .Values.gateway.existingSecretHasTsaIntermediates) }}
+{{- $verifyPostgresTls := eq .Values.gateway.postgres.tlsMode "verify-full" }}
+{{- $useManagedPostgresCa := and $verifyPostgresTls .Values.postgres.enabled .Values.postgres.tls.enabled }}
+{{- $useExternalPostgresCa := and $verifyPostgresTls (not $useManagedPostgresCa) (or .Values.gateway.postgres.caPem (and .Values.gateway.existingSecret .Values.gateway.existingSecretHasPostgresCa)) }}
+{{- $mountPostgresCa := or $useManagedPostgresCa $useExternalPostgresCa }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -37,6 +41,17 @@ spec:
                 secretKeyRef:
                   name: {{ include "trackone.gatewaySecretName" . }}
                   key: TRACKONE_DATABASE_URL
+            - name: TRACKONE_INGEST_BEARER_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "trackone.gatewaySecretName" . }}
+                  key: TRACKONE_INGEST_BEARER_TOKEN
+            - name: TRACKONE_INGEST_BEARER_TOKEN_PREVIOUS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "trackone.gatewaySecretName" . }}
+                  key: TRACKONE_INGEST_BEARER_TOKEN_PREVIOUS
+                  optional: true
             - name: TRACKONE_TSA_CA_FILE
               value: /var/run/trackone-tsa/ca.pem
             - name: TRACKONE_TSA_CRLS_FILE
@@ -66,6 +81,11 @@ spec:
             - name: tsa-ca
               mountPath: /var/run/trackone-tsa
               readOnly: true
+            {{- if $mountPostgresCa }}
+            - name: postgres-ca
+              mountPath: /var/run/trackone-postgres
+              readOnly: true
+            {{- end }}
       volumes:
         - name: tsa-ca
           secret:
@@ -79,4 +99,19 @@ spec:
               - key: tsa-intermediates.pem
                 path: intermediates.pem
               {{- end }}
+        {{- if $mountPostgresCa }}
+        - name: postgres-ca
+          secret:
+            {{- if $useManagedPostgresCa }}
+            secretName: {{ include "trackone.postgresTlsSecretName" . }}
+            items:
+              - key: ca.crt
+                path: ca.pem
+            {{- else }}
+            secretName: {{ include "trackone.gatewaySecretName" . }}
+            items:
+              - key: postgres-ca.pem
+                path: ca.pem
+            {{- end }}
+        {{- end }}
 {{- end }}

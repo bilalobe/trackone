@@ -1,0 +1,8 @@
+{{- if and .Values.gateway.enabled .Values.postgres.enabled -}}
+{{- if and .Values.postgres.tls.enabled (ne .Values.gateway.postgres.tlsMode "verify-full") -}}
+{{- fail "chart-managed PostgreSQL TLS is enabled; gateway.postgres.tlsMode must be verify-full" -}}
+{{- end -}}
+{{- if and (not .Values.postgres.tls.enabled) (ne .Values.gateway.postgres.tlsMode "disable") -}}
+{{- fail "chart-managed PostgreSQL TLS is disabled; gateway.postgres.tlsMode must be disable (development only), or enable postgres.tls.enabled" -}}
+{{- end -}}
+{{- end -}}

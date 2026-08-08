@@ -1,0 +1,17 @@
+{{- if and .Values.postgres.enabled .Values.postgres.tls.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "trackone.postgresTlsConfigMapName" . }}
+  namespace: {{ include "trackone.namespace" . }}
+  labels:
+    app.kubernetes.io/name: postgres
+    {{ include "trackone.commonLabels" . | nindent 4 }}
+data:
+  pg_hba.conf: |
+    local   all  all                       trust
+    hostssl all  all  0.0.0.0/0           scram-sha-256
+    hostssl all  all  ::/0                scram-sha-256
+    hostnossl all all  0.0.0.0/0           reject
+    hostnossl all all  ::/0                reject
+{{- end }}

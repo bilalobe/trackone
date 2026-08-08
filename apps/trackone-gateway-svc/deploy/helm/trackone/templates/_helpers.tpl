@@ -1,10 +1,10 @@
 {{- define "trackone.namespace" -}}
-{{ if .Values.namespace.name -}}
-{{ .Values.namespace.name }}
-{{ else -}}
-{{ .Release.Namespace }}
-{{ end -}}
-{{ end -}}
+{{- if .Values.namespace.name -}}
+{{- .Values.namespace.name -}}
+{{- else -}}
+{{- .Release.Namespace -}}
+{{- end -}}
+{{- end -}}
 
 {{- define "trackone.gatewayConfigMapName" -}}
 {{- if .Values.gateway.existingConfigMap -}}
@@ -28,6 +28,18 @@ trackone-gateway-env
 {{- else -}}
 postgres-auth
 {{- end -}}
+{{- end -}}
+
+{{- define "trackone.postgresTlsSecretName" -}}
+{{- if .Values.postgres.tls.existingSecret -}}
+{{ .Values.postgres.tls.existingSecret }}
+{{- else -}}
+trackone-postgres-tls
+{{- end -}}
+{{- end -}}
+
+{{- define "trackone.postgresTlsConfigMapName" -}}
+trackone-postgres-tls-config
 {{- end -}}
 
 {{ define "trackone.commonLabels" -}}
