@@ -43,7 +43,16 @@ impl ReplayWindow {
         }
     }
 
-    pub fn from_snapshot(snapshot: ReplayWindowSnapshot) -> Result<Self, RejectReason> {
+    pub fn from_snapshot(
+        expected_namespace: &str,
+        snapshot: ReplayWindowSnapshot,
+    ) -> Result<Self, RejectReason> {
+        if expected_namespace.trim().is_empty() || snapshot.namespace.trim().is_empty() {
+            return Err(RejectReason::ReplayNamespaceEmpty);
+        }
+        if snapshot.namespace != expected_namespace {
+            return Err(RejectReason::ReplayNamespaceMismatch);
+        }
         if snapshot.version != 1 || snapshot.window_size == 0 {
             return Err(RejectReason::ContinuityBreak);
         }
@@ -64,14 +73,21 @@ impl ReplayWindow {
         Ok(state)
     }
 
-    pub fn snapshot(&self, namespace: impl Into<String>) -> ReplayWindowSnapshot {
-        ReplayWindowSnapshot {
+    pub fn snapshot(
+        &self,
+        namespace: impl Into<String>,
+    ) -> Result<ReplayWindowSnapshot, RejectReason> {
+        let namespace = namespace.into();
+        if namespace.trim().is_empty() {
+            return Err(RejectReason::ReplayNamespaceEmpty);
+        }
+        Ok(ReplayWindowSnapshot {
             version: 1,
-            namespace: namespace.into(),
+            namespace,
             window_size: self.window_size,
             highest_fc_seen: self.highest_fc_seen,
             seen_fcs: self.seen_fcs(),
-        }
+        })
     }
 
     pub fn window_size(&self) -> u64 {

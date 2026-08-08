@@ -8,7 +8,7 @@ use trackone_core::{
     MAX_FACT_LEN, PodId,
 };
 
-use crate::framed_aad_for_pod;
+use crate::{framed_aad_for_pod, validate_fact_binding};
 
 /// Gateway admission policy for ciphertext bytes, excluding the AEAD tag.
 pub const MAX_FRAME_CIPHERTEXT_BYTES: usize = 256;
@@ -41,10 +41,56 @@ pub struct FrameInput<'a> {
 }
 
 /// Borrowed provisioned material for one admitted device.
+///
+/// `expected_pod_id` is authorization state from the provisioning trust root.
+/// It must never be derived from an incoming frame or decrypted payload. The
+/// legacy 16-bit frame `dev_id` is only a routing hint; admission binds the
+/// decrypted fact to this full 64-bit identity.
+///
+/// # Example
+///
+/// ```
+/// use trackone_core::PodId;
+/// use trackone_ingest::DeviceMaterial;
+///
+/// let provisioned_pod_id = PodId::from([0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0x12, 0x34]);
+/// let salt8 = [0x11; 8];
+/// let ck_up = [0x22; 32];
+/// let material = DeviceMaterial::new(provisioned_pod_id, &salt8, &ck_up);
+///
+/// assert_eq!(material.expected_pod_id(), provisioned_pod_id);
+/// ```
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct DeviceMaterial<'a> {
-    pub salt8: &'a [u8],
-    pub ck_up: &'a [u8],
+    expected_pod_id: PodId,
+    salt8: &'a [u8],
+    ck_up: &'a [u8],
+}
+
+impl<'a> DeviceMaterial<'a> {
+    /// Construct material loaded from the authoritative provisioning record.
+    pub const fn new(expected_pod_id: PodId, salt8: &'a [u8], ck_up: &'a [u8]) -> Self {
+        Self {
+            expected_pod_id,
+            salt8,
+            ck_up,
+        }
+    }
+
+    /// Full canonical identity authorized to use this key material.
+    pub const fn expected_pod_id(self) -> PodId {
+        self.expected_pod_id
+    }
+
+    /// Provisioned nonce salt.
+    pub const fn salt8(self) -> &'a [u8] {
+        self.salt8
+    }
+
+    /// Provisioned uplink AEAD key.
+    pub const fn ck_up(self) -> &'a [u8] {
+        self.ck_up
+    }
 }
 
 /// A framed input accepted into the Rust-native postcard fact plane.
@@ -56,6 +102,7 @@ pub struct AcceptedFrame {
 
 /// Encode a canonical `Fact` under the Rust postcard framed plaintext profile.
 pub fn encode_fact_postcard<'a>(fact: &Fact, out: &'a mut [u8]) -> CoreResult<&'a [u8]> {
+    fact.validate().map_err(Error::InvalidFact)?;
     postcard::to_slice(fact, out)
         .map(|used| &*used)
         .map_err(|_| Error::SerializeError)
@@ -70,24 +117,28 @@ pub fn encode_fact_postcard_buf(fact: &Fact) -> CoreResult<([u8; MAX_FACT_LEN], 
 
 /// Decode a canonical `Fact` under the Rust postcard framed plaintext profile.
 pub fn decode_fact_postcard(bytes: &[u8]) -> CoreResult<Fact> {
-    postcard::from_bytes(bytes).map_err(|_| Error::DeserializeError)
+    let fact: Fact = postcard::from_bytes(bytes).map_err(|_| Error::DeserializeError)?;
+    fact.validate().map_err(Error::InvalidFact)?;
+    Ok(fact)
 }
 
 /// Helper to construct a `Fact`.
-pub fn make_fact(pod_id: PodId, fc: FrameCounter, payload: FactPayload) -> Fact {
+pub fn make_fact(pod_id: PodId, fc: FrameCounter, payload: FactPayload) -> CoreResult<Fact> {
     let kind = match &payload {
         FactPayload::Env(_) => FactKind::Env,
         FactPayload::Custom(_) => FactKind::Custom,
     };
 
-    Fact {
+    let fact = Fact {
         pod_id,
         fc,
         ingest_time: 0,
         pod_time: None,
         kind,
         payload,
-    }
+    };
+    fact.validate().map_err(Error::InvalidFact)?;
+    Ok(fact)
 }
 
 /// Serialize + encrypt a `Fact` into an `EncryptedFrame`.
@@ -125,11 +176,21 @@ where
     })
 }
 
-/// Decrypt + deserialize an `EncryptedFrame` back into a `Fact`.
-pub fn decrypt_fact<const N: usize, C>(cipher: &C, frame: &EncryptedFrame<N>) -> CoreResult<Fact>
+/// Decrypt and bind an `EncryptedFrame` to a provisioned device identity.
+///
+/// `expected_pod_id` must come from the provisioning trust root, never from
+/// `frame.pod_id`. Both the envelope and decoded fact must match it exactly.
+pub fn decrypt_fact<const N: usize, C>(
+    cipher: &C,
+    frame: &EncryptedFrame<N>,
+    expected_pod_id: PodId,
+) -> CoreResult<Fact>
 where
     C: AeadDecrypt<Error = Error>,
 {
+    if frame.pod_id != expected_pod_id {
+        return Err(Error::CryptoError);
+    }
     let aad = framed_aad_for_pod(frame.pod_id, 1, 0); // msg_type 1 = fact frame
     let mut plaintext_buf = [0u8; MAX_FACT_LEN];
 
@@ -146,5 +207,7 @@ where
         )
         .map_err(|_| Error::CryptoError)?;
 
-    decode_fact_postcard(&plaintext_buf[..pt_len])
+    let fact = decode_fact_postcard(&plaintext_buf[..pt_len])?;
+    validate_fact_binding(&fact, expected_pod_id, frame.fc).map_err(|_| Error::CryptoError)?;
+    Ok(fact)
 }

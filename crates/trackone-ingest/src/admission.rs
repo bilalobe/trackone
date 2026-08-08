@@ -17,14 +17,15 @@ use chacha20poly1305::{
 #[cfg(feature = "xchacha")]
 use std::vec::Vec;
 #[cfg(feature = "xchacha")]
-use trackone_core::AEAD_TAG_LEN;
+use trackone_core::{AEAD_TAG_LEN, Error};
 
 #[cfg(feature = "xchacha")]
 use crate::FramedNonceError;
 #[cfg(feature = "xchacha")]
 use crate::{
     AcceptedFrame, DeviceMaterial, FrameInput, FramedFactBindingError, MAX_FRAME_CIPHERTEXT_BYTES,
-    decode_fact_postcard, framed_aad, validate_fact_binding, validate_nonce_prefix,
+    decode_fact_postcard, framed_aad, legacy_dev_id_from_pod_id, validate_fact_binding,
+    validate_nonce_prefix,
 };
 
 /// Rejection reasons produced by framed admission and replay checks.
@@ -39,7 +40,10 @@ pub enum RejectReason {
     NonceSaltMismatch,
     NonceFcMismatch,
     UnsupportedFlags,
+    UnsupportedMessageType,
+    HeaderDeviceIdMismatch,
     DecryptFailed,
+    InvalidFact,
     InvalidIngestProfile,
     PayloadDeviceIdMismatch,
     PayloadFcMismatch,
@@ -47,6 +51,8 @@ pub enum RejectReason {
     OutOfWindow,
     ContinuityBreak,
     ResyncRequired,
+    ReplayNamespaceEmpty,
+    ReplayNamespaceMismatch,
 }
 
 impl RejectReason {
@@ -61,7 +67,10 @@ impl RejectReason {
             Self::NonceSaltMismatch => "nonce_salt_mismatch",
             Self::NonceFcMismatch => "nonce_fc_mismatch",
             Self::UnsupportedFlags => "unsupported_flags",
+            Self::UnsupportedMessageType => "unsupported_message_type",
+            Self::HeaderDeviceIdMismatch => "header_device_id_mismatch",
             Self::DecryptFailed => "decrypt_failed",
+            Self::InvalidFact => "invalid_fact",
             Self::InvalidIngestProfile => "invalid_ingest_profile",
             Self::PayloadDeviceIdMismatch => "payload_device_id_mismatch",
             Self::PayloadFcMismatch => "payload_fc_mismatch",
@@ -69,6 +78,8 @@ impl RejectReason {
             Self::OutOfWindow => "out_of_window",
             Self::ContinuityBreak => "continuity_break",
             Self::ResyncRequired => "resync_required",
+            Self::ReplayNamespaceEmpty => "replay_namespace_empty",
+            Self::ReplayNamespaceMismatch => "replay_namespace_mismatch",
         }
     }
 }
@@ -195,7 +206,11 @@ pub const REJECTION_REASONS: &[&str] = &[
     "flags_range",
     "invalid_ingest_profile",
     "unsupported_flags",
+    "unsupported_message_type",
+    "header_device_id_mismatch",
     "unknown_device",
+    "missing_pod_id",
+    "invalid_pod_id",
     "missing_salt8",
     "invalid_base64",
     "salt8_length",
@@ -207,12 +222,15 @@ pub const REJECTION_REASONS: &[&str] = &[
     "nonce_salt_mismatch",
     "nonce_fc_mismatch",
     "decrypt_failed",
+    "invalid_fact",
     "payload_device_id_mismatch",
     "payload_fc_mismatch",
     "duplicate",
     "out_of_window",
     "continuity_break",
     "resync_required",
+    "replay_namespace_empty",
+    "replay_namespace_mismatch",
 ];
 
 #[cfg(feature = "std")]
@@ -240,6 +258,18 @@ pub fn validate_rejection_record(record: &RejectionRecord) -> Result<(), Rejecti
 }
 
 #[cfg(feature = "xchacha")]
+/// Authenticate, decrypt, and bind one framed fact to provisioned state.
+///
+/// # Identity business rule
+///
+/// `device.expected_pod_id()` is the sole identity authority:
+///
+/// - the frame's legacy `dev_id` must be its 16-bit routing suffix; and
+/// - the decrypted fact's complete `PodId` must equal it byte-for-byte.
+///
+/// The expected identity must come from the provisioning trust root. Deriving
+/// it from `frame.header.dev_id` or from decrypted attacker-controlled data
+/// defeats this check and is forbidden.
 pub fn validate_and_decrypt(
     frame: FrameInput<'_>,
     device: DeviceMaterial<'_>,
@@ -247,7 +277,7 @@ pub fn validate_and_decrypt(
     if frame.tag.len() != AEAD_TAG_LEN {
         return Err(RejectReason::TagLength);
     }
-    if device.ck_up.len() != 32 {
+    if device.ck_up().len() != 32 {
         return Err(RejectReason::CkUpLength);
     }
     if frame.ct.is_empty() {
@@ -259,7 +289,13 @@ pub fn validate_and_decrypt(
     if frame.header.flags != 0 {
         return Err(RejectReason::UnsupportedFlags);
     }
-    validate_nonce_prefix(frame.nonce, device.salt8, frame.header.fc)
+    if frame.header.msg_type != crate::FRAMED_FACT_MSG_TYPE {
+        return Err(RejectReason::UnsupportedMessageType);
+    }
+    if legacy_dev_id_from_pod_id(device.expected_pod_id()) != frame.header.dev_id {
+        return Err(RejectReason::HeaderDeviceIdMismatch);
+    }
+    validate_nonce_prefix(frame.nonce, device.salt8(), frame.header.fc)
         .map_err(map_framed_nonce_error)?;
 
     let aad = framed_aad(
@@ -272,7 +308,7 @@ pub fn validate_and_decrypt(
     combined.extend_from_slice(frame.tag);
 
     let cipher =
-        XChaCha20Poly1305::new_from_slice(device.ck_up).map_err(|_| RejectReason::CkUpLength)?;
+        XChaCha20Poly1305::new_from_slice(device.ck_up()).map_err(|_| RejectReason::CkUpLength)?;
     let nonce = frame
         .nonce
         .try_into()
@@ -287,13 +323,16 @@ pub fn validate_and_decrypt(
         )
         .map_err(|_| RejectReason::DecryptFailed)?;
 
-    let fact = decode_fact_postcard(&plaintext).map_err(|_| RejectReason::DecryptFailed)?;
-    validate_fact_binding(&fact, frame.header.dev_id, frame.header.fc).map_err(|reason| {
-        match reason {
+    let fact = decode_fact_postcard(&plaintext).map_err(|error| match error {
+        Error::InvalidFact(_) => RejectReason::InvalidFact,
+        _ => RejectReason::DecryptFailed,
+    })?;
+    validate_fact_binding(&fact, device.expected_pod_id(), u64::from(frame.header.fc)).map_err(
+        |reason| match reason {
             FramedFactBindingError::PodIdMismatch => RejectReason::PayloadDeviceIdMismatch,
             FramedFactBindingError::FrameCounterMismatch => RejectReason::PayloadFcMismatch,
-        }
-    })?;
+        },
+    )?;
 
     Ok(AcceptedFrame {
         header: frame.header,

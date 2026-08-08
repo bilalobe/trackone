@@ -27,6 +27,3 @@ trackone-ledger = { workspace = true, optional = true }
 
 [dev-dependencies]
 trackone-core = { workspace = true, features = ["dummy-aead"] }
-
-[lib]
-doctest = false

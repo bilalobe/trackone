@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- Bound accepted framed facts to the complete provisioned `PodId` rather than
+  its legacy 16-bit `dev_id` suffix. `DeviceMaterial` now requires the
+  authoritative identity, admission fails closed on header/material or
+  payload/material mismatches, and executable Rustdoc plus regression tests
+  preserve the invariant.
+- Reject unsupported framed message types before decryption and validate fact
+  semantics on every Postcard encode/decode path.
+- Require a non-empty expected replay namespace during snapshot restoration
+  and distinguish empty from mismatched namespace state.
+
+### Changed
+
+- Remove the optional Python binding boundary; framed ingest remains owned by
+  the Rust crate API.
+- Make `make_fact` fallible so malformed environmental payloads cannot enter
+  the framed plane through the convenience constructor.
+
 ## [0.1.0-beta.4] - 2026-07-18
 
 ### Changed

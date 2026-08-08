@@ -18,17 +18,52 @@ This crate owns:
 - deterministic Rust framed fixture emission for tests and demos
 - replay-window state used by framed gateway admission
 
+Postcard encode/decode validates the complete fact semantics before data leaves
+or enters the framed plane. Admission rejects non-fact message types before
+decryption. Durable replay restoration requires an explicit, non-empty
+expected namespace and distinguishes empty from mismatched namespace state.
+
 The implementation is organized into `profile`, `frame`, `aad`, `nonce`,
 `fixture`, `replay`, and `admission` modules while preserving the
 crate-root API.
+
+## Device Identity Invariant
+
+The 16-bit frame `dev_id` is a routing hint, not the canonical device
+identity. Every provisioned key record must carry its authoritative 8-byte
+`PodId`, and admission must enforce both checks:
+
+1. Before decryption, the provisioned `PodId` suffix must match the frame
+   `dev_id`, proving that the selected key record is consistent with the
+   route.
+2. After decryption, the fact's complete `PodId` must exactly equal the
+   provisioned `PodId`.
+
+Never construct the expected identity from an incoming header or payload.
+Use `DeviceMaterial::new(...)` with identity loaded from the provisioning
+trust root:
+
+```rust
+use trackone_core::PodId;
+use trackone_ingest::DeviceMaterial;
+
+let pod_id = PodId::from([0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0x12, 0x34]);
+let salt8 = [0x11; 8];
+let ck_up = [0x22; 32];
+let device = DeviceMaterial::new(pod_id, &salt8, &ck_up);
+
+assert_eq!(device.expected_pod_id(), pod_id);
+```
+
+The corresponding API documentation includes executable examples showing
+that a different full identity is rejected even when its legacy suffix
+collides.
 
 ## Boundary With Other Crates
 
 - [`trackone-core`](../trackone-core/README.md) owns canonical protocol types,
   crypto-facing traits, identity/admission input records, and deterministic CBOR
   commitment surfaces.
-- [`trackone-python`](../../bindings/trackone-python/README.md) optionally
-  exposes selected ingest helpers through PyO3 without owning their semantics.
 - [`trackone-pod-fw`](../trackone-pod-fw/README.md) uses ingest helpers to emit
   framed facts from firmware-side runtime state.
 - [`trackone-sensorthings`](../trackone-sensorthings/README.md) owns read-only
@@ -61,5 +96,6 @@ without the host admission surface.
 
 ```bash
 cargo test --locked -p trackone-ingest --features std,xchacha
+cargo test --locked -p trackone-ingest --doc --features std,xchacha
 cargo check --locked -p trackone-ingest --no-default-features
 ```
