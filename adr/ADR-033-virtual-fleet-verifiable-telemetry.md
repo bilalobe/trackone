@@ -1,7 +1,19 @@
 # ADR-033: Virtual Fleet for Verifiable Telemetry and End-to-End Validation
 
-**Status**: Proposed
+**Status**: Rejected
 **Date**: 2026-01-04
+
+## Resolution
+
+This proposal is rejected as a standalone architectural commitment. The
+Virtual Fleet remains a useful test-fixture idea, but the repository does not
+adopt it as a first-class runtime component or require the scenario runner and
+fixture generator described below. Any future simulator work should be
+recorded as an implementation-specific test decision.
+
+The references in this record point to ADRs and draft material maintained in
+this repository. They are local design inputs, not links to published Internet
+Drafts or claims of external standards status.
 
 ## Related ADRs
 
