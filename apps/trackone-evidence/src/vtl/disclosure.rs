@@ -11,12 +11,34 @@ use trackone_ledger::vtl::{
     SegmentDecodeError, SegmentRecord, merkle_root_from_leaf_hashes, validate_canonical_record,
 };
 
-fn opening_records(root: &Path, opening: &RecordBatchOpening) -> super::Result<Vec<Vec<u8>>> {
-    opening
-        .records
-        .iter()
-        .map(|reference| referenced_artifact(root, reference))
-        .collect()
+/// Hash a claimed opening one record at a time.
+///
+/// Aggregate memory must not grow with the reference count: an untrusted
+/// manifest may point thousands of references at the same maximally sized
+/// artifact, so each record is opened, validated, hashed, and dropped before
+/// the next is read.  Canonical-record failures are reported by the caller
+/// only once the whole opening has loaded, preserving the conclusions of the
+/// former collect-then-validate order.
+fn opening_leaves(
+    root: &Path,
+    opening: &RecordBatchOpening,
+    pending: &mut BTreeSet<&'static str>,
+) -> super::Result<Vec<[u8; 32]>> {
+    let mut leaves = Vec::with_capacity(opening.records.len());
+    for reference in &opening.records {
+        let record = referenced_artifact(root, reference)?;
+        if let Err(error) = validate_canonical_record(&record) {
+            pending.insert(match error {
+                SegmentDecodeError::ResourceLimit(_) => "verifier_policy_rejection",
+                _ => "invalid_canonical_record",
+            });
+        }
+        let mut preimage = Vec::with_capacity(record.len() + 1);
+        preimage.push(0);
+        preimage.extend_from_slice(&record);
+        leaves.push(sha256_digest(&preimage));
+    }
+    Ok(leaves)
 }
 
 pub(super) fn validate_disclosure(
@@ -113,8 +135,9 @@ pub(super) fn validate_disclosure(
         }
         let number = usize::try_from(number_u64).expect("validated above");
         let expected = expected_opening_count(segment, batch_count, number_u64);
-        let records = match opening_records(root, opening) {
-            Ok(records) => records,
+        let mut pending = BTreeSet::new();
+        let mut leaves = match opening_leaves(root, opening, &mut pending) {
+            Ok(leaves) => leaves,
             Err(EvidenceError::VerificationFailed(_)) => {
                 conclusions.fail("commitment_mismatch");
                 continue;
@@ -124,22 +147,12 @@ pub(super) fn validate_disclosure(
                 continue;
             }
         };
-        if u64::try_from(records.len()).ok() != expected {
+        if u64::try_from(leaves.len()).ok() != expected {
             conclusions.fail("insufficient_disclosure");
             continue;
         }
-        let mut leaves = Vec::with_capacity(records.len());
-        for record in records {
-            if let Err(error) = validate_canonical_record(&record) {
-                conclusions.fail(match error {
-                    SegmentDecodeError::ResourceLimit(_) => "verifier_policy_rejection",
-                    _ => "invalid_canonical_record",
-                });
-            }
-            let mut preimage = Vec::with_capacity(record.len() + 1);
-            preimage.push(0);
-            preimage.extend_from_slice(&record);
-            leaves.push(sha256_digest(&preimage));
+        for failure in pending {
+            conclusions.fail(failure);
         }
         leaves.sort_unstable();
         if merkle_root_from_leaf_hashes(&leaves) != segment.batch_roots[number] {

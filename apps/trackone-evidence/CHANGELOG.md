@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Verify aligned Class A/B batch openings, Class C anchor-only bundles,
   predecessor linkage, strict RFC 3161 request/response correlation, and the
   mandatory baseline TSA outcome.
+- Hash disclosed record openings one artifact at a time so an untrusted
+  manifest that repeats references to the same maximally sized artifact cannot
+  drive verifier memory beyond a single record.
 
 ### Removed
 

@@ -17,6 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Align segment batching, close/recovery semantics, disclosure classes,
   mandatory RFC 3161 verification, timestamp request nonce correlation, and
   configured future-skew enforcement with the current profile.
+- Bound verifier memory for disclosed record openings to a single record so a
+  manifest that repeats references to one maximally sized artifact cannot
+  drive aggregate allocation past the archive limits.
 
 ### Removed
 
