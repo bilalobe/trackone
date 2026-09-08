@@ -4,6 +4,16 @@ All notable changes to trackone-gateway-svc will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- Produce current VTL segment artifacts with aligned batch roots, version-one
+  closure policy, deterministic close-reason precedence, contiguous chaining,
+  and mandatory empty shutdown/recovery artifacts.
+- Rename the executable to `trackone-vtl-gateway` and expose the normative
+  commitment-profile UUID from health responses.
+- Report locally queued timestamp work as `queued`, reserving producer
+  `pending` claims for submission attempts that have left the local queue.
+
 ## [0.1.0-beta.5] - 2026-08-08
 
 ### Added
