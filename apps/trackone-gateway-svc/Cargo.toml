@@ -1,6 +1,6 @@
 [package]
 name = "trackone-gateway-svc"
-description = "Deployable HTTP and PostgreSQL runtime for TrackOne v2 admission"
+description = "Deployable HTTP and PostgreSQL runtime for VTL admission"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -31,5 +31,5 @@ path = "src/lib.rs"
 doctest = false
 
 [[bin]]
-name = "trackone-v2-gateway"
+name = "trackone-vtl-gateway"
 path = "src/main.rs"

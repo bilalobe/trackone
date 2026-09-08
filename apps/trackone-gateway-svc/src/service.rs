@@ -1,4 +1,4 @@
-//! HTTP handoff surface for exact v2 canonical-record CBOR bytes.
+//! HTTP handoff surface for exact VTL canonical-record CBOR bytes.
 
 use std::sync::{Arc, Mutex};
 
@@ -18,7 +18,7 @@ use sha2::{Digest, Sha256};
 use subtle::{Choice, ConstantTimeEq};
 
 use crate::postgres::PostgresLedgerStore;
-use crate::producer::{ElapsedClock, ProducerError, V2LedgerProducer};
+use crate::producer::{ElapsedClock, LedgerProducer, ProducerError};
 use crate::tsa::Rfc3161TimestampAuthority;
 
 pub const CBOR_MEDIA_TYPE: &str = "application/cbor";
@@ -29,7 +29,7 @@ pub const DEFAULT_MAX_ADMISSION_BYTES: usize = 4_194_304;
 pub const HARD_MAX_BATCH_RECORDS: usize = 10_000;
 pub const HARD_MAX_ADMISSION_BYTES: usize = 16_777_216;
 
-pub type ServiceProducer<C> = V2LedgerProducer<PostgresLedgerStore, C>;
+pub type ServiceProducer<C> = LedgerProducer<PostgresLedgerStore, C>;
 
 #[derive(Clone)]
 pub struct AdmissionAuth {
@@ -173,17 +173,17 @@ async fn require_bearer(
     }
 }
 
-/// Attempt every durable pending timestamp once. Failures deliberately leave
-/// the segment pending so a later startup can retry it.
-pub fn drain_pending_tsa_segments<C>(
+/// Attempt every durable queued timestamp once. Failures deliberately leave
+/// the segment queued so a later startup can retry it.
+pub fn drain_queued_tsa_segments<C>(
     producer: &mut ServiceProducer<C>,
     timestamp_authority: &Rfc3161TimestampAuthority,
 ) -> Result<(), ProducerError>
 where
     C: ElapsedClock,
 {
-    let pending = producer.store_mut().load_pending_tsa_segments()?;
-    for (segment_number, artifact, digest) in pending {
+    let queued = producer.store_mut().load_queued_tsa_segments()?;
+    for (segment_number, artifact, digest) in queued {
         if let Ok(response) = timestamp_authority.stamp(&artifact) {
             let _ = producer.store_mut().attach_tsa_response(
                 segment_number,
@@ -196,7 +196,7 @@ where
 }
 
 async fn health() -> impl IntoResponse {
-    Json(json!({"ok": true, "profile": "verifiable-telemetry-canonical-cbor-v2"}))
+    Json(json!({"ok": true, "profile": trackone_ledger::vtl::COMMITMENT_PROFILE_ID}))
 }
 
 async fn admit<C>(
@@ -361,7 +361,7 @@ where
             {
                 "verified"
             } else {
-                "pending"
+                "queued"
             }
         } else {
             "verified"
@@ -380,7 +380,7 @@ where
                     )
                 });
             if attached.is_err() {
-                tsa_status = "pending";
+                tsa_status = "queued";
             }
         }
         Ok::<_, ProducerError>((outcome, tsa_status))

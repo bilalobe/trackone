@@ -1,4 +1,4 @@
-//! Deployable TrackOne v2 gateway service runtime.
+//! Deployable TrackOne VTL gateway service runtime.
 
 #![cfg_attr(not(debug_assertions), deny(warnings))]
 

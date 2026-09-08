@@ -1,8 +1,8 @@
 # trackone-gateway-svc
 
-Deployable draft-09 v2 gateway application. It owns the HTTP handoff,
+Deployable VTL gateway application. It owns the HTTP handoff,
 PostgreSQL durability and migrations, elapsed-time producer state machine,
-idempotency handling, RFC 3161 submission, and the `trackone-v2-gateway`
+idempotency handling, RFC 3161 submission, and the `trackone-vtl-gateway`
 binary.
 
 Reusable protocol and commitment rules remain in
@@ -55,12 +55,12 @@ time, serial number, accuracy, policy identifier, and signer fingerprint.
 Start it locally after supplying the required values:
 
 ```bash
-cargo run --locked -p trackone-gateway-svc --bin trackone-v2-gateway
+cargo run --locked -p trackone-gateway-svc --bin trackone-vtl-gateway
 ```
 
 ## HTTP surface
 
-- `GET /healthz` returns `{ "ok": true, "profile": "...v2" }`.
+- `GET /healthz` returns the active normative commitment-profile UUID.
 - `POST /v2/records` accepts one canonical record as
   `application/cbor`. Every request must include `Idempotency-Key` and
   `Authorization: Bearer <token>`.
@@ -77,7 +77,7 @@ Successful admissions return `201 Created`; an idempotent replay returns
 sealed segment numbers. Invalid media or encoding receives 415, malformed
 envelopes 400, invalid inner records 422, and configured limit violations 413.
 
-The 60-second interval, `suppress` empty mode, and 1,000-record segment batch
+The 60-second interval, `suppress` empty mode, and 1,024-record segment batch
 limit are conservative defaults. Lower intervals reduce timestamp latency but
 create more artifacts and finer disclosure boundaries; higher admission
 limits reduce request overhead but increase the atomic resource domain.
@@ -95,8 +95,7 @@ gateway, Postgres, or OTS resources.
 
 ```bash
 cargo test --locked -p trackone-gateway-svc
-cargo build --locked -p trackone-gateway-svc --release --bin trackone-v2-gateway
+cargo build --locked -p trackone-gateway-svc --release --bin trackone-vtl-gateway
 helm lint apps/trackone-gateway-svc/deploy/helm/trackone \
   --set postgres.auth.existingSecret=postgres-auth
-kubectl kustomize apps/trackone-gateway-svc/deploy/k8s/local/overlays/local
 ```

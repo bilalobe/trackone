@@ -1,9 +1,8 @@
 //! OpenSSL-backed RFC 3161 submission and strict archived-profile validation.
 //!
-//! The live path deliberately uses the archived-token verifier immediately
-//! after submission. It does not reconstruct nonce-based transaction checks,
-//! and historical validation at the signed `genTime` is not independent proof
-//! of when the response was first observed.
+//! The live path deliberately uses nonce-free requests, validates each returned
+//! token immediately, and retains the response. Historical validation at the
+//! signed `genTime` is not independent proof of when the response was observed.
 
 use std::fs::{self, OpenOptions};
 use std::path::{Path, PathBuf};

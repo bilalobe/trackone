@@ -1,8 +1,8 @@
 use postgres::{Client, NoTls};
 use std::time::{SystemTime, UNIX_EPOCH};
 use trackone_gateway_svc::postgres::PostgresLedgerStore;
-use trackone_gateway_svc::producer::{ElapsedClock, ProducerError, V2LedgerProducer};
-use trackone_ledger::v2::{ClosurePolicyV1, EmptyMode};
+use trackone_gateway_svc::producer::{ElapsedClock, LedgerProducer, ProducerError};
+use trackone_ledger::vtl::{ClosurePolicy, EmptyMode};
 
 #[derive(Clone, Copy)]
 struct FixedClock;
@@ -38,14 +38,14 @@ fn postgres_appends_moves_and_replays_batch_state_across_restart() {
         PostgresLedgerStore::new(Client::connect(&database_url, NoTls).unwrap(), &ledger_id);
     store.migrate().unwrap();
     store.migrate().unwrap();
-    let policy = ClosurePolicyV1 {
+    let policy = ClosurePolicy {
         interval_ms: u64::MAX,
-        batch_record_limit: 1_000,
+        batch_record_limit: 1_024,
         record_limit: Some(1_000),
         size_limit_bytes: None,
         empty_mode: EmptyMode::Suppress,
     };
-    let mut producer = V2LedgerProducer::open_or_create(
+    let mut producer = LedgerProducer::open_or_create(
         store,
         FixedClock,
         &ledger_id,
@@ -62,10 +62,10 @@ fn postgres_appends_moves_and_replays_batch_state_across_restart() {
         .into_client()
         .query_one(
             "SELECT \
-             (SELECT count(*) FROM trackone_v2_open_record WHERE ledger_id=$1), \
-             (SELECT count(*) FROM trackone_v2_sealed_record WHERE ledger_id=$1), \
+             (SELECT count(*) FROM trackone_vtl_open_record WHERE ledger_id=$1), \
+             (SELECT count(*) FROM trackone_vtl_sealed_record WHERE ledger_id=$1), \
              predecessor_cbor IS NULL \
-             FROM trackone_v2_ledger_state WHERE ledger_id=$1",
+             FROM trackone_vtl_ledger_state WHERE ledger_id=$1",
             &[&ledger_id],
         )
         .unwrap();
@@ -75,7 +75,7 @@ fn postgres_appends_moves_and_replays_batch_state_across_restart() {
 
     let store =
         PostgresLedgerStore::new(Client::connect(&database_url, NoTls).unwrap(), &ledger_id);
-    let mut producer = V2LedgerProducer::open_or_create(
+    let mut producer = LedgerProducer::open_or_create(
         store,
         FixedClock,
         &ledger_id,
@@ -93,10 +93,10 @@ fn postgres_appends_moves_and_replays_batch_state_across_restart() {
     let rows = client
         .query_one(
             "SELECT \
-             (SELECT count(*) FROM trackone_v2_open_record WHERE ledger_id=$1), \
-             (SELECT count(*) FROM trackone_v2_sealed_record WHERE ledger_id=$1), \
+             (SELECT count(*) FROM trackone_vtl_open_record WHERE ledger_id=$1), \
+             (SELECT count(*) FROM trackone_vtl_sealed_record WHERE ledger_id=$1), \
              predecessor_cbor \
-             FROM trackone_v2_ledger_state WHERE ledger_id=$1",
+             FROM trackone_vtl_ledger_state WHERE ledger_id=$1",
             &[&ledger_id],
         )
         .unwrap();
@@ -106,7 +106,7 @@ fn postgres_appends_moves_and_replays_batch_state_across_restart() {
 
     let store =
         PostgresLedgerStore::new(Client::connect(&database_url, NoTls).unwrap(), &ledger_id);
-    let mut restarted = V2LedgerProducer::open_or_create(
+    let mut restarted = LedgerProducer::open_or_create(
         store,
         FixedClock,
         &ledger_id,
@@ -121,10 +121,21 @@ fn postgres_appends_moves_and_replays_batch_state_across_restart() {
             .replayed
     );
     restarted.admit(record(253)).unwrap();
+    let queued = restarted.store_mut().load_queued_tsa_segments().unwrap();
+    assert_eq!(queued.len(), 1);
+    assert_eq!(queued[0].0, 0);
+    restarted
+        .store_mut()
+        .attach_tsa_response(queued[0].0, &queued[0].2, b"test-response")
+        .unwrap();
+    assert_eq!(
+        restarted.store_mut().tsa_statuses(&[0]).unwrap(),
+        vec!["verified"]
+    );
     let mut client = restarted.into_store().into_client();
     let retained: Vec<u8> = client
         .query_one(
-            "SELECT predecessor_cbor FROM trackone_v2_ledger_state WHERE ledger_id=$1",
+            "SELECT predecessor_cbor FROM trackone_vtl_ledger_state WHERE ledger_id=$1",
             &[&ledger_id],
         )
         .unwrap()
@@ -133,13 +144,13 @@ fn postgres_appends_moves_and_replays_batch_state_across_restart() {
 
     client
         .execute(
-            "DELETE FROM trackone_v2_sealed_segment WHERE ledger_id=$1",
+            "DELETE FROM trackone_vtl_sealed_segment WHERE ledger_id=$1",
             &[&ledger_id],
         )
         .unwrap();
     client
         .execute(
-            "DELETE FROM trackone_v2_ledger_state WHERE ledger_id=$1",
+            "DELETE FROM trackone_vtl_ledger_state WHERE ledger_id=$1",
             &[&ledger_id],
         )
         .unwrap();

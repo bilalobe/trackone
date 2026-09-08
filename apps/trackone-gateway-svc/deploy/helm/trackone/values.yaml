@@ -114,7 +114,7 @@ gateway:
     ledgerId: b7a1d5e40c6f438e9a75db27c96f31aa
     siteId: an-001
     intervalMs: "60000"
-    batchRecordLimit: "1000"
+    batchRecordLimit: "1024"
     maxBatchRecords: "1000"
     maxAdmissionBytes: "4194304"
     emptyMode: suppress

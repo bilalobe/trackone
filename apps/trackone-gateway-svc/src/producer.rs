@@ -1,4 +1,4 @@
-//! Draft-09 gateway-service ledger producer state machine.
+//! Verifiable Telemetry Ledgers gateway-service producer state machine.
 //!
 //! The protocol rules live here independently of a concrete database. A store
 //! commits the complete state transition and any sealed artifacts atomically;
@@ -7,11 +7,11 @@
 
 use std::collections::BTreeMap;
 use std::fmt;
-use trackone_ledger::v2::{
-    ClosurePolicyV1, EmptyMode, SegmentBatchV2, SegmentRecordV2, merkle_root_from_leaf_hashes,
-    merkle_root_from_records, validate_canonical_record_v2,
+use trackone_ledger::sha256_hex;
+use trackone_ledger::vtl::{
+    ClosurePolicy, EmptyMode, SegmentRecord, batch_roots_from_leaf_hashes,
+    merkle_root_from_records, validate_canonical_record,
 };
-use trackone_ledger::{hex_lower, sha256_hex};
 
 /// A non-decreasing elapsed-time source. `continuity_id` changes whenever a
 /// persisted tick can no longer be compared safely with current ticks.
@@ -24,7 +24,7 @@ pub trait ElapsedClock {
 pub struct OpenInterval {
     pub opened_at_ms: u64,
     pub clock_continuity_id: u128,
-    pub policy: ClosurePolicyV1,
+    pub policy: ClosurePolicy,
     pub records: Vec<Vec<u8>>,
     pub byte_count: u64,
 }
@@ -32,12 +32,13 @@ pub struct OpenInterval {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ProducerState {
     pub revision: u64,
+    pub active: bool,
     pub ledger_id: String,
     pub site_id: String,
     pub next_segment_number: u64,
     pub predecessor_cbor: Option<Vec<u8>>,
     pub open: OpenInterval,
-    pub next_policy: ClosurePolicyV1,
+    pub next_policy: ClosurePolicy,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -112,10 +113,10 @@ impl CloseReason {
             Self::Recovery => 7,
             Self::Shutdown => 6,
             Self::Reconfigure => 5,
-            Self::SizeLimit => 4,
-            Self::RecordLimit => 3,
-            Self::Interval => 2,
-            Self::Manual => 1,
+            Self::Manual => 4,
+            Self::SizeLimit => 3,
+            Self::RecordLimit => 2,
+            Self::Interval => 1,
         }
     }
 
@@ -165,6 +166,7 @@ pub enum ProducerError {
     TimestampPersistence(String),
     ConcurrentWriter,
     IdempotencyConflict,
+    Inactive,
     Construction(String),
 }
 
@@ -198,6 +200,7 @@ impl fmt::Display for ProducerError {
             Self::IdempotencyConflict => {
                 formatter.write_str("idempotency key was already used for different bytes")
             }
+            Self::Inactive => formatter.write_str("ledger is shut down and must be reactivated"),
             Self::Construction(message) => {
                 write!(formatter, "segment construction failed: {message}")
             }
@@ -207,15 +210,18 @@ impl fmt::Display for ProducerError {
 
 impl std::error::Error for ProducerError {}
 
-fn validate_policy(policy: &ClosurePolicyV1) -> Result<(), ProducerError> {
+fn validate_policy(policy: &ClosurePolicy) -> Result<(), ProducerError> {
     if policy.interval_ms == 0 {
         return Err(ProducerError::InvalidConfiguration(
             "interval_ms must be positive",
         ));
     }
-    if policy.batch_record_limit == 0 {
+    if policy.batch_record_limit == 0
+        || policy.batch_record_limit > trackone_ledger::vtl::MAX_BATCH_RECORD_LIMIT
+        || !policy.batch_record_limit.is_power_of_two()
+    {
         return Err(ProducerError::InvalidConfiguration(
-            "batch_record_limit must be positive",
+            "batch_record_limit must be a power of two no greater than 2^63",
         ));
     }
     if policy.record_limit == Some(0) {
@@ -233,19 +239,19 @@ fn validate_policy(policy: &ClosurePolicyV1) -> Result<(), ProducerError> {
 
 /// Single-writer producer. Every mutating method performs one store CAS; a
 /// failed CAS is fatal to that operation and must be retried after reloading.
-pub struct V2LedgerProducer<S, C> {
+pub struct LedgerProducer<S, C> {
     store: S,
     clock: C,
     state: ProducerState,
 }
 
-impl<S: LedgerStore, C: ElapsedClock> V2LedgerProducer<S, C> {
+impl<S: LedgerStore, C: ElapsedClock> LedgerProducer<S, C> {
     pub fn open_or_create(
         mut store: S,
         clock: C,
         ledger_id: impl Into<String>,
         site_id: impl Into<String>,
-        policy: ClosurePolicyV1,
+        policy: ClosurePolicy,
     ) -> Result<Self, ProducerError> {
         validate_policy(&policy)?;
         let ledger_id = ledger_id.into();
@@ -263,15 +269,20 @@ impl<S: LedgerStore, C: ElapsedClock> V2LedgerProducer<S, C> {
                     "configured ledger_id and site_id do not match existing ledger state",
                 ));
             }
-            return Ok(Self {
+            let mut producer = Self {
                 store,
                 clock,
                 state,
-            });
+            };
+            if !producer.state.active {
+                producer.reactivate()?;
+            }
+            return Ok(producer);
         }
         let now = clock.now_ms()?;
         let state = ProducerState {
             revision: 0,
+            active: true,
             ledger_id,
             site_id,
             next_segment_number: 0,
@@ -318,13 +329,29 @@ impl<S: LedgerStore, C: ElapsedClock> V2LedgerProducer<S, C> {
     /// telemetry. Recoverable material is sealed; an empty suppress interval
     /// advances only the logical interval.
     pub fn recover(&mut self) -> Result<Vec<SealedSegment>, ProducerError> {
+        if !self.state.active {
+            return Err(ProducerError::Inactive);
+        }
         let now = self.clock.now_ms()?;
         self.transition(now, Some(CloseReason::Recovery), None)
     }
 
+    /// Resume a ledger after a committed shutdown closure.
+    pub fn reactivate(&mut self) -> Result<(), ProducerError> {
+        if self.state.active {
+            return Ok(());
+        }
+        let now = self.clock.now_ms()?;
+        let mut next = self.state.clone();
+        next.active = true;
+        next.open.opened_at_ms = now;
+        next.open.clock_continuity_id = self.clock.continuity_id();
+        self.commit(next, Vec::new(), None, Vec::new())
+    }
+
     pub fn update_policy(
         &mut self,
-        policy: ClosurePolicyV1,
+        policy: ClosurePolicy,
         immediate: bool,
     ) -> Result<Vec<SealedSegment>, ProducerError> {
         validate_policy(&policy)?;
@@ -411,13 +438,16 @@ impl<S: LedgerStore, C: ElapsedClock> V2LedgerProducer<S, C> {
         records: Vec<Vec<u8>>,
         idempotency: Option<(String, String)>,
     ) -> Result<AdmissionOutcome, ProducerError> {
+        if !self.state.active {
+            return Err(ProducerError::Inactive);
+        }
         if records.is_empty() {
             return Err(ProducerError::InvalidRecord(
                 "record batch must not be empty".to_string(),
             ));
         }
         for (index, record) in records.iter().enumerate() {
-            validate_canonical_record_v2(record).map_err(|error| {
+            validate_canonical_record(record).map_err(|error| {
                 ProducerError::InvalidRecord(format!("record {index}: {error}"))
             })?;
         }
@@ -504,6 +534,9 @@ impl<S: LedgerStore, C: ElapsedClock> V2LedgerProducer<S, C> {
     }
 
     fn safe_now(&self) -> Result<u64, ProducerError> {
+        if !self.state.active {
+            return Err(ProducerError::Inactive);
+        }
         let now = self.clock.now_ms()?;
         if self.state.open.clock_continuity_id != self.clock.continuity_id()
             || now < self.state.open.opened_at_ms
@@ -517,14 +550,20 @@ impl<S: LedgerStore, C: ElapsedClock> V2LedgerProducer<S, C> {
         &mut self,
         now: u64,
         requested: Option<CloseReason>,
-        replacement_policy: Option<ClosurePolicyV1>,
+        replacement_policy: Option<ClosurePolicy>,
     ) -> Result<Vec<SealedSegment>, ProducerError> {
+        if !self.state.active {
+            return Err(ProducerError::Inactive);
+        }
         let mut next = self.state.clone();
         let mut sealed = Vec::new();
         if let Some(reason) = requested
             && let Some(segment) = Self::seal_open(&mut next, now, reason)?
         {
             sealed.push(segment);
+        }
+        if requested == Some(CloseReason::Shutdown) {
+            next.active = false;
         }
         if let Some(policy) = replacement_policy {
             next.next_policy = policy.clone();
@@ -571,43 +610,41 @@ impl<S: LedgerStore, C: ElapsedClock> V2LedgerProducer<S, C> {
         state.open.policy = state.next_policy.clone();
         state.open.opened_at_ms = next_opened_at_ms;
 
-        if records.is_empty() && policy.empty_mode == EmptyMode::Suppress {
+        if records.is_empty()
+            && policy.empty_mode == EmptyMode::Suppress
+            && !matches!(reason, CloseReason::Shutdown | CloseReason::Recovery)
+        {
             return Ok(None);
         }
         if state.next_segment_number == u64::MAX && state.predecessor_cbor.is_some() {
             return Err(ProducerError::SerialExhausted);
         }
         let merkle = merkle_root_from_records(&records);
-        let batch_limit = usize::try_from(policy.batch_record_limit).unwrap_or(usize::MAX);
-        let mut batches = Vec::new();
-        for hashes in merkle.leaf_hashes.chunks(batch_limit) {
-            batches.push(SegmentBatchV2 {
-                ledger_id: String::new(),
-                site_id: String::new(),
-                segment_number: 0,
-                batch_number: 0,
-                merkle_root: hex_lower(&merkle_root_from_leaf_hashes(hashes)),
-                count: u64::try_from(hashes.len())
-                    .map_err(|_| ProducerError::CounterOverflow("batch record"))?,
-                leaf_hashes: hashes.iter().map(|hash| hex_lower(hash)).collect(),
-            });
-        }
+        let batch_roots =
+            batch_roots_from_leaf_hashes(&merkle.leaf_hashes, policy.batch_record_limit).ok_or(
+                ProducerError::InvalidConfiguration(
+                    "batch_record_limit must be a power of two no greater than 2^63",
+                ),
+            )?;
+        let record_count = u64::try_from(merkle.leaf_hashes.len())
+            .map_err(|_| ProducerError::CounterOverflow("segment record"))?;
         let segment = if let Some(predecessor) = &state.predecessor_cbor {
-            SegmentRecordV2::new_successor(
+            SegmentRecord::new_successor(
                 predecessor,
                 policy,
                 reason.as_str(),
-                batches,
-                merkle.root_hex(),
+                record_count,
+                batch_roots,
+                merkle.root,
             )
         } else {
-            SegmentRecordV2::new_epoch(
+            SegmentRecord::new_epoch(
                 state.ledger_id.clone(),
-                state.site_id.clone(),
                 policy,
                 reason.as_str(),
-                batches,
-                merkle.root_hex(),
+                record_count,
+                batch_roots,
+                merkle.root,
             )
         }
         .map_err(|error| ProducerError::Construction(error.to_string()))?;
@@ -829,8 +866,8 @@ mod tests {
         }
     }
 
-    fn policy(empty_mode: EmptyMode) -> ClosurePolicyV1 {
-        ClosurePolicyV1 {
+    fn policy(empty_mode: EmptyMode) -> ClosurePolicy {
+        ClosurePolicy {
             interval_ms: 100,
             batch_record_limit: 2,
             record_limit: None,
@@ -848,8 +885,8 @@ mod tests {
     fn producer(
         clock: &FakeClock,
         empty_mode: EmptyMode,
-    ) -> V2LedgerProducer<MemoryLedgerStore, &FakeClock> {
-        V2LedgerProducer::open_or_create(
+    ) -> LedgerProducer<MemoryLedgerStore, &FakeClock> {
+        LedgerProducer::open_or_create(
             MemoryLedgerStore::default(),
             clock,
             "b7a1d5e40c6f438e9a75db27c96f31aa",
@@ -900,7 +937,7 @@ mod tests {
         let clock = FakeClock::new(0);
         let mut configured = policy(EmptyMode::Suppress);
         configured.record_limit = Some(2);
-        let mut producer = V2LedgerProducer::open_or_create(
+        let mut producer = LedgerProducer::open_or_create(
             MemoryLedgerStore::default(),
             &clock,
             "b7a1d5e40c6f438e9a75db27c96f31aa",
@@ -923,7 +960,7 @@ mod tests {
         replacement.interval_ms = 500;
         let sealed = producer.update_policy(replacement.clone(), true).unwrap();
         let decoded =
-            trackone_ledger::v2::decode_segment_record_v2(&sealed[0].artifact_cbor).unwrap();
+            trackone_ledger::vtl::decode_segment_record(&sealed[0].artifact_cbor).unwrap();
         assert_eq!(decoded.closure_policy.interval_ms, 100);
         assert_eq!(decoded.close_reason, "reconfigure");
         assert_eq!(producer.state().open.policy, replacement);
@@ -936,7 +973,7 @@ mod tests {
         producer.admit(record(1)).unwrap();
         let store = producer.into_store();
         clock.continuity.set(2);
-        let mut restarted = V2LedgerProducer::open_or_create(
+        let mut restarted = LedgerProducer::open_or_create(
             store,
             &clock,
             "b7a1d5e40c6f438e9a75db27c96f31aa",
@@ -960,7 +997,7 @@ mod tests {
         let store = producer.into_store();
 
         assert!(matches!(
-            V2LedgerProducer::open_or_create(
+            LedgerProducer::open_or_create(
                 store,
                 &clock,
                 "b7a1d5e40c6f438e9a75db27c96f31aa",
@@ -974,7 +1011,7 @@ mod tests {
     }
 
     #[test]
-    fn close_reason_precedence_matches_draft() {
+    fn close_reason_precedence_matches_profile() {
         assert_eq!(
             CloseReason::highest([
                 CloseReason::Manual,
@@ -1044,7 +1081,7 @@ mod tests {
         let clock = FakeClock::new(0);
         let mut configured = policy(EmptyMode::Suppress);
         configured.record_limit = Some(2);
-        let mut producer = V2LedgerProducer::open_or_create(
+        let mut producer = LedgerProducer::open_or_create(
             MemoryLedgerStore::default(),
             &clock,
             "b7a1d5e40c6f438e9a75db27c96f31aa",
@@ -1120,5 +1157,143 @@ mod tests {
             producer.admit_batch_idempotent("batch-replay", records, b"different"),
             Err(ProducerError::IdempotencyConflict)
         );
+    }
+
+    #[test]
+    fn shutdown_emits_an_empty_suppress_artifact_and_requires_reactivation() {
+        let clock = FakeClock::new(0);
+        let mut producer = producer(&clock, EmptyMode::Suppress);
+        let sealed = producer.close(CloseReason::Shutdown).unwrap();
+        assert_eq!(sealed.len(), 1);
+        let segment =
+            trackone_ledger::vtl::decode_segment_record(&sealed[0].artifact_cbor).unwrap();
+        assert_eq!(segment.record_count, 0);
+        assert_eq!(segment.close_reason, "shutdown");
+        assert_eq!(segment.closure_policy.empty_mode, EmptyMode::Suppress);
+        assert_eq!(producer.admit(record(1)), Err(ProducerError::Inactive));
+        assert_eq!(
+            producer.close(CloseReason::Manual),
+            Err(ProducerError::Inactive)
+        );
+        assert_eq!(
+            producer.update_policy(policy(EmptyMode::Emit), true),
+            Err(ProducerError::Inactive)
+        );
+        producer.reactivate().unwrap();
+        assert_eq!(
+            producer.admit(record(1)).unwrap().admitted_segment_number,
+            1
+        );
+    }
+
+    #[test]
+    fn machine_readable_lifecycle_cases_match_producer_transitions() {
+        let corpus: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../toolset/vectors/vtl-interoperability/cases.json"
+        ))
+        .unwrap();
+        for case in corpus["lifecycle_cases"].as_array().unwrap() {
+            let case_id = case["id"].as_str().unwrap();
+            let policy_value = &case["closure_policy"];
+            let empty_mode = match policy_value["empty_mode"].as_str().unwrap() {
+                "emit" => EmptyMode::Emit,
+                "suppress" => EmptyMode::Suppress,
+                value => panic!("{case_id}: unexpected empty mode {value}"),
+            };
+            let configured = ClosurePolicy {
+                interval_ms: policy_value["interval_ms"].as_u64().unwrap(),
+                batch_record_limit: policy_value["batch_record_limit"].as_u64().unwrap(),
+                record_limit: policy_value["record_limit"].as_u64(),
+                size_limit_bytes: policy_value["size_limit_bytes"].as_u64(),
+                empty_mode,
+            };
+            let clock = FakeClock::new(0);
+            let mut producer = LedgerProducer::open_or_create(
+                MemoryLedgerStore::default(),
+                &clock,
+                "b7a1d5e40c6f438e9a75db27c96f31aa",
+                "an-001",
+                configured,
+            )
+            .unwrap();
+            for (index, length) in case["records_before_trigger_lengths"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .enumerate()
+            {
+                let admitted = record(u8::try_from(index + 1).unwrap());
+                assert_eq!(
+                    admitted.len() as u64,
+                    length.as_u64().unwrap(),
+                    "{case_id}: fixture record length"
+                );
+                producer.admit(admitted).unwrap();
+            }
+
+            let trigger = &case["trigger"];
+            clock.set(trigger["elapsed_ms"].as_u64().unwrap());
+            let serial_before = producer.state().next_segment_number;
+            let (sealed, admitted_segment) = match trigger["kind"].as_str().unwrap() {
+                "elapsed_boundary" => (producer.close(CloseReason::Interval).unwrap(), None),
+                "shutdown" => (producer.close(CloseReason::Shutdown).unwrap(), None),
+                "recovery" => (producer.recover().unwrap(), None),
+                "admission" => {
+                    let admitted = record(9);
+                    assert_eq!(
+                        admitted.len() as u64,
+                        trigger["record_length"].as_u64().unwrap(),
+                        "{case_id}: triggering record length"
+                    );
+                    let outcome = producer.admit(admitted).unwrap();
+                    (outcome.sealed, Some(outcome.admitted_segment_number))
+                }
+                value => panic!("{case_id}: unexpected trigger {value}"),
+            };
+
+            let expected = &case["expected"];
+            assert_eq!(
+                sealed.len() as u64,
+                expected["emitted_segment_count"].as_u64().unwrap(),
+                "{case_id}: emitted segment count"
+            );
+            assert_eq!(
+                producer.state().next_segment_number - serial_before,
+                expected["consumed_segment_numbers"].as_u64().unwrap(),
+                "{case_id}: consumed segment numbers"
+            );
+            assert_eq!(
+                sealed.first().map(|segment| segment.records.len() as u64),
+                expected["closed_record_count"].as_u64(),
+                "{case_id}: closed record count"
+            );
+            assert_eq!(
+                sealed.first().map(|segment| segment.close_reason.as_str()),
+                expected["close_reason"].as_str(),
+                "{case_id}: close reason"
+            );
+            assert_eq!(
+                producer.state().active,
+                expected["successor_opened"].as_bool().unwrap(),
+                "{case_id}: successor state"
+            );
+            match expected["triggering_record_assignment"].as_str().unwrap() {
+                "none" => assert!(admitted_segment.is_none(), "{case_id}"),
+                "closed_interval" => assert_eq!(
+                    admitted_segment,
+                    sealed.first().map(|segment| segment.segment_number),
+                    "{case_id}: triggering record must remain in the closed interval"
+                ),
+                "successor_interval" => assert!(
+                    admitted_segment.is_some_and(|number| {
+                        sealed
+                            .last()
+                            .is_some_and(|segment| number > segment.segment_number)
+                    }),
+                    "{case_id}: triggering record must enter the successor interval"
+                ),
+                value => panic!("{case_id}: unexpected assignment {value}"),
+            }
+        }
     }
 }

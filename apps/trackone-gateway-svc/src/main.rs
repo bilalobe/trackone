@@ -9,16 +9,16 @@ use postgres::config::SslMode;
 use postgres::{Client, Config, NoTls};
 use postgres_native_tls::MakeTlsConnector;
 use trackone_gateway_svc::postgres::PostgresLedgerStore;
-use trackone_gateway_svc::producer::{ElapsedClock, ProducerError, V2LedgerProducer};
+use trackone_gateway_svc::producer::{ElapsedClock, LedgerProducer, ProducerError};
 use trackone_gateway_svc::service::{
-    AdmissionAuth, GatewayHttpState, drain_pending_tsa_segments, router,
+    AdmissionAuth, GatewayHttpState, drain_queued_tsa_segments, router,
 };
 use trackone_gateway_svc::service::{
     DEFAULT_MAX_ADMISSION_BYTES, DEFAULT_MAX_BATCH_RECORDS, HARD_MAX_ADMISSION_BYTES,
     HARD_MAX_BATCH_RECORDS,
 };
 use trackone_gateway_svc::tsa::Rfc3161TimestampAuthority;
-use trackone_ledger::v2::{ClosurePolicyV1, EmptyMode};
+use trackone_ledger::vtl::{ClosurePolicy, EmptyMode};
 use trackone_rfc3161::SignerCertificateSha256;
 
 struct SystemElapsedClock {
@@ -136,12 +136,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "suppress" => EmptyMode::Suppress,
         _ => return Err("TRACKONE_EMPTY_MODE must be emit or suppress".into()),
     };
-    let policy = ClosurePolicyV1 {
+    let policy = ClosurePolicy {
         interval_ms: env::var("TRACKONE_INTERVAL_MS")
             .unwrap_or_else(|_| "60000".to_string())
             .parse()?,
         batch_record_limit: env::var("TRACKONE_BATCH_RECORD_LIMIT")
-            .unwrap_or_else(|_| "1000".to_string())
+            .unwrap_or_else(|_| "1024".to_string())
             .parse()?,
         record_limit: optional_u64("TRACKONE_RECORD_LIMIT")?,
         size_limit_bytes: optional_u64("TRACKONE_SIZE_LIMIT_BYTES")?,
@@ -177,11 +177,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     )?;
     let clock = SystemElapsedClock::new()?;
     let continuity_id = clock.continuity_id();
-    let mut producer = V2LedgerProducer::open_or_create(store, clock, ledger_id, site_id, policy)?;
+    let mut producer = LedgerProducer::open_or_create(store, clock, ledger_id, site_id, policy)?;
     if producer.state().open.clock_continuity_id != continuity_id {
         producer.recover()?;
     }
-    drain_pending_tsa_segments(&mut producer, &timestamp_authority)?;
+    drain_queued_tsa_segments(&mut producer, &timestamp_authority)?;
 
     let listener = tokio::net::TcpListener::bind(bind).await?;
     axum::serve(
