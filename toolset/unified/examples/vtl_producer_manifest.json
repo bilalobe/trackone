@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "ledger_id": "b7a1d5e40c6f438e9a75db27c96f31aa",
+  "segment_number": "0",
+  "commitment_profile_id": "c08ade4e-1785-4eb6-9648-b7003d76288d",
+  "disclosure_class": "C",
+  "artifacts": {
+    "segment_cbor": {
+      "path": "segments/segment-0.cbor",
+      "sha256": "2672cb72d5f06863110af1b30660c7e5ba495c0b2ce7d084b0436e010e99388d"
+    }
+  },
+  "anchoring": {
+    "tsa": {
+      "status": "unavailable"
+    }
+  }
+}

@@ -1,0 +1,100 @@
+; Verifiable Telemetry Ledgers profile conformance surface.
+producer-manifest = {
+  "version": 1,
+  "ledger_id": json-hex32,
+  "segment_number": uint64-decimal,
+  "commitment_profile_id": tstr,
+  "disclosure_class": disclosure-class,
+  "artifacts": artifacts,
+  "anchoring": anchoring,
+  ? "extensions": { * tstr => json-data },
+}
+artifacts = {
+  "segment_cbor": artifact-ref,
+  ? "predecessor_segment_cbor": artifact-ref,
+  ? "record_batches": [+ record-batch-opening],
+  ? "tsa_req": artifact-ref,
+  ? "tsa_tsr": artifact-ref,
+  ? "extensions": { * tstr => artifact-ref }
+}
+record-batch-opening = {
+  "batch_number": uint64-decimal,
+  "records": [+ artifact-ref]
+}
+artifact-ref = { "path": relative-path, "sha256": json-hex64 }
+anchoring = { "tsa": producer-tsa-state }
+producer-tsa-state = { "status": "present" / "pending" / "unavailable" }
+
+verifier-result = {
+  "artifact_sha256": json-hex64,
+  "manifest_sha256": json-hex64,
+  ? "commitment_profile_id": tstr,
+  "claimed_disclosure_class": disclosure-class,
+  "verification_scope":
+    "public_recompute" / "disclosed_batch_recompute" / "anchor_only",
+  ? "chain_status": chain-status,
+  "channels": channels,
+  "verifier_policy_id": non-empty-tstr,
+  ? "verifier_policy_sha256": json-hex64,
+  "overall": "success" / "incomplete" / "failure",
+  ? "failure_reasons": [+ baseline-failure-reason],
+  ? "extensions": { * tstr => json-data }
+}
+chain-status = "epoch" / "validated" / "predecessor_not_disclosed" / "failed"
+baseline-failure-reason =
+  "unsupported_commitment_profile" / "invalid_canonical_record" /
+  "invalid_segment_artifact" / "commitment_mismatch" /
+  "segment_chain_mismatch" / "channel_failure" /
+  "insufficient_disclosure" / "scope_not_exercised" /
+  "verifier_policy_rejection"
+channels = { "tsa": verifier-tsa-result }
+verifier-tsa-result =
+  {
+    "status": "verified",
+    ? "extensions": { * tstr => json-data }
+  } /
+  {
+    "status": "pending_claim",
+    "reason": "producer_pending_claim",
+    ? "extensions": { * tstr => json-data }
+  } /
+  {
+    "status": "missing" / "failed",
+    "reason": non-empty-tstr,
+    ? "extensions": { * tstr => json-data }
+  }
+disclosure-class = "A" / "B" / "C"
+relative-path = tstr
+uint64-decimal = tstr
+json-hex32 = (tstr .regexp "[0-9a-f]{32}") .size 32
+json-hex64 = (tstr .regexp "[0-9a-f]{64}") .size 64
+non-empty-tstr = tstr .size (1..18446744073709551615)
+json-data = nil / bool / int / float / tstr / [* json-data] / { * tstr => json-data }
+
+segment-record = {
+  "version": 1,
+  "commitment_profile_id": tstr,
+  "ledger_id": cbor-hex32,
+  "segment_number": uint64,
+  "closure_policy": segment-closure-policy,
+  "close_reason": close-reason,
+  "prev_segment_sha256": sha256-value,
+  "record_count": uint64,
+  "batch_roots": [* sha256-value],
+  "segment_root": sha256-value
+}
+segment-closure-policy = {
+  "version": 1,
+  "interval_ms": positive-uint64,
+  "batch_record_limit": power-of-two-uint64,
+  "record_limit": positive-uint64 / nil,
+  "size_limit_bytes": positive-uint64 / nil,
+  "empty_mode": "emit" / "suppress"
+}
+close-reason = "interval" / "reconfigure" / "record_limit" / "size_limit" /
+  "shutdown" / "recovery" / "manual"
+uint64 = 0..18446744073709551615
+positive-uint64 = 1..18446744073709551615
+power-of-two-uint64 = positive-uint64
+cbor-hex32 = (tstr .regexp "[0-9a-f]{32}") .size 32
+sha256-value = bstr .size 32

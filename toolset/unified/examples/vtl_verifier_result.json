@@ -1,0 +1,19 @@
+{
+  "artifact_sha256": "2672cb72d5f06863110af1b30660c7e5ba495c0b2ce7d084b0436e010e99388d",
+  "manifest_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "commitment_profile_id": "c08ade4e-1785-4eb6-9648-b7003d76288d",
+  "claimed_disclosure_class": "C",
+  "verification_scope": "anchor_only",
+  "chain_status": "epoch",
+  "channels": {
+    "tsa": {
+      "status": "missing",
+      "reason": "timestamp issuance is unavailable"
+    }
+  },
+  "verifier_policy_id": "vtl-baseline-c08ade4e",
+  "overall": "failure",
+  "failure_reasons": [
+    "channel_failure"
+  ]
+}

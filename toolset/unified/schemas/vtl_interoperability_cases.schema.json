@@ -1,0 +1,366 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/vtl_interoperability_cases.schema.json",
+  "title": "VTL interoperability cases",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "profile_source",
+    "commitment_profile_id",
+    "canonical_record_acceptance_cases",
+    "global_sort_traps",
+    "aligned_subtree_composition_cases",
+    "timestamp_channel_cases",
+    "lifecycle_cases"
+  ],
+  "properties": {
+    "schema": {"const": "vtl-interoperability-cases"},
+    "profile_source": {"const": "verifiable-telemetry-ledgers"},
+    "commitment_profile_id": {
+      "const": "c08ade4e-1785-4eb6-9648-b7003d76288d"
+    },
+    "canonical_record_acceptance_cases": {
+      "type": "array",
+      "minItems": 2,
+      "items": {"$ref": "#/$defs/canonical_record_acceptance_case"}
+    },
+    "global_sort_traps": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/global_sort_trap"}
+    },
+    "aligned_subtree_composition_cases": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/aligned_subtree_composition_case"}
+    },
+    "timestamp_channel_cases": {"$ref": "#/$defs/timestamp_channel_cases"},
+    "lifecycle_cases": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/lifecycle_case"}
+    }
+  },
+  "$defs": {
+    "hex_bytes": {
+      "type": "string",
+      "pattern": "^(?:[0-9a-f]{2})+$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "canonical_record_acceptance_case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "construction",
+        "expected_encoded_length",
+        "payload_nesting_depth",
+        "expected_leaf_hash",
+        "is_conforming_canonical_record",
+        "inside_baseline_acceptance_envelope",
+        "permitted_rejection"
+      ],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "construction": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "record_prefix_hex",
+                "repeated_array_head_hex",
+                "repeat_count",
+                "innermost_bstr_length",
+                "fill_octet_hex"
+              ],
+              "properties": {
+                "record_prefix_hex": {"$ref": "#/$defs/hex_bytes"},
+                "repeated_array_head_hex": {"const": "81"},
+                "repeat_count": {"type": "integer", "minimum": 1},
+                "innermost_bstr_length": {"type": "integer", "minimum": 0},
+                "fill_octet_hex": {"type": "string", "pattern": "^[0-9a-f]{2}$"}
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["record_cbor_hex"],
+              "properties": {
+                "record_cbor_hex": {"$ref": "#/$defs/hex_bytes"}
+              }
+            }
+          ]
+        },
+        "expected_encoded_length": {"type": "integer", "minimum": 1},
+        "payload_nesting_depth": {"type": "integer", "minimum": 0},
+        "expected_leaf_hash": {"$ref": "#/$defs/sha256"},
+        "is_conforming_canonical_record": {"const": true},
+        "inside_baseline_acceptance_envelope": {"type": "boolean"},
+        "permitted_rejection": {
+          "enum": [null, "verifier_policy_rejection"]
+        }
+      }
+    },
+    "global_sort_trap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "batch_record_limit",
+        "records_cbor_hex_in_admission_order",
+        "leaf_hashes_in_admission_order",
+        "expected_sorted_leaf_hashes",
+        "expected_batch_roots",
+        "expected_segment_root",
+        "forbidden_per_chunk_batch_roots",
+        "forbidden_per_chunk_segment_root",
+        "expected_public_recompute_failure_reason"
+      ],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "batch_record_limit": {"type": "integer", "minimum": 1},
+        "records_cbor_hex_in_admission_order": {
+          "type": "array",
+          "minItems": 2,
+          "items": {"$ref": "#/$defs/hex_bytes"}
+        },
+        "leaf_hashes_in_admission_order": {
+          "type": "array",
+          "minItems": 2,
+          "items": {"$ref": "#/$defs/sha256"}
+        },
+        "expected_sorted_leaf_hashes": {
+          "type": "array",
+          "minItems": 2,
+          "items": {"$ref": "#/$defs/sha256"}
+        },
+        "expected_batch_roots": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/sha256"}
+        },
+        "expected_segment_root": {"$ref": "#/$defs/sha256"},
+        "forbidden_per_chunk_batch_roots": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/sha256"}
+        },
+        "forbidden_per_chunk_segment_root": {"$ref": "#/$defs/sha256"},
+        "expected_public_recompute_failure_reason": {
+          "const": "commitment_mismatch"
+        }
+      }
+    },
+    "aligned_subtree_composition_case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "batch_record_limit",
+        "records_cbor_hex",
+        "expected_sorted_leaf_hashes",
+        "expected_batch_roots",
+        "expected_left_range_root",
+        "expected_segment_root"
+      ],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "batch_record_limit": {"const": 2},
+        "records_cbor_hex": {
+          "type": "array",
+          "minItems": 5,
+          "maxItems": 5,
+          "items": {"$ref": "#/$defs/hex_bytes"}
+        },
+        "expected_sorted_leaf_hashes": {
+          "type": "array",
+          "minItems": 5,
+          "maxItems": 5,
+          "items": {"$ref": "#/$defs/sha256"}
+        },
+        "expected_batch_roots": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {"$ref": "#/$defs/sha256"}
+        },
+        "expected_left_range_root": {"$ref": "#/$defs/sha256"},
+        "expected_segment_root": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "timestamp_channel_cases": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["valid_nonce_case", "negative_mutations"],
+      "properties": {
+        "valid_nonce_case": {"$ref": "#/$defs/valid_timestamp_case"},
+        "negative_mutations": {
+          "type": "array",
+          "minItems": 3,
+          "items": {"$ref": "#/$defs/timestamp_negative_mutation"}
+        }
+      }
+    },
+    "valid_timestamp_case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "segment_sha256",
+        "request_der_base64_path",
+        "request_der_sha256",
+        "response_der_base64_path",
+        "response_der_sha256",
+        "trust_anchor_pem_path",
+        "trust_anchor_der_sha256",
+        "revocation_crl_pem_path",
+        "revocation_crl_der_sha256",
+        "tsa_policy_oid",
+        "nonce_hex",
+        "signer_certificate_der_sha256",
+        "expected_channel_status"
+      ],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "segment_sha256": {"$ref": "#/$defs/sha256"},
+        "request_der_base64_path": {"type": "string", "minLength": 1},
+        "request_der_sha256": {"$ref": "#/$defs/sha256"},
+        "response_der_base64_path": {"type": "string", "minLength": 1},
+        "response_der_sha256": {"$ref": "#/$defs/sha256"},
+        "trust_anchor_pem_path": {"type": "string", "minLength": 1},
+        "trust_anchor_der_sha256": {"$ref": "#/$defs/sha256"},
+        "revocation_crl_pem_path": {"type": "string", "minLength": 1},
+        "revocation_crl_der_sha256": {"$ref": "#/$defs/sha256"},
+        "tsa_policy_oid": {"type": "string", "minLength": 1},
+        "nonce_hex": {"$ref": "#/$defs/hex_bytes"},
+        "signer_certificate_der_sha256": {"$ref": "#/$defs/sha256"},
+        "expected_channel_status": {"const": "verified"}
+      }
+    },
+    "timestamp_negative_mutation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "base_response_der_base64_path",
+        "operation",
+        "expected_channel_status",
+        "expected_failure_reason"
+      ],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "base_response_der_base64_path": {"type": "string", "minLength": 1},
+        "operation": {
+          "enum": [
+            "set_pki_status_to_granted_with_mods",
+            "duplicate_only_cms_signer_info",
+            "replace_signing_certificate_v2_oid_with_legacy_oid"
+          ]
+        },
+        "expected_channel_status": {"const": "failed"},
+        "expected_failure_reason": {"const": "channel_failure"}
+      }
+    },
+    "closure_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "interval_ms",
+        "batch_record_limit",
+        "record_limit",
+        "size_limit_bytes",
+        "empty_mode"
+      ],
+      "properties": {
+        "interval_ms": {"type": "integer", "minimum": 1},
+        "batch_record_limit": {"type": "integer", "minimum": 1},
+        "record_limit": {
+          "type": ["integer", "null"],
+          "minimum": 1
+        },
+        "size_limit_bytes": {
+          "type": ["integer", "null"],
+          "minimum": 1
+        },
+        "empty_mode": {"enum": ["emit", "suppress"]}
+      }
+    },
+    "trigger": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "elapsed_ms"],
+      "properties": {
+        "kind": {
+          "enum": [
+            "elapsed_boundary",
+            "shutdown",
+            "recovery",
+            "admission"
+          ]
+        },
+        "elapsed_ms": {"type": "integer", "minimum": 0},
+        "record_length": {"type": "integer", "minimum": 1}
+      }
+    },
+    "lifecycle_expected": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "emitted_segment_count",
+        "consumed_segment_numbers",
+        "closed_record_count",
+        "close_reason",
+        "triggering_record_assignment",
+        "successor_opened"
+      ],
+      "properties": {
+        "emitted_segment_count": {"type": "integer", "minimum": 0},
+        "consumed_segment_numbers": {"type": "integer", "minimum": 0},
+        "closed_record_count": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "close_reason": {
+          "enum": [
+            null,
+            "interval",
+            "record_limit",
+            "size_limit",
+            "shutdown",
+            "recovery"
+          ]
+        },
+        "triggering_record_assignment": {
+          "enum": ["none", "closed_interval", "successor_interval"]
+        },
+        "successor_opened": {"type": "boolean"}
+      }
+    },
+    "lifecycle_case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "closure_policy",
+        "records_before_trigger_lengths",
+        "trigger",
+        "expected"
+      ],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "closure_policy": {"$ref": "#/$defs/closure_policy"},
+        "records_before_trigger_lengths": {
+          "type": "array",
+          "items": {"type": "integer", "minimum": 1}
+        },
+        "trigger": {"$ref": "#/$defs/trigger"},
+        "expected": {"$ref": "#/$defs/lifecycle_expected"}
+      }
+    }
+  }
+}

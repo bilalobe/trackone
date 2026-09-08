@@ -41,8 +41,7 @@
         },
         "artifact_type": {
           "enum": [
-            "application/vnd.trackone.conformance.archive.v2+tar",
-            "application/vnd.trackone.conformance.archive.v3+tar"
+            "application/vnd.trackone.conformance.archive+tar"
           ]
         },
         "carrier": {
@@ -69,7 +68,7 @@
           "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/common.schema.json#/$defs/hex64_lower"
         },
         "result_schema": {
-          "enum": ["trackone-conformance-archive-v2", "trackone-conformance-archive-v3"]
+          "const": "trackone-conformance-archive"
         },
         "ok": {
           "const": true

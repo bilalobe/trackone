@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/vtl_verifier_result.schema.json",
+  "title": "VTL verifier result",
+  "type": "object",
+  "properties": {
+    "artifact_sha256": {"$ref": "#/$defs/sha256"},
+    "manifest_sha256": {"$ref": "#/$defs/sha256"},
+    "commitment_profile_id": {"type": "string"},
+    "claimed_disclosure_class": {"enum": ["A", "B", "C"]},
+    "verification_scope": {"enum": ["public_recompute", "disclosed_batch_recompute", "anchor_only"]},
+    "chain_status": {"enum": ["epoch", "validated", "predecessor_not_disclosed", "failed"]},
+    "channels": {
+      "type": "object",
+      "properties": {"tsa": {"$ref": "#/$defs/tsa_result"}},
+      "required": ["tsa"],
+      "additionalProperties": false
+    },
+    "verifier_policy_id": {"type": "string", "minLength": 1},
+    "verifier_policy_sha256": {"$ref": "#/$defs/sha256"},
+    "overall": {"enum": ["success", "incomplete", "failure"]},
+    "failure_reasons": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/failure_reason"}},
+    "extensions": {"type": "object"}
+  },
+  "required": ["artifact_sha256", "manifest_sha256", "claimed_disclosure_class", "verification_scope", "channels", "verifier_policy_id", "overall"],
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {"properties": {"overall": {"const": "failure"}}},
+      "then": {"required": ["failure_reasons"]},
+      "else": {"not": {"required": ["failure_reasons"]}}
+    },
+    {
+      "if": {"properties": {"overall": {"const": "success"}}},
+      "then": {"properties": {"channels": {"properties": {"tsa": {"properties": {"status": {"const": "verified"}}}}}}}
+    },
+    {
+      "if": {"properties": {"overall": {"const": "incomplete"}}},
+      "then": {"properties": {"channels": {"properties": {"tsa": {"properties": {"status": {"const": "pending_claim"}}}}}}}
+    }
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "failure_reason": {"enum": ["unsupported_commitment_profile", "invalid_canonical_record", "invalid_segment_artifact", "commitment_mismatch", "segment_chain_mismatch", "channel_failure", "insufficient_disclosure", "scope_not_exercised", "verifier_policy_rejection"]},
+    "tsa_result": {
+      "type": "object",
+      "properties": {
+        "status": {"enum": ["verified", "pending_claim", "missing", "failed"]},
+        "reason": {"type": "string", "minLength": 1},
+        "extensions": {"type": "object"}
+      },
+      "required": ["status"],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"const": "verified"}}},
+          "then": {"not": {"required": ["reason"]}},
+          "else": {"required": ["reason"]}
+        },
+        {
+          "if": {
+            "properties": {"status": {"const": "pending_claim"}},
+            "required": ["status"]
+          },
+          "then": {"properties": {"reason": {"const": "producer_pending_claim"}}}
+        }
+      ]
+    }
+  }
+}

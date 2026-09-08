@@ -138,22 +138,6 @@ def check(repo: Path) -> dict[str, int]:
             f"{PROVIDER}ots_verifier_sanity_v1.schema.json",
         ),
         (
-            repo / "toolset/vectors/verifiable-telemetry-canonical-cbor-v1/manifest.json",
-            f"{PROVIDER}commitment_vector_manifest.schema.json",
-        ),
-        (
-            repo / "toolset/vectors/verifiable-telemetry-canonical-cbor-v2/manifest.json",
-            f"{PROVIDER}v2_vector_manifest_v2.schema.json",
-        ),
-        (
-            repo / "toolset/vectors/verifiable-telemetry-canonical-cbor-v2/cases.json",
-            f"{PROVIDER}v2_bundle_cases_v1.schema.json",
-        ),
-        (
-            repo / "toolset/vectors/trackone-beta-negative-v1/cases.json",
-            f"{PROVIDER}negative_fixture_cases_v1.schema.json",
-        ),
-        (
             repo / "toolset/unified/examples/scitt_evidence_bundle_statement.json",
             f"{PROVIDER}scitt_evidence_bundle_statement.schema.json",
         ),
@@ -161,62 +145,53 @@ def check(repo: Path) -> dict[str, int]:
             repo / "toolset/unified/examples/scitt_verify_manifest_statement.json",
             f"{PROVIDER}scitt_verify_manifest_statement.schema.json",
         ),
+        (
+            repo / "toolset/unified/examples/vtl_producer_manifest.json",
+            f"{PROVIDER}vtl_producer_manifest.schema.json",
+        ),
+        (
+            repo / "toolset/unified/examples/vtl_verifier_result.json",
+            f"{PROVIDER}vtl_verifier_result.schema.json",
+        ),
+        (
+            repo / "toolset/vectors/vtl-interoperability/cases.json",
+            f"{PROVIDER}vtl_interoperability_cases.schema.json",
+        ),
     ]
     instance_count = 0
     for instance_path, schema_id in instances:
         validate_instance(instance_path, schemas[schema_id], registry)
         instance_count += 1
-    for instance_path in sorted(
-        (
-            repo
-            / "toolset/vectors/verifiable-telemetry-canonical-cbor-v2/fixtures"
-        ).glob("*/segment.verify.json")
-    ):
-        manifest_version = load_json(instance_path).get("version")
-        if manifest_version not in (2, 3):
-            raise ContractError(
-                f"{instance_path}: unsupported verification manifest version "
-                f"{manifest_version!r}"
-            )
-        validate_instance(
-            instance_path,
-            schemas[
-                f"{PROVIDER}verify_manifest_v{manifest_version}.schema.json"
-            ],
-            registry,
-        )
-        instance_count += 1
-    for instance_path in sorted(
-        (
-            repo
-            / "toolset/vectors/verifiable-telemetry-canonical-cbor-v2/fixtures"
-        ).glob("*/expected-result.json")
-    ):
-        validate_instance(
-            instance_path,
-            schemas[f"{PROVIDER}verification_result_v2.schema.json"],
-            registry,
-        )
-        instance_count += 1
 
-    conformance_schema = schemas[f"{PROVIDER}conformance_archive_manifest_v3.schema.json"]
+    vtl_result_schema = schemas[f"{PROVIDER}vtl_verifier_result.schema.json"]
+    vtl_result_validator = validators.validator_for(vtl_result_schema)(
+        vtl_result_schema, registry=registry
+    )
+    empty_reason_result = load_json(
+        repo / "toolset/unified/examples/vtl_verifier_result.json"
+    )
+    empty_reason_result["channels"]["tsa"]["reason"] = ""
+    if not list(vtl_result_validator.iter_errors(empty_reason_result)):
+        raise ContractError("VTL verifier result accepts an empty TSA reason")
+
+    conformance_schema = schemas[f"{PROVIDER}conformance_archive_manifest.schema.json"]
     conformance_example = {
-        "schema": "trackone-conformance-archive-v3",
-        "schema_uri": f"{PROVIDER}conformance_archive_manifest_v3.schema.json",
-        "version": 3,
+        "schema": "trackone-conformance-archive",
+        "schema_uri": f"{PROVIDER}conformance_archive_manifest.schema.json",
+        "version": 1,
         "subject": {
             "kind": "commit",
             "name": "sha-0000000000000000000000000000000000000000",
             "git_commit": "0" * 40,
         },
-        "software_version": "0.1.0-beta.5",
+        "software_version": "0.2.0-beta.1",
         "repository": "bilalobe/trackone",
         "carrier": {
             "oci_ref": (
                 "ghcr.io/bilalobe/trackone/conformance-archive:"
                 "sha-0000000000000000000000000000000000000000"
             ),
-            "artifact_type": "application/vnd.trackone.conformance.archive.v3+tar",
+            "artifact_type": "application/vnd.trackone.conformance.archive+tar",
         },
         "contents": {
             "schema_catalog": "contracts/toolset/unified/schema-catalog.json",
@@ -228,15 +203,11 @@ def check(repo: Path) -> dict[str, int]:
             "detached_verifier": "verifier/bin/trackone-evidence",
         },
         "claims": {
-            "canonical_cbor_v1_vectors": True,
-            "canonical_cbor_v2_vectors": True,
-            "v2_full_conformance": True,
-            "v2_durable_producer": True,
-            "v2_disclosure_classes": True,
-            "rfc3161_timestamp_channel": True,
-            "rfc5816_signer_certificate_binding": True,
-            "negative_fixture_floor": True,
+            "vtl_normative_known_answer_vector": True,
+            "vtl_version_one_evidence_slate": True,
             "offline_schema_resolution": True,
+            "publishable_rust_crates": True,
+            "helm_release_asset": True,
         },
     }
     conformance_validator = validators.validator_for(conformance_schema)(
@@ -249,33 +220,9 @@ def check(repo: Path) -> dict[str, int]:
         )
     instance_count += 1
 
-    rejection_schema = schemas[f"{PROVIDER}rejection_audit.schema.json"]
-    rejection_records = 0
-    for path in sorted(
-        (repo / "toolset/vectors/trackone-beta-negative-v1/fixtures").glob(
-            "*/audit/*.ndjson"
-        )
-    ):
-        for line_number, line in enumerate(
-            path.read_text(encoding="utf-8").splitlines(), start=1
-        ):
-            if not line.strip():
-                continue
-            instance = json.loads(line)
-            validator_type = validators.validator_for(rejection_schema)
-            errors = list(
-                validator_type(rejection_schema, registry=registry).iter_errors(instance)
-            )
-            if errors:
-                raise ContractError(
-                    f"{path}:{line_number} fails rejection schema: {errors[0].message}"
-                )
-            rejection_records += 1
-
     return {
         "schemas": len(schemas),
         "instances": instance_count,
-        "rejection_records": rejection_records,
     }
 
 
