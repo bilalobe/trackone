@@ -20,8 +20,8 @@ helm upgrade --install trackone oci://ghcr.io/bilalobe/trackone/charts/trackone 
   --set postgres.auth.existingSecret=<your-postgres-secret>
 ```
 
-For example, release tag `v0.1.0-beta.5` publishes chart version
-`0.1.0-beta.5`.
+For example, release tag `v0.2.0-beta.1` publishes chart version
+`0.2.0-beta.1`.
 
 The base [values.yaml](values.yaml)
 inside that OCI chart assumes:
@@ -73,8 +73,9 @@ Use the local chart directory and
 [values-local.yaml](values-local.yaml)
 only when you explicitly want local build Jobs. The local override keeps the
 gateway and OTS calendar disabled unless you provide supported images and opt
-into those Helm workloads yourself. The separate Kustomize tree is build-only;
-Helm is the sole runtime deployment surface.
+into those Helm workloads yourself. These chart-managed Jobs are the sole
+Kubernetes build-check surface; Helm also remains the sole runtime deployment
+surface.
 
 Typical flow:
 

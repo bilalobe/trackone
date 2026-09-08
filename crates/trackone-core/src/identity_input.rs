@@ -72,7 +72,7 @@ pub struct ProvisioningRecord {
     /// Unique device identifier (8 bytes)
     pub device_id: DeviceId,
 
-    /// Firmware version string (e.g., "v0.1.0-beta.5")
+    /// Firmware version string (e.g., "v0.2.0-beta.1")
     pub firmware_version: heapless::String<32>,
 
     /// SHA-256 hash of the firmware binary
@@ -102,7 +102,7 @@ mod tests {
     fn provisioning_record_roundtrip() {
         let record = ProvisioningRecord {
             device_id: PodId::from(42u32),
-            firmware_version: heapless::String::try_from("v0.1.0-beta.5").unwrap(),
+            firmware_version: heapless::String::try_from("v0.2.0-beta.1").unwrap(),
             firmware_hash: [0xAB; 32],
             identity_pubkey: [0xCD; 32],
             birth_cert_sig: [0x56; 64],
