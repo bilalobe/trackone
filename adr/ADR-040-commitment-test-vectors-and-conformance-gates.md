@@ -54,7 +54,9 @@ Any mismatch is a hard CI failure.
 - Vectors are tied to a profile version.
 - Profile changes that alter bytes MUST increment profile version and add new
   vectors.
-- Legacy vectors MUST remain in-repo for regression detection.
+- Only vectors for the active profile are part of the conformance gate. When
+  the active profile changes, obsolete vectors and their profile-specific test
+  tools MAY be removed; historical design records remain in the ADR history.
 
 ### 4) Scope of vectors
 

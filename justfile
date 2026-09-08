@@ -6,13 +6,17 @@
 default:
     @just --list
 
-# Re-run the v2 verifier against the checked-in signed Class-A fixture.
-verify bundle_dir="toolset/vectors/verifiable-telemetry-canonical-cbor-v2/fixtures/corrected-epoch-class-a":
-    cargo run --locked --package trackone-evidence -- verify --root {{bundle_dir}} --tsa-ca-file toolset/vectors/verifiable-telemetry-canonical-cbor-v2/trust/tsa-root.pem --tsa-crls-file toolset/vectors/verifiable-telemetry-canonical-cbor-v2/trust/tsa-crls.pem --tsa-policy 1.3.6.1.4.1.55555.1 --tsa-signer-cert-sha256 14ab98cafe09d9d1d01562af42d69a904b01023d9cd5b03bd07e5779710c8014
+# Verify a VTL bundle with deployment-owned baseline TSA policy inputs.
+verify bundle_dir:
+    cargo run --locked --package trackone-evidence -- verify --root {{bundle_dir}} --tsa-ca-file "$TRACKONE_TSA_CA_FILE" --tsa-crls-file "$TRACKONE_TSA_CRLS_FILE" --tsa-policy "$TRACKONE_TSA_POLICY_OID" --tsa-signer-cert-sha256 "$TRACKONE_TSA_SIGNER_CERT_SHA256"
 
 # Enforce reusable-library and application dependency direction.
 boundaries:
     python3 toolset/ci/check_workspace_boundaries.py
+
+# Recompute the VTL known-answer vector corpus from its own record bytes.
+vectors:
+    python3 toolset/ci/check_vtl_vectors.py
 
 # Run all tests with correct feature combinations
 test:
@@ -20,7 +24,7 @@ test:
     cargo test --locked --package trackone-core --features std,postcard,dummy-aead
     cargo test --locked --package trackone-ingest --features std,xchacha
     cargo test --locked --package trackone-pod-fw --features std
-    cargo test --locked --package trackone-ledger --test vector_corpus -- --ignored
+    cargo test --locked --package trackone-ledger --test vtl_known_answer
 
 # Run clippy with correct features (avoid --all-features due to production+dummy-aead conflict)
 clippy:
@@ -38,7 +42,7 @@ build-production:
     cargo build --locked --package trackone-core --no-default-features --features std,production
     cargo build --locked --package trackone-pod-fw --no-default-features --features production
     ! cargo check --locked --package trackone-pod-fw --no-default-features --features production,trackone-core/dummy-aead
-    cargo build --locked --package trackone-gateway-svc --release --bin trackone-v2-gateway
+    cargo build --locked --package trackone-gateway-svc --release --bin trackone-vtl-gateway
 
 # Run Rust-side serialization benchmarks
 bench-rust:
@@ -57,5 +61,5 @@ clean:
     cargo clean
 
 # Full CI check (format, clippy, test, build)
-ci: boundaries fmt-check clippy test build-release
+ci: boundaries vectors fmt-check clippy test build-release
     @echo "✅ All CI checks passed!"

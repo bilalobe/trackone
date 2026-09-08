@@ -13,7 +13,7 @@ The source tree makes the dependency direction explicit:
 | Layer | Packages | Purpose |
 | --- | --- | --- |
 | Reusable libraries | `trackone-core`, `trackone-constants`, `trackone-ingest`, `trackone-ledger`, `trackone-ots`, `trackone-rfc3161`, `trackone-sensorthings`, `trackone-pod-fw` | Protocol, framing, commitment, timestamp verification, projection, and firmware logic |
-| Applications | `trackone-evidence`, `trackone-gateway-svc` | Supported v2 verifier/compactor and deployable v2 gateway |
+| Applications | `trackone-evidence`, `trackone-gateway-svc` | Supported VTL verifier/compactor and deployable VTL gateway |
 
 Reusable crates depend only on reusable crates. Applications compose reusable
 crates at the edge. These rules are checked by
@@ -31,10 +31,15 @@ pod-fw -> ingest -> gateway-svc -> ledger -> evidence verifier
 ```
 
 Canonical evidence is CBOR-backed. JSON and SensorThings outputs are
-read-only projections, and OTS/TSA responses attest to already-created
-artifacts rather than changing their bytes. The current v1 and draft-09 v2
-commitment contracts are represented by checked-in schemas, CDDL, vectors, and
-detached-verifier fixtures under [`toolset/`](toolset/).
+read-only projections, and timestamp responses attest to already-created
+artifacts rather than changing their bytes. The active VTL profile is the
+[current profile
+on the IETF Datatracker](https://datatracker.ietf.org/doc/draft-elkhatabi-verifiable-telemetry-ledgers/),
+an externally published Independent Submission Internet-Draft identified
+in-band by profile UUID `c08ade4e-1785-4eb6-9648-b7003d76288d`. The profile
+document is not carried in this repository; its CDDL, schemas, and
+known-answer vectors live under [`toolset/`](toolset/). Older commitment
+contracts and vectors are outside the current conformance surface.
 
 ## Requirements
 
@@ -67,31 +72,29 @@ cargo build --workspace --release --locked
 
 ## Evidence application
 
-`trackone-evidence` is the supported v2 verifier and deterministic compactor.
-Verify a directory bundle with:
+`trackone-evidence` is the supported VTL verifier and deterministic compactor.
+It accepts only the version-one producer-manifest slate and emits only the
+unversioned verifier-result slate. Verify a directory bundle with:
 
 ```bash
 cargo run --locked -p trackone-evidence -- verify \
-  --root toolset/vectors/verifiable-telemetry-canonical-cbor-v2/fixtures/corrected-epoch-class-a \
-  --tsa-ca-file toolset/vectors/verifiable-telemetry-canonical-cbor-v2/trust/tsa-root.pem \
-  --tsa-crls-file toolset/vectors/verifiable-telemetry-canonical-cbor-v2/trust/tsa-crls.pem \
+  --root BUNDLE \
+  --tsa-ca-file tsa-root.pem \
+  --tsa-crls-file tsa-crls.pem \
   --tsa-policy 1.3.6.1.4.1.55555.1 \
-  --tsa-signer-cert-sha256 14ab98cafe09d9d1d01562af42d69a904b01023d9cd5b03bd07e5779710c8014
+  --tsa-signer-cert-sha256 HEX
 ```
 
-Use `--json` for machine-readable summaries. `compact` emits the active
-manifest-v3 gzip carrier, and `verify --archive FILE` verifies that carrier.
-Manifest v2 remains read-only input for the same v2 commitment profile, and
-the v1 commitment contract remains covered by its schemas and conformance
-vectors. The legacy v1 verifier/export CLI and the old
-`verify-v2`/`compact-v2` command names are intentionally not part of the
-supported application surface.
+Use `--json` for machine-readable results. `compact` emits a deterministic
+gzip-compressed tar carrier, and `verify --archive FILE` verifies that carrier.
+Pre-slate manifest v2/v3 inputs and the former versioned command/module names
+are intentionally unsupported.
 
 ## Gateway service
 
-`trackone-gateway-svc` owns the draft-09 v2 HTTP runtime, PostgreSQL state,
+`trackone-gateway-svc` owns the VTL HTTP runtime, PostgreSQL state,
 migrations, elapsed-time producer, idempotency handling, and RFC 3161
-submission. The binary is `trackone-v2-gateway`.
+submission. The binary is `trackone-vtl-gateway`.
 
 Required environment variables:
 
@@ -120,7 +123,7 @@ development-only value `TRACKONE_POSTGRES_TLS_MODE=disable`.
 Run the service after supplying those values:
 
 ```bash
-cargo run --locked -p trackone-gateway-svc --bin trackone-v2-gateway
+cargo run --locked -p trackone-gateway-svc --bin trackone-vtl-gateway
 ```
 
 The HTTP surface is intentionally small:
@@ -133,19 +136,16 @@ The HTTP surface is intentionally small:
   record byte strings, optionally with `Content-Encoding: gzip`, and requires
   the same bearer authentication. `/healthz` remains unauthenticated.
 
-Evidence manifest v3 and `trackone-evidence compact` provide deterministic
-`application/vnd.trackone.evidence-bundle.v3+gzip` carriers with packed Class
-A records. `verify --archive` applies the same v2 verification after
-bounded safe extraction; manifest v2 remains readable. Manifest v3 carries
-only verification-critical discovery references and producer
-`present`/`pending` claims. Verifier-authored result v2 reports scoped
-success, partial, or failure without duplicating TSA diagnostics or
-`segment_root`.
+The version-one producer manifest references exact record artifacts by aligned
+batch opening. `trackone-evidence compact` preserves those referenced bytes in
+a deterministic carrier, and `verify --archive` applies the same bounded VTL
+verification after extraction. The unversioned verifier result reports the
+claimed disclosure class, executed scope, chain state, TSA outcome, policy
+identity, and any profile-defined failure categories.
 
-The service's Dockerfile, migrations, and sole runtime deployment surface
-(the Helm chart) are owned by
+The service's Dockerfile, migrations, and Helm runtime chart are owned by
 [`apps/trackone-gateway-svc/deploy/`](apps/trackone-gateway-svc/deploy/).
-The retained Kustomize tree renders build-check Jobs only.
+The local Kustomize tree remains limited to reusable build-check Jobs.
 
 ## Deployment
 
@@ -176,7 +176,9 @@ remain under [`deploy/docker/`](deploy/docker/).
 ## Contract and conformance tooling
 
 - [`toolset/unified/`](toolset/unified/) contains canonical schemas and CDDL.
-- [`toolset/vectors/`](toolset/vectors/) contains v1, v2, and negative fixtures.
+- [`toolset/vectors/`](toolset/vectors/) contains the explicitly named current
+  known-answer and interoperability vectors reproduced directly by the ledger
+  test suite.
 - [`toolset/anchoring/`](toolset/anchoring/) contains anchor-evidence state and
   receipt checks.
 - [`toolset/independent-verifier/`](toolset/independent-verifier/) builds and

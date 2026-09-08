@@ -1,6 +1,6 @@
 # ADR-063: V2-preserving payload minimization and compact bundle envelopes
 
-**Status:** Accepted
+**Status:** Superseded by [ADR-064](ADR-064-vtl-versioning-reset.md)
 
 ## Context
 

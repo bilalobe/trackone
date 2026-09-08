@@ -15,3 +15,9 @@ target/
 # Python tooling
 __pycache__/
 *.py[cod]
+
+# Generated Internet-Draft source and renderings
+docs/draft-*
+
+# Local working notes for unreleased profile revisions
+docs/vtl-resource-measurement-plan.md

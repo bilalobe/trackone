@@ -86,6 +86,7 @@ security decisions remain in force unless an ADR explicitly supersedes them.
 - [ADR-061: Library, Application, and Binding Package Boundaries](ADR-061-library-application-and-binding-package-boundaries.md)
 - [ADR-062: RFC 5816 Signer-Certificate Binding](ADR-062-rfc5816-signer-certificate-binding.md)
 - [ADR-063: V2-preserving Payload Minimization and Compact Bundle Envelopes](ADR-063-v2-preserving-payload-minimization-and-compact-bundle-envelopes.md)
+- [ADR-064: VTL Versioning Reset and Scoped Archive Claims](ADR-064-vtl-versioning-reset.md)
 
 ## Index Conventions
 
@@ -395,8 +396,8 @@ Entries list **Status** and **Summary**. Related references are grouped under **
   **Summary**: Draft an informational RFC to document TrackOne’s ledger model, dual anchoring, and canonical schemas for broader review and collaboration.
 
 - **[ADR-033](ADR-033-virtual-fleet-verifiable-telemetry.md): Virtual Fleet for Verifiable Telemetry and End-to-End Validation**
-  **Status**: Proposed
-  **Summary**: Introduce a deterministic virtual fleet and scenario runner to validate ingestion → ledger → anchoring behavior without physical hardware.
+  **Status**: Rejected
+  **Summary**: The proposed virtual fleet remains a possible test-fixture idea, but is not adopted as a first-class runtime component; future simulator work should be documented as an implementation-specific test decision.
 
 - **[ADR-040](ADR-040-commitment-test-vectors-and-conformance-gates.md): Commitment test vectors and conformance gates**
   **Status**: Proposed
@@ -435,8 +436,12 @@ Entries list **Status** and **Summary**. Related references are grouped under **
   **Summary**: Anchors exact verified main-CI conformance subjects, exact-pins and sanity-tests the open JSON/header OTS candidates, advances monotonic public-header-quorum receipts without claiming full Bitcoin consensus, and publishes immutable receipt revisions to GHCR.
 
 - **[ADR-061](ADR-061-full-draft-08-v2-conformance-and-archive-v3.md): Full Draft-08 V2 Conformance and Conformance Archive V3**
-  **Status**: Accepted, 2026-07-14
-  **Summary**: Moves current conformance subjects to archive v3, requires the full draft-08 v2 producer, disclosure, RFC 3161, refusal, and offline-resolution claim set, and defines the limits of the full-conformance assertion.
+  **Status**: Superseded by ADR-064
+  **Summary**: Historical archive-v3 and draft-08 claim boundary, retained only for previously published subjects.
+
+- **[ADR-064](ADR-064-vtl-versioning-reset.md): VTL Versioning Reset and Scoped Archive Claims**
+  **Status**: Accepted, 2026-08-27
+  **Summary**: Defines the current VTL compatibility line, resets segment and producer-manifest schemas to version one, keeps verifier results unversioned, adopts self-explanatory module names, and narrows archive claims to mechanically replayed checks.
 
 ### Future Roadmap
 
@@ -459,7 +464,7 @@ Entries list **Status** and **Summary**. Related references are grouped under **
 **Calendar & Trust**: [ADR-014](ADR-014-stationary-ots-calendar.md) \<- [ADR-020](ADR-020-stationary-ots-calendar-followup.md), [ADR-022](ADR-022-first-party-stationary-ots-calendar-service.md); [ADR-019](ADR-019-rust-gateway-chain-of-trust.md) \<- [ADR-024](ADR-024-anti-replay-and-ots-backed-ledger.md), [ADR-025](ADR-025-adaptive-uplink-cadence-over-lora.md), [ADR-026](ADR-026-ota-firmware-updates-over-lora.md)
 **Ledger & Anti-Replay**: [ADR-024](ADR-024-anti-replay-and-ots-backed-ledger.md) \<- [ADR-002](ADR-002-telemetry-framing-and-replay-policy.md), [ADR-003](ADR-003-merkle-canonicalization-and-ots-anchoring.md), [ADR-006](ADR-006-forward-only-schema-and-salt8.md), [ADR-025](ADR-025-adaptive-uplink-cadence-over-lora.md), [ADR-026](ADR-026-ota-firmware-updates-over-lora.md), [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md), [ADR-041](ADR-041-verification-disclosure-bundles-and-privacy-tiers.md), [ADR-058](ADR-058-admission-state-and-rejection-audit-contract.md)
 **Firmware Runtime & Recovery**: [ADR-042](ADR-042-hardware-watchdog-and-liveness-registry.md) \<- [ADR-021](ADR-021-safety-net-ots-pipeline-verification.md), [ADR-024](ADR-024-anti-replay-and-ots-backed-ledger.md)
-**Conformance & Interop**: [ADR-032](ADR-032-informational-rfc-verifiable-telemetry-ledger.md) \<- [ADR-039](ADR-039-cbor-first-commitment-profile-and-artifact-authority.md), [ADR-040](ADR-040-commitment-test-vectors-and-conformance-gates.md), [ADR-041](ADR-041-verification-disclosure-bundles-and-privacy-tiers.md), [ADR-043](ADR-043-phased-bundle-manifest-maturity-for-id.md), [ADR-052](ADR-052-commitment-profile-identifier-binding-boundary.md), [ADR-055](ADR-055-independent-verifier-negative-fixture-corpus.md), [ADR-057](ADR-057-publication-channel-status-and-export-refusal-policy.md), [ADR-059](ADR-059-rust-native-conformance-archive-and-workflow-lanes.md), [ADR-061](ADR-061-full-draft-08-v2-conformance-and-archive-v3.md)
+**Conformance & Interop**: [ADR-032](ADR-032-informational-rfc-verifiable-telemetry-ledger.md) \<- [ADR-039](ADR-039-cbor-first-commitment-profile-and-artifact-authority.md), [ADR-040](ADR-040-commitment-test-vectors-and-conformance-gates.md), [ADR-041](ADR-041-verification-disclosure-bundles-and-privacy-tiers.md), [ADR-043](ADR-043-phased-bundle-manifest-maturity-for-id.md), [ADR-052](ADR-052-commitment-profile-identifier-binding-boundary.md), [ADR-055](ADR-055-independent-verifier-negative-fixture-corpus.md), [ADR-057](ADR-057-publication-channel-status-and-export-refusal-policy.md), [ADR-059](ADR-059-rust-native-conformance-archive-and-workflow-lanes.md), [ADR-061](ADR-061-full-draft-08-v2-conformance-and-archive-v3.md), [ADR-064](ADR-064-vtl-versioning-reset.md)
 **Environmental Evidence & Projections**: [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md) \<- [ADR-027](ADR-027-sensorthings-shtc3-representation.md), [ADR-028](ADR-028-sensorthings-projection-mapping.md), [ADR-029](ADR-029-env-daily-summaries-and-usecases.md)
 **Future Roadmap**: [ADR-017](ADR-017-rust-core-and-pyo3-integration.md), [ADR-036](ADR-036-post-quantum-kem.md), [ADR-037](ADR-037-signature-roles-and-verification-boundaries.md)
 **System Scope & Boundary**: [ADR-047](ADR-047-trackone-evidence-plane-within-device-lifecycle.md) \<- [ADR-024](ADR-024-anti-replay-and-ots-backed-ledger.md), [ADR-032](ADR-032-informational-rfc-verifiable-telemetry-ledger.md), [ADR-037](ADR-037-signature-roles-and-verification-boundaries.md), [ADR-039](ADR-039-cbor-first-commitment-profile-and-artifact-authority.md), [ADR-041](ADR-041-verification-disclosure-bundles-and-privacy-tiers.md), [ADR-046](ADR-046-sealed-trust-root-boundary-and-deferring-trackone-seal.md), [ADR-061](ADR-061-library-application-and-binding-package-boundaries.md)

@@ -13,12 +13,13 @@ This crate owns:
 
 - deterministic CBOR commitment encoding and JSON projection helpers
 - Merkle leaf hashing and root construction
-- block-header and day-record construction for the current commitment profile
+- block-header and segment-artifact construction for the current commitment profile
 - lowercase SHA-256 hex generation
 - `hex64` normalization and validation used by the integrity/manifest path
-- the isolated draft-09 v2 canonical-record and segment-artifact encoder,
-  strict decoder, validated epoch/successor constructors, stable invariant
-  categories, hash-sorted Merkle calculation, and embedded-batch invariants
+- the VTL canonical-record and version-one segment-artifact encoder, strict
+  decoder, validated epoch/successor constructors, stable invariant
+  categories, hash-sorted Merkle calculation, aligned batch subtrees, and
+  profile UUID binding
 
 It is the right place for reusable deterministic logic that belongs to the
 commitment contract. Under
@@ -33,17 +34,26 @@ projection and parity workflows.
 - [`trackone-ingest`](../trackone-ingest/README.md) owns framed Postcard wire
   profiles and admission helpers before facts enter commitment artifacts
 - [`trackone-gateway-svc`](../../apps/trackone-gateway-svc/README.md) composes
-  v2 commitment rules into a durable deployable service
+  VTL commitment rules into a durable deployable service
 - [`trackone-sensorthings`](../trackone-sensorthings/README.md) may use digest
   helpers for deterministic projection IDs, but those projections are not
   commitment artifacts
-- [`trackone-evidence`](../../apps/trackone-evidence/README.md) owns v2
+- [`trackone-evidence`](../../apps/trackone-evidence/README.md) owns VTL
   verification and deterministic bundle compaction
 
 This split is intentional and matches
 [`ADR-046`](../../adr/ADR-046-sealed-trust-root-boundary-and-deferring-trackone-seal.md):
 deterministic seal primitives live here, but the seal/publication workflow is
 not a separate crate yet.
+
+## Internal VTL layout
+
+The active VTL profile is deliberately split by authority inside
+`vtl`: `merkle` contains only the domain-separated commitment tree, while the
+parent module owns the profile model plus canonical artifact encoding and
+decoding. This keeps tree changes independent from the strict CBOR parser and
+creates a stable seam for later extraction when another supported consumer
+needs the profile as a standalone package.
 
 ## Boundary watchlist
 
@@ -59,20 +69,12 @@ deterministic artifact rules, it probably does not belong here.
 
 ## Conformance role
 
-The published vector corpus under
-[`toolset/vectors/verifiable-telemetry-canonical-cbor-v1/`](../../toolset/vectors/verifiable-telemetry-canonical-cbor-v1/)
-is generated against this contract, and Rust tests are expected to reproduce it
-exactly.
-
-The v2 surface is additive and does not reinterpret v1 day artifacts. It
-implements deterministic record/segment commitment primitives; elapsed-time
+The `vtl` module implements the profile identified by
+`c08ade4e-1785-4eb6-9648-b7003d76288d` and the normative
+[`vtl-known-answer`](../../toolset/vectors/vtl-known-answer/)
+vector. It owns deterministic record/segment commitment primitives; elapsed-time
 segment formation, durable publication, and timestamp-channel orchestration
 remain outside this crate.
-
-The v2 corpus includes exact corrected epoch bytes and a preserved invalid
-successor/zero-predecessor artifact. The corpus gate checks canonical
-round-trip equality and artifact digests in addition to record and Merkle
-values.
 
 ## Check
 

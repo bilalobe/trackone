@@ -142,12 +142,16 @@ jobs:
       - name: Validate provider IDs, offline references, schemas, and corpora
         run: python toolset/ci/check_contracts.py
 
+      - name: Recompute the VTL known-answer vector corpus
+        run: python toolset/ci/check_vtl_vectors.py
+
       - name: Compile release helper scripts
         run: >-
           python -m py_compile
           toolset/anchoring/anchor_evidence.py
           toolset/anchoring/ots_verifier_sanity.py
           toolset/ci/check_contracts.py
+          toolset/ci/check_vtl_vectors.py
           toolset/ci/check_workspace_boundaries.py
           toolset/independent-verifier/build_conformance_archive.py
           toolset/independent-verifier/verify_conformance_archive.py
@@ -216,8 +220,8 @@ jobs:
             --set gateway.enabled=true \
             --set-string gateway.auth.bearerToken=0123456789abcdef0123456789abcdef \
             --set-string gateway.env.tsaSignerCertSha256=14ab98cafe09d9d1d01562af42d69a904b01023d9cd5b03bd07e5779710c8014 \
-            --set-file gateway.env.tsaCaPem=toolset/vectors/verifiable-telemetry-canonical-cbor-v2/trust/tsa-root.pem \
-            --set-file gateway.env.tsaCrlsPem=toolset/vectors/verifiable-telemetry-canonical-cbor-v2/trust/tsa-crls.pem \
+            --set-file gateway.env.tsaCaPem=toolset/vectors/vtl-interoperability/tsa/test-root.pem \
+            --set-file gateway.env.tsaCrlsPem=toolset/vectors/vtl-interoperability/tsa/test-root.crl.pem \
             >"${helm_render}"
           grep -Fq 'ssl=on' "${helm_render}"
           grep -Fq 'hostnossl all all  0.0.0.0/0' "${helm_render}"

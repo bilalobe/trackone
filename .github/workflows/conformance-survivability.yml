@@ -79,10 +79,10 @@ jobs:
             fi
           else
             oras push "${ARCHIVE_OCI_REF}" \
-              --artifact-type application/vnd.trackone.conformance.archive.v3+tar \
+              --artifact-type application/vnd.trackone.conformance.archive+tar \
               --annotation org.opencontainers.image.source="https://github.com/${GITHUB_REPOSITORY}" \
               --annotation org.opencontainers.image.revision="${{ github.event.workflow_run.head_sha }}" \
-              --annotation org.opencontainers.image.title="TrackOne conformance archive v3" \
+              --annotation org.opencontainers.image.title="TrackOne conformance archive" \
               "${ARCHIVE}:application/gzip"
           fi
           oras resolve "${ARCHIVE_OCI_REF}" | tee conformance-oci-digest.txt

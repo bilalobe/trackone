@@ -7,7 +7,7 @@
 
 - [ADR-015](ADR-015-parallel-anchoring-ots-rfc3161-tsa.md): RFC 3161 parallel anchoring
 - [ADR-061](ADR-061-library-application-and-binding-package-boundaries.md): package boundaries
-- [ADR-061](ADR-061-full-draft-08-v2-conformance-and-archive-v3.md): draft-08 conformance
+- [ADR-064](ADR-064-vtl-versioning-reset.md): current VTL profile and evidence slate
 
 ## Context
 
@@ -48,9 +48,9 @@ not comprehensive long-term validation or evidence augmentation.
 
 Gateway startup requires `TRACKONE_TSA_SIGNER_CERT_SHA256` and
 `TRACKONE_TSA_CRLS_FILE`, with `TRACKONE_TSA_INTERMEDIATES_FILE` when needed.
-The v2 evidence CLI requires the corresponding CA, CRL, policy, and signer-pin
-options when a TSA response is present.
-`--allow-missing-tsa` permits absence only, not an invalid present response.
+The VTL evidence CLI requires the corresponding CA, CRL, policy, and signer-pin
+options for the mandatory TSA baseline. Pending or unavailable state produces
+a failed verification result; there is no missing-TSA bypass.
 
 The coordinated release now contains eight reusable libraries and two
 publishable applications. This supersedes ADR-061's package-count statements,

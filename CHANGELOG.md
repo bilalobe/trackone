@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Establish the current VTL profile, profile UUID
+  `c08ade4e-1785-4eb6-9648-b7003d76288d`, version-one segment and
+  producer-manifest contracts, and the unversioned verifier-result contract.
+- Replace the version-named ledger and evidence modules with self-explanatory
+  `vtl` modules; pre-slate evidence manifests are no longer accepted.
+- Align segment batching, close/recovery semantics, disclosure classes,
+  mandatory RFC 3161 verification, timestamp request nonce correlation, and
+  configured future-skew enforcement with the current profile.
+
+### Removed
+
+- Remove the former embedded-batch segment model, manifest v2/v3
+  compatibility path, alternative baseline anchor channels, and unscoped
+  current-draft conformance wording.
+
 ## [0.1.0-beta.5] - 2026-08-08
 
 ### Added

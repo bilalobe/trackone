@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Replace the version-named module with `trackone_ledger::vtl` and implement
+  the current version-one segment shape, profile UUID, aligned batch roots,
+  and canonical known-answer vector.
+
+### Removed
+
+- Remove the former embedded batch/site segment representation and its
+  compatibility-named APIs.
+
 ## [0.1.0-beta.5] - 2026-08-08
 
 ### Changed

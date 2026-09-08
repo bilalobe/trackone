@@ -18,7 +18,7 @@
 The current Internet-Draft defines:
 
 - accepted-telemetry commitment semantics;
-- authoritative canonical records and day artifacts;
+- authoritative canonical records and segment artifacts;
 - verifier-facing manifests and disclosure classes; and
 - anchor and proof validation over disclosed artifacts.
 
@@ -33,7 +33,7 @@ questions arise that are not part of the base commitment profile:
 - what exactly is the publication unit;
 - what statement payload is submitted;
 - which fields are mandatory in the published claim;
-- whether the statement is over an authoritative day artifact or an exported
+- whether the statement is over an authoritative segment artifact or an exported
   disclosure bundle;
 - what a verifier should do with SCITT state; and
 - whether SCITT publication affects local verification semantics at all.
@@ -67,7 +67,7 @@ disclosed artifacts and proof channels described there.
 SCITT state is not required to:
 
 - identify the applicable `commitment_profile_id`;
-- recompute canonical-record or day-artifact commitments;
+- recompute canonical-record or segment-artifact commitments;
 - validate OTS, RFC 3161, or peer proof channels; or
 - determine the disclosure class exercised by a bundle.
 
@@ -82,7 +82,7 @@ statement.
 
 The preferred default is:
 
-- the digest of the authoritative day artifact.
+- the digest of the authoritative segment artifact.
 
 An alternative publication unit is:
 

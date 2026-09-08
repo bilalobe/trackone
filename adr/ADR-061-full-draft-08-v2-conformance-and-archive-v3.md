@@ -1,6 +1,6 @@
 # ADR-061: Full Draft-08 V2 Conformance and Conformance Archive V3
 
-**Status**: Accepted
+**Status**: Superseded by [ADR-064](ADR-064-vtl-versioning-reset.md)
 **Date**: 2026-07-14
 
 ## Related ADRs
