@@ -21,8 +21,8 @@ use base64::engine::general_purpose::STANDARD as BASE64;
 use cms::cert::CertificateChoices;
 use cms::content_info::ContentInfo;
 use cms::signed_data::{SignedData, SignerIdentifier};
-use der::asn1::{Any, AnyRef, ObjectIdentifier, OctetString, Uint};
-use der::{DateTime, Decode, Encode, Reader, Sequence, Tag, Tagged};
+use der::asn1::{Any, AnyRef, ContextSpecific, ObjectIdentifier, OctetString, Uint};
+use der::{DateTime, Decode, Encode, Reader, Sequence, Tag, TagNumber, Tagged};
 use sha2::{Digest, Sha256};
 use x509_cert::Certificate;
 use x509_cert::crl::CertificateList;
@@ -32,6 +32,8 @@ const ID_SIGNED_DATA: ObjectIdentifier = ObjectIdentifier::new_unwrap("1.2.840.1
 const ID_CT_TST_INFO: ObjectIdentifier = ObjectIdentifier::new_unwrap("1.2.840.113549.1.9.16.1.4");
 const ID_AA_SIGNING_CERTIFICATE_V2: ObjectIdentifier =
     ObjectIdentifier::new_unwrap("1.2.840.113549.1.9.16.2.47");
+const ID_AA_SIGNING_CERTIFICATE: ObjectIdentifier =
+    ObjectIdentifier::new_unwrap("1.2.840.113549.1.9.16.2.12");
 const ID_SHA256: ObjectIdentifier = ObjectIdentifier::new_unwrap("2.16.840.1.101.3.4.2.1");
 const ID_CE_SUBJECT_KEY_IDENTIFIER: ObjectIdentifier = ObjectIdentifier::new_unwrap("2.5.29.14");
 const ID_CE_DELTA_CRL_INDICATOR: ObjectIdentifier = ObjectIdentifier::new_unwrap("2.5.29.27");
@@ -144,6 +146,39 @@ impl TimestampGenerationTime {
     /// complete signed value.
     pub fn unix_seconds(&self) -> u64 {
         self.date_time.unix_duration().as_secs()
+    }
+
+    /// Whether this signed instant is later than a Unix-epoch duration.
+    ///
+    /// `Duration` has nanosecond precision, while RFC 3161 GeneralizedTime
+    /// permits an arbitrary number of fractional decimal digits. Comparing the
+    /// digit sequences (with implicit trailing zeroes) preserves the complete
+    /// RFC 3161 value without rounding it to a coarser unit.
+    fn exceeds_unix_duration(&self, bound: Duration) -> bool {
+        match self.unix_seconds().cmp(&bound.as_secs()) {
+            std::cmp::Ordering::Greater => return true,
+            std::cmp::Ordering::Less => return false,
+            std::cmp::Ordering::Equal => {}
+        }
+
+        let Some(fraction) = &self.fractional_seconds else {
+            return false;
+        };
+        let bound_fraction = format!("{:09}", bound.subsec_nanos());
+        for index in 0..fraction.len().max(bound_fraction.len()) {
+            let signed_digit = fraction.as_bytes().get(index).copied().unwrap_or(b'0');
+            let bound_digit = bound_fraction
+                .as_bytes()
+                .get(index)
+                .copied()
+                .unwrap_or(b'0');
+            match signed_digit.cmp(&bound_digit) {
+                std::cmp::Ordering::Greater => return true,
+                std::cmp::Ordering::Less => return false,
+                std::cmp::Ordering::Equal => {}
+            }
+        }
+        false
     }
 
     fn openssl_attime_bounds(&self) -> (u64, u64) {
@@ -259,6 +294,7 @@ pub struct VerificationPolicy {
     openssl_binary: PathBuf,
     max_response_bytes: usize,
     command_timeout: Duration,
+    max_future_skew: Duration,
 }
 
 #[derive(Clone, Debug)]
@@ -296,6 +332,7 @@ impl VerificationPolicy {
             openssl_binary: PathBuf::from("openssl"),
             max_response_bytes: DEFAULT_MAX_RESPONSE_BYTES,
             command_timeout: DEFAULT_COMMAND_TIMEOUT,
+            max_future_skew: Duration::ZERO,
         })
     }
 
@@ -307,6 +344,13 @@ impl VerificationPolicy {
     pub fn with_limits(mut self, max_response_bytes: usize, command_timeout: Duration) -> Self {
         self.max_response_bytes = max_response_bytes;
         self.command_timeout = command_timeout;
+        self
+    }
+
+    /// Set the maximum amount by which `TSTInfo.genTime` may lead the local
+    /// verifier time. The default is zero future skew.
+    pub fn with_max_future_skew(mut self, max_future_skew: Duration) -> Self {
+        self.max_future_skew = max_future_skew;
         self
     }
 
@@ -327,6 +371,8 @@ pub struct VerifiedTimestamp {
     pub generation_time: TimestampGenerationTime,
     pub accuracy: Option<TimestampAccuracy>,
     pub signer_certificate_sha256: SignerCertificateSha256,
+    /// Canonical unsigned nonce magnitude, when the response carries one.
+    pub nonce: Option<Vec<u8>>,
 }
 
 #[derive(Debug)]
@@ -455,6 +501,7 @@ struct CandidateTimestampFields {
     serial_number: TimestampSerialNumber,
     claimed_generation_time: TimestampGenerationTime,
     accuracy: Option<TimestampAccuracy>,
+    nonce: Option<Vec<u8>>,
     signer_certificate_der: Vec<u8>,
     signer_certificate_sha256: SignerCertificateSha256,
 }
@@ -475,6 +522,20 @@ pub fn verify_response(
     // signature. The claimed time is used only to configure historical path
     // evaluation of the same selected signer certificate.
     let candidate = extract_candidate_fields(response_der)?;
+    let now = SystemTime::now().duration_since(UNIX_EPOCH).map_err(|_| {
+        VerificationError::Configuration("local time is before the Unix epoch".into())
+    })?;
+    let latest = now.checked_add(policy.max_future_skew).ok_or_else(|| {
+        VerificationError::Configuration("future-skew bound overflows time".into())
+    })?;
+    if candidate
+        .claimed_generation_time
+        .exceeds_unix_duration(latest)
+    {
+        return Err(VerificationError::Profile(
+            "TSTInfo genTime exceeds the configured maximum future skew".into(),
+        ));
+    }
     verify_status_and_profile(&candidate, expected_artifact_sha256, policy)?;
 
     let temporary = create_temporary_directory()?;
@@ -581,44 +642,49 @@ fn extract_candidate_fields(
         .ok_or_else(|| VerificationError::Malformed("TSTInfo content is missing".into()))?;
     let tst_octets: OctetString = tst_content.decode_as().map_err(malformed)?;
     let tst_info = AnyRef::from_der(tst_octets.as_bytes()).map_err(malformed)?;
-    let (policy_oid, message_imprint, serial_number, claimed_generation_time, accuracy) = tst_info
-        .sequence(|reader| -> der::Result<_> {
-            let version: u8 = reader.decode()?;
-            if version != 1 {
-                return Err(Tag::Integer.value_error().into());
-            }
-            let policy_oid: ObjectIdentifier = reader.decode()?;
-            let message_imprint: MessageImprint = reader.decode()?;
-            let serial_number: Uint = reader.decode()?;
-            let claimed_generation_time: AnyRef<'_> = reader.decode()?;
-            let accuracy = if !reader.is_finished() && Tag::peek(reader)? == Tag::Sequence {
-                Some(reader.decode::<AccuracyAsn1>()?)
-            } else {
-                None
-            };
-            if !reader.is_finished() && Tag::peek(reader)? == Tag::Boolean {
-                let _: bool = reader.decode()?;
-            }
-            if !reader.is_finished() && Tag::peek(reader)? == Tag::Integer {
-                let _: Uint = reader.decode()?;
-            }
-            let mut trailing_fields = 0;
-            while !reader.is_finished() {
-                let _: AnyRef<'_> = reader.decode()?;
-                trailing_fields += 1;
-                if trailing_fields > 2 {
-                    return Err(Tag::Sequence.value_error().into());
+    let (policy_oid, message_imprint, serial_number, claimed_generation_time, accuracy, nonce) =
+        tst_info
+            .sequence(|reader| -> der::Result<_> {
+                let version: u8 = reader.decode()?;
+                if version != 1 {
+                    return Err(Tag::Integer.value_error().into());
                 }
-            }
-            Ok((
-                policy_oid,
-                message_imprint,
-                serial_number,
-                claimed_generation_time,
-                accuracy,
-            ))
-        })
-        .map_err(malformed)?;
+                let policy_oid: ObjectIdentifier = reader.decode()?;
+                let message_imprint: MessageImprint = reader.decode()?;
+                let serial_number: Uint = reader.decode()?;
+                let claimed_generation_time: AnyRef<'_> = reader.decode()?;
+                let accuracy = if !reader.is_finished() && Tag::peek(reader)? == Tag::Sequence {
+                    Some(reader.decode::<AccuracyAsn1>()?)
+                } else {
+                    None
+                };
+                if !reader.is_finished() && Tag::peek(reader)? == Tag::Boolean {
+                    let _: bool = reader.decode()?;
+                }
+                let nonce = if !reader.is_finished() && Tag::peek(reader)? == Tag::Integer {
+                    let value: Uint = reader.decode()?;
+                    Some(value.as_bytes().to_vec())
+                } else {
+                    None
+                };
+                let mut trailing_fields = 0;
+                while !reader.is_finished() {
+                    let _: AnyRef<'_> = reader.decode()?;
+                    trailing_fields += 1;
+                    if trailing_fields > 2 {
+                        return Err(Tag::Sequence.value_error().into());
+                    }
+                }
+                Ok((
+                    policy_oid,
+                    message_imprint,
+                    serial_number,
+                    claimed_generation_time,
+                    accuracy,
+                    nonce,
+                ))
+            })
+            .map_err(malformed)?;
 
     let serial_number = TimestampSerialNumber::new(serial_number)?;
     let claimed_generation_time =
@@ -644,6 +710,7 @@ fn extract_candidate_fields(
         serial_number,
         claimed_generation_time,
         accuracy,
+        nonce,
         signer_certificate_der,
         signer_certificate_sha256,
     })
@@ -902,6 +969,15 @@ fn inspect_verified_response(
             "signed-attribute count exceeds {MAX_SIGNED_ATTRIBUTES}"
         )));
     }
+    if signed_attributes
+        .iter()
+        .any(|attribute| attribute.oid == ID_AA_SIGNING_CERTIFICATE)
+    {
+        return Err(VerificationError::Profile(
+            "legacy SigningCertificate signed attribute is prohibited; SigningCertificateV2 is required"
+                .into(),
+        ));
+    }
     let signing_certificate_attribute = exactly_one(
         signed_attributes
             .iter()
@@ -945,7 +1021,83 @@ fn inspect_verified_response(
         generation_time: candidate.claimed_generation_time.clone(),
         accuracy: candidate.accuracy,
         signer_certificate_sha256: candidate.signer_certificate_sha256,
+        nonce: candidate.nonce.clone(),
     })
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct VerifiedTimestampRequest {
+    pub nonce: Option<Vec<u8>>,
+}
+
+/// Validate the exact DER `TimeStampReq` supporting artifact and its optional
+/// nonce correlation with a verified response.
+pub fn verify_request(
+    request_der: &[u8],
+    expected_artifact_sha256: [u8; 32],
+    response_nonce: Option<&[u8]>,
+) -> Result<VerifiedTimestampRequest, VerificationError> {
+    let request = AnyRef::from_der(request_der).map_err(malformed)?;
+    let (message_imprint, nonce, cert_req) = request
+        .sequence(|reader| -> der::Result<_> {
+            let version: u8 = reader.decode()?;
+            if version != 1 {
+                return Err(Tag::Integer.value_error().into());
+            }
+            let message_imprint: MessageImprint = reader.decode()?;
+            if !reader.is_finished() && Tag::peek(reader)? == Tag::ObjectIdentifier {
+                let _: ObjectIdentifier = reader.decode()?;
+            }
+            let nonce = if !reader.is_finished() && Tag::peek(reader)? == Tag::Integer {
+                let value: Uint = reader.decode()?;
+                Some(value.as_bytes().to_vec())
+            } else {
+                None
+            };
+            let cert_req = if !reader.is_finished() && Tag::peek(reader)? == Tag::Boolean {
+                reader.decode::<bool>()?
+            } else {
+                false
+            };
+            if !reader.is_finished() {
+                let extensions =
+                    ContextSpecific::<Vec<x509_cert::ext::Extension>>::decode_implicit(
+                        reader,
+                        TagNumber(0),
+                    )?
+                    .ok_or_else(|| {
+                        Tag::ContextSpecific {
+                            constructed: true,
+                            number: TagNumber(0),
+                        }
+                        .value_error()
+                    })?;
+                if extensions.value.is_empty() {
+                    return Err(Tag::Sequence.value_error().into());
+                }
+            }
+            if !reader.is_finished() {
+                return Err(Tag::Sequence.value_error().into());
+            }
+            Ok((message_imprint, nonce, cert_req))
+        })
+        .map_err(malformed)?;
+    if message_imprint.hash_algorithm.oid != ID_SHA256
+        || message_imprint.hashed_message.as_bytes() != expected_artifact_sha256
+    {
+        return Err(VerificationError::MessageImprintMismatch);
+    }
+    if !cert_req {
+        return Err(VerificationError::Profile(
+            "TimeStampReq certReq must be TRUE".into(),
+        ));
+    }
+    if nonce.as_deref() != response_nonce {
+        return Err(VerificationError::Profile(
+            "TimeStampReq and TimeStampResp nonces do not match".into(),
+        ));
+    }
+    Ok(VerifiedTimestampRequest { nonce })
 }
 
 fn load_certificates_from_pem(
@@ -1427,6 +1579,24 @@ mod tests {
     const FIXTURE_SIGNER: &str = "14ab98cafe09d9d1d01562af42d69a904b01023d9cd5b03bd07e5779710c8014";
     const FIXTURE_RESPONSE: &[u8] = include_bytes!("../tests/fixtures/response.tsr");
     const FIXTURE_SEGMENT: &[u8] = include_bytes!("../tests/fixtures/segment.cbor");
+    const TIMESTAMP_REQUEST_B64: &str =
+        include_str!("../../../toolset/vectors/vtl-interoperability/tsa/appendix-a-nonce.tsq.b64");
+    const TIMESTAMP_RESPONSE_B64: &str =
+        include_str!("../../../toolset/vectors/vtl-interoperability/tsa/appendix-a-nonce.tsr.b64");
+    const TIMESTAMP_ROOT_PEM: &str =
+        include_str!("../../../toolset/vectors/vtl-interoperability/tsa/test-root.pem");
+    const TIMESTAMP_CRL_PEM: &str =
+        include_str!("../../../toolset/vectors/vtl-interoperability/tsa/test-root.crl.pem");
+    const TIMESTAMP_CASES: &str =
+        include_str!("../../../toolset/vectors/vtl-interoperability/cases.json");
+    const TIMESTAMP_SIGNER: &str =
+        "d9605fad90502738f205d5742e93ba9985e6b4e69f09d7f6aa470a4783f894c5";
+
+    fn decode_base64_fixture(value: &str) -> Vec<u8> {
+        BASE64
+            .decode(value.split_whitespace().collect::<String>())
+            .unwrap()
+    }
 
     fn fixture_policy() -> VerificationPolicy {
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
@@ -1540,6 +1710,49 @@ mod tests {
         Ok(response_der)
     }
 
+    fn duplicate_signer_info(response_der: &[u8]) -> Result<Vec<u8>, VerificationError> {
+        let response = AnyRef::from_der(response_der).map_err(malformed)?;
+        let (status_der, mut content_info) = response
+            .sequence(|reader| -> der::Result<_> {
+                let status: AnyRef<'_> = reader.decode()?;
+                let content_info: ContentInfo = reader.decode()?;
+                Ok((status.to_der()?, content_info))
+            })
+            .map_err(malformed)?;
+        let mut signed_data: SignedData = content_info.content.decode_as().map_err(malformed)?;
+        let signer_info = signed_data
+            .signer_infos
+            .0
+            .as_ref()
+            .first()
+            .ok_or_else(|| VerificationError::Profile("fixture SignerInfo is missing".into()))?
+            .clone();
+        signed_data.signer_infos.0 = vec![signer_info.clone(), signer_info]
+            .try_into()
+            .map_err(malformed)?;
+        content_info.content =
+            Any::from_der(&signed_data.to_der().map_err(malformed)?).map_err(malformed)?;
+        let content_der = content_info.to_der().map_err(malformed)?;
+        let body_len = status_der
+            .len()
+            .checked_add(content_der.len())
+            .ok_or_else(|| VerificationError::Profile("fixture response is too large".into()))?;
+        let mut response_der = vec![0x30];
+        if body_len < 128 {
+            response_der.push(body_len as u8);
+        } else if body_len <= usize::from(u16::MAX) {
+            response_der.push(0x82);
+            response_der.extend_from_slice(&(body_len as u16).to_be_bytes());
+        } else {
+            return Err(VerificationError::Profile(
+                "fixture response exceeds the supported DER length".into(),
+            ));
+        }
+        response_der.extend_from_slice(&status_der);
+        response_der.extend_from_slice(&content_der);
+        Ok(response_der)
+    }
+
     #[test]
     fn signer_hash_is_canonical_lowercase_sha256() {
         let value = "ab2b1301f6fabdb26aad49d3d1e8b3ddeb31db166377cc29c7bf372d718fdc38";
@@ -1590,6 +1803,34 @@ mod tests {
                 AnyRef::from_der(&noncanonical).unwrap()
             )
             .is_err()
+        );
+    }
+
+    #[test]
+    fn timestamp_generation_time_compares_future_skew_at_fractional_precision() {
+        let whole_second = parse_generation_time("20260722224000Z")
+            .unwrap()
+            .unix_seconds();
+        let bound = Duration::new(whole_second, 100_000_000);
+        assert!(
+            !parse_generation_time("20260722224000.1Z")
+                .unwrap()
+                .exceeds_unix_duration(bound)
+        );
+        assert!(
+            parse_generation_time("20260722224000.1000000001Z")
+                .unwrap()
+                .exceeds_unix_duration(bound)
+        );
+        assert!(
+            parse_generation_time("20260722224000.9Z")
+                .unwrap()
+                .exceeds_unix_duration(bound)
+        );
+        assert!(
+            !parse_generation_time("20260722223959.999999999999999999Z")
+                .unwrap()
+                .exceeds_unix_duration(bound)
         );
     }
 
@@ -1928,10 +2169,177 @@ mod tests {
     }
 
     #[test]
+    fn machine_readable_timestamp_corpus_matches_profile() {
+        let request = decode_base64_fixture(TIMESTAMP_REQUEST_B64);
+        let response = decode_base64_fixture(TIMESTAMP_RESPONSE_B64);
+        let expected_digest = [
+            0x26, 0x72, 0xcb, 0x72, 0xd5, 0xf0, 0x68, 0x63, 0x11, 0x0a, 0xf1, 0xb3, 0x06, 0x60,
+            0xc7, 0xe5, 0xba, 0x49, 0x5c, 0x0b, 0x2c, 0xe7, 0xd0, 0x84, 0xb0, 0x43, 0x6e, 0x01,
+            0x0e, 0x99, 0x38, 0x8d,
+        ];
+        let expected_nonce = [0x2c, 0xa5, 0x43, 0x14, 0x85, 0xfe, 0x48, 0x6d];
+        assert_eq!(
+            hex_lower(&Sha256::digest(&request)),
+            "137f2e52c11fc2a9604354feec0483f4122ec1a0f24507bf99292d7c19305e6c"
+        );
+        assert_eq!(
+            hex_lower(&Sha256::digest(&response)),
+            "6789dc0bc4a7988594a845e00c354660f0d63e79e35b684e836851fbfc36837b"
+        );
+        for expected in [
+            "2672cb72d5f06863110af1b30660c7e5ba495c0b2ce7d084b0436e010e99388d",
+            "137f2e52c11fc2a9604354feec0483f4122ec1a0f24507bf99292d7c19305e6c",
+            "6789dc0bc4a7988594a845e00c354660f0d63e79e35b684e836851fbfc36837b",
+            "set_pki_status_to_granted_with_mods",
+            "duplicate_only_cms_signer_info",
+            "replace_signing_certificate_v2_oid_with_legacy_oid",
+        ] {
+            assert!(TIMESTAMP_CASES.contains(expected));
+        }
+        let root_der =
+            decode_pem_blocks(TIMESTAMP_ROOT_PEM.as_bytes(), "test root", "CERTIFICATE", 1)
+                .unwrap()
+                .remove(0);
+        assert_eq!(
+            hex_lower(&Sha256::digest(root_der)),
+            "a141a1311b6d34343026933b50d46d9ea02cb25dc6534f7cd4dcd54ac3d49254"
+        );
+        let crl_der = decode_pem_blocks(TIMESTAMP_CRL_PEM.as_bytes(), "test CRL", "X509 CRL", 1)
+            .unwrap()
+            .remove(0);
+        assert_eq!(
+            hex_lower(&Sha256::digest(crl_der)),
+            "519480d1d96f98d7e75210e3703bef988934d2d7e1c56b44f521739b47e7fb87"
+        );
+
+        let root =
+            std::env::temp_dir().join(format!("trackone-rfc3161-corpus-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        let anchors = root.join("anchors.pem");
+        let crls = root.join("crls.pem");
+        fs::write(&anchors, TIMESTAMP_ROOT_PEM).unwrap();
+        fs::write(&crls, TIMESTAMP_CRL_PEM).unwrap();
+        let policy = VerificationPolicy::new(
+            HistoricalValidationArchive {
+                trust_anchors_file: anchors,
+                intermediates_file: None,
+                crls_file: crls,
+            },
+            "1.3.6.1.4.1.55555.12",
+            TIMESTAMP_SIGNER.parse().unwrap(),
+        )
+        .unwrap()
+        .with_max_future_skew(Duration::from_secs(20 * 366 * 24 * 60 * 60));
+
+        let verified = verify_response(&response, expected_digest, &policy).unwrap();
+        assert_eq!(verified.nonce.as_deref(), Some(expected_nonce.as_slice()));
+        let verified_request =
+            verify_request(&request, expected_digest, verified.nonce.as_deref()).unwrap();
+        assert_eq!(
+            verified_request.nonce.as_deref(),
+            Some(expected_nonce.as_slice())
+        );
+
+        let mut granted_with_mods = response.clone();
+        let status = [0x30, 0x03, 0x02, 0x01, 0x00];
+        let offset = granted_with_mods
+            .windows(status.len())
+            .position(|window| window == status)
+            .unwrap();
+        granted_with_mods[offset + status.len() - 1] = 1;
+        assert!(matches!(
+            extract_candidate_fields(&granted_with_mods).and_then(|candidate| {
+                verify_status_and_profile(&candidate, expected_digest, &policy)
+            }),
+            Err(VerificationError::Status(1))
+        ));
+
+        let duplicate = duplicate_signer_info(&response).unwrap();
+        assert!(
+            extract_candidate_fields(&duplicate)
+                .unwrap_err()
+                .to_string()
+                .contains("exactly one CMS SignerInfo")
+        );
+
+        const V2_OID_DER: &[u8] = &[
+            0x06, 0x0b, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x09, 0x10, 0x02, 0x2f,
+        ];
+        let mut legacy = response;
+        let offset = legacy
+            .windows(V2_OID_DER.len())
+            .position(|window| window == V2_OID_DER)
+            .unwrap();
+        legacy[offset + V2_OID_DER.len() - 1] = 0x0c;
+        assert!(
+            inspect_verified_response(&legacy, expected_digest, &policy)
+                .unwrap_err()
+                .to_string()
+                .contains("legacy SigningCertificate")
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn oversized_response_is_rejected_before_parsing() {
         let policy = fixture_policy().with_limits(16, Duration::from_secs(1));
         let error = verify_response(FIXTURE_RESPONSE, [0; 32], &policy).unwrap_err();
         assert!(matches!(error, VerificationError::ResponseTooLarge { .. }));
+    }
+
+    fn timestamp_request(digest: [u8; 32], cert_req: bool) -> Vec<u8> {
+        let mut request = vec![
+            0x30, 0x3c, 0x02, 0x01, 0x01, 0x30, 0x31, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48,
+            0x01, 0x65, 0x03, 0x04, 0x02, 0x01, 0x05, 0x00, 0x04, 0x20,
+        ];
+        request.extend_from_slice(&digest);
+        request.extend_from_slice(&[0x02, 0x01, 0x01, 0x01, 0x01, u8::from(cert_req) * 0xff]);
+        request
+    }
+
+    #[test]
+    fn timestamp_request_binds_imprint_certreq_and_nonce() {
+        let digest = [0x42; 32];
+        let verified =
+            verify_request(&timestamp_request(digest, true), digest, Some(&[1])).unwrap();
+        assert_eq!(verified.nonce, Some(vec![1]));
+
+        assert!(matches!(
+            verify_request(&timestamp_request(digest, true), digest, Some(&[2])),
+            Err(VerificationError::Profile(message)) if message.contains("nonces do not match")
+        ));
+        assert!(matches!(
+            verify_request(&timestamp_request(digest, false), digest, Some(&[1])),
+            Err(VerificationError::Profile(message)) if message.contains("certReq")
+        ));
+        assert!(matches!(
+            verify_request(&timestamp_request(digest, true), [0; 32], Some(&[1])),
+            Err(VerificationError::MessageImprintMismatch)
+        ));
+    }
+
+    #[test]
+    fn timestamp_request_rejects_malformed_extensions_field() {
+        let digest = [0x42; 32];
+        let mut request = timestamp_request(digest, true);
+        request[1] += 2;
+        request.extend_from_slice(&[0x05, 0x00]);
+
+        assert!(matches!(
+            verify_request(&request, digest, Some(&[1])),
+            Err(VerificationError::Malformed(_))
+        ));
+    }
+
+    #[test]
+    fn timestamp_request_accepts_well_formed_extensions_field() {
+        let digest = [0x42; 32];
+        let mut request = timestamp_request(digest, true);
+        request[1] += 10;
+        request.extend_from_slice(&[0xa0, 0x08, 0x30, 0x06, 0x06, 0x02, 0x2a, 0x03, 0x04, 0x00]);
+
+        verify_request(&request, digest, Some(&[1])).unwrap();
     }
 
     #[cfg(unix)]

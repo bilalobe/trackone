@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Validate disclosed RFC 3161 requests, including SHA-256 message imprint,
+  `certReq`, and request/response nonce equality.
+- Reject `genTime` values beyond a deployment-configured maximum future skew.
+
 ## [0.1.0-beta.5] - 2026-08-08
 
 - Migrate CMS parsing and certificate handling to `cms 0.3.0-pre.2`, DER
