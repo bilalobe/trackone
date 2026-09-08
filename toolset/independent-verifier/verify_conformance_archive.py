@@ -18,14 +18,14 @@ from typing import Any, Iterator
 from urllib.parse import urldefrag
 
 
-ARCHIVE_SCHEMA = "trackone-conformance-archive-v3"
-ARTIFACT_TYPE = "application/vnd.trackone.conformance.archive.v3+tar"
+ARCHIVE_SCHEMA = "trackone-conformance-archive"
+ARTIFACT_TYPE = "application/vnd.trackone.conformance.archive+tar"
 PROVIDER = (
     "https://raw.githubusercontent.com/bilalobe/trackone/"
     "main/toolset/unified/schemas/"
 )
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
-V2_VECTOR_SCHEMA = "trackone-v2-vector-manifest-2"
+VTL_KNOWN_ANSWER_VECTORS = "vtl-known-answer"
 
 
 class VerifyError(RuntimeError):
@@ -33,7 +33,7 @@ class VerifyError(RuntimeError):
 
 
 class CborDecoder:
-    """Decoder for the deterministic JSON/CBOR subset used by v1 vectors."""
+    """Decoder for the deterministic CBOR subset used by the VTL vector."""
 
     def __init__(self, data: bytes):
         self.data = data
@@ -98,11 +98,11 @@ class CborDecoder:
             key = self.item()
             encoded = self.data[start : self.offset]
             if not isinstance(key, str):
-                raise VerifyError("v1 CBOR map key is not text")
+                raise VerifyError("CBOR map key is not text")
             if previous is not None and (len(previous), previous) >= (len(encoded), encoded):
-                raise VerifyError("v1 CBOR map keys are not in deterministic order")
+                raise VerifyError("CBOR map keys are not in deterministic order")
             if key in result:
-                raise VerifyError(f"duplicate v1 CBOR map key: {key}")
+                raise VerifyError(f"duplicate CBOR map key: {key}")
             previous = encoded
             result[key] = self.item()
         return result
@@ -254,206 +254,180 @@ def verify_schema_catalog(root: Path, manifest: dict[str, Any]) -> int:
     return len(schemas)
 
 
-def v1_merkle(hashes: list[str]) -> str:
-    if not hashes:
-        return hashlib.sha256(b"").hexdigest()
-    layer = sorted(bytes.fromhex(item) for item in hashes)
-    while len(layer) > 1:
-        if len(layer) % 2:
-            layer.append(layer[-1])
-        layer = [
-            hashlib.sha256(layer[index] + layer[index + 1]).digest()
-            for index in range(0, len(layer), 2)
-        ]
-    return layer[0].hex()
-
-
-def verify_v1_vectors(vector_root: Path) -> int:
-    manifest = read_json(vector_root / "manifest.json")
-    if manifest.get("commitment_profile_id") != "verifiable-telemetry-canonical-cbor-v1":
-        raise VerifyError("v1 commitment profile mismatch")
-    hashes: list[str] = []
-    for item in manifest.get("facts", []):
-        cbor_path = portable(vector_root, item.get("cbor_path"), "v1 fact CBOR")
-        json_path = portable(vector_root, item.get("json_path"), "v1 fact JSON")
-        digest = sha256(cbor_path)
-        if digest != item.get("cbor_sha256"):
-            raise VerifyError(f"v1 fact digest mismatch: {cbor_path.name}")
-        decoded = CborDecoder(cbor_path.read_bytes()).decode()
-        if decoded != read_json(json_path):
-            raise VerifyError(f"v1 CBOR/JSON projection mismatch: {cbor_path.name}")
-        hashes.append(digest)
-    if not hashes or sorted(hashes) != manifest.get("leaf_hashes"):
-        raise VerifyError("v1 leaf hash set mismatch")
-    if v1_merkle(hashes) != manifest.get("merkle_root"):
-        raise VerifyError("v1 Merkle root mismatch")
-    day_path = portable(vector_root, manifest.get("day_record_cbor_path"), "v1 day CBOR")
-    if sha256(day_path) != manifest.get("day_cbor_sha256"):
-        raise VerifyError("v1 day CBOR digest mismatch")
-    day_json = portable(vector_root, manifest.get("day_record_json_path"), "v1 day JSON")
-    if CborDecoder(day_path.read_bytes()).decode() != read_json(day_json):
-        raise VerifyError("v1 day CBOR/JSON projection mismatch")
-    return len(hashes)
-
-
-def v2_tree(leaves: list[bytes]) -> bytes:
+def vtl_tree(leaves: list[bytes]) -> bytes:
     if not leaves:
         return hashlib.sha256(b"").digest()
     if len(leaves) == 1:
         return leaves[0]
     split = 1 << ((len(leaves) - 1).bit_length() - 1)
-    return hashlib.sha256(b"\x01" + v2_tree(leaves[:split]) + v2_tree(leaves[split:])).digest()
+    return hashlib.sha256(
+        b"\x01" + vtl_tree(leaves[:split]) + vtl_tree(leaves[split:])
+    ).digest()
 
 
-def verify_v2_vectors(vector_root: Path) -> int:
-    manifest = read_json(vector_root / "manifest.json")
-    if manifest.get("schema") != V2_VECTOR_SCHEMA:
-        raise VerifyError("v2 vector schema token mismatch")
-    if manifest.get("commitment_profile_id") != "verifiable-telemetry-canonical-cbor-v2":
-        raise VerifyError("v2 commitment profile mismatch")
-    leaves: list[bytes] = []
-    for index, record in enumerate(manifest.get("records", [])):
+def verify_vtl_known_answer(vector_root: Path) -> dict[str, Any]:
+    vector = read_json(vector_root / "vector.json")
+    profile = "c08ade4e-1785-4eb6-9648-b7003d76288d"
+    if vector.get("commitment_profile_id") != profile:
+        raise VerifyError("VTL known-answer profile UUID mismatch")
+    try:
+        records = [bytes.fromhex(item) for item in vector["records_cbor_hex"]]
+        segment_bytes = bytes.fromhex(vector["segment_cbor_hex"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise VerifyError("VTL known-answer vector contains invalid hexadecimal") from exc
+    leaves = sorted(hashlib.sha256(b"\x00" + record).digest() for record in records)
+    segment_root = vtl_tree(leaves)
+    if segment_root.hex() != vector.get("segment_root"):
+        raise VerifyError("VTL known-answer segment root mismatch")
+    batch_limit = vector.get("batch_record_limit")
+    if not isinstance(batch_limit, int) or batch_limit <= 0:
+        raise VerifyError("VTL known-answer batch limit is invalid")
+    batch_roots = [
+        vtl_tree(leaves[index : index + batch_limit])
+        for index in range(0, len(leaves), batch_limit)
+    ]
+    if [item.hex() for item in batch_roots] != vector.get("batch_roots"):
+        raise VerifyError("VTL known-answer batch roots mismatch")
+    if vtl_tree(batch_roots) != segment_root:
+        raise VerifyError("VTL aligned batch composition mismatch")
+    if len(segment_bytes) != vector.get("segment_cbor_length"):
+        raise VerifyError("VTL segment length mismatch")
+    if hashlib.sha256(segment_bytes).hexdigest() != vector.get("segment_cbor_sha256"):
+        raise VerifyError("VTL segment digest mismatch")
+    segment = CborDecoder(segment_bytes).decode()
+    if not isinstance(segment, dict) or segment.get("version") != 1:
+        raise VerifyError("VTL segment version mismatch")
+    if segment.get("commitment_profile_id") != profile:
+        raise VerifyError("VTL segment profile UUID mismatch")
+    if segment.get("record_count") != len(records):
+        raise VerifyError("VTL segment record count mismatch")
+    if segment.get("segment_root") != segment_root:
+        raise VerifyError("VTL segment root field mismatch")
+    if segment.get("batch_roots") != batch_roots:
+        raise VerifyError("VTL segment batch roots field mismatch")
+    if [item.hex() for item in leaves] != vector.get("sorted_leaf_hashes"):
+        raise VerifyError("VTL known-answer sorted leaf hashes mismatch")
+    verify_vtl_distinct_encodings(vector)
+    verify_vtl_duplicate_roots(vector)
+    verify_vtl_empty_successor(vector, segment_bytes, profile)
+    return {"records": len(records), "segment_sha256": hashlib.sha256(segment_bytes).hexdigest()}
+
+
+def verify_vtl_distinct_encodings(vector: dict[str, Any]) -> None:
+    """Integer 1, float 1.0, and both floating-point zeros stay distinguishable."""
+    cases = vector.get("distinct_encoding_cases")
+    if not isinstance(cases, list) or len(cases) != 4:
+        raise VerifyError("VTL distinct-encoding cases are missing or malformed")
+    seen: dict[str, str] = {}
+    for case in cases:
         try:
-            cbor = bytes.fromhex(record["cbor_hex"])
-        except (KeyError, ValueError) as exc:
-            raise VerifyError(f"invalid v2 CBOR hex at record {index}") from exc
-        leaf = hashlib.sha256(b"\x00" + cbor).digest()
-        if leaf.hex() != record.get("leaf_sha256"):
-            raise VerifyError(f"v2 leaf digest mismatch at record {index}")
-        leaves.append(leaf)
-    if not leaves:
-        raise VerifyError("v2 vector set is empty")
-    leaves.sort()
-    if v2_tree(leaves).hex() != manifest.get("segment_root"):
-        raise VerifyError("v2 segment root mismatch")
-    return len(leaves)
+            record = bytes.fromhex(case["record_cbor_hex"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise VerifyError("VTL distinct-encoding case has invalid hexadecimal") from exc
+        digest = hashlib.sha256(b"\x00" + record).hexdigest()
+        if digest != case.get("leaf_hash"):
+            raise VerifyError(f"VTL distinct-encoding leaf mismatch for {case.get('name')}")
+        if digest in seen:
+            raise VerifyError(
+                f"VTL distinct-encoding collision between {seen[digest]} and {case.get('name')}"
+            )
+        seen[digest] = str(case.get("name"))
 
 
-def verify_v2_bundles(vector_root: Path, binary: Path) -> tuple[int, int]:
-    cases = read_json(vector_root / "cases.json")
-    if cases.get("schema") != "trackone-v2-bundle-cases-1":
-        raise VerifyError("v2 bundle case schema token mismatch")
-    count = 0
-    rejected = 0
-    for case in cases.get("cases", []):
-        fixture = portable(
-            vector_root,
-            case.get("path"),
-            f"v2 bundle {case.get('id')}",
-            directory=True,
+def verify_vtl_duplicate_roots(vector: dict[str, Any]) -> None:
+    """Repeated occurrences of one record commit to a multiset, not a set."""
+    duplicates = vector.get("duplicate_occurrence_roots")
+    if not isinstance(duplicates, dict):
+        raise VerifyError("VTL duplicate-occurrence roots are missing")
+    try:
+        record = bytes.fromhex(duplicates["record_cbor_hex"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise VerifyError("VTL duplicate-occurrence record is invalid hexadecimal") from exc
+    leaf = hashlib.sha256(b"\x00" + record).digest()
+    for count, key in ((3, "three_identical_record_1_root"), (4, "four_identical_record_1_root")):
+        if vtl_tree(sorted([leaf] * count)).hex() != duplicates.get(key):
+            raise VerifyError(f"VTL duplicate-occurrence root mismatch for {key}")
+
+
+def verify_vtl_empty_successor(
+    vector: dict[str, Any], predecessor_bytes: bytes, profile: str
+) -> None:
+    """The empty shutdown artifact retains empty_mode suppress and chains correctly."""
+    empty = vector.get("empty_shutdown_suppress")
+    if not isinstance(empty, dict):
+        raise VerifyError("VTL empty shutdown successor is missing")
+    try:
+        empty_bytes = bytes.fromhex(empty["segment_cbor_hex"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise VerifyError("VTL empty successor contains invalid hexadecimal") from exc
+    if len(empty_bytes) != empty.get("segment_cbor_length"):
+        raise VerifyError("VTL empty successor length mismatch")
+    if hashlib.sha256(empty_bytes).hexdigest() != empty.get("segment_cbor_sha256"):
+        raise VerifyError("VTL empty successor digest mismatch")
+    decoded = CborDecoder(empty_bytes).decode()
+    if not isinstance(decoded, dict):
+        raise VerifyError("VTL empty successor is not a CBOR map")
+    if decoded.get("commitment_profile_id") != profile:
+        raise VerifyError("VTL empty successor profile UUID mismatch")
+    if decoded.get("record_count") != 0 or decoded.get("batch_roots") != []:
+        raise VerifyError("VTL empty successor is not empty")
+    if decoded.get("segment_root") != hashlib.sha256(b"").digest():
+        raise VerifyError("VTL empty successor root is not SHA-256 over zero octets")
+    if decoded.get("close_reason") != "shutdown":
+        raise VerifyError("VTL empty successor close reason mismatch")
+    policy = decoded.get("closure_policy")
+    if not isinstance(policy, dict) or policy.get("empty_mode") != "suppress":
+        raise VerifyError("VTL empty successor did not retain empty_mode suppress")
+    if decoded.get("prev_segment_sha256") != hashlib.sha256(predecessor_bytes).digest():
+        raise VerifyError("VTL empty successor does not chain to the compact segment")
+
+
+def verify_vtl_evidence_slate(vector_root: Path, binary: Path) -> int:
+    vector = read_json(vector_root / "vector.json")
+    segment = bytes.fromhex(vector["segment_cbor_hex"])
+    with tempfile.TemporaryDirectory(prefix="trackone-vtl-slate-") as temporary:
+        root = Path(temporary)
+        (root / "segment.cbor").write_bytes(segment)
+        manifest = {
+            "version": 1,
+            "ledger_id": "b7a1d5e40c6f438e9a75db27c96f31aa",
+            "segment_number": "0",
+            "commitment_profile_id": vector["commitment_profile_id"],
+            "disclosure_class": "C",
+            "artifacts": {
+                "segment_cbor": {
+                    "path": "segment.cbor",
+                    "sha256": hashlib.sha256(segment).hexdigest(),
+                }
+            },
+            "anchoring": {"tsa": {"status": "unavailable"}},
+        }
+        (root / "segment.verify.json").write_text(
+            json.dumps(manifest, separators=(",", ":")), encoding="utf-8"
         )
-        command = [str(binary), "verify", "--root", str(fixture), "--json"]
-        if case.get("tsa_ca_file"):
-            ca_file = portable(vector_root, case["tsa_ca_file"], "v2 TSA trust anchor")
-            command.extend(["--tsa-ca-file", str(ca_file)])
-        if case.get("tsa_intermediates_file"):
-            intermediates_file = portable(
-                vector_root, case["tsa_intermediates_file"], "v2 TSA intermediates"
-            )
-            command.extend(["--tsa-intermediates-file", str(intermediates_file)])
-        if case.get("tsa_crls_file"):
-            crls_file = portable(vector_root, case["tsa_crls_file"], "v2 TSA CRLs")
-            command.extend(["--tsa-crls-file", str(crls_file)])
-        if case.get("tsa_policy_oid"):
-            command.extend(["--tsa-policy", case["tsa_policy_oid"]])
-        if case.get("tsa_signer_cert_sha256"):
-            command.extend(
-                ["--tsa-signer-cert-sha256", case["tsa_signer_cert_sha256"]]
-            )
         completed = subprocess.run(
-            command,
+            [str(binary), "verify", "--root", str(root), "--json"],
             text=True,
             capture_output=True,
             timeout=60,
             check=False,
         )
-        succeeded = completed.returncode == 0
-        if succeeded != case.get("expect_success"):
-            raise VerifyError(
-                f"v2 bundle {case.get('id')} exit mismatch: {completed.returncode}\n"
-                f"{completed.stdout}{completed.stderr}"
-            )
-        if succeeded:
-            expected = read_json(portable(fixture, case.get("expected_result"), "v2 expected result"))
-            try:
-                actual = json.loads(completed.stdout)
-            except json.JSONDecodeError as exc:
-                raise VerifyError(f"v2 bundle {case.get('id')} emitted invalid JSON") from exc
-            if actual != expected:
-                raise VerifyError(f"v2 bundle {case.get('id')} result drifted")
-            if count == 0:
-                with tempfile.TemporaryDirectory(prefix="trackone-compact-") as temp:
-                    archive = Path(temp) / "bundle.v3.tar.gz"
-                    policy_args = command[5:]
-                    compact = subprocess.run(
-                        [
-                            str(binary),
-                            "compact",
-                            "--root",
-                            str(fixture),
-                            "--output",
-                            str(archive),
-                            *policy_args,
-                        ],
-                        text=True,
-                        capture_output=True,
-                        timeout=60,
-                        check=False,
-                    )
-                    if compact.returncode != 0:
-                        raise VerifyError(
-                            f"v2 compact creation failed:\n{compact.stdout}{compact.stderr}"
-                        )
-                    with tarfile.open(archive, mode="r:gz") as compact_tar:
-                        manifest_member = compact_tar.extractfile("segment.verify.json")
-                        if manifest_member is None:
-                            raise VerifyError("v2 compact archive has no manifest")
-                        compact_manifest = json.load(manifest_member)
-                    if (
-                        compact_manifest.get("version") != 3
-                        or "records_pack"
-                        not in compact_manifest.get("artifacts", {})
-                    ):
-                        raise VerifyError(
-                            "v2 compact archive is not an active packed manifest-v3 envelope"
-                        )
-                    replay = subprocess.run(
-                        [
-                            str(binary),
-                            "verify",
-                            "--archive",
-                            str(archive),
-                            "--json",
-                            *policy_args,
-                        ],
-                        text=True,
-                        capture_output=True,
-                        timeout=60,
-                        check=False,
-                    )
-                    if replay.returncode != 0:
-                        raise VerifyError(
-                            f"v2 compact archive replay failed:\n{replay.stdout}{replay.stderr}"
-                        )
-                    compact_result = json.loads(replay.stdout)
-                    if (
-                        compact_result.get("version") != 2
-                        or compact_result.get("overall") != "success"
-                    ):
-                        raise VerifyError(
-                            "v2 compact archive did not emit a successful v2 result"
-                        )
-        else:
-            rejected += 1
-            expected = read_json(portable(fixture, case.get("expected_error"), "v2 expected error"))
-            if expected.get("error_contains") not in completed.stderr:
-                raise VerifyError(f"v2 bundle {case.get('id')} diagnostic drifted")
-        count += 1
-    if count == 0:
-        raise VerifyError("v2 detached bundle corpus is empty")
-    if rejected == 0:
-        raise VerifyError("v2 detached bundle corpus has no rejection cases")
-    return count, rejected
+        if completed.returncode == 0:
+            raise VerifyError("VTL unavailable-TSA slate unexpectedly succeeded")
+        try:
+            result = json.loads(completed.stdout)
+        except json.JSONDecodeError as exc:
+            raise VerifyError("VTL verifier did not emit a result object") from exc
+        if (
+            "version" in result
+            or result.get("commitment_profile_id") != vector["commitment_profile_id"]
+            or result.get("claimed_disclosure_class") != "C"
+            or result.get("verification_scope") != "anchor_only"
+            or result.get("overall") != "failure"
+            or result.get("failure_reasons") != ["channel_failure"]
+        ):
+            raise VerifyError("VTL verifier result slate drifted")
+    return 1
 
 
 def verify_root(root: Path) -> dict[str, Any]:
@@ -461,43 +435,43 @@ def verify_root(root: Path) -> dict[str, Any]:
         raise VerifyError("archive root must not be a symlink")
     checksummed_files = verify_checksums(root)
     manifest = read_json(root / "conformance-manifest.json")
-    if manifest.get("schema") != ARCHIVE_SCHEMA or manifest.get("version") != 3:
+    if manifest.get("schema") != ARCHIVE_SCHEMA or manifest.get("version") != 1:
         raise VerifyError("conformance archive manifest version mismatch")
-    if manifest.get("schema_uri") != f"{PROVIDER}conformance_archive_manifest_v3.schema.json":
+    if manifest.get("schema_uri") != f"{PROVIDER}conformance_archive_manifest.schema.json":
         raise VerifyError("conformance archive schema URI mismatch")
     if manifest.get("carrier", {}).get("artifact_type") != ARTIFACT_TYPE:
         raise VerifyError("conformance archive media type mismatch")
     claims = manifest.get("claims", {})
     expected_claims = {
-        "canonical_cbor_v1_vectors": True,
-        "canonical_cbor_v2_vectors": True,
-        "v2_full_conformance": True,
-        "v2_durable_producer": True,
-        "v2_disclosure_classes": True,
-        "rfc3161_timestamp_channel": True,
-        "rfc5816_signer_certificate_binding": True,
-        "negative_fixture_floor": True,
+        "vtl_normative_known_answer_vector": True,
+        "vtl_version_one_evidence_slate": True,
         "offline_schema_resolution": True,
+        "publishable_rust_crates": True,
+        "helm_release_asset": True,
     }
     if claims != expected_claims:
         raise VerifyError("conformance claim set mismatch")
     schemas = verify_schema_catalog(root, manifest)
     vectors = portable(root, manifest["contents"]["vectors"], "vectors", directory=True)
-    v1_records = verify_v1_vectors(vectors / "verifiable-telemetry-canonical-cbor-v1")
-    v2_root = vectors / "verifiable-telemetry-canonical-cbor-v2"
-    v2_records = verify_v2_vectors(v2_root)
     binary = portable(root, manifest["contents"]["detached_verifier"], "detached verifier")
-    v2_bundles, negative_cases = verify_v2_bundles(v2_root, binary)
+    vtl_vector = verify_vtl_known_answer(vectors / VTL_KNOWN_ANSWER_VECTORS)
+    vtl_slate_cases = verify_vtl_evidence_slate(vectors / VTL_KNOWN_ANSWER_VECTORS, binary)
+    crates = portable(root, manifest["contents"]["crates"], "crates", directory=True)
+    helm = portable(root, manifest["contents"]["helm"], "Helm", directory=True)
+    crate_count = len(list(crates.glob("*.crate")))
+    helm_count = len(list(helm.glob("*.tgz")))
+    if crate_count != 10 or helm_count != 1:
+        raise VerifyError("publishable crate or Helm release asset count mismatch")
     return {
         "ok": True,
         "schema": ARCHIVE_SCHEMA,
         "subject": manifest["subject"],
         "checksummed_files": checksummed_files,
         "schemas": schemas,
-        "v1_records": v1_records,
-        "v2_records": v2_records,
-        "v2_bundles": v2_bundles,
-        "negative_cases": negative_cases,
+        "vtl_vector": vtl_vector,
+        "vtl_slate_cases": vtl_slate_cases,
+        "crates": crate_count,
+        "helm_charts": helm_count,
     }
 
 

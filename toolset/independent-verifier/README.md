@@ -1,12 +1,11 @@
 # TrackOne detached conformance verifier
 
-`verify_conformance_archive.py` is a standard-library archive v3 runner. It
+`verify_conformance_archive.py` is a standard-library conformance archive runner. It
 checks the complete `SHA256SUMS` inventory, resolves every public schema through
-the archive-local catalog, replays the v1 and draft-09 v2 commitment vectors,
-and executes the bundled v2-only `trackone-evidence` binary against the
-positive and rejection bundle corpus. The legacy v1 command-line verifier is
-not part of the archive; immutable v1 commitment vectors are replayed directly
-by this standard-library runner.
+the archive-local catalog, reproduces the current VTL normative known-answer
+vector, and executes the
+bundled `trackone-evidence` binary against the version-one producer-manifest
+and unversioned verifier-result slate.
 
 From outside the source checkout:
 
@@ -16,8 +15,17 @@ python3 verify_conformance_archive.py --archive trackone-conformance.tar.gz
 
 The bundled native verifier currently targets Linux x86-64. Packaged crate
 sources remain in `software/crates/` for independent rebuilds on other targets.
-The archive claims full conformance to the scoped draft-09 v2 profile:
-durable production, disclosure Classes A/B/C, RFC 3161 verification, the
-negative-fixture refusal floor, and offline schema resolution. The claim does
-not cover telemetry truth or completeness, external TSA availability, or
-fitness for automated sanctions or actuation.
+The manifest makes only mechanically replayed archive claims: the normative
+VTL vector, the current VTL evidence slate, offline schema resolution, and
+release-asset counts.
+It does not make an unscoped draft-conformance claim or attest telemetry truth,
+deployment behavior, external TSA availability, or fitness for automated
+sanctions or actuation.
+
+## Building an archive
+
+`build_conformance_archive.py` assembles the archive that the runner above
+verifies. The builder intentionally does not package the externally published profile
+document. The archive retains the checked-in schemas, CDDL, vectors, and
+detached verifier; the active profile source remains the [current document on
+the IETF Datatracker](https://datatracker.ietf.org/doc/draft-elkhatabi-verifiable-telemetry-ledgers/).

@@ -30,7 +30,7 @@ class AnchorEvidenceTests(unittest.TestCase):
         self.archive.write_bytes(b"deterministic conformance archive")
         self.manifest = self.root / "archive.manifest.json"
         self.manifest_value = {
-            "schema": "trackone-conformance-archive-v2",
+            "schema": "trackone-conformance-archive",
             "subject": {
                 "kind": "commit",
                 "name": f"sha-{GIT_COMMIT}",
@@ -41,7 +41,7 @@ class AnchorEvidenceTests(unittest.TestCase):
                 "oci_ref": (
                     f"ghcr.io/bilalobe/trackone/conformance-archive:sha-{GIT_COMMIT}"
                 ),
-                "artifact_type": "application/vnd.trackone.conformance.archive.v2+tar",
+                "artifact_type": "application/vnd.trackone.conformance.archive+tar",
             },
         }
         write_json(self.manifest, self.manifest_value)
@@ -50,7 +50,7 @@ class AnchorEvidenceTests(unittest.TestCase):
             self.verification,
             {
                 "ok": True,
-                "schema": "trackone-conformance-archive-v2",
+                "schema": "trackone-conformance-archive",
                 "subject": self.manifest_value["subject"],
             },
         )

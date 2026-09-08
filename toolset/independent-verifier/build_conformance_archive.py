@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Assemble the deterministic TrackOne conformance archive v3 carrier."""
+"""Assemble the deterministic TrackOne conformance archive carrier."""
 
 from __future__ import annotations
 
@@ -18,11 +18,12 @@ from pathlib import Path
 from typing import Any
 
 
-ARTIFACT_TYPE = "application/vnd.trackone.conformance.archive.v3+tar"
+ARTIFACT_TYPE = "application/vnd.trackone.conformance.archive+tar"
 SCHEMA_URI = (
     "https://raw.githubusercontent.com/bilalobe/trackone/main/"
-    "toolset/unified/schemas/conformance_archive_manifest_v3.schema.json"
+    "toolset/unified/schemas/conformance_archive_manifest.schema.json"
 )
+VTL_KNOWN_ANSWER_VECTORS = "vtl-known-answer"
 
 
 class BuildError(RuntimeError):
@@ -170,9 +171,9 @@ def assemble(args: argparse.Namespace) -> dict[str, Any]:
         )
 
         manifest = {
-            "schema": "trackone-conformance-archive-v3",
+            "schema": "trackone-conformance-archive",
             "schema_uri": SCHEMA_URI,
-            "version": 3,
+            "version": 1,
             "subject": {
                 "kind": args.subject_kind,
                 "name": args.subject,
@@ -194,15 +195,11 @@ def assemble(args: argparse.Namespace) -> dict[str, Any]:
                 "detached_verifier": "verifier/bin/trackone-evidence",
             },
             "claims": {
-                "canonical_cbor_v1_vectors": True,
-                "canonical_cbor_v2_vectors": True,
-                "v2_full_conformance": True,
-                "v2_durable_producer": True,
-                "v2_disclosure_classes": True,
-                "rfc3161_timestamp_channel": True,
-                "rfc5816_signer_certificate_binding": True,
-                "negative_fixture_floor": True,
+                "vtl_normative_known_answer_vector": True,
+                "vtl_version_one_evidence_slate": True,
                 "offline_schema_resolution": True,
+                "publishable_rust_crates": True,
+                "helm_release_asset": True,
             },
         }
         write_json(root / "conformance-manifest.json", manifest)

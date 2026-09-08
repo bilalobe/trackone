@@ -1,4 +1,0 @@
-{
-  "invariant": "successor-predecessor-is-zero",
-  "error_contains": "invalid v2 segment artifact: successor segment must have a predecessor"
-}
