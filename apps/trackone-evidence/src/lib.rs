@@ -1,7 +1,7 @@
-//! Supported v2 evidence verification and compact-carrier library.
+//! Verifiable Telemetry Ledgers evidence verification and compact-carrier library.
 
 mod error;
 
-pub mod v2;
+pub mod vtl;
 
 pub use error::{EvidenceError, Result};

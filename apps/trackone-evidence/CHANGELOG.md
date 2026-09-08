@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Keep producer manifests on the current version-one slate and expose the
+  implementation through `trackone_evidence::vtl`.
+- Advance verifier results to the current contract, drop the result `version`
+  member in favour of `verifier_policy_id` identification, separate successful
+  scope from timestamp incompleteness, and rename Class B scope to
+  `disclosed_batch_recompute`.
+- Verify aligned Class A/B batch openings, Class C anchor-only bundles,
+  predecessor linkage, strict RFC 3161 request/response correlation, and the
+  mandatory baseline TSA outcome.
+
+### Removed
+
+- Remove manifest v2/v3 input compatibility, the `v2` module, OTS/peer baseline
+  channels, and the missing-TSA policy bypass.
+
 ## [0.1.0-beta.5] - 2026-08-08
 
 ### Added

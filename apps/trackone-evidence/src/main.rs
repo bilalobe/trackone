@@ -1,13 +1,14 @@
-//! Command-line entry point for v2 evidence verification and compaction.
+//! Command-line entry point for VTL evidence verification and compaction.
 
 use std::path::PathBuf;
-use trackone_evidence::v2::{
-    V2VerifyPolicy, compact_v2_bundle, verify_v2_archive, verify_v2_bundle_with_policy,
+use std::time::Duration;
+use trackone_evidence::vtl::{
+    VerificationScope, VerifyPolicy, compact_bundle, verify_archive, verify_bundle_with_policy,
 };
 
 fn usage() -> ! {
     eprintln!(
-        "usage:\n  trackone-evidence verify (--root DIR | --archive FILE) [--json] [--pretty] [--tsa-ca-file FILE] [--tsa-intermediates-file FILE] [--tsa-crls-file FILE] [--tsa-policy OID] [--tsa-signer-cert-sha256 HEX] [--allow-missing-tsa] [--verifier-policy-id ID] [--verifier-policy-file FILE]\n  trackone-evidence compact --root DIR --output FILE [--include-extensions] [--tsa-ca-file FILE] [--tsa-intermediates-file FILE] [--tsa-crls-file FILE] [--tsa-policy OID] [--tsa-signer-cert-sha256 HEX] [--allow-missing-tsa] [--verifier-policy-id ID] [--verifier-policy-file FILE]"
+        "usage:\n  trackone-evidence verify (--root DIR | --archive FILE) [--scope public_recompute|disclosed_batch_recompute|anchor_only] [--batch N ...] [--require-claimed-scope] [--json] [--pretty] [--tsa-ca-file FILE] [--tsa-intermediates-file FILE] [--tsa-crls-file FILE] [--tsa-policy OID] [--tsa-signer-cert-sha256 HEX] [--tsa-max-future-skew-seconds N] [--verifier-policy-id ID] [--verifier-policy-file FILE]\n  trackone-evidence compact --root DIR --output FILE [--include-extensions] [--tsa-ca-file FILE] [--tsa-intermediates-file FILE] [--tsa-crls-file FILE] [--tsa-policy OID] [--tsa-signer-cert-sha256 HEX] [--tsa-max-future-skew-seconds N] [--verifier-policy-id ID] [--verifier-policy-file FILE]"
     );
     std::process::exit(2);
 }
@@ -20,7 +21,7 @@ fn take_value(args: &[String], idx: &mut usize, name: &str) -> String {
     })
 }
 
-fn parse_policy_arg(args: &[String], idx: &mut usize, policy: &mut V2VerifyPolicy) -> bool {
+fn parse_policy_arg(args: &[String], idx: &mut usize, policy: &mut VerifyPolicy) -> bool {
     match args[*idx].as_str() {
         "--tsa-ca-file" => {
             policy.tsa_ca_file = Some(PathBuf::from(take_value(args, idx, "--tsa-ca-file")));
@@ -43,7 +44,14 @@ fn parse_policy_arg(args: &[String], idx: &mut usize, policy: &mut V2VerifyPolic
                 usage();
             }));
         }
-        "--allow-missing-tsa" => policy.require_tsa = false,
+        "--tsa-max-future-skew-seconds" => {
+            let raw = take_value(args, idx, "--tsa-max-future-skew-seconds");
+            let seconds = raw.parse::<u64>().unwrap_or_else(|_| {
+                eprintln!("invalid --tsa-max-future-skew-seconds");
+                usage();
+            });
+            policy.max_future_skew = Duration::from_secs(seconds);
+        }
         "--verifier-policy-id" => {
             policy.verifier_policy_id = Some(take_value(args, idx, "--verifier-policy-id"));
         }
@@ -54,6 +62,26 @@ fn parse_policy_arg(args: &[String], idx: &mut usize, policy: &mut V2VerifyPolic
                 "--verifier-policy-file",
             )));
         }
+        "--scope" => {
+            policy.selected_scope = Some(match take_value(args, idx, "--scope").as_str() {
+                "public_recompute" => VerificationScope::PublicRecompute,
+                "disclosed_batch_recompute" => VerificationScope::DisclosedBatchRecompute,
+                "anchor_only" => VerificationScope::AnchorOnly,
+                _ => {
+                    eprintln!("invalid --scope");
+                    usage();
+                }
+            });
+        }
+        "--batch" => {
+            let raw = take_value(args, idx, "--batch");
+            let number = raw.parse::<u64>().unwrap_or_else(|_| {
+                eprintln!("invalid --batch");
+                usage();
+            });
+            policy.selected_batches.insert(number);
+        }
+        "--require-claimed-scope" => policy.require_claimed_scope = true,
         _ => return false,
     }
     true
@@ -64,7 +92,7 @@ fn run_verify(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let mut archive: Option<PathBuf> = None;
     let mut json_mode = false;
     let mut pretty = false;
-    let mut policy = V2VerifyPolicy::baseline();
+    let mut policy = VerifyPolicy::baseline();
     let mut idx = 0;
     while idx < args.len() {
         match args[idx].as_str() {
@@ -78,8 +106,8 @@ fn run_verify(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
         idx += 1;
     }
     let summary = match (root, archive) {
-        (Some(root), None) => verify_v2_bundle_with_policy(&root, &policy)?,
-        (None, Some(archive)) => verify_v2_archive(&archive, &policy)?,
+        (Some(root), None) => verify_bundle_with_policy(&root, &policy)?,
+        (None, Some(archive)) => verify_archive(&archive, &policy)?,
         _ => usage(),
     };
     if json_mode {
@@ -91,7 +119,7 @@ fn run_verify(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     } else {
         println!(
             "Disclosure={} Overall={}",
-            summary["disclosure_class"], summary["overall"]
+            summary["claimed_disclosure_class"], summary["overall"]
         );
     }
     if summary["overall"].as_str() != Some("success") {
@@ -104,7 +132,7 @@ fn run_compact(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let mut root: Option<PathBuf> = None;
     let mut output: Option<PathBuf> = None;
     let mut include_extensions = false;
-    let mut policy = V2VerifyPolicy::baseline();
+    let mut policy = VerifyPolicy::baseline();
     let mut idx = 0;
     while idx < args.len() {
         match args[idx].as_str() {
@@ -116,7 +144,7 @@ fn run_compact(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
         }
         idx += 1;
     }
-    compact_v2_bundle(
+    compact_bundle(
         &root.unwrap_or_else(|| usage()),
         &output.unwrap_or_else(|| usage()),
         &policy,

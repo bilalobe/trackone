@@ -1,6 +1,6 @@
 [package]
 name = "trackone-evidence"
-description = "Rust-native verifier and deterministic compactor for TrackOne v2 evidence bundles"
+description = "Rust-native verifier and deterministic compactor for VTL evidence bundles"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
