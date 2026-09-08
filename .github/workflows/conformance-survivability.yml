@@ -78,12 +78,21 @@ jobs:
               exit 1
             fi
           else
-            oras push "${ARCHIVE_OCI_REF}" \
-              --artifact-type application/vnd.trackone.conformance.archive+tar \
-              --annotation org.opencontainers.image.source="https://github.com/${GITHUB_REPOSITORY}" \
-              --annotation org.opencontainers.image.revision="${{ github.event.workflow_run.head_sha }}" \
-              --annotation org.opencontainers.image.title="TrackOne conformance archive" \
-              "${ARCHIVE}:application/gzip"
+            # oras records the pushed file's relative path as the blob's
+            # filename annotation. ARCHIVE still carries the "handoff/"
+            # prefix from the download-artifact step, so push from that
+            # directory and reference only the basename (ARCHIVE_NAME) --
+            # otherwise the pullback step below re-creates "handoff/..."
+            # under its own output directory and the flat-path lookup fails.
+            (
+              cd "$(dirname "${ARCHIVE}")"
+              oras push "${ARCHIVE_OCI_REF}" \
+                --artifact-type application/vnd.trackone.conformance.archive+tar \
+                --annotation org.opencontainers.image.source="https://github.com/${GITHUB_REPOSITORY}" \
+                --annotation org.opencontainers.image.revision="${{ github.event.workflow_run.head_sha }}" \
+                --annotation org.opencontainers.image.title="TrackOne conformance archive" \
+                "${ARCHIVE_NAME}:application/gzip"
+            )
           fi
           oras resolve "${ARCHIVE_OCI_REF}" | tee conformance-oci-digest.txt
 
