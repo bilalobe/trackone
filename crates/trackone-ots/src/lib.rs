@@ -28,19 +28,6 @@ const OTS_MAX_ATTESTATION_PAYLOAD_LEN: usize = 8192;
 const OTS_MAX_URI_LEN: usize = 1000;
 const OTS_MAX_RECURSION_DEPTH: u16 = 256;
 
-fn trim_ascii(input: &[u8]) -> &[u8] {
-    let start = input
-        .iter()
-        .position(|byte| !byte.is_ascii_whitespace())
-        .unwrap_or(input.len());
-    let end = input
-        .iter()
-        .rposition(|byte| !byte.is_ascii_whitespace())
-        .map(|idx| idx + 1)
-        .unwrap_or(start);
-    &input[start..end]
-}
-
 fn is_sha256_hex(value: &str) -> bool {
     value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
@@ -50,7 +37,7 @@ fn normalize_hex(value: &str) -> String {
 }
 
 fn hex_to_digest32(value: &str) -> Option<[u8; 32]> {
-    if !is_sha256_hex(value) {
+    if value.len() != 64 {
         return None;
     }
 
@@ -61,6 +48,12 @@ fn hex_to_digest32(value: &str) -> Option<[u8; 32]> {
         *byte = (hex_nibble(hi)? << 4) | hex_nibble(lo)?;
     }
     Some(out)
+}
+
+fn parse_expected_digest(value: Option<&str>) -> Result<Option<[u8; 32]>, &'static str> {
+    value
+        .map(|value| hex_to_digest32(value).ok_or("ots-expected-hash-invalid"))
+        .transpose()
 }
 
 fn hex_nibble(byte: u8) -> Option<u8> {
@@ -84,19 +77,19 @@ fn artifact_path_for_ots(ots_path: &Path) -> Option<PathBuf> {
     Some(artifact)
 }
 
-fn parse_stationary_stub(raw: &[u8]) -> Option<String> {
-    if !raw.starts_with(STATIONARY_PREFIX) {
-        return None;
-    }
-    let line = raw[STATIONARY_PREFIX.len()..]
+fn read_artifact_for_ots(ots_path: &Path) -> Result<Vec<u8>, &'static str> {
+    let artifact_path = artifact_path_for_ots(ots_path).ok_or("ots-invalid-path")?;
+    fs::read(artifact_path).map_err(|_| "ots-artifact-read-failed")
+}
+
+fn parse_stationary_stub(raw: &[u8]) -> Option<[u8; 32]> {
+    let line = raw
+        .strip_prefix(STATIONARY_PREFIX)?
         .split(|byte| *byte == b'\n' || *byte == b'\r')
         .next()
         .unwrap_or_default();
     let text = core::str::from_utf8(line).ok()?.trim();
-    if !is_sha256_hex(text) {
-        return None;
-    }
-    Some(normalize_hex(text))
+    hex_to_digest32(text)
 }
 
 fn normalize_path(path: &Path) -> PathBuf {
@@ -154,7 +147,10 @@ fn wait_for_exit(
 }
 
 fn is_executable(path: &Path) -> bool {
-    if !path.is_file() {
+    let Ok(metadata) = fs::metadata(path) else {
+        return false;
+    };
+    if !metadata.is_file() {
         return false;
     }
 
@@ -162,9 +158,7 @@ fn is_executable(path: &Path) -> bool {
     {
         use std::os::unix::fs::PermissionsExt;
 
-        fs::metadata(path)
-            .map(|meta| meta.permissions().mode() & 0o111 != 0)
-            .unwrap_or(false)
+        metadata.permissions().mode() & 0o111 != 0
     }
 
     #[cfg(not(unix))]
@@ -294,12 +288,10 @@ impl<'a> OtsCursor<'a> {
 
 fn expected_digest_for_ots(
     ots_path: &Path,
-    expected_artifact_sha: Option<&str>,
+    expected_digest: Option<&[u8; 32]>,
 ) -> Result<Option<[u8; 32]>, OtsInternalError> {
-    if let Some(expected) = expected_artifact_sha {
-        return hex_to_digest32(expected)
-            .map(Some)
-            .ok_or(OtsInternalError::Invalid("ots-expected-hash-invalid"));
+    if let Some(expected) = expected_digest {
+        return Ok(Some(*expected));
     }
 
     let Some(artifact_path) = artifact_path_for_ots(ots_path) else {
@@ -315,7 +307,7 @@ fn expected_digest_for_ots(
 fn parse_detached_ots(
     raw: &[u8],
     ots_path: &Path,
-    expected_artifact_sha: Option<&str>,
+    expected_digest: Option<&[u8; 32]>,
 ) -> Result<OtsProofSummary, OtsInternalError> {
     if !raw.starts_with(OTS_HEADER_MAGIC) {
         return Err(OtsInternalError::Fallback);
@@ -338,7 +330,7 @@ fn parse_detached_ots(
     let file_digest: [u8; 32] = file_digest
         .try_into()
         .map_err(|_| OtsInternalError::Invalid("ots-proof-parse-failed"))?;
-    if let Some(expected_digest) = expected_digest_for_ots(ots_path, expected_artifact_sha)?
+    if let Some(expected_digest) = expected_digest_for_ots(ots_path, expected_digest)?
         && file_digest != expected_digest
     {
         return Err(OtsInternalError::Invalid(
@@ -494,9 +486,9 @@ fn parse_bitcoin_block_header_attestation_height(payload: &[u8]) -> Result<u64, 
 fn verify_detached_ots_proof(
     raw: &[u8],
     ots_path: &Path,
-    expected_artifact_sha: Option<&str>,
+    expected_digest: Option<&[u8; 32]>,
 ) -> Result<OtsVerifyResult, OtsInternalError> {
-    let summary = parse_detached_ots(raw, ots_path, expected_artifact_sha)?;
+    let summary = parse_detached_ots(raw, ots_path, expected_digest)?;
     if !summary.bitcoin_heights.is_empty() {
         // Native parsing can confirm proof shape and artifact binding, but it
         // does not validate inclusion against the referenced Bitcoin header.
@@ -516,7 +508,9 @@ fn describe_detached_ots_proof_impl(
     expected_artifact_sha: Option<&str>,
 ) -> Result<Vec<String>, OtsInternalError> {
     let raw = fs::read(ots_path).map_err(|_| OtsInternalError::Invalid("ots-proof-read-failed"))?;
-    let summary = parse_detached_ots(&raw, ots_path, expected_artifact_sha)?;
+    let expected_digest =
+        parse_expected_digest(expected_artifact_sha).map_err(OtsInternalError::Invalid)?;
+    let summary = parse_detached_ots(&raw, ots_path, expected_digest.as_ref())?;
     let mut description = Vec::with_capacity(summary.steps.len() + 1);
     description.push(format!("file sha256 {}", hex_lower(&summary.file_digest)));
     description.extend(summary.steps);
@@ -578,14 +572,9 @@ fn verify_ots_proof_impl(
     ots_binary: Option<&Path>,
     timeout: Duration,
 ) -> OtsVerifyResult {
-    let expected_digest = match expected_artifact_sha {
-        Some(expected) => match hex_to_digest32(expected) {
-            Some(digest) => Some(digest),
-            None => {
-                return OtsVerifyResult::failure(OtsStatus::Failed, "ots-expected-hash-invalid");
-            }
-        },
-        None => None,
+    let expected_digest = match parse_expected_digest(expected_artifact_sha) {
+        Ok(digest) => digest,
+        Err(reason) => return OtsVerifyResult::failure(OtsStatus::Failed, reason),
     };
     let raw = match fs::read(ots_path) {
         Ok(raw) => raw,
@@ -597,14 +586,9 @@ fn verify_ots_proof_impl(
         }
     };
     let expected_artifact = if let Some(expected_digest) = expected_digest {
-        let Some(artifact_path) = artifact_path_for_ots(ots_path) else {
-            return OtsVerifyResult::failure(OtsStatus::Failed, "ots-invalid-path");
-        };
-        let artifact = match fs::read(&artifact_path) {
+        let artifact = match read_artifact_for_ots(ots_path) {
             Ok(artifact) => artifact,
-            Err(_) => {
-                return OtsVerifyResult::failure(OtsStatus::Failed, "ots-artifact-read-failed");
-            }
+            Err(reason) => return OtsVerifyResult::failure(OtsStatus::Failed, reason),
         };
         if sha256_digest(&artifact) != expected_digest {
             return OtsVerifyResult::failure(OtsStatus::Failed, "ots-proof-artifact-hash-mismatch");
@@ -614,42 +598,34 @@ fn verify_ots_proof_impl(
         None
     };
 
-    if let Some(stub_hex) = parse_stationary_stub(&raw) {
+    if let Some(stub_digest) = parse_stationary_stub(&raw) {
         if !allow_placeholder {
             return OtsVerifyResult::failure(OtsStatus::Failed, "placeholder-not-allowed");
         }
 
-        let expected = if let Some(expected) = expected_artifact_sha {
-            if !is_sha256_hex(expected) {
-                return OtsVerifyResult::failure(OtsStatus::Failed, "stationary-stub-invalid");
-            }
-            normalize_hex(expected)
+        let expected = if let Some(expected) = expected_digest {
+            expected
         } else {
-            let artifact_path = match artifact_path_for_ots(ots_path) {
-                Some(path) => path,
-                None => {
-                    return OtsVerifyResult::failure(OtsStatus::Failed, "ots-invalid-path");
-                }
-            };
-            let artifact_bytes = match fs::read(&artifact_path) {
+            let artifact_bytes = match read_artifact_for_ots(ots_path) {
                 Ok(bytes) => bytes,
-                Err(_) => {
+                Err("ots-artifact-read-failed") => {
                     return OtsVerifyResult::failure(
                         OtsStatus::Failed,
                         "stationary-stub-artifact-missing",
                     );
                 }
+                Err(reason) => return OtsVerifyResult::failure(OtsStatus::Failed, reason),
             };
-            sha256_hex(&artifact_bytes)
+            sha256_digest(&artifact_bytes)
         };
 
-        if stub_hex == expected {
+        if stub_digest == expected {
             return OtsVerifyResult::success(OtsStatus::Pending, "stationary-stub-accepted");
         }
         return OtsVerifyResult::failure(OtsStatus::Failed, "stationary-stub-hash-mismatch");
     }
 
-    if trim_ascii(&raw) == PLACEHOLDER_BYTES {
+    if raw.trim_ascii() == PLACEHOLDER_BYTES {
         return if allow_placeholder {
             OtsVerifyResult::success(OtsStatus::Pending, "placeholder-accepted")
         } else {
@@ -657,7 +633,7 @@ fn verify_ots_proof_impl(
         };
     }
 
-    match verify_detached_ots_proof(&raw, ots_path, expected_artifact_sha) {
+    match verify_detached_ots_proof(&raw, ots_path, expected_digest.as_ref()) {
         Ok(result) => return result,
         Err(OtsInternalError::Invalid(reason)) => {
             return OtsVerifyResult::failure(OtsStatus::Failed, reason);
@@ -665,43 +641,39 @@ fn verify_ots_proof_impl(
         Err(OtsInternalError::Fallback) => {}
     }
 
-    let (verification_path, staged_verification) = {
-        let Some(artifact_path) = artifact_path_for_ots(ots_path) else {
-            return OtsVerifyResult::failure(OtsStatus::Failed, "ots-invalid-path");
-        };
-        let artifact = match expected_artifact {
-            Some(artifact) => artifact,
-            None => match fs::read(&artifact_path) {
-                Ok(artifact) => artifact,
-                Err(_) => {
-                    return OtsVerifyResult::failure(OtsStatus::Failed, "ots-artifact-read-failed");
-                }
-            },
-        };
+    verify_external_ots(ots_path, &raw, expected_artifact, ots_binary, timeout)
+}
 
-        let proof_name = match ots_path.file_name() {
-            Some(name) => name,
-            None => return OtsVerifyResult::failure(OtsStatus::Failed, "ots-invalid-path"),
-        };
-        let staging = match tempfile::Builder::new()
-            .prefix("trackone-ots-verify-")
-            .tempdir()
-        {
-            Ok(staging) => staging,
-            Err(_) => {
-                return OtsVerifyResult::failure(OtsStatus::Failed, "ots-staging-failed");
-            }
-        };
-        let staged_proof = staging.path().join(proof_name);
-        let Some(staged_artifact) = artifact_path_for_ots(&staged_proof) else {
-            return OtsVerifyResult::failure(OtsStatus::Failed, "ots-invalid-path");
-        };
-        if fs::write(&staged_artifact, &artifact).is_err()
-            || fs::write(&staged_proof, &raw).is_err()
-        {
-            return OtsVerifyResult::failure(OtsStatus::Failed, "ots-staging-failed");
-        }
-        (staged_proof, staging)
+fn stage_ots_verification(
+    ots_path: &Path,
+    proof: &[u8],
+    artifact: &[u8],
+) -> Result<(PathBuf, tempfile::TempDir), &'static str> {
+    let proof_name = ots_path.file_name().ok_or("ots-invalid-path")?;
+    let staging = tempfile::Builder::new()
+        .prefix("trackone-ots-verify-")
+        .tempdir()
+        .map_err(|_| "ots-staging-failed")?;
+    let staged_proof = staging.path().join(proof_name);
+    let staged_artifact = artifact_path_for_ots(&staged_proof).ok_or("ots-invalid-path")?;
+    fs::write(staged_artifact, artifact).map_err(|_| "ots-staging-failed")?;
+    fs::write(&staged_proof, proof).map_err(|_| "ots-staging-failed")?;
+    Ok((staged_proof, staging))
+}
+
+fn verify_external_ots(
+    ots_path: &Path,
+    proof: &[u8],
+    expected_artifact: Option<Vec<u8>>,
+    ots_binary: Option<&Path>,
+    timeout: Duration,
+) -> OtsVerifyResult {
+    let artifact = match expected_artifact {
+        Some(artifact) => artifact,
+        None => match read_artifact_for_ots(ots_path) {
+            Ok(artifact) => artifact,
+            Err(reason) => return OtsVerifyResult::failure(OtsStatus::Failed, reason),
+        },
     };
 
     let binary = match ots_binary
@@ -716,6 +688,11 @@ fn verify_ots_proof_impl(
         return OtsVerifyResult::failure(OtsStatus::Failed, "ots-binary-not-executable");
     }
 
+    let (verification_path, _staging) = match stage_ots_verification(ots_path, proof, &artifact) {
+        Ok(staged) => staged,
+        Err(reason) => return OtsVerifyResult::failure(OtsStatus::Failed, reason),
+    };
+    // The private snapshot stays alive until the verifier has exited.
     let child = match Command::new(&binary)
         .arg("verify")
         .arg(&verification_path)
@@ -727,16 +704,14 @@ fn verify_ots_proof_impl(
         Err(_) => return OtsVerifyResult::failure(OtsStatus::Failed, "ots-exec-failed"),
     };
 
-    let result = match wait_for_exit(child, timeout) {
+    match wait_for_exit(child, timeout) {
         Ok(Some(status)) if status.success() => {
             OtsVerifyResult::success(OtsStatus::Verified, "ots-verified")
         }
         Ok(Some(_)) => OtsVerifyResult::failure(OtsStatus::Failed, "ots-verification-failed"),
         Ok(None) => OtsVerifyResult::failure(OtsStatus::Failed, "ots-timeout"),
         Err(_) => OtsVerifyResult::failure(OtsStatus::Failed, "ots-exec-failed"),
-    };
-    drop(staged_verification);
-    result
+    }
 }
 
 pub fn verify_ots_proof_native(
@@ -905,38 +880,15 @@ pub fn describe_ots_proof_native(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     #[cfg(unix)]
     use std::os::unix::fs::PermissionsExt;
 
-    struct TestDir {
-        path: PathBuf,
-    }
-
-    impl TestDir {
-        fn new(label: &str) -> Self {
-            let unique = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_nanos();
-            let path = std::env::temp_dir().join(format!(
-                "trackone-ots-{label}-{}-{unique}",
-                std::process::id()
-            ));
-            fs::create_dir_all(&path).unwrap();
-            Self { path }
-        }
-
-        fn path(&self) -> &Path {
-            &self.path
-        }
-    }
-
-    impl Drop for TestDir {
-        fn drop(&mut self) {
-            let _ = fs::remove_dir_all(&self.path);
-        }
+    fn test_dir(label: &str) -> tempfile::TempDir {
+        tempfile::Builder::new()
+            .prefix(&format!("trackone-ots-{label}-"))
+            .tempdir()
+            .unwrap()
     }
 
     #[cfg(unix)]
@@ -1035,7 +987,7 @@ mod tests {
 
     #[test]
     fn verify_ots_proof_accepts_placeholder() {
-        let tmp = TestDir::new("placeholder");
+        let tmp = test_dir("placeholder");
         let ots_path = tmp.path().join("2025-10-07.cbor.ots");
         fs::write(&ots_path, b"OTS_PROOF_PLACEHOLDER\n").unwrap();
 
@@ -1048,7 +1000,7 @@ mod tests {
 
     #[test]
     fn verify_ots_proof_requires_external_verifier_for_bitcoin_attestation() {
-        let tmp = TestDir::new("native-bitcoin");
+        let tmp = test_dir("native-bitcoin");
         let artifact_path = tmp.path().join("2025-10-07.cbor");
         let ots_path = artifact_path.with_extension("cbor.ots");
         fs::write(&artifact_path, b"day-bytes").unwrap();
@@ -1069,7 +1021,7 @@ mod tests {
         assert_eq!(result.reason, "ots-binary-not-found");
         assert!(result.bitcoin_attestation_heights.is_empty());
 
-        let summary = parse_detached_ots(&proof, &ots_path, Some(&hex_lower(&artifact_digest)))
+        let summary = parse_detached_ots(&proof, &ots_path, Some(&artifact_digest))
             .expect("native OTS proof should parse");
         assert_eq!(summary.file_digest, artifact_digest);
         assert_eq!(summary.bitcoin_heights, vec![849_123]);
@@ -1086,7 +1038,7 @@ mod tests {
 
     #[test]
     fn verify_ots_proof_reports_native_pending_attestation() {
-        let tmp = TestDir::new("native-pending");
+        let tmp = test_dir("native-pending");
         let artifact_path = tmp.path().join("2025-10-07.cbor");
         let ots_path = artifact_path.with_extension("cbor.ots");
         fs::write(&artifact_path, b"day-bytes").unwrap();
@@ -1112,7 +1064,7 @@ mod tests {
 
     #[test]
     fn verify_ots_proof_rejects_native_artifact_hash_mismatch() {
-        let tmp = TestDir::new("native-mismatch");
+        let tmp = test_dir("native-mismatch");
         let artifact_path = tmp.path().join("2025-10-07.cbor");
         let ots_path = artifact_path.with_extension("cbor.ots");
         fs::write(&artifact_path, b"day-bytes").unwrap();
@@ -1138,29 +1090,37 @@ mod tests {
 
     #[test]
     fn verify_ots_proof_accepts_stationary_stub_when_hash_matches() {
-        let tmp = TestDir::new("stationary");
+        let tmp = test_dir("stationary");
         let artifact_path = tmp.path().join("2025-10-07.cbor");
         let ots_path = artifact_path.with_extension("cbor.ots");
         fs::write(&artifact_path, b"day-bytes").unwrap();
         let artifact_sha = sha256_hex(b"day-bytes");
-        fs::write(&ots_path, format!("STATIONARY-OTS:{artifact_sha}\n")).unwrap();
+        let uppercase_sha = artifact_sha.to_ascii_uppercase();
+        for stub_sha in [&artifact_sha, &uppercase_sha] {
+            fs::write(&ots_path, format!("STATIONARY-OTS:{stub_sha}\n")).unwrap();
+            for expected in [
+                None,
+                Some(artifact_sha.as_str()),
+                Some(uppercase_sha.as_str()),
+            ] {
+                let result = verify_ots_proof_impl(
+                    &ots_path,
+                    true,
+                    expected,
+                    None,
+                    default_verify_timeout(),
+                );
 
-        let result = verify_ots_proof_impl(
-            &ots_path,
-            true,
-            Some(&artifact_sha),
-            None,
-            default_verify_timeout(),
-        );
-
-        assert!(result.ok);
-        assert_eq!(result.status, OtsStatus::Pending);
-        assert_eq!(result.reason, "stationary-stub-accepted");
+                assert!(result.ok);
+                assert_eq!(result.status, OtsStatus::Pending);
+                assert_eq!(result.reason, "stationary-stub-accepted");
+            }
+        }
     }
 
     #[test]
     fn verify_ots_proof_rejects_stationary_stub_when_hash_mismatches() {
-        let tmp = TestDir::new("stationary-mismatch");
+        let tmp = test_dir("stationary-mismatch");
         let artifact_path = tmp.path().join("2025-10-07.cbor");
         let ots_path = artifact_path.with_extension("cbor.ots");
         fs::write(&artifact_path, b"day-bytes").unwrap();
@@ -1186,7 +1146,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn verify_ots_proof_accepts_real_proof_when_ots_binary_succeeds() {
-        let tmp = TestDir::new("real-proof");
+        let tmp = test_dir("real-proof");
         let artifact_path = tmp.path().join("2025-10-07.cbor");
         let ots_path = artifact_path.with_extension("cbor.ots");
         let ots_binary = write_fake_ots_binary(tmp.path(), 0);
@@ -1209,7 +1169,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn external_verifier_is_bound_to_expected_artifact_hash() {
-        let tmp = TestDir::new("external-artifact-mismatch");
+        let tmp = test_dir("external-artifact-mismatch");
         let artifact_path = tmp.path().join("2025-10-07.cbor");
         let ots_path = artifact_path.with_extension("cbor.ots");
         let ots_binary = write_fake_ots_binary(tmp.path(), 0);
@@ -1231,40 +1191,114 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    fn external_verifier_accepts_matching_expected_artifact_hash() {
-        let tmp = TestDir::new("external-artifact-match");
+    fn external_verifier_uses_private_snapshots_and_cleans_up() {
+        let tmp = test_dir("external-artifact-match");
         let artifact_path = tmp.path().join("2025-10-07.cbor");
         let ots_path = artifact_path.with_extension("cbor.ots");
         let ots_binary = tmp.path().join("ots");
         fs::write(
             &ots_binary,
-            "#!/bin/sh\nprintf substituted > \"${0%/*}/2025-10-07.cbor\"\nartifact=${2%.ots}\n[ \"$(cat \"$artifact\")\" = expected-day-bytes ]\n",
+            r#"#!/bin/sh
+set -eu
+printf substituted > "${0%/*}/2025-10-07.cbor"
+printf substituted-proof > "${0%/*}/2025-10-07.cbor.ots"
+printf '%s' "$2" > "${0%/*}/staged-path"
+artifact=${2%.ots}
+[ "$(cat "$artifact")" = expected-day-bytes ]
+[ "$(cat "$2")" = UNSUPPORTED_EXTERNAL_PROOF ]
+exit "$(cat "${0%/*}/exit-code")"
+"#,
         )
         .unwrap();
         let mut permissions = fs::metadata(&ots_binary).unwrap().permissions();
         permissions.set_mode(0o755);
         fs::set_permissions(&ots_binary, permissions).unwrap();
-        fs::write(&artifact_path, b"expected-day-bytes").unwrap();
-        fs::write(&ots_path, b"UNSUPPORTED_EXTERNAL_PROOF\n").unwrap();
+        let expected_sha = sha256_hex(b"expected-day-bytes");
+        for expected in [None, Some(expected_sha.as_str())] {
+            for (exit_code, ok, status, reason) in [
+                ("0", true, OtsStatus::Verified, "ots-verified"),
+                ("7", false, OtsStatus::Failed, "ots-verification-failed"),
+            ] {
+                fs::write(tmp.path().join("exit-code"), exit_code).unwrap();
+                fs::write(&artifact_path, b"expected-day-bytes").unwrap();
+                fs::write(&ots_path, b"UNSUPPORTED_EXTERNAL_PROOF\n").unwrap();
 
-        let result = verify_ots_proof_impl(
+                let result = verify_ots_proof_impl(
+                    &ots_path,
+                    false,
+                    expected,
+                    Some(&ots_binary),
+                    default_verify_timeout(),
+                );
+
+                assert_eq!(result.ok, ok);
+                assert_eq!(result.status, status);
+                assert_eq!(result.reason, reason);
+                assert_eq!(fs::read(&artifact_path).unwrap(), b"substituted");
+                assert_eq!(fs::read(&ots_path).unwrap(), b"substituted-proof");
+                let staged_path = fs::read_to_string(tmp.path().join("staged-path")).unwrap();
+                let staged_path = Path::new(&staged_path);
+                assert_ne!(staged_path, ots_path);
+                assert!(!staged_path.parent().unwrap().exists());
+            }
+        }
+    }
+
+    #[test]
+    fn describe_ots_proof_validates_expected_digest() {
+        let tmp = test_dir("describe-digest");
+        let ots_path = tmp.path().join("artifact.ots");
+        let digest = sha256_digest(b"day-bytes");
+        fs::write(
             &ots_path,
-            false,
-            Some(&sha256_hex(b"expected-day-bytes")),
-            Some(&ots_binary),
-            default_verify_timeout(),
-        );
+            pending_proof(&digest, "https://calendar.example"),
+        )
+        .unwrap();
 
-        assert!(result.ok);
-        assert_eq!(result.status, OtsStatus::Verified);
-        assert_eq!(result.reason, "ots-verified");
-        assert_eq!(fs::read(&artifact_path).unwrap(), b"substituted");
+        let description =
+            describe_ots_proof_native(&ots_path, Some(&hex_lower(&digest).to_ascii_uppercase()))
+                .unwrap();
+        assert_eq!(
+            description,
+            vec![
+                format!("file sha256 {}", hex_lower(&digest)),
+                "verify PendingAttestation(https://calendar.example)".to_string(),
+            ]
+        );
+        assert_eq!(
+            describe_ots_proof_native(&ots_path, Some(&"g".repeat(64))),
+            Err("ots-expected-hash-invalid"),
+        );
+        assert_eq!(
+            describe_ots_proof_native(&ots_path, Some(&sha256_hex(b"different-bytes"))),
+            Err("ots-proof-artifact-hash-mismatch"),
+        );
+    }
+
+    #[test]
+    fn expected_hash_requires_sibling_artifact_for_each_proof_kind() {
+        let tmp = test_dir("missing-artifact");
+        let ots_path = tmp.path().join("artifact.ots");
+        let digest = sha256_digest(b"day-bytes");
+        let expected_sha = hex_lower(&digest);
+        for proof in [
+            PLACEHOLDER_BYTES.to_vec(),
+            format!("STATIONARY-OTS:{expected_sha}\n").into_bytes(),
+            pending_proof(&digest, "https://calendar.example"),
+            b"UNSUPPORTED_EXTERNAL_PROOF".to_vec(),
+        ] {
+            fs::write(&ots_path, proof).unwrap();
+            let result = verify_ots_proof_native(&ots_path, true, Some(&expected_sha), None, None);
+            assert!(!result.ok);
+            assert_eq!(result.status, OtsStatus::Failed);
+            assert_eq!(result.reason, "ots-artifact-read-failed");
+        }
     }
 
     #[cfg(unix)]
     #[test]
     fn invalid_expected_hash_is_rejected_before_external_verifier() {
-        let tmp = TestDir::new("external-invalid-expected");
+        let tmp = test_dir("external-invalid-expected");
         let ots_path = tmp.path().join("2025-10-07.cbor.ots");
         let ots_binary = write_fake_ots_binary(tmp.path(), 0);
         fs::write(&ots_path, b"UNSUPPORTED_EXTERNAL_PROOF\n").unwrap();
@@ -1284,7 +1318,7 @@ mod tests {
 
     #[test]
     fn expected_hash_binds_placeholder_paths_to_the_sibling_artifact() {
-        let tmp = TestDir::new("placeholder-artifact-mismatch");
+        let tmp = test_dir("placeholder-artifact-mismatch");
         let artifact_path = tmp.path().join("2025-10-07.cbor");
         let ots_path = artifact_path.with_extension("cbor.ots");
         fs::write(&artifact_path, b"substituted-day-bytes").unwrap();
@@ -1306,7 +1340,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn verify_ots_proof_times_out_when_binary_hangs() {
-        let tmp = TestDir::new("real-proof-timeout");
+        let tmp = test_dir("real-proof-timeout");
         let artifact_path = tmp.path().join("2025-10-07.cbor");
         let ots_path = artifact_path.with_extension("cbor.ots");
         let ots_binary = tmp.path().join("ots");
@@ -1332,7 +1366,7 @@ mod tests {
 
     #[test]
     fn validate_meta_sidecar_accepts_valid_sidecar() {
-        let tmp = TestDir::new("meta-valid");
+        let tmp = test_dir("meta-valid");
         let repo_root = tmp.path();
         let artifact_path = repo_root.join("out/site_demo/day/2025-10-07.cbor");
         let ots_path = artifact_path.with_extension("cbor.ots");
@@ -1365,7 +1399,7 @@ mod tests {
 
     #[test]
     fn validate_meta_sidecar_rejects_missing_required_fields() {
-        let tmp = TestDir::new("meta-missing");
+        let tmp = test_dir("meta-missing");
         let repo_root = tmp.path();
         let artifact_path = repo_root.join("out/site_demo/day/2025-10-07.cbor");
         let ots_path = artifact_path.with_extension("cbor.ots");
@@ -1387,7 +1421,7 @@ mod tests {
 
     #[test]
     fn validate_meta_sidecar_rejects_hash_mismatch() {
-        let tmp = TestDir::new("meta-mismatch");
+        let tmp = test_dir("meta-mismatch");
         let repo_root = tmp.path();
         let artifact_path = repo_root.join("out/site_demo/day/2025-10-07.cbor");
         let ots_path = artifact_path.with_extension("cbor.ots");
@@ -1420,7 +1454,7 @@ mod tests {
 
     #[test]
     fn validate_meta_sidecar_rejects_day_mismatch() {
-        let tmp = TestDir::new("meta-day-mismatch");
+        let tmp = test_dir("meta-day-mismatch");
         let repo_root = tmp.path();
         let artifact_path = repo_root.join("out/site_demo/day/2025-10-07.cbor");
         let ots_path = artifact_path.with_extension("cbor.ots");
