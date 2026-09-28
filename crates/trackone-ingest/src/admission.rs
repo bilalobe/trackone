@@ -5,9 +5,9 @@ use core::fmt;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "std")]
-use std::string::String;
+use sha2::{Digest, Sha256};
 #[cfg(feature = "std")]
-use trackone_ledger::sha256_hex;
+use std::string::String;
 
 #[cfg(feature = "xchacha")]
 use chacha20poly1305::{
@@ -235,7 +235,14 @@ pub const REJECTION_REASONS: &[&str] = &[
 
 #[cfg(feature = "std")]
 pub fn hash_rejected_line(raw_line: &str) -> String {
-    sha256_hex(raw_line.trim_end_matches(['\r', '\n']).as_bytes())
+    let digest = Sha256::digest(raw_line.trim_end_matches(['\r', '\n']).as_bytes());
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut encoded = String::with_capacity(64);
+    for byte in digest {
+        encoded.push(HEX[(byte >> 4) as usize] as char);
+        encoded.push(HEX[(byte & 0x0f) as usize] as char);
+    }
+    encoded
 }
 
 #[cfg(feature = "std")]
@@ -347,5 +354,18 @@ fn map_framed_nonce_error(reason: FramedNonceError) -> RejectReason {
         FramedNonceError::Salt8Length => RejectReason::Salt8Length,
         FramedNonceError::SaltMismatch => RejectReason::NonceSaltMismatch,
         FramedNonceError::FrameCounterMismatch => RejectReason::NonceFcMismatch,
+    }
+}
+
+#[cfg(all(test, feature = "std"))]
+mod tests {
+    use super::hash_rejected_line;
+
+    #[test]
+    fn rejected_line_hash_is_stable_and_ignores_line_endings() {
+        const EXPECTED: &str = "43258cff783fe7036d8a43033f830adfc60ec037382473548ac742b888292777";
+        assert_eq!(hash_rejected_line("{\"a\":1,\"b\":2}"), EXPECTED);
+        assert_eq!(hash_rejected_line("{\"a\":1,\"b\":2}\n"), EXPECTED);
+        assert_eq!(hash_rejected_line("{\"a\":1,\"b\":2}\r\n"), EXPECTED);
     }
 }

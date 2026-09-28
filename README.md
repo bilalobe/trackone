@@ -20,20 +20,30 @@ crates at the edge. These rules are checked by
 [`just boundaries`](justfile) and
 [`toolset/ci/check_workspace_boundaries.py`](toolset/ci/check_workspace_boundaries.py).
 
-## Data and evidence flow
+## Data and evidence flows
 
-The normal path is:
+The workspace contains two related compositions with separate protocol
+authorities:
 
 ```text
-pod-fw -> ingest -> gateway-svc -> ledger -> evidence verifier
-                                      \-> SensorThings projection
-                                      \-> OTS/TSA publication edges
+Telemetry and firmware
+  pod-fw -> ingest -> core -> constants
+            \-> constants
+  sensorthings -> core
+
+VTL production and verification
+  gateway-svc -> ledger <- evidence
+              -> rfc3161 <- evidence
+
+Alternative timestamp channel
+  ots -> ledger + constants
 ```
 
-Canonical evidence is CBOR-backed. JSON and SensorThings outputs are
-read-only projections, and timestamp responses attest to already-created
-artifacts rather than changing their bytes. The active VTL profile is the
-[current profile
+The telemetry fact model and its deterministic encoding do not define the
+current VTL artifact profile. VTL evidence is CBOR-backed; JSON and
+SensorThings outputs are read-only projections, and timestamp responses attest
+to already-created artifacts rather than changing their bytes. The active VTL
+profile is the [current profile
 on the IETF Datatracker](https://datatracker.ietf.org/doc/draft-elkhatabi-verifiable-telemetry-ledgers/),
 an externally published Independent Submission Internet-Draft identified
 in-band by profile UUID `c08ade4e-1785-4eb6-9648-b7003d76288d`. The profile

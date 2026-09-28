@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Compute rejection-audit hashes directly with SHA-256 so framed admission no
+  longer depends on the ledger crate for hashing or transitive Serde feature
+  activation; the `std` feature now enables Serde's standard-library support
+  explicitly.
+
 ## [0.1.0-beta.5] - 2026-08-08
 
 ### Security

@@ -16,5 +16,5 @@ doctest = false
 
 [dependencies]
 serde_json.workspace = true
+sha2.workspace = true
 trackone-core.workspace = true
-trackone-ledger.workspace = true

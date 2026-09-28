@@ -19,9 +19,6 @@ pub const OTS_VERIFY_TIMEOUT_SECS: u64 = 30;
 /// Default pod watchdog timeout in milliseconds.
 pub const DEFAULT_WATCHDOG_MS: u32 = 1_000;
 
-/// Active commitment profile identifier.
-pub const COMMITMENT_PROFILE_ID_CANONICAL_CBOR_V1: &str = "verifiable-telemetry-canonical-cbor-v1";
-
 /// Disclosure class for publicly recomputable verification bundles.
 pub const DISCLOSURE_CLASS_PUBLIC_RECOMPUTE: &str = "A";
 
@@ -52,10 +49,6 @@ mod tests {
 
     #[test]
     fn release_constants_match_manifest_contract() {
-        assert_eq!(
-            COMMITMENT_PROFILE_ID_CANONICAL_CBOR_V1,
-            "verifiable-telemetry-canonical-cbor-v1"
-        );
         assert_eq!(DISCLOSURE_CLASS_PUBLIC_RECOMPUTE, "A");
         assert_eq!(DISCLOSURE_CLASS_PARTNER_AUDIT, "B");
         assert_eq!(DISCLOSURE_CLASS_ANCHOR_ONLY, "C");

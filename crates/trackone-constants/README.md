@@ -9,10 +9,7 @@ This crate is for constants that need to stay aligned across:
 
 - `trackone-core`
 - `trackone-ingest`
-- `trackone-ledger`
 - `trackone-ots`
-- `trackone-gateway-svc`
-- `trackone-pod-fw`
 
 Current examples include:
 
@@ -21,8 +18,10 @@ Current examples include:
 - framed ingest labels such as `INGEST_PROFILE_RUST_POSTCARD_V1` and
   `FRAMED_FACT_MSG_TYPE`
 - verifier/runtime defaults such as `OTS_VERIFY_TIMEOUT_SECS`
-- release/profile labels such as `COMMITMENT_PROFILE_ID_CANONICAL_CBOR_V1`
 - disclosure-class identifiers and labels
+
+The active VTL commitment-profile UUID belongs to `trackone-ledger::vtl`, not
+this cross-cutting constants crate.
 
 ## What does not belong here
 
@@ -47,11 +46,8 @@ paths.
 - [`trackone-ingest`](../trackone-ingest/README.md) uses sizing, nonce, and tag
   constants for framed admission and fixture emission
 - [`trackone-ots`](../trackone-ots/README.md) uses the bounded verifier timeout
-- [`trackone-pod-fw`](../trackone-pod-fw/README.md) uses the same sizing and
-  protocol policy as host-side code
-- [`trackone-evidence`](../../apps/trackone-evidence/README.md) and
-  [`trackone-gateway-svc`](../../apps/trackone-gateway-svc/README.md) consume
-  the shared profile and verifier defaults at application edges
+- [`trackone-pod-fw`](../trackone-pod-fw/README.md) receives shared sizing and
+  protocol policy through core and ingest
 
 ## Check
 

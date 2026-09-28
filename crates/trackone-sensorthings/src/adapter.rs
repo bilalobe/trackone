@@ -1,7 +1,7 @@
 use serde_json::json;
 use trackone_core::{Fact, FactKind, FactPayload, FactValidationError, SampleType};
-use trackone_ledger::sha256_hex;
 
+use super::hash::sha256_hex;
 use super::mapping::{
     EnvObservationProjection, EnvObservationProjectionInput, ObservationResult,
     project_env_observation,
@@ -329,9 +329,10 @@ mod tests {
         )
         .expect("adapter should succeed");
 
+        assert_eq!(input.sensor_key, "prov-299b45f3a5471a50-temperature-air");
         assert_eq!(
-            input.sensor_key,
-            derive_provisioned_sensor_key("ed25519-pubkey-pod-012", "temperature_air", None)
+            derive_provisioned_sensor_key("ed25519-pubkey-pod-012", "temperature_air", None),
+            "prov-299b45f3a5471a50-temperature-air"
         );
     }
 

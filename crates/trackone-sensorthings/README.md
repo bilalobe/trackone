@@ -22,8 +22,9 @@ results must be finite.
 
 - [`trackone-core`](../trackone-core/README.md) owns canonical protocol facts,
   sample types, and payload shapes.
-- [`trackone-ledger`](../trackone-ledger/README.md) owns commitment artifacts;
-  SensorThings outputs are not Merkle leaves or CBOR commitment authorities.
+- [`trackone-ledger`](../trackone-ledger/README.md) separately owns VTL
+  commitment artifacts; SensorThings has no ledger dependency, and its outputs
+  are not Merkle leaves or CBOR commitment authorities.
 
 ## Boundary watchlist
 

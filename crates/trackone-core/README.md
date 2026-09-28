@@ -1,8 +1,9 @@
 # trackone-core
 
-`trackone-core` is the shared protocol crate for TrackOne. It owns the bounded
-types, AEAD-facing traits, imported identity-input records, and
-deterministic encoding surfaces that both host and firmware code depend on.
+`trackone-core` is the shared telemetry protocol crate for TrackOne. It owns
+the bounded fact types, AEAD-facing traits, imported identity-input records,
+and deterministic fact encoding used by host and firmware code. The active VTL
+artifact profile is a separate authority in `trackone-ledger`.
 
 ## Responsibilities
 
@@ -15,7 +16,8 @@ This crate owns:
 - AEAD traits and crypto-adjacent type contracts
 - identity/admission input types used to carry external lifecycle state into
   the TrackOne evidence path
-- deterministic CBOR encoding support used by the commitment path
+- deterministic CBOR encoding for the shared telemetry fact model; this older
+  fact encoding is outside the active VTL conformance surface
 - re-export of shared policy constants from
   [`trackone-constants`](../trackone-constants/README.md)
 
@@ -33,14 +35,15 @@ This crate owns:
 
 The crate remains `no_std`-capable when `std` is disabled.
 
-`EnvFact::instant` and `EnvFact::summary` are fallible. Postcard-facing callers
-and commitment callers must propagate `FactValidationError`; canonical CBOR
-encoding returns `CoreResult<Vec<u8>>` and never commits an invalid fact.
+`EnvFact::instant` and `EnvFact::summary` are fallible. Postcard-facing and
+deterministic-encoding callers must propagate `FactValidationError`;
+deterministic CBOR encoding returns `CoreResult<Vec<u8>>` and never encodes an
+invalid fact.
 
 ## Boundary with other crates
 
-- [`trackone-ledger`](../trackone-ledger/README.md) owns commitment-specific
-  artifact construction, Merkle policy, and digest helpers.
+- [`trackone-ledger`](../trackone-ledger/README.md) owns the active VTL profile,
+  artifact construction, Merkle policy, and VTL profile UUID.
 - [`trackone-ingest`](../trackone-ingest/README.md) owns framed Postcard wire
   profiles, nonce/AAD binding, fixture emission, replay, and framed admission.
 - [`trackone-sensorthings`](../trackone-sensorthings/README.md) owns read-only
@@ -49,8 +52,8 @@ encoding returns `CoreResult<Vec<u8>>` and never commits an invalid fact.
   runtime helpers on top of the core protocol model.
 
 `trackone-core` should stay focused on shared protocol semantics. If logic is
-about framed ingest admission it belongs in `trackone-ingest`; if it is only
-about verifier/export commitment artifacts, it probably belongs in
+about framed ingest admission it belongs in `trackone-ingest`; if it is about
+VTL producer/verifier artifacts, it belongs in
 `trackone-ledger`.
 
 ## Boundary watchlist

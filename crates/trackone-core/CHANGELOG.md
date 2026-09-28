@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- Remove the obsolete `COMMITMENT_PROFILE_ID_CANONICAL_CBOR_V1` re-export and
+  distinguish deterministic telemetry fact encoding from the active VTL
+  artifact profile.
+
 ## [0.1.0-beta.5] - 2026-08-08
 
 ### Changed

@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), deny(warnings))]
 
 pub mod adapter;
+mod hash;
 pub mod ids;
 pub mod mapping;
 mod timefmt;

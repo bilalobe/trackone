@@ -13,6 +13,7 @@ pub use merkle::{
     merkle_root_from_records,
 };
 
+/// Active VTL commitment-profile UUID.
 pub const COMMITMENT_PROFILE_ID: &str = "c08ade4e-1785-4eb6-9648-b7003d76288d";
 pub const SEGMENT_MEDIA_TYPE: &str = "application/cbor";
 pub const SPECIALIZED_SEGMENT_MEDIA_TYPE: &str = "application/vnd.vtl.segment+cbor";

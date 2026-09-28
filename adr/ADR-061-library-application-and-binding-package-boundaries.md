@@ -2,7 +2,7 @@
 
 **Status**: Accepted
 **Date**: 2026-07-15
-**Amended**: 2026-08-08
+**Amended**: 2026-09-10
 
 ## Related ADRs
 
@@ -12,6 +12,8 @@
 - [ADR-046](ADR-046-sealed-trust-root-boundary-and-deferring-trackone-seal.md): deterministic seal and publication boundaries
 - [ADR-051](ADR-051-internal-dependency-boundaries-and-feature-demotion.md): dependency direction and feature demotion
 - [ADR-059](ADR-059-rust-native-conformance-archive-and-workflow-lanes.md): release conformance packaging
+- [ADR-064](ADR-064-vtl-versioning-reset.md): active unversioned VTL module and profile slate
+- [ADR-066](ADR-066-tsa-baseline-selection-and-ots-displacement.md): RFC 3161 baseline and OTS positioning
 
 ## Context
 
@@ -38,13 +40,14 @@ The workspace uses two explicit source layers:
 
 The concrete allocation is:
 
-- `trackone-ots` owns native OTS parsing, verification, and sidecar binding;
-- `trackone-gateway-svc` owns the v2 producer, PostgreSQL store, HTTP service,
-  RFC 3161 submission, service binary, migrations, Dockerfile, Helm chart, and
-  build-only local Kustomize assets; Helm is the sole runtime deployment
-  surface;
-- `trackone-evidence` is the supported v2 verifier/compactor library and CLI
-  but lives under `apps/` and depends directly on `trackone-ots`;
+- `trackone-ots` owns native OTS parsing, verification, and sidecar binding as
+  a reusable alternative-channel library outside the baseline application graph;
+- `trackone-gateway-svc` owns the VTL producer, PostgreSQL store, HTTP service,
+  RFC 3161 submission, snapshot export, service and export binaries,
+  migrations, Dockerfile, and Helm chart;
+- `trackone-evidence` is the supported VTL verifier/compactor library and CLI,
+  lives under `apps/`, and depends directly on `trackone-ledger` and
+  `trackone-rfc3161`;
 - the mixed `trackone-gateway` package and its mismatched `trackone` library
   target are removed.
 
@@ -53,9 +56,10 @@ compose reusable crates.
 
 `trackone-ingest` exposes its existing crate-root API from internal
 `profile`, `frame`, `aad`, `nonce`, `fixture`, `replay`, and
-`admission` modules. The evidence library exposes its forward-only v2
-verification and compaction surface from the `v2` module. Its former v1
-verification/export modules and compatibility command names are removed.
+`admission` modules. The evidence library exposes its forward-only VTL
+verification and compaction surface from the unversioned `vtl` module. Former
+version-named verification/export modules and compatibility command names are
+removed.
 
 The coordinated release contains eight reusable libraries and two publishable
 applications. The legacy `trackone-python` PyO3 leaf is removed; Python
@@ -83,7 +87,7 @@ dependency-direction decisions remain in force.
 - Rust callers of the former `trackone::ots` and `trackone::v2_*` paths must
   migrate to `trackone_ots` and `trackone_gateway_svc`.
 - Release automation and downstream package-count assumptions must recognize
-  nine publishable packages.
+  ten publishable packages.
 - Historical ADRs and changelogs retain references to the former package name;
   readers must follow this ADR for the current allocation.
 
@@ -103,7 +107,7 @@ dependency-direction decisions remain in force.
 2. Test the supported `std,xchacha` ingest path.
 3. Test the OTS, evidence, and gateway-service packages independently.
 4. Run the curated workspace test, Clippy, format, and production-build gates.
-5. Package the nine publishable packages, lint/package the app-owned Helm
+5. Package the ten publishable packages, lint/package the app-owned Helm
    chart, and assemble the conformance archive.
 6. Verify searches and Cargo metadata show no dependency on the removed
    `trackone-gateway` package.

@@ -1,7 +1,11 @@
-//! Deterministic CBOR encoding for TrackOne commitments.
+//! Deterministic CBOR encoding for TrackOne telemetry facts and identity input.
 //!
-//! TrackOne uses a **deterministic CBOR profile** (inspired by RFC 8949 Section 4.2)
-//! for stable cryptographic commitments and reproducible hashing.
+//! This module implements the older fact-level deterministic encoding described
+//! by ADR-034. It remains useful for stable hashing and stored telemetry, but it
+//! is not the active VTL artifact profile; that authority lives in
+//! `trackone_ledger::vtl`.
+//!
+//! The encoding is a project-specific profile inspired by RFC 8949 Section 4.2.
 //!
 //! This is NOT strictly RFC 8949 "canonical CBOR" - it's a project-specific profile with:
 //! - integers encoded in shortest form (per RFC 8949)
@@ -16,9 +20,9 @@
 //! - Schema is already versioned and fixed in TrackOne core types
 //!
 //! Notes:
-//! - Use `CanonicalCbor` for commitments; generic serde-driven CBOR helpers are
-//!   intentionally omitted so callers do not confuse them with the canonical
-//!   commitment surface.
+//! - Use `CanonicalCbor` when this exact fact encoding is required; generic
+//!   serde-driven CBOR helpers are intentionally omitted so callers cannot
+//!   accidentally substitute a different byte representation.
 //! - Field order in arrays is part of the canonical contract and MUST NOT change
 //!   without a schema version bump.
 //! - Schema version is embedded as the first array element to enable safe evolution.
@@ -33,8 +37,8 @@ use crate::types::{CoreResult, EnvFact, Error, Fact, FactPayload};
 
 /// Encodes a value to CBOR using deterministic/canonical rules.
 ///
-/// This is the function you want for hashing, commitments, and reproducible
-/// size measurements.
+/// Use this function for reproducible telemetry fact bytes and size
+/// measurements. Active VTL artifacts use `trackone_ledger::vtl` instead.
 #[cfg(feature = "std")]
 pub fn to_canonical_cbor_vec<T: CanonicalCbor>(value: &T) -> CoreResult<Vec<u8>> {
     value.to_canonical_cbor_vec()

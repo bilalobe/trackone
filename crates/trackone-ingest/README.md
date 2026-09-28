@@ -62,14 +62,14 @@ collides.
 ## Boundary With Other Crates
 
 - [`trackone-core`](../trackone-core/README.md) owns canonical protocol types,
-  crypto-facing traits, identity/admission input records, and deterministic CBOR
-  commitment surfaces.
+  crypto-facing traits, identity/admission input records, and deterministic
+  telemetry fact encoding.
 - [`trackone-pod-fw`](../trackone-pod-fw/README.md) uses ingest helpers to emit
   framed facts from firmware-side runtime state.
 - [`trackone-sensorthings`](../trackone-sensorthings/README.md) owns read-only
   projection of already accepted facts into SensorThings-shaped outputs.
 - [`trackone-ledger`](../trackone-ledger/README.md) owns commitment artifacts;
-  CBOR remains the only commitment authority.
+  ingest has no dependency on ledger and does not define VTL artifacts.
 
 ## What This Crate Is Not
 

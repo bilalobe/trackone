@@ -1,4 +1,4 @@
-use trackone_ledger::sha256_hex;
+use super::hash::sha256_hex;
 
 const ENTITY_ID_DOMAIN: &[u8] = b"trackone:sensorthings:entity-id:v2";
 

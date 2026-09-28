@@ -27,18 +27,18 @@ pub mod crypto;
 /// External identity/admission input records and CBOR serialization (ADR-019, ADR-034).
 pub mod identity_input;
 
-/// Canonical CBOR encoding for deterministic hashing/commitments (ADR-034).
+/// Deterministic CBOR encoding for the shared telemetry fact model (ADR-034).
 ///
-/// Note: this is currently `std`-gated because it returns `Vec<u8>`.
+/// This is distinct from the active VTL artifact profile owned by
+/// `trackone-ledger`. It is currently `std`-gated because it returns `Vec<u8>`.
 #[cfg(feature = "std")]
 pub mod cbor;
 
 pub use trackone_constants::{
-    AEAD_NONCE_LEN, AEAD_TAG_LEN, COMMITMENT_PROFILE_ID_CANONICAL_CBOR_V1, DEFAULT_WATCHDOG_MS,
-    DISCLOSURE_CLASS_ANCHOR_ONLY, DISCLOSURE_CLASS_ANCHOR_ONLY_LABEL,
-    DISCLOSURE_CLASS_PARTNER_AUDIT, DISCLOSURE_CLASS_PARTNER_AUDIT_LABEL,
-    DISCLOSURE_CLASS_PUBLIC_RECOMPUTE, DISCLOSURE_CLASS_PUBLIC_RECOMPUTE_LABEL,
-    INGEST_PROFILE_RUST_POSTCARD_V1, MAX_FACT_LEN,
+    AEAD_NONCE_LEN, AEAD_TAG_LEN, DEFAULT_WATCHDOG_MS, DISCLOSURE_CLASS_ANCHOR_ONLY,
+    DISCLOSURE_CLASS_ANCHOR_ONLY_LABEL, DISCLOSURE_CLASS_PARTNER_AUDIT,
+    DISCLOSURE_CLASS_PARTNER_AUDIT_LABEL, DISCLOSURE_CLASS_PUBLIC_RECOMPUTE,
+    DISCLOSURE_CLASS_PUBLIC_RECOMPUTE_LABEL, INGEST_PROFILE_RUST_POSTCARD_V1, MAX_FACT_LEN,
 };
 
 #[cfg(test)]
@@ -52,10 +52,6 @@ mod tests {
 
     #[test]
     fn release_contract_constants_are_reexported() {
-        assert_eq!(
-            COMMITMENT_PROFILE_ID_CANONICAL_CBOR_V1,
-            "verifiable-telemetry-canonical-cbor-v1"
-        );
         assert_eq!(DISCLOSURE_CLASS_PUBLIC_RECOMPUTE, "A");
         assert_eq!(DISCLOSURE_CLASS_PARTNER_AUDIT, "B");
         assert_eq!(DISCLOSURE_CLASS_ANCHOR_ONLY, "C");

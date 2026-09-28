@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Compute projection identifiers with a private SHA-256 helper so SensorThings
+  no longer depends on the VTL ledger crate; existing identifiers are unchanged.
+
 ## [0.1.0-beta.5] - 2026-08-08
 
 ### Changed

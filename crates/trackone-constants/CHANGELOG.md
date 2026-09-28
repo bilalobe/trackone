@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- Remove the obsolete pre-reset `COMMITMENT_PROFILE_ID_CANONICAL_CBOR_V1`;
+  the active VTL profile UUID is owned by `trackone-ledger`.
+
 ## [0.1.0-beta.5] - 2026-08-08
 
 ### Changed
