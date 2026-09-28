@@ -17,6 +17,7 @@ mod disclosure;
 mod manifest;
 mod paths;
 mod policy;
+mod remote;
 mod result;
 mod timestamp;
 
@@ -376,3 +377,4 @@ pub fn compact_bundle(
 }
 
 pub use archive::verify_archive;
+pub use remote::{RemoteOptions, verify_remote_bundle};

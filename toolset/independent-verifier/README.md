@@ -29,3 +29,38 @@ verifies. The builder intentionally does not package the externally published pr
 document. The archive retains the checked-in schemas, CDDL, vectors, and
 detached verifier; the active profile source remains the [current document on
 the IETF Datatracker](https://datatracker.ietf.org/doc/draft-elkhatabi-verifiable-telemetry-ledgers/).
+
+## HTTPS reference-binding acceptance checker
+
+The [HTTPS acceptance walkthrough](../../docs/vtl-https-acceptance.md) connects
+the audit scenario to the concrete exchange. The
+[acceptance README](../acceptance/README.md) gives the fresh producer command,
+focused rejection coverage, and detached corpus replay instructions.
+
+`verify_https_bundle.py` is separate from the archive runner and from the Rust
+verifier. It retrieves an immutable snapshot with Python's TLS 1.3 / HTTP/1.1
+stack, encodes each validated UTF-8 path component exactly once, recomputes VTL
+commitments and predecessor continuity, parses the relevant CBOR and DER
+structures itself, and delegates only cryptographic signature and RFC 5280
+path operations to OpenSSL. Its JSON report lists the checks actually
+exercised; it does not claim exhaustive baseline-verifier coverage.
+
+For timestamp-complete Class A evidence:
+
+```bash
+python3 verify_https_bundle.py \
+  --bundle-url https://evidence.example/bundles/example/ \
+  --expected-segment-sha256 "$EXPECTED_SEGMENT_SHA256" \
+  --https-ca-file https-root.pem \
+  --scope public_recompute \
+  --tsa-ca-file tsa-root.pem \
+  --tsa-crls-file tsa-crls.pem \
+  --tsa-policy 1.3.6.1.4.1.55555.1 \
+  --tsa-signer-cert-sha256 "$TSA_SIGNER_SHA256" \
+  --evaluation-time 2026-09-09T12:00:00Z \
+  --output acceptance-report.json
+```
+
+The HTTPS CA and TSA trust inputs are intentionally distinct. The bundle URL,
+required scope, and expected segment digest are provisioned independently of
+the retrieved manifest.

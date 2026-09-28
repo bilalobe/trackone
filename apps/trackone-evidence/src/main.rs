@@ -3,12 +3,13 @@
 use std::path::PathBuf;
 use std::time::Duration;
 use trackone_evidence::vtl::{
-    VerificationScope, VerifyPolicy, compact_bundle, verify_archive, verify_bundle_with_policy,
+    RemoteOptions, VerificationScope, VerifyPolicy, compact_bundle, verify_archive,
+    verify_bundle_with_policy, verify_remote_bundle,
 };
 
 fn usage() -> ! {
     eprintln!(
-        "usage:\n  trackone-evidence verify (--root DIR | --archive FILE) [--scope public_recompute|disclosed_batch_recompute|anchor_only] [--batch N ...] [--require-claimed-scope] [--json] [--pretty] [--tsa-ca-file FILE] [--tsa-intermediates-file FILE] [--tsa-crls-file FILE] [--tsa-policy OID] [--tsa-signer-cert-sha256 HEX] [--tsa-max-future-skew-seconds N] [--verifier-policy-id ID] [--verifier-policy-file FILE]\n  trackone-evidence compact --root DIR --output FILE [--include-extensions] [--tsa-ca-file FILE] [--tsa-intermediates-file FILE] [--tsa-crls-file FILE] [--tsa-policy OID] [--tsa-signer-cert-sha256 HEX] [--tsa-max-future-skew-seconds N] [--verifier-policy-id ID] [--verifier-policy-file FILE]"
+        "usage:\n  trackone-evidence verify (--root DIR | --archive FILE | --bundle-url URL --expected-segment-sha256 HEX --https-ca-file FILE) [--scope public_recompute|disclosed_batch_recompute|anchor_only] [--batch N ...] [--require-claimed-scope] [--json] [--pretty] [--tsa-ca-file FILE] [--tsa-intermediates-file FILE] [--tsa-crls-file FILE] [--tsa-policy OID] [--tsa-signer-cert-sha256 HEX] [--tsa-max-future-skew-seconds N] [--verifier-policy-id ID] [--verifier-policy-file FILE]\n  trackone-evidence compact --root DIR --output FILE [--include-extensions] [--tsa-ca-file FILE] [--tsa-intermediates-file FILE] [--tsa-crls-file FILE] [--tsa-policy OID] [--tsa-signer-cert-sha256 HEX] [--tsa-max-future-skew-seconds N] [--verifier-policy-id ID] [--verifier-policy-file FILE]"
     );
     std::process::exit(2);
 }
@@ -90,6 +91,9 @@ fn parse_policy_arg(args: &[String], idx: &mut usize, policy: &mut VerifyPolicy)
 fn run_verify(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let mut root: Option<PathBuf> = None;
     let mut archive: Option<PathBuf> = None;
+    let mut bundle_url: Option<String> = None;
+    let mut expected_segment_sha256: Option<String> = None;
+    let mut https_ca_file: Option<PathBuf> = None;
     let mut json_mode = false;
     let mut pretty = false;
     let mut policy = VerifyPolicy::baseline();
@@ -98,6 +102,14 @@ fn run_verify(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
         match args[idx].as_str() {
             "--root" => root = Some(PathBuf::from(take_value(args, &mut idx, "--root"))),
             "--archive" => archive = Some(PathBuf::from(take_value(args, &mut idx, "--archive"))),
+            "--bundle-url" => bundle_url = Some(take_value(args, &mut idx, "--bundle-url")),
+            "--expected-segment-sha256" => {
+                expected_segment_sha256 =
+                    Some(take_value(args, &mut idx, "--expected-segment-sha256"));
+            }
+            "--https-ca-file" => {
+                https_ca_file = Some(PathBuf::from(take_value(args, &mut idx, "--https-ca-file")));
+            }
             "--json" => json_mode = true,
             "--pretty" => pretty = true,
             _ if parse_policy_arg(args, &mut idx, &mut policy) => {}
@@ -105,9 +117,25 @@ fn run_verify(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
         }
         idx += 1;
     }
-    let summary = match (root, archive) {
-        (Some(root), None) => verify_bundle_with_policy(&root, &policy)?,
-        (None, Some(archive)) => verify_archive(&archive, &policy)?,
+    let summary = match (root, archive, bundle_url) {
+        (Some(root), None, None)
+            if expected_segment_sha256.is_none() && https_ca_file.is_none() =>
+        {
+            verify_bundle_with_policy(&root, &policy)?
+        }
+        (None, Some(archive), None)
+            if expected_segment_sha256.is_none() && https_ca_file.is_none() =>
+        {
+            verify_archive(&archive, &policy)?
+        }
+        (None, None, Some(url)) => verify_remote_bundle(
+            &RemoteOptions::new(
+                url,
+                expected_segment_sha256.unwrap_or_else(|| usage()),
+                https_ca_file.unwrap_or_else(|| usage()),
+            ),
+            &policy,
+        )?,
         _ => usage(),
     };
     if json_mode {
