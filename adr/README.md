@@ -87,6 +87,8 @@ security decisions remain in force unless an ADR explicitly supersedes them.
 - [ADR-062: RFC 5816 Signer-Certificate Binding](ADR-062-rfc5816-signer-certificate-binding.md)
 - [ADR-063: V2-preserving Payload Minimization and Compact Bundle Envelopes](ADR-063-v2-preserving-payload-minimization-and-compact-bundle-envelopes.md)
 - [ADR-064: VTL Versioning Reset and Scoped Archive Claims](ADR-064-vtl-versioning-reset.md)
+- [ADR-065: Relationship to RFC 4998 ERS and Commitment Determinism](ADR-065-ers-relationship-and-commitment-determinism.md)
+- [ADR-066: TSA Baseline Selection and the Displacement of OTS](ADR-066-tsa-baseline-selection-and-ots-displacement.md)
 
 ## Index Conventions
 
@@ -299,7 +301,7 @@ Entries list **Status** and **Summary**. Related references are grouped under **
   - **See also**: [ADR-007](ADR-007-ots-ci-verification-and-bitcoin-headers.md), [ADR-020](ADR-020-stationary-ots-calendar-followup.md), [ADR-021](ADR-021-safety-net-ots-pipeline-verification.md), [ADR-022](ADR-022-first-party-stationary-ots-calendar-service.md), [ADR-023](ADR-023-ots-vs-git-integrity.md)
 
 - **[ADR-015](ADR-015-parallel-anchoring-ots-rfc3161-tsa.md): Parallel Anchoring with OpenTimestamps and RFC 3161 TSA**
-  **Status**: Accepted
+  **Status**: Superseded by [ADR-066](ADR-066-tsa-baseline-selection-and-ots-displacement.md)
   **Summary**: For each daily Merkle root, produce and store both an OTS proof and an RFC 3161 TSA response over the same digest; verify both in CI/CLI and treat dual success as strongest assurance while remaining backward-compatible with OTS-only.
 
   - **See also**: [ADR-022](ADR-022-first-party-stationary-ots-calendar-service.md)
@@ -443,6 +445,14 @@ Entries list **Status** and **Summary**. Related references are grouped under **
   **Status**: Accepted, 2026-08-27
   **Summary**: Defines the current VTL compatibility line, resets segment and producer-manifest schemas to version one, keeps verifier results unversioned, adopts self-explanatory module names, and narrows archive claims to mechanically replayed checks.
 
+- **[ADR-065](ADR-065-ers-relationship-and-commitment-determinism.md): Relationship to RFC 4998 ERS and Commitment Determinism**
+  **Status**: Accepted, 2026-09-09
+  **Summary**: Keeps the VTL commitment construction rather than profiling RFC 4998, positions ERS as an optional preservation layer above the segment artifact, supplies replacement Section 1.2 text for draft -13, and records the prototype experiment and decision criterion that could reopen the question.
+
+- **[ADR-066](ADR-066-tsa-baseline-selection-and-ots-displacement.md): TSA Baseline Selection and the Displacement of OTS**
+  **Status**: Accepted, 2026-09-10
+  **Summary**: Records the criterion selecting the RFC 3161 channel as the sole baseline — a referenceable validation algorithm, a closed set of verifier policy inputs, synchronous issuance, and pinnable trust — and establishes from the -00 through -12 revision history that OpenTimestamps was displaced by scope narrowing rather than rejected, supplying Section 1.2 text for draft -13 and identifying ADR-015 as the single prior decision whose authority this changes under ADR-050 Section 3.
+
 ### Future Roadmap
 
 - **[ADR-017](ADR-017-rust-core-and-pyo3-integration.md): Rust Core and PyO3 Integration Strategy**
@@ -464,7 +474,7 @@ Entries list **Status** and **Summary**. Related references are grouped under **
 **Calendar & Trust**: [ADR-014](ADR-014-stationary-ots-calendar.md) \<- [ADR-020](ADR-020-stationary-ots-calendar-followup.md), [ADR-022](ADR-022-first-party-stationary-ots-calendar-service.md); [ADR-019](ADR-019-rust-gateway-chain-of-trust.md) \<- [ADR-024](ADR-024-anti-replay-and-ots-backed-ledger.md), [ADR-025](ADR-025-adaptive-uplink-cadence-over-lora.md), [ADR-026](ADR-026-ota-firmware-updates-over-lora.md)
 **Ledger & Anti-Replay**: [ADR-024](ADR-024-anti-replay-and-ots-backed-ledger.md) \<- [ADR-002](ADR-002-telemetry-framing-and-replay-policy.md), [ADR-003](ADR-003-merkle-canonicalization-and-ots-anchoring.md), [ADR-006](ADR-006-forward-only-schema-and-salt8.md), [ADR-025](ADR-025-adaptive-uplink-cadence-over-lora.md), [ADR-026](ADR-026-ota-firmware-updates-over-lora.md), [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md), [ADR-041](ADR-041-verification-disclosure-bundles-and-privacy-tiers.md), [ADR-058](ADR-058-admission-state-and-rejection-audit-contract.md)
 **Firmware Runtime & Recovery**: [ADR-042](ADR-042-hardware-watchdog-and-liveness-registry.md) \<- [ADR-021](ADR-021-safety-net-ots-pipeline-verification.md), [ADR-024](ADR-024-anti-replay-and-ots-backed-ledger.md)
-**Conformance & Interop**: [ADR-032](ADR-032-informational-rfc-verifiable-telemetry-ledger.md) \<- [ADR-039](ADR-039-cbor-first-commitment-profile-and-artifact-authority.md), [ADR-040](ADR-040-commitment-test-vectors-and-conformance-gates.md), [ADR-041](ADR-041-verification-disclosure-bundles-and-privacy-tiers.md), [ADR-043](ADR-043-phased-bundle-manifest-maturity-for-id.md), [ADR-052](ADR-052-commitment-profile-identifier-binding-boundary.md), [ADR-055](ADR-055-independent-verifier-negative-fixture-corpus.md), [ADR-057](ADR-057-publication-channel-status-and-export-refusal-policy.md), [ADR-059](ADR-059-rust-native-conformance-archive-and-workflow-lanes.md), [ADR-061](ADR-061-full-draft-08-v2-conformance-and-archive-v3.md), [ADR-064](ADR-064-vtl-versioning-reset.md)
+**Conformance & Interop**: [ADR-032](ADR-032-informational-rfc-verifiable-telemetry-ledger.md) \<- [ADR-039](ADR-039-cbor-first-commitment-profile-and-artifact-authority.md), [ADR-040](ADR-040-commitment-test-vectors-and-conformance-gates.md), [ADR-041](ADR-041-verification-disclosure-bundles-and-privacy-tiers.md), [ADR-043](ADR-043-phased-bundle-manifest-maturity-for-id.md), [ADR-052](ADR-052-commitment-profile-identifier-binding-boundary.md), [ADR-055](ADR-055-independent-verifier-negative-fixture-corpus.md), [ADR-057](ADR-057-publication-channel-status-and-export-refusal-policy.md), [ADR-059](ADR-059-rust-native-conformance-archive-and-workflow-lanes.md), [ADR-061](ADR-061-full-draft-08-v2-conformance-and-archive-v3.md), [ADR-064](ADR-064-vtl-versioning-reset.md), [ADR-065](ADR-065-ers-relationship-and-commitment-determinism.md), [ADR-066](ADR-066-tsa-baseline-selection-and-ots-displacement.md)
 **Environmental Evidence & Projections**: [ADR-030](ADR-030-envfacts-sensorthings-and-duty-cycled-anchoring.md) \<- [ADR-027](ADR-027-sensorthings-shtc3-representation.md), [ADR-028](ADR-028-sensorthings-projection-mapping.md), [ADR-029](ADR-029-env-daily-summaries-and-usecases.md)
 **Future Roadmap**: [ADR-017](ADR-017-rust-core-and-pyo3-integration.md), [ADR-036](ADR-036-post-quantum-kem.md), [ADR-037](ADR-037-signature-roles-and-verification-boundaries.md)
 **System Scope & Boundary**: [ADR-047](ADR-047-trackone-evidence-plane-within-device-lifecycle.md) \<- [ADR-024](ADR-024-anti-replay-and-ots-backed-ledger.md), [ADR-032](ADR-032-informational-rfc-verifiable-telemetry-ledger.md), [ADR-037](ADR-037-signature-roles-and-verification-boundaries.md), [ADR-039](ADR-039-cbor-first-commitment-profile-and-artifact-authority.md), [ADR-041](ADR-041-verification-disclosure-bundles-and-privacy-tiers.md), [ADR-046](ADR-046-sealed-trust-root-boundary-and-deferring-trackone-seal.md), [ADR-061](ADR-061-library-application-and-binding-package-boundaries.md)

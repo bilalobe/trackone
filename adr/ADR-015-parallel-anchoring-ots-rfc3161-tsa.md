@@ -1,6 +1,6 @@
 # ADR-015: Parallel Anchoring with OpenTimestamps and RFC 3161 TSA
 
-**Status**: Accepted
+**Status**: Superseded by [ADR-066](ADR-066-tsa-baseline-selection-and-ots-displacement.md)
 **Date**: 2025-11-06
 **Updated**: 2026-02-25
 
