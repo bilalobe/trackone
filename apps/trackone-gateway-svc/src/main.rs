@@ -1,14 +1,9 @@
 use std::env;
-use std::fs;
 use std::net::SocketAddr;
-use std::str::FromStr;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
-use native_tls::{Certificate, TlsConnector};
-use postgres::config::SslMode;
-use postgres::{Client, Config, NoTls};
-use postgres_native_tls::MakeTlsConnector;
 use trackone_gateway_svc::postgres::PostgresLedgerStore;
+use trackone_gateway_svc::postgres_connection::{PostgresTlsMode, connect_postgres};
 use trackone_gateway_svc::producer::{ElapsedClock, LedgerProducer, ProducerError};
 use trackone_gateway_svc::service::{
     AdmissionAuth, GatewayHttpState, drain_queued_tsa_segments, router,
@@ -58,49 +53,7 @@ fn optional_u64(name: &str) -> Result<Option<u64>, Box<dyn std::error::Error>> {
         .transpose()
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum PostgresTlsMode {
-    VerifyFull,
-    Disable,
-}
-
-impl PostgresTlsMode {
-    fn parse(raw: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        match raw {
-            "verify-full" => Ok(Self::VerifyFull),
-            "disable" => Ok(Self::Disable),
-            _ => Err(
-                "TRACKONE_POSTGRES_TLS_MODE must be verify-full or disable (development only)"
-                    .into(),
-            ),
-        }
-    }
-}
-
-fn connect_postgres(
-    database_url: &str,
-    mode: PostgresTlsMode,
-    ca_file: Option<&str>,
-) -> Result<Client, Box<dyn std::error::Error>> {
-    let mut config = Config::from_str(database_url)?;
-    match mode {
-        PostgresTlsMode::VerifyFull => {
-            config.ssl_mode(SslMode::Require);
-            let mut builder = TlsConnector::builder();
-            if let Some(path) = ca_file {
-                builder.add_root_certificate(Certificate::from_pem(&fs::read(path)?)?);
-            }
-            Ok(config.connect(MakeTlsConnector::new(builder.build()?))?)
-        }
-        PostgresTlsMode::Disable => {
-            config.ssl_mode(SslMode::Disable);
-            Ok(config.connect(NoTls)?)
-        }
-    }
-}
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let database_url = required("TRACKONE_DATABASE_URL")?;
     let postgres_tls_mode = PostgresTlsMode::parse(
         &env::var("TRACKONE_POSTGRES_TLS_MODE").unwrap_or_else(|_| "verify-full".to_string()),
@@ -183,35 +136,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     drain_queued_tsa_segments(&mut producer, &timestamp_authority)?;
 
-    let listener = tokio::net::TcpListener::bind(bind).await?;
-    axum::serve(
-        listener,
-        router(GatewayHttpState::new(
-            producer,
-            timestamp_authority,
-            admission_auth,
-            max_batch_records,
-            max_admission_bytes,
-        )),
-    )
-    .await?;
-    Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::PostgresTlsMode;
-
-    #[test]
-    fn postgres_tls_mode_accepts_only_explicit_supported_values() {
-        assert_eq!(
-            PostgresTlsMode::parse("verify-full").unwrap(),
-            PostgresTlsMode::VerifyFull
-        );
-        assert_eq!(
-            PostgresTlsMode::parse("disable").unwrap(),
-            PostgresTlsMode::Disable
-        );
-        assert!(PostgresTlsMode::parse("prefer").is_err());
-    }
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()?;
+    runtime.block_on(async move {
+        let listener = tokio::net::TcpListener::bind(bind).await?;
+        axum::serve(
+            listener,
+            router(GatewayHttpState::new(
+                producer,
+                timestamp_authority,
+                admission_auth,
+                max_batch_records,
+                max_admission_bytes,
+            )),
+        )
+        .await?;
+        Ok::<(), Box<dyn std::error::Error>>(())
+    })
 }

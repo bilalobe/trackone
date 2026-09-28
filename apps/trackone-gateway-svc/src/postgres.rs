@@ -65,7 +65,7 @@ impl PostgresLedgerStore {
             .client
             .execute(
                 "UPDATE trackone_vtl_sealed_segment SET tsa_response=$4, tsa_status='verified' \
-                 WHERE ledger_id=$1 AND segment_number=$2::numeric AND artifact_sha256=$3 \
+                 WHERE ledger_id=$1 AND segment_number=$2::text::numeric AND artifact_sha256=$3 \
                  AND tsa_status='queued'",
                 &[
                     &self.ledger_id,
@@ -290,15 +290,15 @@ impl LedgerStore for PostgresLedgerStore {
             if sealed.is_empty() {
                 transaction
                     .execute(
-                        "UPDATE trackone_vtl_ledger_state SET revision=$2::numeric, site_id=$3, \
-                         next_segment_number=$4::numeric, opened_at_ms=$5::numeric, \
-                         clock_continuity_id=$6::numeric, open_interval_ms=$7::numeric, \
-                         open_batch_record_limit=$8::numeric, open_record_limit=$9::numeric, \
-                         open_size_limit_bytes=$10::numeric, open_empty_mode=$11, \
-                         byte_count=$12::numeric, next_interval_ms=$13::numeric, \
-                         next_batch_record_limit=$14::numeric, next_record_limit=$15::numeric, \
-                         next_size_limit_bytes=$16::numeric, next_empty_mode=$17, active=$18 \
-                         WHERE ledger_id=$1 AND revision=$19::numeric",
+                        "UPDATE trackone_vtl_ledger_state SET revision=$2::text::numeric, site_id=$3, \
+                         next_segment_number=$4::text::numeric, opened_at_ms=$5::text::numeric, \
+                         clock_continuity_id=$6::text::numeric, open_interval_ms=$7::text::numeric, \
+                         open_batch_record_limit=$8::text::numeric, open_record_limit=$9::text::numeric, \
+                         open_size_limit_bytes=$10::text::numeric, open_empty_mode=$11, \
+                         byte_count=$12::text::numeric, next_interval_ms=$13::text::numeric, \
+                         next_batch_record_limit=$14::text::numeric, next_record_limit=$15::text::numeric, \
+                         next_size_limit_bytes=$16::text::numeric, next_empty_mode=$17, active=$18 \
+                         WHERE ledger_id=$1 AND revision=$19::text::numeric",
                         &[
                             &state.ledger_id,
                             &revision,
@@ -325,14 +325,14 @@ impl LedgerStore for PostgresLedgerStore {
             } else {
                 transaction
                     .execute(
-                    "UPDATE trackone_vtl_ledger_state SET revision=$2::numeric, site_id=$3, \
-                     next_segment_number=$4::numeric, predecessor_cbor=$5, opened_at_ms=$6::numeric, \
-                     clock_continuity_id=$7::numeric, open_interval_ms=$8::numeric, \
-                     open_batch_record_limit=$9::numeric, open_record_limit=$10::numeric, \
-                     open_size_limit_bytes=$11::numeric, open_empty_mode=$12, byte_count=$13::numeric, \
-                     next_interval_ms=$14::numeric, next_batch_record_limit=$15::numeric, \
-                     next_record_limit=$16::numeric, next_size_limit_bytes=$17::numeric, \
-                     next_empty_mode=$18, active=$19 WHERE ledger_id=$1 AND revision=$20::numeric",
+                    "UPDATE trackone_vtl_ledger_state SET revision=$2::text::numeric, site_id=$3, \
+                     next_segment_number=$4::text::numeric, predecessor_cbor=$5, opened_at_ms=$6::text::numeric, \
+                     clock_continuity_id=$7::text::numeric, open_interval_ms=$8::text::numeric, \
+                     open_batch_record_limit=$9::text::numeric, open_record_limit=$10::text::numeric, \
+                     open_size_limit_bytes=$11::text::numeric, open_empty_mode=$12, byte_count=$13::text::numeric, \
+                     next_interval_ms=$14::text::numeric, next_batch_record_limit=$15::text::numeric, \
+                     next_record_limit=$16::text::numeric, next_size_limit_bytes=$17::text::numeric, \
+                     next_empty_mode=$18, active=$19 WHERE ledger_id=$1 AND revision=$20::text::numeric",
                     &[&state.ledger_id, &revision, &state.site_id, &next_segment_number,
                       &state.predecessor_cbor, &opened_at_ms, &clock_continuity_id,
                       &open_interval_ms, &open_batch_limit, &open_record_limit,
@@ -352,9 +352,9 @@ impl LedgerStore for PostgresLedgerStore {
                       open_batch_record_limit, open_record_limit, open_size_limit_bytes, \
                       open_empty_mode, byte_count, next_interval_ms, next_batch_record_limit, \
                       next_record_limit, next_size_limit_bytes, next_empty_mode, active) VALUES \
-                     ($1,$2::numeric,$3,$4::numeric,$5,$6::numeric,$7::numeric,$8::numeric, \
-                      $9::numeric,$10::numeric,$11::numeric,$12,$13::numeric,$14::numeric, \
-                      $15::numeric,$16::numeric,$17::numeric,$18,$19) ON CONFLICT DO NOTHING",
+                     ($1,$2::text::numeric,$3,$4::text::numeric,$5,$6::text::numeric,$7::text::numeric,$8::text::numeric, \
+                      $9::text::numeric,$10::text::numeric,$11::text::numeric,$12,$13::text::numeric,$14::text::numeric, \
+                      $15::text::numeric,$16::text::numeric,$17::text::numeric,$18,$19) ON CONFLICT DO NOTHING",
                     &[
                         &state.ledger_id,
                         &revision,
@@ -389,7 +389,7 @@ impl LedgerStore for PostgresLedgerStore {
                 .execute(
                     "INSERT INTO trackone_vtl_sealed_segment \
                      (ledger_id, segment_number, close_reason, artifact_cbor, artifact_sha256) \
-                     VALUES ($1,$2::numeric,$3,$4,$5)",
+                     VALUES ($1,$2::text::numeric,$3,$4,$5)",
                     &[
                         &state.ledger_id,
                         &segment_number,
@@ -416,7 +416,7 @@ impl LedgerStore for PostgresLedgerStore {
                     .execute(
                         "INSERT INTO trackone_vtl_sealed_record \
                          (ledger_id, segment_number, ordinal, record_cbor) \
-                         SELECT ledger_id, $2::numeric, ordinal, record_cbor \
+                         SELECT ledger_id, $2::text::numeric, ordinal, record_cbor \
                          FROM trackone_vtl_open_record WHERE ledger_id=$1 ORDER BY ordinal",
                         &[&state.ledger_id, &segment_number],
                     )
@@ -446,7 +446,7 @@ impl LedgerStore for PostgresLedgerStore {
                     transaction
                         .execute(
                             "INSERT INTO trackone_vtl_open_record \
-                             (ledger_id, ordinal, record_cbor) VALUES ($1,$2::numeric,$3)",
+                             (ledger_id, ordinal, record_cbor) VALUES ($1,$2::text::numeric,$3)",
                             &[&state.ledger_id, &ordinal, &admitted.record_cbor],
                         )
                         .map_err(store_error)?;
@@ -461,7 +461,7 @@ impl LedgerStore for PostgresLedgerStore {
                         .execute(
                             "INSERT INTO trackone_vtl_sealed_record \
                              (ledger_id, segment_number, ordinal, record_cbor) \
-                             VALUES ($1,$2::numeric,$3::numeric,$4)",
+                             VALUES ($1,$2::text::numeric,$3::text::numeric,$4)",
                             &[
                                 &state.ledger_id,
                                 &segment_number,
@@ -490,7 +490,7 @@ impl LedgerStore for PostgresLedgerStore {
                     "INSERT INTO trackone_vtl_idempotency \
                      (ledger_id, idempotency_key, request_sha256, admitted_segment_numbers, \
                       state_revision, sealed_segment_numbers) \
-                     VALUES ($1,$2,$3,$4,$5::numeric,$6) \
+                     VALUES ($1,$2,$3,$4,$5::text::numeric,$6) \
                      ON CONFLICT DO NOTHING",
                     &[
                         &state.ledger_id,
