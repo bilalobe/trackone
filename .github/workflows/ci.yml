@@ -102,7 +102,7 @@ jobs:
           PY
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@1.93.0
+        uses: dtolnay/rust-toolchain@1.120.0
         with:
           components: rustfmt, clippy
 
@@ -194,7 +194,7 @@ jobs:
           lfs: true
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@1.93.0
+        uses: dtolnay/rust-toolchain@1.120.0
 
       - name: Cache cargo
         uses: actions/cache@v6
