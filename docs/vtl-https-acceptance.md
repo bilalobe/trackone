@@ -47,6 +47,13 @@ sequenceDiagram
 | Producer → publisher | No wire protocol in this deployment: publication uses a shared filesystem and an atomic no-replace visibility transition. |
 | Verifier → TSA | None. Timestamp validation is local using separately provisioned TSA anchors, CRLs, policy OID, signer pin, and evaluation policy. |
 
+The exporter keeps the staging tree private while writing it, then makes its
+directories traversable and files readable by the HTTPS service account before
+the atomic publication step. The independent checker bounds each complete
+fetch by elapsed time, including connection setup, headers, body, and retries.
+It checks disclosed CBOR payloads incrementally under an item budget, avoiding
+decoded collections proportional to attacker-controlled array lengths.
+
 The [full sequence](diagrams/vtl-wire-sequence.svg),
 [protocol stack](diagrams/vtl-wire-stack.svg), and
 [binding notes](diagrams/vtl-wire-sequence.md) provide supporting detail.

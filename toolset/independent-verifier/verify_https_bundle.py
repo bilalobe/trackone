@@ -14,11 +14,13 @@ import http.client
 import json
 import math
 import re
+import socket
 import ssl
 import struct
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -36,9 +38,11 @@ HEX64 = re.compile(r"^[0-9a-f]{64}$")
 MAX_OBJECT = 64 * 1024 * 1024
 MAX_TOTAL = 256 * 1024 * 1024
 MAX_REQUESTS = 10_000
+FETCH_DEADLINE_SECONDS = 60.0
 MAX_UINT64 = (1 << 64) - 1
 MAX_BATCH_RECORD_LIMIT = 1 << 63
 MAX_CBOR_NESTING_DEPTH = 32
+MAX_CBOR_ITEMS = 1_000_000
 TRANSIENT_STATUS = {408, 429, 500, 502, 503, 504}
 
 
@@ -78,6 +82,68 @@ def portable_path(value: Any) -> str:
     if any(part in {"", ".", ".."} for part in value.split("/")):
         raise CheckError(f"non-portable artifact path {value!r}")
     return value
+
+
+class DeadlineHTTPSConnection(http.client.HTTPSConnection):
+    """Apply one elapsed-time budget to DNS, TCP, and TLS setup."""
+
+    def __init__(self, *args: Any, deadline: float, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.deadline = deadline
+
+    def remaining_timeout(self) -> float:
+        remaining = self.deadline - time.monotonic()
+        if remaining <= 0:
+            raise CheckError("HTTPS fetch deadline exceeded")
+        return min(self.timeout, remaining)
+
+    def connect(self) -> None:
+        resolved = threading.Event()
+        addresses: list[Any] = []
+        errors: list[OSError] = []
+
+        def resolve() -> None:
+            try:
+                addresses.extend(
+                    socket.getaddrinfo(self.host, self.port, 0, socket.SOCK_STREAM)
+                )
+            except OSError as exc:
+                errors.append(exc)
+            finally:
+                resolved.set()
+
+        # libc DNS resolution has no portable cancellation API. A daemon worker
+        # lets the caller enforce its deadline; a late result cannot open sockets.
+        resolver = threading.Thread(target=resolve, daemon=True)
+        resolver.start()
+        if not resolved.wait(max(0.0, self.deadline - time.monotonic())):
+            raise CheckError("HTTPS fetch deadline exceeded")
+        self.remaining_timeout()
+        if errors:
+            raise errors[0]
+        last_error: OSError | None = None
+        for family, socktype, protocol, _canonical, address in addresses:
+            timeout = self.remaining_timeout()
+            self.sock = socket.socket(family, socktype, protocol)
+            try:
+                self.sock.settimeout(timeout)
+                self.sock.connect(address)
+                break
+            except OSError as exc:
+                last_error = exc
+                self.sock.close()
+                self.sock = None
+        else:
+            if last_error is not None:
+                raise last_error
+            raise OSError("DNS resolution returned no addresses")
+        self.sock.settimeout(self.remaining_timeout())
+        self.sock = self._context.wrap_socket(
+            self.sock, server_hostname=self.host, do_handshake_on_connect=False
+        )
+        self.sock.settimeout(self.remaining_timeout())
+        self.sock.do_handshake()
+        self.sock.settimeout(self.remaining_timeout())
 
 
 @dataclass
@@ -120,14 +186,36 @@ class HttpRetriever:
         self.requests += 1
         if self.requests > MAX_REQUESTS:
             raise CheckError("HTTPS request limit exceeded")
+        deadline = time.monotonic() + FETCH_DEADLINE_SECONDS
         last_error: Exception | None = None
         for attempt in range(self.retries + 1):
-            connection = http.client.HTTPSConnection(
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise CheckError("HTTPS fetch deadline exceeded")
+            connection = DeadlineHTTPSConnection(
                 self.parsed.hostname,
                 self.parsed.port or 443,
-                timeout=self.timeout,
+                timeout=min(self.timeout, remaining),
                 context=self.context,
+                deadline=deadline,
             )
+            expired = threading.Event()
+
+            def expire(
+                deadline_event: threading.Event = expired,
+                active_connection: DeadlineHTTPSConnection = connection,
+            ) -> None:
+                deadline_event.set()
+                active_socket = active_connection.sock
+                if active_socket is not None:
+                    try:
+                        active_socket.shutdown(socket.SHUT_RDWR)
+                    except OSError:
+                        pass
+
+            timer = threading.Timer(remaining, expire)
+            timer.daemon = True
+            timer.start()
             try:
                 connection.request(
                     "GET",
@@ -138,7 +226,11 @@ class HttpRetriever:
                         "Connection": "close",
                     },
                 )
+                if expired.is_set():
+                    raise CheckError("HTTPS fetch deadline exceeded")
                 response = connection.getresponse()
+                if expired.is_set():
+                    raise CheckError("HTTPS fetch deadline exceeded")
                 if response.version != 11:
                     raise CheckError("unsupported HTTP version; HTTP/1.1 is required")
                 if response.status in TRANSIENT_STATUS and attempt < self.retries:
@@ -163,6 +255,8 @@ class HttpRetriever:
                 body = bytearray()
                 while True:
                     chunk = response.read(min(1024 * 1024, MAX_OBJECT + 1 - len(body)))
+                    if expired.is_set():
+                        raise CheckError("HTTPS fetch deadline exceeded")
                     if not chunk:
                         break
                     body.extend(chunk)
@@ -182,20 +276,30 @@ class HttpRetriever:
                     raise CheckError("aggregate HTTPS byte limit exceeded")
                 return bytes(body)
             except (OSError, ssl.SSLError, http.client.HTTPException) as exc:
+                if expired.is_set() or time.monotonic() >= deadline:
+                    raise CheckError("HTTPS fetch deadline exceeded") from exc
                 last_error = exc
                 if attempt == self.retries:
                     break
                 time.sleep(0.05 * (attempt + 1))
             finally:
+                timer.cancel()
                 connection.close()
         raise CheckError(f"HTTPS retrieval exhausted its retry budget: {last_error}")
 
 
 class CborDecoder:
-    def __init__(self, data: bytes, max_depth: int = MAX_CBOR_NESTING_DEPTH):
+    def __init__(
+        self,
+        data: bytes,
+        max_depth: int = MAX_CBOR_NESTING_DEPTH,
+        max_items: int = MAX_CBOR_ITEMS,
+    ):
         self.data = data
         self.offset = 0
         self.max_depth = max_depth
+        self.max_items = max_items
+        self.items = 0
 
     def decode(self) -> Any:
         value = self.item()
@@ -223,9 +327,12 @@ class CborDecoder:
             raise CheckError("non-shortest CBOR argument")
         return value
 
-    def item(self, depth: int = 0) -> Any:
+    def item(self, depth: int = 0, *, materialize: bool = True) -> Any:
         if depth > self.max_depth:
             raise CheckError("CBOR nesting depth exceeds the supported limit")
+        self.items += 1
+        if self.items > self.max_items:
+            raise CheckError("CBOR item count exceeds the supported limit")
         initial = self.take(1)[0]
         major, additional = initial >> 5, initial & 31
         if major == 0:
@@ -233,19 +340,34 @@ class CborDecoder:
         if major == 1:
             return -1 - self.argument(additional)
         if major == 2:
-            return self.take(self.argument(additional))
+            length = self.argument(additional)
+            if not materialize:
+                self.advance(length)
+                return None
+            return self.take(length)
         if major == 3:
-            return self.take(self.argument(additional)).decode("utf-8")
+            try:
+                return self.take(self.argument(additional)).decode("utf-8")
+            except UnicodeDecodeError as exc:
+                raise CheckError("invalid UTF-8 CBOR text") from exc
         if major == 4:
             count = self.argument(additional)
             if count > len(self.data) - self.offset:
                 raise CheckError("CBOR array length exceeds remaining input")
-            return [self.item(depth + 1) for _ in range(count)]
+            if count > self.max_items - self.items:
+                raise CheckError("CBOR item count exceeds the supported limit")
+            if materialize:
+                return [self.item(depth + 1) for _ in range(count)]
+            for _ in range(count):
+                self.item(depth + 1, materialize=False)
+            return None
         if major == 5:
             count = self.argument(additional)
             if count > (len(self.data) - self.offset) // 2:
                 raise CheckError("CBOR map length exceeds remaining input")
-            return self.mapping(count, depth)
+            if count > (self.max_items - self.items) // 2:
+                raise CheckError("CBOR item count exceeds the supported limit")
+            return self.mapping(count, depth, materialize=materialize)
         if major == 6:
             raise CheckError("CBOR tags are not permitted")
         if major == 7 and additional in {20, 21, 22}:
@@ -270,8 +392,15 @@ class CborDecoder:
             return value
         raise CheckError("unsupported CBOR value")
 
-    def mapping(self, count: int, depth: int) -> dict[str, Any]:
-        result: dict[str, Any] = {}
+    def advance(self, length: int) -> None:
+        if self.offset + length > len(self.data):
+            raise CheckError("truncated CBOR")
+        self.offset += length
+
+    def mapping(
+        self, count: int, depth: int, *, materialize: bool = True
+    ) -> dict[str, Any] | None:
+        result: dict[str, Any] | None = {} if materialize else None
         previous: tuple[int, bytes] | None = None
         for _ in range(count):
             start = self.offset
@@ -284,10 +413,12 @@ class CborDecoder:
                 raise CheckError(
                     "non-text, duplicate, or non-deterministic CBOR map key"
                 )
-            if key in result:
+            if result is not None and key in result:
                 raise CheckError("duplicate CBOR map key")
             previous = ordering
-            result[key] = self.item(depth + 1)
+            value = self.item(depth + 1, materialize=materialize)
+            if result is not None:
+                result[key] = value
         return result
 
 
@@ -666,21 +797,26 @@ def sha256_bytes(value: Any, label: str) -> bytes:
 
 def validate_record(data: bytes) -> None:
     # The outer record array is excluded from the payload depth limit.
-    value = CborDecoder(data, MAX_CBOR_NESTING_DEPTH + 1).decode()
-    if (
-        not isinstance(value, list)
-        or len(value) != 7
-        or type(value[0]) is not int
-        or value[0] != 1
-    ):
+    decoder = CborDecoder(data, MAX_CBOR_NESTING_DEPTH + 1)
+    initial = decoder.take(1)[0]
+    if initial >> 5 != 4 or decoder.argument(initial & 31) != 7:
         raise CheckError("record opening is not a version-one canonical record")
-    if not isinstance(value[1], bytes) or len(value[1]) != 8:
+    decoder.items = 1  # Count the outer array without materializing it.
+    version = decoder.item(1)
+    if type(version) is not int or version != 1:
+        raise CheckError("record opening is not a version-one canonical record")
+    device_id = decoder.item(1)
+    if not isinstance(device_id, bytes) or len(device_id) != 8:
         raise CheckError("canonical record device identifier is not eight octets")
-    uint64(value[2], "canonical record fc")
-    uint64(value[3], "canonical record ingest_time")
-    if value[4] is not None:
-        uint64(value[4], "canonical record device_time")
-    uint64(value[5], "canonical record kind")
+    uint64(decoder.item(1), "canonical record fc")
+    uint64(decoder.item(1), "canonical record ingest_time")
+    device_time = decoder.item(1)
+    if device_time is not None:
+        uint64(device_time, "canonical record device_time")
+    uint64(decoder.item(1), "canonical record kind")
+    decoder.item(1, materialize=False)
+    if decoder.offset != len(data):
+        raise CheckError("trailing CBOR bytes")
 
 
 def validate_segment(segment: Any) -> tuple[int, int, list[bytes]]:
