@@ -295,6 +295,111 @@ fn ambiguous_remote_outcome_resubmits_the_exact_digest() {
     assert_eq!(database.immutable(), immutable);
 }
 
+#[test]
+fn oversized_http_response_leaves_the_same_obligation_retryable() {
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+    use std::path::PathBuf;
+    use trackone_gateway_svc::tsa::Rfc3161TimestampAuthority;
+
+    let Some(database) = Database::new() else {
+        return;
+    };
+    database.producer().admit(record(1)).unwrap();
+    let immutable = database.immutable();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let url = format!("http://{}", listener.local_addr().unwrap());
+    listener.set_nonblocking(true).unwrap();
+    let server = std::thread::spawn(move || {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let mut stream = loop {
+            match listener.accept() {
+                Ok((stream, _)) => break stream,
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                    assert!(Instant::now() < deadline, "TSA client never connected");
+                    std::thread::sleep(Duration::from_millis(5));
+                }
+                Err(error) => panic!("accept failed: {error}"),
+            }
+        };
+        stream
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .unwrap();
+        stream
+            .set_write_timeout(Some(Duration::from_secs(5)))
+            .unwrap();
+        let mut request = Vec::new();
+        let mut byte = [0];
+        while !request.ends_with(b"\r\n\r\n") {
+            stream.read_exact(&mut byte).unwrap();
+            request.push(byte[0]);
+        }
+        let length = String::from_utf8_lossy(&request)
+            .lines()
+            .find_map(|line| {
+                let (name, value) = line.split_once(':')?;
+                name.eq_ignore_ascii_case("content-length")
+                    .then(|| value.trim().parse::<usize>().unwrap())
+            })
+            .unwrap();
+        stream.read_exact(&mut vec![0; length]).unwrap();
+        let body = vec![b'x'; 1024 * 1024 + 1];
+        write!(
+            stream,
+            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+            body.len()
+        )
+        .unwrap();
+        stream.write_all(&body).unwrap();
+    });
+    let fixtures = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../crates/trackone-rfc3161/tests/fixtures");
+    let authority = Rfc3161TimestampAuthority::new(
+        url,
+        fixtures.join("tsa-root.pem"),
+        None,
+        fixtures.join("tsa-crls.pem"),
+        "1.3.6.1.4.1.55555.1",
+        "14ab98cafe09d9d1d01562af42d69a904b01023d9cd5b03bd07e5779710c8014"
+            .parse()
+            .unwrap(),
+        Duration::ZERO,
+    )
+    .unwrap();
+    let config = TimestampWorkerConfig::default();
+    let mut store = database.store();
+    let first = store.claim_timestamp(config.max_attempts).unwrap().unwrap();
+    let failure = submit_claim(&authority, &first);
+    server.join().unwrap();
+    assert!(failure.as_ref().unwrap_err().contains("maximum"));
+    assert!(store.finish_timestamp(&first, &failure, &config).unwrap());
+    let status = store.timestamp_status(0).unwrap().unwrap();
+    assert_eq!(status.state, "queued");
+    assert!(status.next_attempt.is_some());
+    assert!(status.last_error.unwrap().contains("maximum"));
+    let row = database.client().query_one(
+        "SELECT tsa_response, tsa_lease_until IS NULL FROM trackone_vtl_sealed_segment WHERE ledger_id=$1 AND segment_number=0",
+        &[&database.ledger],
+    ).unwrap();
+    assert!(row.get::<_, Option<Vec<u8>>>(0).is_none());
+    assert!(row.get::<_, bool>(1));
+    database.due();
+    let retry = store.claim_timestamp(config.max_attempts).unwrap().unwrap();
+    assert_eq!(retry.artifact_cbor, first.artifact_cbor);
+    assert_eq!(retry.artifact_sha256, first.artifact_sha256);
+    assert_eq!(retry.attempt, first.attempt + 1);
+    assert!(
+        store
+            .finish_timestamp(&retry, &submit_claim(&Accepted, &retry), &config)
+            .unwrap()
+    );
+    assert_eq!(
+        store.timestamp_status(0).unwrap().unwrap().state,
+        "attached"
+    );
+    assert_eq!(database.immutable(), immutable);
+}
+
 struct Blocked {
     started: AtomicUsize,
     release: (Mutex<bool>, Condvar),

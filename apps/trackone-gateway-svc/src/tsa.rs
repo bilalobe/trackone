@@ -5,6 +5,7 @@
 //! signed `genTime` is not independent proof of when the response was observed.
 
 use std::fs::{self, OpenOptions};
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 use std::thread;
@@ -150,25 +151,24 @@ impl Rfc3161TimestampAuthority {
         let upload = format!("@{}", query.display());
         let mut curl_command = Command::new(&self.curl_binary);
         curl_command
-            .args(["-fsS", "--max-time", &timeout])
+            .args(["-fsS", "--no-buffer", "--max-time", &timeout])
             .args(["-H", "Content-Type: application/timestamp-query"])
             .args(["-H", "Accept: application/timestamp-reply"])
             .args(["--data-binary", &upload])
-            .arg(&self.url)
-            .arg("-o")
-            .arg(response);
-        let curl_status = run_command(curl_command, "RFC 3161 HTTP submission", self.timeout)?;
+            .arg(&self.url);
+        let curl_status = run_submission(curl_command, self.timeout)?;
         require_success("RFC 3161 HTTP submission", &curl_status)?;
 
-        let response_size = fs::metadata(response)
-            .map_err(|error| ProducerError::TimestampSubmission(error.to_string()))?
-            .len();
-        if response_size > MAX_RESPONSE_BYTES {
-            return Err(ProducerError::TimestampSubmission(format!(
-                "TSA response is {response_size} bytes; maximum is {MAX_RESPONSE_BYTES}"
-            )));
-        }
-        fs::read(response).map_err(|error| ProducerError::TimestampSubmission(error.to_string()))
+        // No response body reaches disk until the entire bounded transfer succeeds.
+        let mut staged = OpenOptions::new()
+            .write(true)
+            .truncate(true)
+            .open(response)
+            .map_err(|error| ProducerError::TimestampPersistence(error.to_string()))?;
+        staged
+            .write_all(&curl_status.stdout)
+            .map_err(|error| ProducerError::TimestampPersistence(error.to_string()))?;
+        Ok(curl_status.stdout)
     }
 }
 
@@ -251,6 +251,107 @@ impl Drop for TemporaryResponse {
     }
 }
 
+/// Capture the body with one overflow-detection byte, supervising the process
+/// independently of reads so a stalled pipe cannot defeat the request deadline.
+fn run_submission(mut command: Command, timeout: Duration) -> Result<Output, ProducerError> {
+    const MAX_DIAGNOSTIC_BYTES: usize = 8192;
+    let submission_error = |message: String| ProducerError::TimestampSubmission(message);
+    command.stdout(Stdio::piped()).stderr(Stdio::piped());
+    let mut child = command.spawn().map_err(|error| {
+        submission_error(format!(
+            "RFC 3161 HTTP submission could not execute: {error}"
+        ))
+    })?;
+    let started = Instant::now();
+    let stdout = child.stdout.take().expect("piped submission stdout");
+    let mut stderr = child.stderr.take().expect("piped submission stderr");
+
+    thread::scope(|scope| {
+        let body_reader = scope.spawn(move || {
+            let mut body = Vec::new();
+            stdout.take(MAX_RESPONSE_BYTES + 1).read_to_end(&mut body)?;
+            Ok::<_, std::io::Error>(body)
+        });
+        let diagnostic_reader = scope.spawn(move || {
+            let mut diagnostic = Vec::new();
+            let mut buffer = [0; 4096];
+            loop {
+                let count = match stderr.read(&mut buffer) {
+                    Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+                    result => result?,
+                };
+                if count == 0 {
+                    return Ok::<_, std::io::Error>(diagnostic);
+                }
+                let retained = count.min(MAX_DIAGNOSTIC_BYTES - diagnostic.len());
+                diagnostic.extend_from_slice(&buffer[..retained]);
+            }
+        });
+        let mut body_reader = Some(body_reader);
+        let mut body = None;
+        let result = (|| {
+            loop {
+                if body_reader
+                    .as_ref()
+                    .is_some_and(|reader| reader.is_finished())
+                {
+                    let bytes = body_reader
+                        .take()
+                        .unwrap()
+                        .join()
+                        .map_err(|_| submission_error("TSA response reader panicked".into()))?
+                        .map_err(|error| {
+                            submission_error(format!("TSA response read failed: {error}"))
+                        })?;
+                    if bytes.len() as u64 > MAX_RESPONSE_BYTES {
+                        return Err(submission_error(format!(
+                            "TSA response exceeds maximum of {MAX_RESPONSE_BYTES} bytes"
+                        )));
+                    }
+                    body = Some(bytes);
+                }
+                // Even when curl has exited, drain and check stdout before
+                // accepting its status: buffered overflow or truncation matters.
+                let status = child
+                    .try_wait()
+                    .map_err(|error| submission_error(error.to_string()))?;
+                if let Some(status) = status
+                    && body.is_some()
+                    && diagnostic_reader.is_finished()
+                {
+                    return Ok(status);
+                }
+                if started.elapsed() >= timeout {
+                    return Err(submission_error(format!(
+                        "RFC 3161 HTTP submission exceeded the {} second process timeout",
+                        timeout.as_secs()
+                    )));
+                }
+                thread::sleep(Duration::from_millis(10));
+            }
+        })();
+        if result.is_err() {
+            let _ = child.kill();
+        }
+        // Always reap before joining readers or releasing the staged-file guard.
+        let reaped = child.wait();
+        if let Some(reader) = body_reader {
+            let _ = reader.join();
+        }
+        let diagnostic = diagnostic_reader.join();
+        let status = result?;
+        reaped.map_err(|error| submission_error(error.to_string()))?;
+        let stderr = diagnostic
+            .map_err(|_| submission_error("TSA diagnostic reader panicked".into()))?
+            .map_err(|error| submission_error(format!("TSA diagnostic read failed: {error}")))?;
+        Ok(Output {
+            status,
+            stdout: body.unwrap(),
+            stderr,
+        })
+    })
+}
+
 fn run_command(
     mut command: Command,
     label: &'static str,
@@ -324,10 +425,7 @@ mod tests {
         let curl = root.join("curl");
         fs::write(
             &curl,
-            format!(
-                "#!/bin/sh\nwhile [ $# -gt 0 ]; do if [ \"$1\" = \"-o\" ]; then shift; cp '{}' \"$1\"; exit $?; fi; shift; done\nexit 1\n",
-                source.display()
-            ),
+            format!("#!/bin/sh\nexec cat '{}'\n", source.display()),
         )
         .unwrap();
         fs::set_permissions(&curl, fs::Permissions::from_mode(0o755)).unwrap();
@@ -347,6 +445,314 @@ mod tests {
         )
         .unwrap()
         .with_binaries(PathBuf::from("openssl"), curl)
+    }
+
+    #[derive(Clone, Copy, Debug)]
+    enum Framing {
+        Declared,
+        Chunked,
+        CloseDelimited,
+    }
+
+    // Read the entire request, then either finish a response or wait for the
+    // client to abort it. Socket deadlines keep fixture failures bounded.
+    fn http_response(
+        framing: Framing,
+        size: usize,
+        complete: bool,
+        await_abort: bool,
+    ) -> (String, thread::JoinHandle<bool>) {
+        observed_http_response(framing, size, complete, await_abort, None)
+    }
+
+    fn observed_http_response(
+        framing: Framing,
+        size: usize,
+        complete: bool,
+        await_abort: bool,
+        staging_directory: Option<PathBuf>,
+    ) -> (String, thread::JoinHandle<bool>) {
+        use std::net::TcpListener;
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}", listener.local_addr().unwrap());
+        listener.set_nonblocking(true).unwrap();
+        let server = thread::spawn(move || {
+            let deadline = Instant::now() + Duration::from_secs(5);
+            let mut stream = loop {
+                match listener.accept() {
+                    Ok((stream, _)) => break stream,
+                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                        assert!(Instant::now() < deadline, "client never connected");
+                        thread::sleep(Duration::from_millis(5));
+                    }
+                    Err(error) => panic!("accept failed: {error}"),
+                }
+            };
+            stream
+                .set_read_timeout(Some(Duration::from_secs(5)))
+                .unwrap();
+            stream
+                .set_write_timeout(Some(Duration::from_secs(5)))
+                .unwrap();
+            let mut request = Vec::new();
+            let mut byte = [0];
+            while !request.ends_with(b"\r\n\r\n") {
+                stream.read_exact(&mut byte).unwrap();
+                request.push(byte[0]);
+            }
+            let length = String::from_utf8_lossy(&request)
+                .lines()
+                .find_map(|line| {
+                    let (name, value) = line.split_once(':')?;
+                    name.eq_ignore_ascii_case("content-length")
+                        .then(|| value.trim().parse::<usize>().unwrap())
+                })
+                .unwrap_or(0);
+            stream.read_exact(&mut vec![0; length]).unwrap();
+            let headers = match framing {
+                Framing::Declared => format!(
+                    "Content-Length: {}\r\n",
+                    if await_abort {
+                        size + 64 * 1024 * 1024
+                    } else {
+                        size + usize::from(!complete)
+                    }
+                ),
+                Framing::Chunked => "Transfer-Encoding: chunked\r\n".into(),
+                Framing::CloseDelimited => String::new(),
+            };
+            write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nConnection: close\r\n{headers}\r\n"
+            )
+            .unwrap();
+            if matches!(framing, Framing::Chunked) && size > 0 {
+                write!(stream, "{size:x}\r\n").unwrap();
+            }
+            stream.write_all(&vec![b'x'; size]).unwrap();
+            if matches!(framing, Framing::Chunked) && size > 0 {
+                stream.write_all(b"\r\n").unwrap();
+            }
+            if let Some(directory) = staging_directory {
+                // Observe disk usage while the transfer is still unfinished.
+                for entry in fs::read_dir(directory).unwrap() {
+                    let entry = entry.unwrap();
+                    if entry.file_name().to_string_lossy().ends_with(".pending") {
+                        match entry.metadata() {
+                            Ok(metadata) => assert_eq!(metadata.len(), 0),
+                            Err(error) if error.kind() == std::io::ErrorKind::NotFound => (),
+                            Err(error) => panic!("staging metadata failed: {error}"),
+                        }
+                    }
+                }
+            }
+            if await_abort {
+                // Leave the response unfinished. Overflow must disconnect
+                // before either the server's deadline or curl's max-time.
+                match stream.read(&mut byte) {
+                    Ok(0) => true,
+                    Err(error) => matches!(
+                        error.kind(),
+                        std::io::ErrorKind::ConnectionReset | std::io::ErrorKind::BrokenPipe
+                    ),
+                    _ => false,
+                }
+            } else {
+                if complete && matches!(framing, Framing::Chunked) {
+                    stream.write_all(b"0\r\n\r\n").unwrap();
+                }
+                true
+            }
+        });
+        (url, server)
+    }
+
+    fn download(url: &str, timeout: Duration) -> Result<Vec<u8>, ProducerError> {
+        let mut command = Command::new("curl");
+        command.args([
+            "-fsS",
+            "--no-buffer",
+            "--noproxy",
+            "*",
+            "--max-time",
+            "15",
+            url,
+        ]);
+        let output = run_submission(command, timeout)?;
+        require_success("RFC 3161 HTTP submission", &output)?;
+        Ok(output.stdout)
+    }
+
+    #[test]
+    fn complete_transfers_enforce_the_inclusive_boundary() {
+        for framing in [Framing::Declared, Framing::Chunked, Framing::CloseDelimited] {
+            for size in [
+                MAX_RESPONSE_BYTES as usize - 1,
+                MAX_RESPONSE_BYTES as usize,
+                MAX_RESPONSE_BYTES as usize + 1,
+            ] {
+                let (url, server) = http_response(framing, size, true, false);
+                let result = download(&url, Duration::from_secs(3));
+                assert!(server.join().unwrap());
+                if size as u64 <= MAX_RESPONSE_BYTES {
+                    assert_eq!(result.unwrap().len(), size, "{framing:?}");
+                } else {
+                    assert!(
+                        matches!(result, Err(ProducerError::TimestampSubmission(_))),
+                        "{framing:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn truncated_transfers_fail_immediately_around_the_boundary() {
+        for framing in [Framing::Declared, Framing::Chunked] {
+            for size in [
+                MAX_RESPONSE_BYTES as usize - 1,
+                MAX_RESPONSE_BYTES as usize,
+                MAX_RESPONSE_BYTES as usize + 1,
+            ] {
+                let (url, server) = http_response(framing, size, false, false);
+                let result = download(&url, Duration::from_secs(3));
+                assert!(server.join().unwrap());
+                assert!(
+                    matches!(result, Err(ProducerError::TimestampSubmission(_))),
+                    "{framing:?}, {size}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn overflow_aborts_unfinished_transfers_without_writing_to_staging() {
+        for framing in [Framing::Declared, Framing::Chunked, Framing::CloseDelimited] {
+            for existing in [false, true] {
+                let root = tempfile::tempdir().unwrap();
+                let response = root.path().join("response.tsr");
+                if existing {
+                    fs::write(&response, b"existing response").unwrap();
+                }
+                let (url, server) = observed_http_response(
+                    framing,
+                    MAX_RESPONSE_BYTES as usize + 1,
+                    false,
+                    true,
+                    Some(root.path().to_path_buf()),
+                );
+                let mut authority = fixture_authority(PathBuf::from("curl"));
+                authority.url = url;
+                let started = Instant::now();
+                let error = authority
+                    .stamp_paths(b"artifact", &root.path().join("query.tsq"), &response)
+                    .unwrap_err();
+                assert!(matches!(error, ProducerError::TimestampSubmission(_)));
+                assert!(error.to_string().contains("maximum"));
+                assert!(started.elapsed() < Duration::from_secs(3));
+                assert!(server.join().unwrap(), "client did not abort {framing:?}");
+                assert_eq!(response.exists(), existing);
+                if existing {
+                    assert_eq!(fs::read(&response).unwrap(), b"existing response");
+                }
+                assert_no_pending(root.path());
+            }
+        }
+    }
+
+    fn assert_no_pending(root: &Path) {
+        assert!(fs::read_dir(root).unwrap().all(|entry| {
+            !entry
+                .unwrap()
+                .file_name()
+                .to_string_lossy()
+                .ends_with(".pending")
+        }));
+    }
+
+    #[test]
+    fn stalled_and_interrupted_transfers_clean_up_without_publication() {
+        for (size, stall) in [(17, false), (17, true), (MAX_RESPONSE_BYTES as usize, true)] {
+            let root = tempfile::tempdir().unwrap();
+            let response = root.path().join("response.tsr");
+            let (url, server) = observed_http_response(
+                Framing::Declared,
+                size,
+                false,
+                stall,
+                Some(root.path().to_path_buf()),
+            );
+            let mut authority = fixture_authority(PathBuf::from("curl"));
+            authority.url = url;
+            authority.timeout = Duration::from_millis(200);
+            let started = Instant::now();
+            let error = authority
+                .stamp_paths(b"artifact", &root.path().join("query.tsq"), &response)
+                .unwrap_err();
+            assert!(matches!(error, ProducerError::TimestampSubmission(_)));
+            if stall {
+                assert!(error.to_string().contains("process timeout"));
+            }
+            assert!(started.elapsed() < Duration::from_secs(3));
+            assert!(server.join().unwrap());
+            assert!(!response.exists());
+            assert_no_pending(root.path());
+        }
+    }
+
+    #[test]
+    fn public_stamp_removes_query_and_response_files_after_transfer_failures() {
+        for (size, stall) in [
+            (17, false),
+            (17, true),
+            (MAX_RESPONSE_BYTES as usize + 1, true),
+        ] {
+            let root = tempfile::tempdir().unwrap();
+            let query_log = root.path().join("query-path");
+            let openssl = root.path().join("openssl");
+            // Record the allocated query path without changing query generation.
+            fs::write(&openssl, format!(
+                "#!/bin/sh\nfor arg do output=\"$arg\"; done\nprintf '%s' \"$output\" > '{}'\nexec openssl \"$@\"\n",
+                query_log.display(),
+            )).unwrap();
+            fs::set_permissions(&openssl, fs::Permissions::from_mode(0o755)).unwrap();
+            let (url, server) = http_response(Framing::Declared, size, false, stall);
+            let mut authority = fixture_authority(PathBuf::from("curl"))
+                .with_binaries(openssl, PathBuf::from("curl"));
+            authority.url = url;
+            authority.timeout = Duration::from_millis(200);
+            assert!(matches!(
+                authority.stamp(b"artifact"),
+                Err(ProducerError::TimestampSubmission(_))
+            ));
+            assert!(server.join().unwrap());
+            let query = PathBuf::from(fs::read_to_string(query_log).unwrap());
+            let response = query.with_extension("tsr");
+            assert!(!query.exists());
+            assert!(!response.exists());
+            let staging_prefix = format!(".{}.", response.file_name().unwrap().to_str().unwrap());
+            assert!(
+                fs::read_dir(response.parent().unwrap())
+                    .unwrap()
+                    .all(|entry| {
+                        !entry
+                            .unwrap()
+                            .file_name()
+                            .to_string_lossy()
+                            .starts_with(&staging_prefix)
+                    })
+            );
+        }
+    }
+
+    #[test]
+    fn diagnostic_output_is_drained_but_retention_is_bounded() {
+        let mut command = Command::new("sh");
+        command.args(["-c", "head -c 65536 /dev/zero >&2; printf body"]);
+        let output = run_submission(command, Duration::from_secs(3)).unwrap();
+        assert!(output.status.success());
+        assert_eq!(output.stdout, b"body");
+        assert_eq!(output.stderr.len(), 8192);
     }
 
     #[test]
