@@ -215,3 +215,15 @@ kubectl -n trackone create secret docker-registry ghcr-creds \
   --docker-password=<TOKEN> \
   --docker-email=<EMAIL>
 ```
+
+### Background timestamp workers
+
+`gateway.env.tsaWorkerConcurrency` defaults to `"2"` (1–16),
+`tsaMaxAttempts` to `"20"` (1–1000), `tsaRetryInitialMs` to `"5000"`, and
+`tsaRetryMaxMs` to `"300000"`. Retry delays must be positive, at most one day,
+and maximum must be at least initial. These values map to the corresponding
+`TRACKONE_TSA_*` environment variables. Workers start after listener binding;
+TSA availability is not a health check requirement. Inspect queued, failed, and
+attached jobs through authenticated `GET /v2/segments/{number}/timestamp`.
+The gateway applies the additive queue metadata migration at startup. Failed
+jobs stop automatic submission and are not requeued by configuration changes.

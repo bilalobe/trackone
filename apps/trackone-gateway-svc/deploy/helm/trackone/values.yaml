@@ -122,6 +122,10 @@ gateway:
     tsaPolicyOid: 1.3.6.1.4.1.55555.1
     # Maximum accepted lead of TSA genTime over the gateway clock, in seconds (0–3600).
     tsaMaxFutureSkewSeconds: "0"
+    tsaWorkerConcurrency: "2"
+    tsaMaxAttempts: "20"
+    tsaRetryInitialMs: "5000"
+    tsaRetryMaxMs: "300000"
     # SHA-256 of the complete DER TSA signer certificate (not the CA certificate).
     tsaSignerCertSha256: ""
     # Required when gateway.enabled=true; use --set-file or an existing Secret.

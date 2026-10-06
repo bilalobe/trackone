@@ -1,0 +1,7 @@
+{{- if .Values.gateway.enabled }}
+{{- $initial := int64 .Values.gateway.env.tsaRetryInitialMs }}
+{{- $maximum := int64 .Values.gateway.env.tsaRetryMaxMs }}
+{{- if or (lt $initial 1) (gt $initial 86400000) (lt $maximum $initial) (gt $maximum 86400000) }}
+{{- fail "gateway TSA retry delays must be positive, ordered, and at most 86400000 ms" }}
+{{- end }}
+{{- end }}
