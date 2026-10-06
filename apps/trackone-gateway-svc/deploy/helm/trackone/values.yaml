@@ -87,6 +87,9 @@ gateway:
   existingSecretHasTsaIntermediates: false
   # Set when existingSecret contains the optional postgres-ca.pem key.
   existingSecretHasPostgresCa: false
+  disclosure:
+    # Optional existing Secret with a grants.json key. Omission disables evidence access.
+    existingSecret: ""
   auth:
     # Required when gateway.enabled=true unless existingSecret supplies it.
     bearerToken: ""

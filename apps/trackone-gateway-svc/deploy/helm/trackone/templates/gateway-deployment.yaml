@@ -24,6 +24,10 @@ spec:
         {{ include "trackone.commonLabels" . | nindent 8 }}
     spec:
       automountServiceAccountToken: false
+      {{- if .Values.gateway.disclosure.existingSecret }}
+      securityContext:
+        fsGroup: 65532
+      {{- end }}
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -36,6 +40,10 @@ spec:
             - configMapRef:
                 name: {{ include "trackone.gatewayConfigMapName" . }}
           env:
+            {{- if .Values.gateway.disclosure.existingSecret }}
+            - name: TRACKONE_DISCLOSURE_GRANTS_FILE
+              value: /var/run/trackone-disclosure/grants.json
+            {{- end }}
             - name: TRACKONE_DATABASE_URL
               valueFrom:
                 secretKeyRef:
@@ -78,6 +86,11 @@ spec:
           resources:
             {{ toYaml .Values.gateway.resources | nindent 12 }}
           volumeMounts:
+            {{- if .Values.gateway.disclosure.existingSecret }}
+            - name: disclosure-grants
+              mountPath: /var/run/trackone-disclosure
+              readOnly: true
+            {{- end }}
             - name: tsa-ca
               mountPath: /var/run/trackone-tsa
               readOnly: true
@@ -87,6 +100,15 @@ spec:
               readOnly: true
             {{- end }}
       volumes:
+        {{- if .Values.gateway.disclosure.existingSecret }}
+        - name: disclosure-grants
+          secret:
+            secretName: {{ .Values.gateway.disclosure.existingSecret | quote }}
+            defaultMode: 0440
+            items:
+              - key: grants.json
+                path: grants.json
+        {{- end }}
         - name: tsa-ca
           secret:
             secretName: {{ include "trackone.gatewaySecretName" . }}

@@ -148,3 +148,15 @@ cargo build --locked -p trackone-gateway-svc --release --bin trackone-vtl-gatewa
 helm lint apps/trackone-gateway-svc/deploy/helm/trackone \
   --set postgres.auth.existingSecret=postgres-auth
 ```
+
+## Authenticated evidence retrieval
+
+Ledger-addressed evidence and immutable Class A/B/C disclosures are available
+under `/v2/ledgers/{ledger_id}/segments/{segment_number}`. Set
+`TRACKONE_DISCLOSURE_GRANTS_FILE` to a JSON secret containing scoped credentials;
+omission disables access, and ingest credentials do not grant disclosure access.
+See the [HTTP binding](../../docs/vtl-http-binding.md) for exact endpoints,
+availability responses, grant configuration, fixtures, and independent retrieval.
+Helm mounts an existing `grants.json` Secret through
+`gateway.disclosure.existingSecret`. The additive snapshot migration runs at
+startup; existing sealed segments are unchanged.

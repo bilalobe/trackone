@@ -64,3 +64,12 @@ python3 verify_https_bundle.py \
 The HTTPS CA and TSA trust inputs are intentionally distinct. The bundle URL,
 required scope, and expected segment digest are provisioned independently of
 the retrieved manifest.
+
+The checker also supports authenticated gateway disclosure generation:
+`--bearer-token-file FILE --generate-class A|B|C --download-dir NEW_DIRECTORY`.
+With `--generate-class`, `--bundle-url` is the ledger/segment directory URL;
+Class B selects complete batches using `--batch`. Without generation, a bearer
+file can authenticate reads of an existing immutable bundle URL. Downloads
+include every digest-bound manifest reference and never overwrite a directory.
+See the [HTTP binding](../../docs/vtl-http-binding.md) for a complete example and
+the subsequent `trackone-evidence verify --root` command.

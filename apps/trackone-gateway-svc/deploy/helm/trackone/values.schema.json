@@ -140,6 +140,13 @@
         "existingSecretHasPostgresCa": {
           "type": "boolean"
         },
+        "disclosure": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "existingSecret": {"type": "string"}
+          }
+        },
         "auth": {
           "type": "object",
           "additionalProperties": false,

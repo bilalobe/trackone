@@ -98,3 +98,10 @@ integrity check, not independent authentication of its selection.
 
 The first packaged run is
 [vtl-https-acceptance-20260909T215444Z](https://github.com/bilalobe/trackone/releases/tag/corpus-vtl-https-acceptance-20260909T215444Z).
+
+The fresh-run harness additionally uses a TLS proxy to exercise the gateway's
+ledger-addressed disclosure API. It writes `class-{a,b,c}-http-bundle/` directories
+and `class-{a,b,c}-gateway-{independent,trackone}.json` reports. Each bundle is
+requested and downloaded by the detached independent client, then verified from
+disk by `trackone-evidence`. All bytes must match the shared CLI exporter.
+Scoped credentials live only in the temporary working directory.
