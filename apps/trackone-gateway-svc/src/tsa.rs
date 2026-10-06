@@ -151,6 +151,8 @@ impl Rfc3161TimestampAuthority {
         let upload = format!("@{}", query.display());
         let mut curl_command = Command::new(&self.curl_binary);
         curl_command
+            // Must be first: ambient .curlrc output directives bypass stdout capture.
+            .arg("--disable")
             .args(["-fsS", "--no-buffer", "--max-time", &timeout])
             .args(["-H", "Content-Type: application/timestamp-query"])
             .args(["-H", "Accept: application/timestamp-reply"])
@@ -570,6 +572,7 @@ mod tests {
     fn download(url: &str, timeout: Duration) -> Result<Vec<u8>, ProducerError> {
         let mut command = Command::new("curl");
         command.args([
+            "--disable",
             "-fsS",
             "--no-buffer",
             "--noproxy",
@@ -742,6 +745,59 @@ mod tests {
                             .starts_with(&staging_prefix)
                     })
             );
+        }
+    }
+
+    #[test]
+    fn ambient_curl_output_configuration_cannot_bypass_the_response_limit() {
+        let root = tempfile::tempdir().unwrap();
+        let redirected = root.path().join("unbounded-output");
+        fs::write(
+            root.path().join(".curlrc"),
+            format!("output = \"{}\"\n", redirected.display(),),
+        )
+        .unwrap();
+
+        // Prove this curl reads the isolated config when --disable is absent.
+        let (url, server) = http_response(Framing::Declared, 17, true, false);
+        let mut command = Command::new("curl");
+        command.env("CURL_HOME", root.path()).args([
+            "-fsS",
+            "--noproxy",
+            "*",
+            "--max-time",
+            "3",
+            &url,
+        ]);
+        let output = run_submission(command, Duration::from_secs(3)).unwrap();
+        require_success("curl config control", &output).unwrap();
+        assert!(server.join().unwrap());
+        assert!(output.stdout.is_empty());
+        assert_eq!(fs::read(&redirected).unwrap(), vec![b'x'; 17]);
+        fs::remove_file(&redirected).unwrap();
+
+        // Set CURL_HOME only in the child, keeping parallel tests independent.
+        let curl = root.path().join("curl");
+        fs::write(&curl, format!(
+            "#!/bin/sh\n[ \"$1\" = --disable ] || exit 90\nexport CURL_HOME='{}'\nexec curl \"$@\"\n",
+            root.path().display(),
+        )).unwrap();
+        fs::set_permissions(&curl, fs::Permissions::from_mode(0o755)).unwrap();
+        for framing in [Framing::Declared, Framing::Chunked] {
+            let (url, server) =
+                http_response(framing, MAX_RESPONSE_BYTES as usize + 1, true, false);
+            let mut authority = fixture_authority(curl.clone());
+            authority.url = url;
+            let response = root.path().join("response.tsr");
+            let error = authority
+                .stamp_paths(b"artifact", &root.path().join("query.tsq"), &response)
+                .unwrap_err();
+            assert!(server.join().unwrap());
+            assert!(matches!(error, ProducerError::TimestampSubmission(_)));
+            assert!(error.to_string().contains("maximum"));
+            assert!(!redirected.exists());
+            assert!(!response.exists());
+            assert_no_pending(root.path());
         }
     }
 
