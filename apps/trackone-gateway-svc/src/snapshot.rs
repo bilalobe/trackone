@@ -169,9 +169,9 @@ fn read_material(
     let status: String = row.get(2);
     let response: Option<Vec<u8>> = row.get(3);
     if status != "verified" || response.as_ref().is_none_or(Vec::is_empty) {
-        return Err(ExportError::Invalid(
-            "segment has no usable retained timestamp response; queued export is refused".into(),
-        ));
+        return Err(ExportError::Invalid(format!(
+            "segment has no usable retained timestamp response; {status} export is refused"
+        )));
     }
     let records = transaction
         .query(

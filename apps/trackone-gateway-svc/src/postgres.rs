@@ -11,8 +11,8 @@ use crate::producer::{
 pub const MIGRATION: &str = include_str!("../migrations/0001_vtl_ledger.sql");
 
 pub struct PostgresLedgerStore {
-    client: Client,
-    ledger_id: String,
+    pub(crate) client: Client,
+    pub(crate) ledger_id: String,
 }
 
 impl PostgresLedgerStore {
@@ -24,7 +24,15 @@ impl PostgresLedgerStore {
     }
 
     pub fn migrate(&mut self) -> Result<(), ProducerError> {
-        self.client.batch_execute(MIGRATION).map_err(store_error)
+        let mut transaction = self.client.transaction().map_err(store_error)?;
+        transaction
+            .query_one("SELECT pg_advisory_xact_lock(3203161)", &[])
+            .map_err(store_error)?;
+        transaction.batch_execute(MIGRATION).map_err(store_error)?;
+        transaction
+            .batch_execute(include_str!("../migrations/0002_timestamp_queue.sql"))
+            .map_err(store_error)?;
+        transaction.commit().map_err(store_error)
     }
 
     pub fn into_client(self) -> Client {
@@ -60,27 +68,7 @@ impl PostgresLedgerStore {
         artifact_sha256: &str,
         response: &[u8],
     ) -> Result<(), ProducerError> {
-        let segment_number = numeric(segment_number);
-        let changed = self
-            .client
-            .execute(
-                "UPDATE trackone_vtl_sealed_segment SET tsa_response=$4, tsa_status='verified' \
-                 WHERE ledger_id=$1 AND segment_number=$2::text::numeric AND artifact_sha256=$3 \
-                 AND tsa_status='queued'",
-                &[
-                    &self.ledger_id,
-                    &segment_number,
-                    &artifact_sha256,
-                    &response,
-                ],
-            )
-            .map_err(store_error)?;
-        if changed != 1 {
-            return Err(ProducerError::Store(
-                "TSA response target is missing, changed, or already complete".to_string(),
-            ));
-        }
-        Ok(())
+        self.attach_timestamp(segment_number, artifact_sha256, response, None)
     }
 
     pub fn tsa_statuses(&mut self, segment_numbers: &[u64]) -> Result<Vec<String>, ProducerError> {
@@ -101,7 +89,10 @@ impl PostgresLedgerStore {
 }
 
 fn store_error(error: postgres::Error) -> ProducerError {
-    ProducerError::Store(error.to_string())
+    ProducerError::Store(match error.as_db_error() {
+        Some(database) => format!("{}: {}", database.code().code(), database.message()),
+        None => error.to_string(),
+    })
 }
 
 fn require_row_count(operation: &str, actual: u64, expected: u64) -> Result<(), ProducerError> {

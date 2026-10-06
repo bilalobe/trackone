@@ -8,3 +8,5 @@ pub mod producer;
 pub mod service;
 pub mod snapshot;
 pub mod tsa;
+
+pub mod timestamp_worker;

@@ -3,7 +3,7 @@
 use std::sync::{Arc, Mutex};
 
 use axum::body::Bytes;
-use axum::extract::{Request, State};
+use axum::extract::{Path, Request, State};
 use axum::http::{
     HeaderMap, HeaderName, HeaderValue, StatusCode,
     header::{AUTHORIZATION, CONTENT_ENCODING, CONTENT_TYPE, WWW_AUTHENTICATE},
@@ -19,7 +19,6 @@ use subtle::{Choice, ConstantTimeEq};
 
 use crate::postgres::PostgresLedgerStore;
 use crate::producer::{ElapsedClock, LedgerProducer, ProducerError};
-use crate::tsa::Rfc3161TimestampAuthority;
 
 pub const CBOR_MEDIA_TYPE: &str = "application/cbor";
 pub const BATCH_CBOR_MEDIA_TYPE: &str = "application/vnd.trackone.record-batch.v1+cbor";
@@ -107,7 +106,6 @@ fn bearer_digest(token: &str) -> [u8; 32] {
 
 pub struct GatewayHttpState<C> {
     producer: Arc<Mutex<ServiceProducer<C>>>,
-    timestamp_authority: Arc<Rfc3161TimestampAuthority>,
     admission_auth: AdmissionAuth,
     max_batch_records: usize,
     max_admission_bytes: usize,
@@ -117,7 +115,6 @@ impl<C> Clone for GatewayHttpState<C> {
     fn clone(&self) -> Self {
         Self {
             producer: Arc::clone(&self.producer),
-            timestamp_authority: Arc::clone(&self.timestamp_authority),
             admission_auth: self.admission_auth.clone(),
             max_batch_records: self.max_batch_records,
             max_admission_bytes: self.max_admission_bytes,
@@ -128,14 +125,12 @@ impl<C> Clone for GatewayHttpState<C> {
 impl<C> GatewayHttpState<C> {
     pub fn new(
         producer: ServiceProducer<C>,
-        timestamp_authority: Rfc3161TimestampAuthority,
         admission_auth: AdmissionAuth,
         max_batch_records: usize,
         max_admission_bytes: usize,
     ) -> Self {
         Self {
             producer: Arc::new(Mutex::new(producer)),
-            timestamp_authority: Arc::new(timestamp_authority),
             admission_auth,
             max_batch_records,
             max_admission_bytes,
@@ -150,6 +145,10 @@ where
     let protected = Router::new()
         .route("/v2/records", post(admit::<C>))
         .route("/v2/record-batches", post(admit_batch::<C>))
+        .route(
+            "/v2/segments/{segment_number}/timestamp",
+            get(timestamp_status::<C>),
+        )
         .route_layer(middleware::from_fn_with_state(
             state.admission_auth.clone(),
             require_bearer,
@@ -173,26 +172,50 @@ async fn require_bearer(
     }
 }
 
-/// Attempt every durable queued timestamp once. Failures deliberately leave
-/// the segment queued so a later startup can retry it.
-pub fn drain_queued_tsa_segments<C>(
-    producer: &mut ServiceProducer<C>,
-    timestamp_authority: &Rfc3161TimestampAuthority,
-) -> Result<(), ProducerError>
+async fn timestamp_status<C>(
+    State(state): State<GatewayHttpState<C>>,
+    Path(number): Path<String>,
+) -> Response
 where
-    C: ElapsedClock,
+    C: ElapsedClock + Send + 'static,
 {
-    let queued = producer.store_mut().load_queued_tsa_segments()?;
-    for (segment_number, artifact, digest) in queued {
-        if let Ok(response) = timestamp_authority.stamp(&artifact) {
-            let _ = producer.store_mut().attach_tsa_response(
-                segment_number,
-                &digest,
-                &response.response_der,
+    let number = match number.parse::<u64>() {
+        Ok(parsed) if number.bytes().all(|byte| byte.is_ascii_digit()) => parsed,
+        _ => {
+            return error_response(
+                StatusCode::BAD_REQUEST,
+                "segment_number",
+                "segment number must be uint64",
             );
         }
+    };
+    match tokio::task::spawn_blocking(move || {
+        state
+            .producer
+            .lock()
+            .map_err(|_| ProducerError::Store("producer mutex is poisoned".into()))?
+            .store_mut()
+            .timestamp_status(number)
+    })
+    .await
+    {
+        Ok(Ok(Some(status))) => Json(status).into_response(),
+        Ok(Ok(None)) => error_response(
+            StatusCode::NOT_FOUND,
+            "segment_not_found",
+            "sealed segment was not found",
+        ),
+        Ok(Err(error)) => error_response(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "timestamp_status",
+            &error.to_string(),
+        ),
+        Err(error) => error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "blocking_task",
+            &error.to_string(),
+        ),
     }
-    Ok(())
 }
 
 async fn health() -> impl IntoResponse {
@@ -327,7 +350,6 @@ where
         );
     };
     let producer = Arc::clone(&state.producer);
-    let timestamp_authority = Arc::clone(&state.timestamp_authority);
     let minimal = headers
         .get("prefer")
         .and_then(|value| value.to_str().ok())
@@ -348,15 +370,23 @@ where
             }
         };
 
-        let mut tsa_status = if outcome.sealed_segment_numbers.is_empty() {
+        let tsa_status = if outcome.sealed_segment_numbers.is_empty() {
             "not_applicable"
         } else if outcome.replayed {
+            // Status is a projection: a failed lookup cannot revoke durable admission.
             let statuses = producer
                 .lock()
-                .map_err(|_| ProducerError::Store("producer mutex is poisoned".to_string()))?
-                .store_mut()
-                .tsa_statuses(&outcome.sealed_segment_numbers)?;
-            if statuses.len() == outcome.sealed_segment_numbers.len()
+                .ok()
+                .and_then(|mut producer| {
+                    producer
+                        .store_mut()
+                        .tsa_statuses(&outcome.sealed_segment_numbers)
+                        .ok()
+                })
+                .unwrap_or_default();
+            if statuses.iter().any(|status| status == "failed") {
+                "failed"
+            } else if statuses.len() == outcome.sealed_segment_numbers.len()
                 && statuses.iter().all(|status| status == "verified")
             {
                 "verified"
@@ -364,25 +394,8 @@ where
                 "queued"
             }
         } else {
-            "verified"
+            "queued"
         };
-        for segment in &outcome.sealed {
-            let attached = timestamp_authority
-                .stamp(&segment.artifact_cbor)
-                .and_then(|response| {
-                    let mut producer = producer.lock().map_err(|_| {
-                        ProducerError::Store("producer mutex is poisoned".to_string())
-                    })?;
-                    producer.store_mut().attach_tsa_response(
-                        segment.segment_number,
-                        &segment.artifact_sha256,
-                        &response.response_der,
-                    )
-                });
-            if attached.is_err() {
-                tsa_status = "queued";
-            }
-        }
         Ok::<_, ProducerError>((outcome, tsa_status))
     })
     .await;

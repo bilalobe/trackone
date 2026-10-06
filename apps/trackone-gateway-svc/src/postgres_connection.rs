@@ -32,6 +32,7 @@ pub fn connect_postgres(
     ca_file: Option<&str>,
 ) -> Result<Client, Box<dyn std::error::Error>> {
     let mut config = Config::from_str(database_url)?;
+    config.connect_timeout(std::time::Duration::from_secs(5));
     match mode {
         PostgresTlsMode::VerifyFull => {
             config.ssl_mode(SslMode::Require);

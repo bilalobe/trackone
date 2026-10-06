@@ -2,16 +2,16 @@ use std::env;
 use std::net::SocketAddr;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+use std::sync::Arc;
 use trackone_gateway_svc::postgres::PostgresLedgerStore;
 use trackone_gateway_svc::postgres_connection::{PostgresTlsMode, connect_postgres};
 use trackone_gateway_svc::producer::{ElapsedClock, LedgerProducer, ProducerError};
-use trackone_gateway_svc::service::{
-    AdmissionAuth, GatewayHttpState, drain_queued_tsa_segments, router,
-};
+use trackone_gateway_svc::service::{AdmissionAuth, GatewayHttpState, router};
 use trackone_gateway_svc::service::{
     DEFAULT_MAX_ADMISSION_BYTES, DEFAULT_MAX_BATCH_RECORDS, HARD_MAX_ADMISSION_BYTES,
     HARD_MAX_BATCH_RECORDS,
 };
+use trackone_gateway_svc::timestamp_worker::{TimestampWorkerConfig, TimestampWorkers};
 use trackone_gateway_svc::tsa::Rfc3161TimestampAuthority;
 use trackone_ledger::vtl::{ClosurePolicy, EmptyMode};
 use trackone_rfc3161::SignerCertificateSha256;
@@ -139,6 +139,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Err("TRACKONE_MAX_ADMISSION_BYTES must be between 1 and 16777216".into());
     }
 
+    let worker_config = TimestampWorkerConfig {
+        concurrency: optional_u64("TRACKONE_TSA_WORKER_CONCURRENCY")?
+            .unwrap_or(2)
+            .try_into()?,
+        max_attempts: optional_u64("TRACKONE_TSA_MAX_ATTEMPTS")?
+            .unwrap_or(20)
+            .try_into()?,
+        retry_initial_ms: optional_u64("TRACKONE_TSA_RETRY_INITIAL_MS")?.unwrap_or(5_000),
+        retry_max_ms: optional_u64("TRACKONE_TSA_RETRY_MAX_MS")?.unwrap_or(300_000),
+    };
+    worker_config.validate()?;
+
     let client = connect_postgres(
         &database_url,
         postgres_tls_mode,
@@ -157,30 +169,58 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     )?;
     let clock = SystemElapsedClock::new()?;
     let continuity_id = clock.continuity_id();
-    let mut producer = LedgerProducer::open_or_create(store, clock, ledger_id, site_id, policy)?;
+    let mut producer =
+        LedgerProducer::open_or_create(store, clock, ledger_id.clone(), site_id, policy)?;
     if producer.state().open.clock_continuity_id != continuity_id {
         producer.recover()?;
     }
-    drain_queued_tsa_segments(&mut producer, &timestamp_authority)?;
 
+    // Keep the final synchronous PostgreSQL client owner outside the Tokio
+    // runtime: its destructor closes the connection with its own block_on.
+    let app = router(GatewayHttpState::new(
+        producer,
+        admission_auth,
+        max_batch_records,
+        max_admission_bytes,
+    ));
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()?;
-    runtime.block_on(async move {
+    runtime.block_on(async {
         let listener = tokio::net::TcpListener::bind(bind).await?;
-        axum::serve(
-            listener,
-            router(GatewayHttpState::new(
-                producer,
-                timestamp_authority,
-                admission_auth,
-                max_batch_records,
-                max_admission_bytes,
-            )),
-        )
-        .await?;
+        let workers = Arc::new(TimestampWorkers::start(
+            worker_config,
+            Arc::new(timestamp_authority),
+            move || {
+                connect_postgres(
+                    &database_url,
+                    postgres_tls_mode,
+                    postgres_ca_file.as_deref(),
+                )
+                .map(|client| PostgresLedgerStore::new(client, &ledger_id))
+                .map_err(|error| ProducerError::Store(error.to_string()))
+            },
+        )?);
+        let shutdown_workers = Arc::clone(&workers);
+        let result = axum::serve(listener, app.clone())
+            .with_graceful_shutdown(async move {
+                shutdown_signal().await;
+                shutdown_workers.stop_claiming();
+            })
+            .await;
+        drop(workers);
+        result?;
         Ok::<(), Box<dyn std::error::Error>>(())
     })
+}
+
+async fn shutdown_signal() {
+    let mut terminate = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+        .expect("install SIGTERM handler");
+    tokio::select! {
+        _ = tokio::signal::ctrl_c() => (),
+        _ = terminate.recv() => (),
+    }
 }
 
 #[cfg(test)]
