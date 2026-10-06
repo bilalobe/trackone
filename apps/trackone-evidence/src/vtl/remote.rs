@@ -247,6 +247,13 @@ impl Retriever<'_> {
             .output()
             .map_err(|error| bad(format!("HTTPS retrieval could not execute: {error}")))?;
         if !output.status.success() {
+            // curl can reject an incomplete body before we inspect its headers.
+            // Report ambiguous framing first when response headers are available.
+            if output.status.code() == Some(18)
+                && let Ok(bytes) = fs::read(&headers)
+            {
+                validate_headers(&bytes)?;
+            }
             let diagnostic = String::from_utf8_lossy(
                 &output.stderr[..output.stderr.len().min(MAX_DIAGNOSTIC_BYTES)],
             );

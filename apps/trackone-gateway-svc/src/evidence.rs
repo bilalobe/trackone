@@ -553,8 +553,14 @@ async fn generate(
         || headers
             .get("content-type")
             .and_then(|h| h.to_str().ok())
-            .map(|s| s.split(';').next().unwrap().trim())
-            != Some("application/json")
+            .map(|s| {
+                s.split(';')
+                    .next()
+                    .unwrap()
+                    .trim()
+                    .eq_ignore_ascii_case("application/json")
+            })
+            != Some(true)
     {
         return Err(Failure::MediaType);
     }

@@ -116,7 +116,7 @@ def run_matrix(
         (
             "truncated",
             "https-binding-retrieval",
-            "truncat|partial|missing|transferred|unexpected eof",
+            "truncat|partial|missing|transferred|unexpected eof|transfer closed with [0-9]+ bytes remaining",
         ),
         ("duplicate_length", "https-binding-retrieval", "length|Content-Length"),
         ("transfer_and_length", "https-binding-retrieval", "length|framing"),
