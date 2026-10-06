@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Submit RFC 3161 timestamps through bounded background workers after listener
+  binding and acknowledge admissions at durable commit. Persist retry metadata,
+  fenced claim leases, and terminal failures through an additive database
+  migration; expose authenticated per-segment timestamp status.
+
 - Establish the current VTL profile, profile UUID
   `c08ade4e-1785-4eb6-9648-b7003d76288d`, version-one segment and
   producer-manifest contracts, and the unversioned verifier-result contract.

@@ -22,6 +22,8 @@ security decisions remain in force unless an ADR explicitly supersedes them.
 
 ## Index (Project)
 
+- [ADR-067: Asynchronous RFC 3161 submission](ADR-067-asynchronous-rfc3161-submission.md)
+
 - [ADR-001: Cryptographic Primitives and Framing](ADR-001-primitives-x25519-hkdf-xchacha.md)
 - [ADR-002: Telemetry Framing, Nonce/Replay Policy, and Device Table](ADR-002-telemetry-framing-and-replay-policy.md)
 - [ADR-003: Canonicalization, Merkle Policy, and Daily OpenTimestamps Anchoring](ADR-003-merkle-canonicalization-and-ots-anchoring.md)

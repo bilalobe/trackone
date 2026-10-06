@@ -6,6 +6,11 @@ All notable changes to trackone-gateway-svc will be documented in this file.
 
 ### Changed
 
+- Submit RFC 3161 timestamps through bounded background workers after listener
+  binding and acknowledge admissions at durable commit. Persist retry metadata,
+  fenced claim leases, and terminal failures through an additive database
+  migration; expose authenticated per-segment timestamp status.
+
 - Produce current VTL segment artifacts with aligned batch roots, version-one
   closure policy, deterministic close-reason precedence, contiguous chaining,
   and mandatory empty shutdown/recovery artifacts.

@@ -61,8 +61,47 @@ Start it locally after supplying the required values:
 cargo run --locked -p trackone-gateway-svc --bin trackone-vtl-gateway
 ```
 
+## Timestamp queue
+
+Admission success acknowledges durable occurrence and sealed-segment persistence.
+It does not wait for the TSA. Startup binds the listener before starting workers,
+so an existing backlog or TSA outage does not delay listener availability.
+The additive queue migration is applied automatically and can be run repeatedly
+against a database using the current commitment profile.
+
+Workers use separate PostgreSQL connections and claim one due segment at a time.
+The default pool contains two workers. Retry metadata is durable: attempt count,
+next attempt, last error (at most 512 characters), and a five-minute claim lease.
+A crash before attachment or ambiguous remote result can resubmit the same digest;
+the first committed verified response is retained without replacement. A completed
+segment never changes its artifact bytes, digest, or predecessor.
+
+| Environment variable | Default | Accepted values |
+| --- | --- | --- |
+| `TRACKONE_TSA_WORKER_CONCURRENCY` | `2` | 1–16 |
+| `TRACKONE_TSA_MAX_ATTEMPTS` | `20` | 1–1000 |
+| `TRACKONE_TSA_RETRY_INITIAL_MS` | `5000` | 1–86400000 |
+| `TRACKONE_TSA_RETRY_MAX_MS` | `300000` | Initial delay through 86400000 |
+
+After failed attempt n, delay is `min(initial × 2^(n−1), maximum)`.
+Exhausted attempts become terminal `failed` jobs, including an expired final
+claim. Changing the attempt limit does not requeue failed jobs. Database
+outages trigger worker reconnects; PostgreSQL connection establishment has a
+five-second timeout. SIGTERM/SIGINT stop new claims and let active bounded
+submissions finish. Abrupt termination recovers via lease expiry.
+
+See [ADR-067](../../adr/ADR-067-asynchronous-rfc3161-submission.md).
+
 ## HTTP surface
 
+- `GET /v2/segments/{segment_number}/timestamp` requires the admission bearer
+  token and reports the configured ledger's segment timestamp state. The JSON
+  fields are `ledger_id`, `segment_number`, `artifact_sha256`, `state`,
+  `attempt_count`, `next_attempt`, and `last_error`. Integer fields are decimal
+  strings; timestamps are UTC RFC3339. State is `queued`, `failed` (terminal),
+  or `attached`. Next attempt and last error are nullable. During a claim,
+  next attempt indicates the recovery lease deadline. Invalid segment numbers
+  return 400; missing segments return 404.
 - `GET /healthz` returns the active normative commitment-profile UUID.
 - `POST /v2/records` accepts one canonical record as
   `application/cbor`. Every request must include `Idempotency-Key` and
@@ -73,6 +112,13 @@ cargo run --locked -p trackone-gateway-svc --bin trackone-vtl-gateway
   `Content-Encoding: gzip`; its idempotency digest covers the expanded
   envelope, so compressed and identity requests replay identically. Both POST
   routes require bearer authentication; `/healthz` remains public.
+
+Fresh admissions report `tsa_status: "queued"` for newly sealed segments and
+`not_applicable` when no segment seals. Replays report `failed` if any referenced
+segment failed, otherwise `queued` while any remain pending, otherwise `verified`.
+A failed status lookup falls back to `queued` without revoking admission success.
+The timestamp endpoint provides per-segment details. Export refuses queued and
+failed segments until a verified response is retained.
 
 Successful admissions return `201 Created`; an idempotent replay returns
 `200 OK`. `Prefer: return=minimal` returns an empty success body with
