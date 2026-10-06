@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import atexit
 import hashlib
+import http.client
 import json
 import os
 import re
@@ -261,6 +262,7 @@ def start_server(
     log_dir: Path,
     *,
     root: Path | None = None,
+    upstream_port: int | None = None,
 ) -> subprocess.Popen[str]:
     command = [
         sys.executable,
@@ -276,6 +278,8 @@ def start_server(
         "--log-dir",
         str(log_dir),
     ]
+    if upstream_port:
+        command.extend(["--upstream-port", str(upstream_port)])
     if root:
         command.extend(["--root", str(root)])
     else:
@@ -469,7 +473,18 @@ def main() -> int:
     )
     for _ in range(100):
         ready = subprocess.run(
-            ["docker", "exec", container, "pg_isready", "-U", "trackone"],
+            [
+                "docker",
+                "exec",
+                container,
+                "pg_isready",
+                "-h",
+                "127.0.0.1",
+                "-U",
+                "trackone",
+                "-d",
+                "trackone",
+            ],
             capture_output=True,
             check=False,
         )
@@ -503,6 +518,30 @@ def main() -> int:
         signer_digest = hashlib.sha256(signer_der).hexdigest()
         ledger_id = uuid.uuid4().hex
         token = "acceptance-bearer-token-000000000000"
+        disclosure_token = "acceptance-disclosure-token-00000000000"
+        token_file = work / "disclosure-token"
+        token_file.write_text(disclosure_token)
+        token_file.chmod(0o600)
+        grants_file = work / "disclosure-grants.json"
+        grants_file.write_text(
+            json.dumps(
+                [
+                    {
+                        "principal_id": "acceptance-auditor",
+                        "token": disclosure_token,
+                        "grants": [
+                            {
+                                "ledger_id": ledger_id,
+                                "read_segments": True,
+                                "classes": ["A", "B", "C"],
+                                "batches": "all",
+                            }
+                        ],
+                    }
+                ]
+            )
+        )
+        grants_file.chmod(0o600)
         gateway_env = os.environ.copy()
         gateway_env.update(
             {
@@ -516,6 +555,7 @@ def main() -> int:
                 "TRACKONE_TSA_CRLS_FILE": str(pki["tsa_crls"]),
                 "TRACKONE_TSA_POLICY_OID": POLICY_OID,
                 "TRACKONE_TSA_SIGNER_CERT_SHA256": signer_digest,
+                "TRACKONE_DISCLOSURE_GRANTS_FILE": str(grants_file),
                 "TRACKONE_BIND": f"127.0.0.1:{gateway_port}",
                 "TRACKONE_INTERVAL_MS": "3600000",
                 "TRACKONE_BATCH_RECORD_LIMIT": "2",
@@ -533,6 +573,36 @@ def main() -> int:
         wait_gateway(gateway_port)
         admit_segment(gateway_port, token, 0, [3, 1, 1, 2, 4], work)
         admit_segment(gateway_port, token, 1, [8, 7, 6, 5, 5], work)
+
+        # Admission is durable before asynchronous timestamp attachment. Poll
+        # the authenticated status route before exporting complete snapshots.
+        for segment_number in (0, 1):
+            deadline = time.monotonic() + 60
+            while True:
+                connection = http.client.HTTPConnection(
+                    "127.0.0.1", gateway_port, timeout=5
+                )
+                try:
+                    connection.request(
+                        "GET",
+                        f"/v2/segments/{segment_number}/timestamp",
+                        headers={"Authorization": f"Bearer {token}"},
+                    )
+                    response = connection.getresponse()
+                    status = json.loads(response.read())
+                finally:
+                    connection.close()
+                if response.status != 200 or status.get("state") == "failed":
+                    raise AcceptanceError(
+                        "timestamp queue did not complete successfully"
+                    )
+                if status.get("state") == "attached":
+                    break
+                if time.monotonic() >= deadline:
+                    raise AcceptanceError(
+                        "timestamp queue acceptance deadline exceeded"
+                    )
+                time.sleep(0.1)
 
         publish = output / "published"
         publish.mkdir()
@@ -669,6 +739,76 @@ def main() -> int:
             ("class-b", "disclosed_batch_recompute", ["0"]),
             ("class-c", "anchor_only", []),
         ]
+        gateway_https_port = free_port()
+        gateway_https = start_server(
+            "gateway",
+            gateway_https_port,
+            pki,
+            output / "https-gateway",
+            upstream_port=gateway_port,
+        )
+        wait_https(gateway_https_port, pki["https_root"], "/healthz")
+        for name, scope, batches in cases:
+            downloaded = output / (name + "-http-bundle")
+            command = [
+                sys.executable,
+                str(detached),
+                "--bundle-url",
+                f"https://localhost:{gateway_https_port}/v2/ledgers/{ledger_id}/segments/1/",
+                "--generate-class",
+                name[-1].upper(),
+                "--bearer-token-file",
+                str(token_file),
+                "--download-dir",
+                str(downloaded),
+                "--scope",
+                scope,
+                *common,
+                "--output",
+                str(reports / (name + "-gateway-independent.json")),
+            ]
+            for batch in batches:
+                command.extend(["--batch", batch])
+            run(command, cwd=work)
+            local_command = [
+                str(ROOT / "target/debug/trackone-evidence"),
+                "verify",
+                "--root",
+                str(downloaded),
+                "--scope",
+                scope,
+                "--tsa-ca-file",
+                str(pki["tsa_root"]),
+                "--tsa-crls-file",
+                str(pki["tsa_crls"]),
+                "--tsa-policy",
+                POLICY_OID,
+                "--tsa-signer-cert-sha256",
+                signer_digest,
+                "--tsa-max-future-skew-seconds",
+                "5",
+                "--json",
+            ]
+            verified = json.loads(run(local_command).stdout)
+            if (
+                verified["overall"] != "success"
+                or verified["artifact_sha256"] != digest
+            ):
+                raise AcceptanceError(
+                    "HTTP-exported bundle failed trackone-evidence verification"
+                )
+            (reports / (name + "-gateway-trackone.json")).write_text(
+                json.dumps(verified, indent=2) + "\n"
+            )
+            # Shared builder must yield identical exact bytes through CLI and HTTP.
+            for source in (publish / name).rglob("*"):
+                if (
+                    source.is_file()
+                    and source.read_bytes()
+                    != (downloaded / source.relative_to(publish / name)).read_bytes()
+                ):
+                    raise AcceptanceError("CLI and HTTP snapshot bytes differ")
+        stop_process(gateway_https)
         for name, scope, batches in cases:
             url = f"https://localhost:{evidence_port}/{name}/"
             independent_command = [

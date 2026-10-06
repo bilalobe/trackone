@@ -154,6 +154,7 @@ class HttpRetriever:
     retries: int = 2
     requests: int = 0
     total_bytes: int = 0
+    bearer_token: str | None = None
 
     def __post_init__(self) -> None:
         parsed = urlsplit(self.root)
@@ -176,7 +177,9 @@ class HttpRetriever:
         self.context = ssl.create_default_context(cafile=str(self.ca_file))
         self.context.minimum_version = ssl.TLSVersion.TLSv1_3
 
-    def get(self, relative: str, accept: str) -> bytes:
+    def get(
+        self, relative: str, accept: str, *, request_body: bytes | None = None
+    ) -> bytes:
         relative = portable_path(relative)
         # Component-wise quoting makes literal %, ?, and # filename octets.
         suffix = "/".join(quote(part, safe="-._~") for part in relative.split("/"))
@@ -218,12 +221,23 @@ class HttpRetriever:
             timer.start()
             try:
                 connection.request(
-                    "GET",
+                    "POST" if request_body is not None else "GET",
                     request_path,
+                    body=request_body,
                     headers={
                         "Accept": accept,
                         "Accept-Encoding": "identity",
                         "Connection": "close",
+                        **(
+                            {"Authorization": f"Bearer {self.bearer_token}"}
+                            if self.bearer_token
+                            else {}
+                        ),
+                        **(
+                            {"Content-Type": "application/json"}
+                            if request_body is not None
+                            else {}
+                        ),
                     },
                 )
                 if expired.is_set():
@@ -237,7 +251,9 @@ class HttpRetriever:
                     response.read(MAX_OBJECT + 1)
                     time.sleep(0.05 * (attempt + 1))
                     continue
-                if response.status != 200:
+                if response.status not in (
+                    {200, 201} if request_body is not None else {200}
+                ):
                     raise CheckError(
                         f"evidence retrieval requires HTTP 200, got {response.status}"
                     )
@@ -271,6 +287,19 @@ class HttpRetriever:
                         raise CheckError("invalid HTTP Content-Length") from exc
                     if declared_length != len(body):
                         raise CheckError("truncated or overlong HTTP evidence body")
+                content_digest = response.getheader("Content-Digest")
+                if content_digest is not None:
+                    import base64
+
+                    expected = (
+                        "sha-256=:"
+                        + base64.b64encode(hashlib.sha256(body).digest()).decode(
+                            "ascii"
+                        )
+                        + ":"
+                    )
+                    if content_digest != expected:
+                        raise CheckError("HTTP Content-Digest mismatch")
                 self.total_bytes += len(body)
                 if self.total_bytes > MAX_TOTAL:
                     raise CheckError("aggregate HTTPS byte limit exceeded")
@@ -904,10 +933,95 @@ def validate_segment(segment: Any) -> tuple[int, int, list[bytes]]:
     return count, batch_limit, roots
 
 
+def download_bundle(
+    http: HttpRetriever, manifest_bytes: bytes, manifest: dict, output: Path
+) -> None:
+    """Materialize only digest-bound references into a new private directory."""
+    files = {"segment.verify.json": manifest_bytes}
+
+    def collect(value: object) -> None:
+        if isinstance(value, dict):
+            if "path" in value:
+                path = portable_path(value["path"])
+                digest = value.get("sha256")
+                if (
+                    path == "segment.verify.json"
+                    or not isinstance(digest, str)
+                    or not HEX64.fullmatch(digest)
+                ):
+                    raise CheckError("invalid download reference")
+                body = files.get(path)
+                if body is None:
+                    body = http.get(path, "application/octet-stream")
+                if hashlib.sha256(body).hexdigest() != digest:
+                    raise CheckError("download reference digest mismatch")
+                files[path] = body
+            else:
+                for child in value.values():
+                    collect(child)
+        elif isinstance(value, list):
+            for child in value:
+                collect(child)
+
+    collect(manifest.get("artifacts", {}))
+    # mkdir is exclusive; do not write through an existing output or symlink.
+    output.mkdir(mode=0o700)
+    for path, body in files.items():
+        destination = output / path
+        destination.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        with destination.open("xb") as stream:
+            stream.write(body)
+
+
 def verify_exchange(args: argparse.Namespace) -> dict[str, Any]:
-    http = HttpRetriever(args.bundle_url, args.https_ca_file)
+    token_file = getattr(args, "bearer_token_file", None)
+    token = token_file.read_text(encoding="ascii").strip() if token_file else None
+    if token is not None and (
+        not 32 <= len(token) <= 256 or any(not 33 <= ord(c) <= 126 for c in token)
+    ):
+        raise CheckError("invalid bearer token file")
+    http = HttpRetriever(args.bundle_url, args.https_ca_file, bearer_token=token)
+    generated_digest = None
+    generate_class = getattr(args, "generate_class", None)
+    if generate_class:
+        if token is None:
+            raise CheckError("disclosure generation requires --bearer-token-file")
+        selection = {"class": generate_class}
+        if generate_class == "B":
+            selection["batches"] = [str(b) for b in args.batch]
+        result = parse_json(
+            http.get(
+                "disclosures",
+                "application/json",
+                request_body=json.dumps(selection).encode(),
+            )
+        )
+        generated_digest = result.get("manifest_sha256")
+        if not isinstance(generated_digest, str) or not HEX64.fullmatch(
+            generated_digest
+        ):
+            raise CheckError("invalid generated manifest digest")
+        expected_path = http.parsed.path + "disclosures/" + generated_digest + "/"
+        if (
+            result.get("bundle_url") != expected_path
+            or result.get("artifact_sha256") != args.expected_segment_sha256
+            or result.get("class") != generate_class
+        ):
+            raise CheckError("disclosure generation identity mismatch")
+        # Only a fixed child of the already authenticated origin is accepted.
+        http = HttpRetriever(
+            args.bundle_url + "disclosures/" + generated_digest + "/",
+            args.https_ca_file,
+            bearer_token=token,
+        )
     manifest_bytes = http.get("segment.verify.json", "application/json")
+    if (
+        generated_digest
+        and hashlib.sha256(manifest_bytes).hexdigest() != generated_digest
+    ):
+        raise CheckError("generated manifest digest mismatch")
     manifest = parse_json(manifest_bytes)
+    download_dir = getattr(args, "download_dir", None)
     required = {
         "version",
         "ledger_id",
@@ -1068,6 +1182,8 @@ def verify_exchange(args: argparse.Namespace) -> dict[str, Any]:
         overall = "failure"
     else:
         raise CheckError("producer TSA state and artifact shape are inconsistent")
+    if download_dir:
+        download_bundle(http, manifest_bytes, manifest, download_dir)
     return {
         "ok": overall != "failure",
         "checker": "trackone-independent-https-acceptance-v1",
@@ -1121,6 +1237,17 @@ def required_tsa_args(args: argparse.Namespace) -> None:
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description=__doc__)
     result.add_argument("--bundle-url", required=True)
+    result.add_argument("--bearer-token-file", type=Path)
+    result.add_argument(
+        "--generate-class",
+        choices=["A", "B", "C"],
+        help="Treat bundle URL as a ledger/segment root and generate this disclosure",
+    )
+    result.add_argument(
+        "--download-dir",
+        type=Path,
+        help="Write manifest and all referenced objects into a new directory",
+    )
     result.add_argument("--expected-segment-sha256", required=True)
     result.add_argument("--https-ca-file", required=True, type=Path)
     result.add_argument(

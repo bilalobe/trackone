@@ -159,6 +159,9 @@ def check(repo: Path) -> dict[str, int]:
         ),
     ]
     instance_count = 0
+    for fixture in (repo / "toolset/vectors/vtl-http-binding").rglob("*.verify.json"):
+        instances.append((fixture, f"{PROVIDER}vtl_producer_manifest.schema.json"))
+
     for instance_path, schema_id in instances:
         validate_instance(instance_path, schemas[schema_id], registry)
         instance_count += 1

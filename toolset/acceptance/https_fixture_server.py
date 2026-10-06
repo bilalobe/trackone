@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import http.client
 import http.server
 import ssl
 import subprocess
@@ -17,7 +18,48 @@ class Handler(http.server.BaseHTTPRequestHandler):
     # response; every reply below carries an explicit Content-Length.
     protocol_version = "HTTP/1.1"
 
+    def proxy(self) -> None:
+        length = int(self.headers.get("Content-Length", "0"))
+        if not 0 <= length <= 65536:
+            self.send_error(413)
+            return
+        connection = http.client.HTTPConnection(
+            "127.0.0.1", self.server.upstream_port, timeout=30
+        )
+        try:
+            connection.request(
+                self.command,
+                self.path,
+                body=self.rfile.read(length) if length else None,
+                headers={
+                    key: value
+                    for key, value in self.headers.items()
+                    if key.lower()
+                    not in {"host", "connection", "transfer-encoding", "content-length"}
+                },
+            )
+            response = connection.getresponse()
+            body = response.read()
+            self.send_response(response.status)
+            for key, value in response.getheaders():
+                if key.lower() not in {
+                    "connection",
+                    "transfer-encoding",
+                    "content-length",
+                    "server",
+                    "date",
+                }:
+                    self.send_header(key, value)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        finally:
+            connection.close()
+
     def do_GET(self) -> None:
+        if self.server.mode == "gateway":
+            self.proxy()
+            return
         if self.server.mode != "static":  # type: ignore[attr-defined]
             self.send_error(405)
             return
@@ -50,6 +92,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_POST(self) -> None:
+        if self.server.mode == "gateway":
+            self.proxy()
+            return
         if self.server.mode != "tsa" or self.path != "/tsa":  # type: ignore[attr-defined]
             self.send_error(405)
             return
@@ -114,12 +159,13 @@ def media_type(path: Path) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--mode", choices=["static", "tsa"], required=True)
+    parser.add_argument("--mode", choices=["static", "tsa", "gateway"], required=True)
     parser.add_argument("--bind", default="127.0.0.1")
     parser.add_argument("--port", type=int, required=True)
     parser.add_argument("--cert", type=Path, required=True)
     parser.add_argument("--key", type=Path, required=True)
     parser.add_argument("--root", type=Path)
+    parser.add_argument("--upstream-port", type=int)
     parser.add_argument("--config", type=Path)
     parser.add_argument("--log-dir", type=Path, required=True)
     args = parser.parse_args()
@@ -127,8 +173,11 @@ def main() -> None:
         parser.error("--root is required in static mode")
     if args.mode == "tsa" and not args.config:
         parser.error("--config is required in tsa mode")
+    if args.mode == "gateway" and not args.upstream_port:
+        parser.error("--upstream-port is required in gateway mode")
     args.log_dir.mkdir(parents=True, exist_ok=True)
     server = http.server.ThreadingHTTPServer((args.bind, args.port), Handler)
+    server.upstream_port = args.upstream_port
     server.mode = args.mode  # type: ignore[attr-defined]
     server.root = args.root  # type: ignore[attr-defined]
     server.config = args.config  # type: ignore[attr-defined]

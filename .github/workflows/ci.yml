@@ -309,3 +309,32 @@ jobs:
             dist/conformance-verification.json
           if-no-files-found: error
           retention-days: 30
+
+  vtl-http-binding:
+    runs-on: ubuntu-latest
+    needs: [rust, contracts]
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          lfs: true
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@1.93.0
+      - name: Cache cargo
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target/debug
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
+      - name: Exercise authenticated disclosures and independent verification
+        run: python3 toolset/acceptance/run_vtl_https_exchange.py --output /tmp/vtl-http-binding
+      - name: Retain verification reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: vtl-http-binding-reports
+          path: /tmp/vtl-http-binding/reports/
+          if-no-files-found: ignore
