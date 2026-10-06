@@ -32,6 +32,9 @@ impl PostgresLedgerStore {
         transaction
             .batch_execute(include_str!("../migrations/0002_timestamp_queue.sql"))
             .map_err(store_error)?;
+        transaction
+            .batch_execute(include_str!("../migrations/0003_disclosures.sql"))
+            .map_err(store_error)?;
         transaction.commit().map_err(store_error)
     }
 

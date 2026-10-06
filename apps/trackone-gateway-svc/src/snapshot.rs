@@ -43,6 +43,9 @@ impl DisclosureClass {
 #[derive(Debug)]
 pub enum ExportError {
     Invalid(String),
+    Absent,
+    Pending,
+    Unavailable,
     Database(String),
     Io(std::io::Error),
 }
@@ -51,6 +54,13 @@ impl std::fmt::Display for ExportError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Invalid(message) => formatter.write_str(message),
+            Self::Absent => formatter.write_str("sealed segment was not found"),
+            Self::Pending => formatter.write_str(
+                "segment has no usable retained timestamp response; queued export is refused",
+            ),
+            Self::Unavailable => formatter.write_str(
+                "segment has no usable retained timestamp response; failed export is refused",
+            ),
             Self::Database(message) => write!(formatter, "database snapshot failed: {message}"),
             Self::Io(error) => write!(formatter, "snapshot publication failed: {error}"),
         }
@@ -136,13 +146,23 @@ pub fn export_snapshot(
         ));
     }
     validate_destination(output)?;
-    let material = read_material(client, ledger_id, segment_number)?;
-    let export = prepare_export(ledger_id, segment_number, class, selected_batches, material)?;
+    let export = prepare_snapshot(client, ledger_id, segment_number, class, selected_batches)?;
     publish_directory(output, &export)
 }
 
-struct PreparedExport {
-    files: Vec<(PathBuf, Vec<u8>)>,
+pub(crate) fn prepare_snapshot(
+    client: &mut Client,
+    ledger_id: &str,
+    segment_number: u64,
+    class: DisclosureClass,
+    selected_batches: &BTreeSet<u64>,
+) -> Result<PreparedExport, ExportError> {
+    let material = read_material(client, ledger_id, segment_number)?;
+    prepare_export(ledger_id, segment_number, class, selected_batches, material)
+}
+
+pub(crate) struct PreparedExport {
+    pub(crate) files: Vec<(PathBuf, Vec<u8>)>,
 }
 
 fn read_material(
@@ -165,13 +185,15 @@ fn read_material(
             &[&ledger_id, &number],
         )
         .map_err(database_error)?
-        .ok_or_else(|| ExportError::Invalid("sealed segment was not found".into()))?;
+        .ok_or(ExportError::Absent)?;
     let status: String = row.get(2);
     let response: Option<Vec<u8>> = row.get(3);
     if status != "verified" || response.as_ref().is_none_or(Vec::is_empty) {
-        return Err(ExportError::Invalid(format!(
-            "segment has no usable retained timestamp response; {status} export is refused"
-        )));
+        return Err(if status == "queued" {
+            ExportError::Pending
+        } else {
+            ExportError::Unavailable
+        });
     }
     let records = transaction
         .query(
@@ -528,6 +550,65 @@ mod tests {
             predecessor: None,
             records,
             tsa_response: b"timestamp".to_vec(),
+        }
+    }
+
+    #[test]
+    fn checked_in_http_bundles_match_shared_builder() {
+        let root =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../toolset/vectors/vtl-http-binding");
+        let vector: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../toolset/vectors/vtl-known-answer/vector.json"
+        ))
+        .unwrap();
+        let decode = |value: &str| {
+            value
+                .as_bytes()
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .map(|pair| u8::from_str_radix(std::str::from_utf8(pair).unwrap(), 16).unwrap())
+                .collect::<Vec<_>>()
+        };
+        for (class, folder) in [
+            (DisclosureClass::A, "class-a"),
+            (DisclosureClass::B, "class-b"),
+            (DisclosureClass::C, "class-c"),
+        ] {
+            let artifact = decode(vector["segment_cbor_hex"].as_str().unwrap());
+            let material = SnapshotMaterial {
+                artifact_sha256: sha256_hex(&artifact),
+                artifact,
+                predecessor: None,
+                records: vector["records_cbor_hex"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|v| decode(v.as_str().unwrap()))
+                    .collect(),
+                tsa_response: fs::read(root.join(folder).join("timestamp.tsr")).unwrap(),
+            };
+            let selected = if class == DisclosureClass::B {
+                BTreeSet::from([0])
+            } else {
+                BTreeSet::new()
+            };
+            let prepared = prepare_export(
+                vector["ledger_id"].as_str().unwrap(),
+                0,
+                class,
+                &selected,
+                material,
+            )
+            .unwrap();
+            for (path, bytes) in prepared.files {
+                assert_eq!(
+                    fs::read(root.join(folder).join(&path)).unwrap(),
+                    bytes,
+                    "{folder}/{}",
+                    path.display()
+                );
+            }
         }
     }
 

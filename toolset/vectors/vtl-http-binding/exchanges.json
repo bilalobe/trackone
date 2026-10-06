@@ -1,0 +1,522 @@
+[
+  {
+    "name": "generate-A",
+    "request": {
+      "method": "POST",
+      "path": "/v2/ledgers/b7a1d5e40c6f438e9a75db27c96f31aa/segments/0/disclosures",
+      "headers": {
+        "Authorization": "Bearer FIXTURE_CREDENTIAL",
+        "Content-Type": "application/json"
+      },
+      "body": {
+        "class": "A"
+      }
+    },
+    "response": {
+      "status": 201,
+      "headers": {
+        "Location": "/v2/ledgers/b7a1d5e40c6f438e9a75db27c96f31aa/segments/0/disclosures/c610f91bca84bff5ab419cca68a9728b539fa026ed9f5a5a918a12cf709943a0/segment.verify.json",
+        "Cache-Control": "private, no-store"
+      },
+      "body": {
+        "ledger_id": "b7a1d5e40c6f438e9a75db27c96f31aa",
+        "segment_number": "0",
+        "class": "A",
+        "manifest_sha256": "c610f91bca84bff5ab419cca68a9728b539fa026ed9f5a5a918a12cf709943a0",
+        "artifact_sha256": "2672cb72d5f06863110af1b30660c7e5ba495c0b2ce7d084b0436e010e99388d",
+        "bundle_url": "/v2/ledgers/b7a1d5e40c6f438e9a75db27c96f31aa/segments/0/disclosures/c610f91bca84bff5ab419cca68a9728b539fa026ed9f5a5a918a12cf709943a0/"
+      }
+    }
+  },
+  {
+    "name": "fetch-A-segment.cbor",
+    "request": {
+      "method": "GET",
+      "path": "/v2/ledgers/b7a1d5e40c6f438e9a75db27c96f31aa/segments/0/disclosures/c610f91bca84bff5ab419cca68a9728b539fa026ed9f5a5a918a12cf709943a0/segment.cbor",
+      "headers": {
+        "Authorization": "Bearer FIXTURE_CREDENTIAL"
+      }
+    },
+    "response": {
+      "status": 200,
+      "headers": {
+        "Content-Type": "application/cbor",
+        "ETag": "\"2672cb72d5f06863110af1b30660c7e5ba495c0b2ce7d084b0436e010e99388d\"",
+        "Content-Digest": "sha-256=:JnLLctXwaGMRCvGzBmDH5bpJXAss59CEsENuAQ6ZOI0=:",
+        "Cache-Control": "private, no-store",
+        "Link": "</v2/ledgers/b7a1d5e40c6f438e9a75db27c96f31aa/segments/0/disclosures/c610f91bca84bff5ab419cca68a9728b539fa026ed9f5a5a918a12cf709943a0/segment.verify.json>; rel=\"describedby\"",
+        "Repr-Digest": "sha-256=:JnLLctXwaGMRCvGzBmDH5bpJXAss59CEsENuAQ6ZOI0=:"
+      },
+      "body_file": "class-a/segment.cbor"
+    }
+  },
+  {
+    "name": "fetch-A-records/batch-00000000000000000000/occurrence-00000000000000000000-ordinal-00000000000000000002.cbor",
+    "request": {
+      "method": "GET",
+      "path": "/v2/ledgers/b7a1d5e40c6f438e9a75db27c96f31aa/segments/0/disclosures/c610f91bca84bff5ab419cca68a9728b539fa026ed9f5a5a918a12cf709943a0/records/batch-00000000000000000000/occurrence-00000000000000000000-ordinal-00000000000000000002.cbor",
+      "headers": {
+        "Authorization": "Bearer FIXTURE_CREDENTIAL"
+      }
+    },
+    "response": {
+      "status": 200,
+      "headers": {
+        "Content-Type": "application/cbor",
+        "ETag": "\"630765dd51926538bde59353e8a494051d80105cf206ce9529dbe0c8f1fd1e67\"",
+        "Content-Digest": "sha-256=:Ywdl3VGSZTi95ZNT6KSUBR2AEFzyBs6VKdvgyPH9Hmc=:",
+        "Cache-Control": "private, no-store",
+        "Link": "</v2/ledgers/b7a1d5e40c6f438e9a75db27c96f31aa/segments/0/disclosures/c610f91bca84bff5ab419cca68a9728b539fa026ed9f5a5a918a12cf709943a0/segment.verify.json>; rel=\"describedby\"",
+        "Repr-Digest": "sha-256=:Ywdl3VGSZTi95ZNT6KSUBR2AEFzyBs6VKdvgyPH9Hmc=:"
+      },
+      "body_file": "class-a/records/batch-00000000000000000000/occurrence-00000000000000000000-ordinal-00000000000000000002.cbor"
+    }
+  },
+  {
+    "name": "fetch-A-records/batch-00000000000000000000/occurrence-00000000000000000001-ordinal-00000000000000000001.cbor",
+    "request": {
+      "method": "GET",
+      "path": "/v2/ledgers/b7a1d5e40c6f438e9a75db27c96f31aa/segments/0/disclosures/c610f91bca84bff5ab419cca68a9728b539fa026ed9f5a5a918a12cf709943a0/records/batch-00000000000000000000/occurrence-00000000000000000001-ordinal-00000000000000000001.cbor",
+      "headers": {
+        "Authorization": "Bearer FIXTURE_CREDENTIAL"
+      }
+    },
+    "response": {
+      "status": 200,
+      "headers": {
+        "Content-Type": "application/cbor",
+        "ETag": "\"9653fb8f67b01be6ee5c0ec7aad549543aad76da8518cb6088f71fa4e37f15e3\"",
+        "Content-Digest": "sha-256=:llP7j2ewG+buXA7HqtVJVDqtdtqFGMtgiPcfpON/FeM=:",
+        "Cache-Control": "private, no-store",
+        "Link": "</v2/ledgers/b7a1d5e40c6f438e9a75db27c96f31aa/segments/0/disclosures/c610f91bca84bff5ab419cca68a9728b539fa026ed9f5a5a918a12cf709943a0/segment.verify.json>; rel=\"describedby\"",
+        "Repr-Digest": "sha-256=:llP7j2ewG+buXA7HqtVJVDqtdtqFGMtgiPcfpON/FeM=:"
+      },
+      "body_file": "class-a/records/batch-00000000000000000000/occurrence-00000000000000000001-ordinal-00000000000000000001.cbor"
+    }
+  },
+  {
+    "name": "fetch-A-records/batch-00000000000000000001/occurrence-00000000000000000000-ordinal-00000000000000000000.cbor",
+    "request": {
+      "method": "GET",
+      "path": "/v2/ledgers/b7a1d5e40c6f438e9a75db27c96f31aa/segments/0/disclosures/c610f91bca84bff5ab419cca68a9728b539fa026ed9f5a5a918a12cf709943a0/records/batch-00000000000000000001/occurrence-00000000000000000000-ordinal-00000000000000000000.cbor",
+      "headers": {
+        "Authorization": "Bearer FIXTURE_CREDENTIAL"
+      }
+    },
+    "response": {
+      "status": 200,
+      "headers": {
+        "Content-Type": "application/cbor",
+        "ETag": "\"8ab3fda697af089e1aa5ed8c3f4ff12be2842a0fef6a4ac45cb764b463016c3c\"",
+        "Content-Digest": "sha-256=:irP9ppevCJ4ape2MP0/xK+KEKg/vakrEXLdktGMBbDw=:",
+        "Cache-Control": "private, no-store",
+        "Link": "</v2/ledgers/b7a1d5e40c6f438e9a75db27c96f31aa/segments/0/disclosures/c610f91bca84bff5ab419cca68a9728b539fa026ed9f5a5a918a12cf709943a0/segment.verify.json>; rel=\"describedby\"",
+        "Repr-Digest": "sha-256=:irP9ppevCJ4ape2MP0/xK+KEKg/vakrEXLdktGMBbDw=:"
+      },
+      "body_file": "class-a/records/batch-00000000000000000001/occurrence-00000000000000000000-ordinal-00000000000000000000.cbor"
+    }
+  },
+  {
+    "name": "fetch-A-timestamp.tsr",
+    "request": {
+      "method": "GET",
+      "path": "/v2/ledgers/b7a1d5e40c6f438e9a75db27c96f31aa/segments/0/disclosures/c610f91bca84bff5ab419cca68a9728b539fa026ed9f5a5a918a12cf709943a0/timestamp.tsr",
+      "headers": {
+        "Authorization": "Bearer FIXTURE_CREDENTIAL"
+      }
+    },
+    "response": {
+      "status": 200,
+      "headers": {
+        "Content-Type": "application/timestamp-reply",
+        "ETag": "\"6789dc0bc4a7988594a845e00c354660f0d63e79e35b684e836851fbfc36837b\"",
+        "Content-Digest": "sha-256=:Z4ncC8SnmIWUqEXgDDVGYPDWPnnjW2hOg2hR+/w2g3s=:",
+        "Cache-Control": "private, no-store",
+        "Link": "</v2/ledgers/b7a1d5e40c6f438e9a75db27c96f31aa/segments/0/disclosures/c610f91bca84bff5ab419cca68a9728b539fa026ed9f5a5a918a12cf709943a0/segment.verify.json>; rel=\"describedby\"",
+        "Repr-Digest": "sha-256=:Z4ncC8SnmIWUqEXgDDVGYPDWPnnjW2hOg2hR+/w2g3s=:"
+      },
+      "body_file": "class-a/timestamp.tsr"
+    }
+  },
+  {
+    "name": "fetch-A-segment.verify.json",
+    "request": {
+      "method": "GET",
+      "path": "/v2/ledgers/b7a1d5e40c6f438e9a75db27c96f31aa/segments/0/disclosures/c610f91bca84bff5ab419cca68a9728b539fa026ed9f5a5a918a12cf709943a0/segment.verify.json",
+      "headers": {
+        "Authorization": "Bearer FIXTURE_CREDENTIAL"
+      }
+    },
+    "response": {
+      "status": 200,
+      "headers": {
+        "Content-Type": "application/json",
+        "ETag": "\"c610f91bca84bff5ab419cca68a9728b539fa026ed9f5a5a918a12cf709943a0\"",
+        "Content-Digest": "sha-256=:xhD5G8qEv/WrQZzKaKlyi1OfoCbtn1pakYoSz3CZQ6A=:",
+        "Cache-Control": "private, no-store",
+        "Link": "</v2/ledgers/b7a1d5e40c6f438e9a75db27c96f31aa/segments/0/disclosures/c610f91bca84bff5ab419cca68a9728b539fa026ed9f5a5a918a12cf709943a0/segment.verify.json>; rel=\"describedby\"",
+        "Repr-Digest": "sha-256=:xhD5G8qEv/WrQZzKaKlyi1OfoCbtn1pakYoSz3CZQ6A=:"
+      },
+      "body_file": "class-a/segment.verify.json"
+    }
+  },
+  {
+    "name": "generate-B",
+    "request": {
+      "method": "POST",
+      "path": "/v2/ledgers/b7a1d5e40c6f438e9a75db27c96f31aa/segments/0/disclosures",
+      "headers": {
+        "Authorization": "Bearer FIXTURE_CREDENTIAL",
+        "Content-Type": "application/json"
+      },
+      "body": {
+        "class": "B",
+        "batches": [
+          "0"
+        ]
+      }
+    },
+    "response": {
+      "status": 201,
+      "headers": {
+        "Location": "/v2/ledgers/b7a1d5e40c6f438e9a75db27c96f31aa/segments/0/disclosures/fc084725b22399287d718554eb3f85e41fd1c186bd56619efae604e535edb764/segment.verify.json",
+        "Cache-Control": "private, no-store"
+      },
+      "body": {
+        "ledger_id": "b7a1d5e40c6f438e9a75db27c96f31aa",
+        "segment_number": "0",
+        "class": "B",
+        "manifest_sha256": "fc084725b22399287d718554eb3f85e41fd1c186bd56619efae604e535edb764",
+        "artifact_sha256": "2672cb72d5f06863110af1b30660c7e5ba495c0b2ce7d084b0436e010e99388d",
+        "bundle_url": "/v2/ledgers/b7a1d5e40c6f438e9a75db27c96f31aa/segments/0/disclosures/fc084725b22399287d718554eb3f85e41fd1c186bd56619efae604e535edb764/"
+      }
+    }
+  },
+  {
+    "name": "fetch-B-segment.cbor",
+    "request": {
+      "method": "GET",
+      "path": "/v2/ledgers/b7a1d5e40c6f438e9a75db27c96f31aa/segments/0/disclosures/fc084725b22399287d718554eb3f85e41fd1c186bd56619efae604e535edb764/segment.cbor",
+      "headers": {
+        "Authorization": "Bearer FIXTURE_CREDENTIAL"
+      }
+    },
+    "response": {
+      "status": 200,
+      "headers": {
+        "Content-Type": "application/cbor",
+        "ETag": "\"2672cb72d5f06863110af1b30660c7e5ba495c0b2ce7d084b0436e010e99388d\"",
+        "Content-Digest": "sha-256=:JnLLctXwaGMRCvGzBmDH5bpJXAss59CEsENuAQ6ZOI0=:",
+        "Cache-Control": "private, no-store",
+        "Link": "</v2/ledgers/b7a1d5e40c6f438e9a75db27c96f31aa/segments/0/disclosures/fc084725b22399287d718554eb3f85e41fd1c186bd56619efae604e535edb764/segment.verify.json>; rel=\"describedby\"",
+        "Repr-Digest": "sha-256=:JnLLctXwaGMRCvGzBmDH5bpJXAss59CEsENuAQ6ZOI0=:"
+      },
+      "body_file": "class-b/segment.cbor"
+    }
+  },
+  {
+    "name": "fetch-B-records/batch-00000000000000000000/occurrence-00000000000000000000-ordinal-00000000000000000002.cbor",
+    "request": {
+      "method": "GET",
+      "path": "/v2/ledgers/b7a1d5e40c6f438e9a75db27c96f31aa/segments/0/disclosures/fc084725b22399287d718554eb3f85e41fd1c186bd56619efae604e535edb764/records/batch-00000000000000000000/occurrence-00000000000000000000-ordinal-00000000000000000002.cbor",
+      "headers": {
+        "Authorization": "Bearer FIXTURE_CREDENTIAL"
+      }
+    },
+    "response": {
+      "status": 200,
+      "headers": {
+        "Content-Type": "application/cbor",
+        "ETag": "\"630765dd51926538bde59353e8a494051d80105cf206ce9529dbe0c8f1fd1e67\"",
+        "Content-Digest": "sha-256=:Ywdl3VGSZTi95ZNT6KSUBR2AEFzyBs6VKdvgyPH9Hmc=:",
+        "Cache-Control": "private, no-store",
+        "Link": "</v2/ledgers/b7a1d5e40c6f438e9a75db27c96f31aa/segments/0/disclosures/fc084725b22399287d718554eb3f85e41fd1c186bd56619efae604e535edb764/segment.verify.json>; rel=\"describedby\"",
+        "Repr-Digest": "sha-256=:Ywdl3VGSZTi95ZNT6KSUBR2AEFzyBs6VKdvgyPH9Hmc=:"
+      },
+      "body_file": "class-b/records/batch-00000000000000000000/occurrence-00000000000000000000-ordinal-00000000000000000002.cbor"
+    }
+  },
+  {
+    "name": "fetch-B-records/batch-00000000000000000000/occurrence-00000000000000000001-ordinal-00000000000000000001.cbor",
+    "request": {
+      "method": "GET",
+      "path": "/v2/ledgers/b7a1d5e40c6f438e9a75db27c96f31aa/segments/0/disclosures/fc084725b22399287d718554eb3f85e41fd1c186bd56619efae604e535edb764/records/batch-00000000000000000000/occurrence-00000000000000000001-ordinal-00000000000000000001.cbor",
+      "headers": {
+        "Authorization": "Bearer FIXTURE_CREDENTIAL"
+      }
+    },
+    "response": {
+      "status": 200,
+      "headers": {
+        "Content-Type": "application/cbor",
+        "ETag": "\"9653fb8f67b01be6ee5c0ec7aad549543aad76da8518cb6088f71fa4e37f15e3\"",
+        "Content-Digest": "sha-256=:llP7j2ewG+buXA7HqtVJVDqtdtqFGMtgiPcfpON/FeM=:",
+        "Cache-Control": "private, no-store",
+        "Link": "</v2/ledgers/b7a1d5e40c6f438e9a75db27c96f31aa/segments/0/disclosures/fc084725b22399287d718554eb3f85e41fd1c186bd56619efae604e535edb764/segment.verify.json>; rel=\"describedby\"",
+        "Repr-Digest": "sha-256=:llP7j2ewG+buXA7HqtVJVDqtdtqFGMtgiPcfpON/FeM=:"
+      },
+      "body_file": "class-b/records/batch-00000000000000000000/occurrence-00000000000000000001-ordinal-00000000000000000001.cbor"
+    }
+  },
+  {
+    "name": "fetch-B-timestamp.tsr",
+    "request": {
+      "method": "GET",
+      "path": "/v2/ledgers/b7a1d5e40c6f438e9a75db27c96f31aa/segments/0/disclosures/fc084725b22399287d718554eb3f85e41fd1c186bd56619efae604e535edb764/timestamp.tsr",
+      "headers": {
+        "Authorization": "Bearer FIXTURE_CREDENTIAL"
+      }
+    },
+    "response": {
+      "status": 200,
+      "headers": {
+        "Content-Type": "application/timestamp-reply",
+        "ETag": "\"6789dc0bc4a7988594a845e00c354660f0d63e79e35b684e836851fbfc36837b\"",
+        "Content-Digest": "sha-256=:Z4ncC8SnmIWUqEXgDDVGYPDWPnnjW2hOg2hR+/w2g3s=:",
+        "Cache-Control": "private, no-store",
+        "Link": "</v2/ledgers/b7a1d5e40c6f438e9a75db27c96f31aa/segments/0/disclosures/fc084725b22399287d718554eb3f85e41fd1c186bd56619efae604e535edb764/segment.verify.json>; rel=\"describedby\"",
+        "Repr-Digest": "sha-256=:Z4ncC8SnmIWUqEXgDDVGYPDWPnnjW2hOg2hR+/w2g3s=:"
+      },
+      "body_file": "class-b/timestamp.tsr"
+    }
+  },
+  {
+    "name": "fetch-B-segment.verify.json",
+    "request": {
+      "method": "GET",
+      "path": "/v2/ledgers/b7a1d5e40c6f438e9a75db27c96f31aa/segments/0/disclosures/fc084725b22399287d718554eb3f85e41fd1c186bd56619efae604e535edb764/segment.verify.json",
+      "headers": {
+        "Authorization": "Bearer FIXTURE_CREDENTIAL"
+      }
+    },
+    "response": {
+      "status": 200,
+      "headers": {
+        "Content-Type": "application/json",
+        "ETag": "\"fc084725b22399287d718554eb3f85e41fd1c186bd56619efae604e535edb764\"",
+        "Content-Digest": "sha-256=:/AhHJbIjmSh9cYVU6z+F5B/RwYa9VmGe+uYE5TXtt2Q=:",
+        "Cache-Control": "private, no-store",
+        "Link": "</v2/ledgers/b7a1d5e40c6f438e9a75db27c96f31aa/segments/0/disclosures/fc084725b22399287d718554eb3f85e41fd1c186bd56619efae604e535edb764/segment.verify.json>; rel=\"describedby\"",
+        "Repr-Digest": "sha-256=:/AhHJbIjmSh9cYVU6z+F5B/RwYa9VmGe+uYE5TXtt2Q=:"
+      },
+      "body_file": "class-b/segment.verify.json"
+    }
+  },
+  {
+    "name": "generate-C",
+    "request": {
+      "method": "POST",
+      "path": "/v2/ledgers/b7a1d5e40c6f438e9a75db27c96f31aa/segments/0/disclosures",
+      "headers": {
+        "Authorization": "Bearer FIXTURE_CREDENTIAL",
+        "Content-Type": "application/json"
+      },
+      "body": {
+        "class": "C"
+      }
+    },
+    "response": {
+      "status": 201,
+      "headers": {
+        "Location": "/v2/ledgers/b7a1d5e40c6f438e9a75db27c96f31aa/segments/0/disclosures/e4fe67ef1fbcef4dfa284800324a261b054f9e9e10f9ba6c8136ad5b23535831/segment.verify.json",
+        "Cache-Control": "private, no-store"
+      },
+      "body": {
+        "ledger_id": "b7a1d5e40c6f438e9a75db27c96f31aa",
+        "segment_number": "0",
+        "class": "C",
+        "manifest_sha256": "e4fe67ef1fbcef4dfa284800324a261b054f9e9e10f9ba6c8136ad5b23535831",
+        "artifact_sha256": "2672cb72d5f06863110af1b30660c7e5ba495c0b2ce7d084b0436e010e99388d",
+        "bundle_url": "/v2/ledgers/b7a1d5e40c6f438e9a75db27c96f31aa/segments/0/disclosures/e4fe67ef1fbcef4dfa284800324a261b054f9e9e10f9ba6c8136ad5b23535831/"
+      }
+    }
+  },
+  {
+    "name": "fetch-C-segment.cbor",
+    "request": {
+      "method": "GET",
+      "path": "/v2/ledgers/b7a1d5e40c6f438e9a75db27c96f31aa/segments/0/disclosures/e4fe67ef1fbcef4dfa284800324a261b054f9e9e10f9ba6c8136ad5b23535831/segment.cbor",
+      "headers": {
+        "Authorization": "Bearer FIXTURE_CREDENTIAL"
+      }
+    },
+    "response": {
+      "status": 200,
+      "headers": {
+        "Content-Type": "application/cbor",
+        "ETag": "\"2672cb72d5f06863110af1b30660c7e5ba495c0b2ce7d084b0436e010e99388d\"",
+        "Content-Digest": "sha-256=:JnLLctXwaGMRCvGzBmDH5bpJXAss59CEsENuAQ6ZOI0=:",
+        "Cache-Control": "private, no-store",
+        "Link": "</v2/ledgers/b7a1d5e40c6f438e9a75db27c96f31aa/segments/0/disclosures/e4fe67ef1fbcef4dfa284800324a261b054f9e9e10f9ba6c8136ad5b23535831/segment.verify.json>; rel=\"describedby\"",
+        "Repr-Digest": "sha-256=:JnLLctXwaGMRCvGzBmDH5bpJXAss59CEsENuAQ6ZOI0=:"
+      },
+      "body_file": "class-c/segment.cbor"
+    }
+  },
+  {
+    "name": "fetch-C-timestamp.tsr",
+    "request": {
+      "method": "GET",
+      "path": "/v2/ledgers/b7a1d5e40c6f438e9a75db27c96f31aa/segments/0/disclosures/e4fe67ef1fbcef4dfa284800324a261b054f9e9e10f9ba6c8136ad5b23535831/timestamp.tsr",
+      "headers": {
+        "Authorization": "Bearer FIXTURE_CREDENTIAL"
+      }
+    },
+    "response": {
+      "status": 200,
+      "headers": {
+        "Content-Type": "application/timestamp-reply",
+        "ETag": "\"6789dc0bc4a7988594a845e00c354660f0d63e79e35b684e836851fbfc36837b\"",
+        "Content-Digest": "sha-256=:Z4ncC8SnmIWUqEXgDDVGYPDWPnnjW2hOg2hR+/w2g3s=:",
+        "Cache-Control": "private, no-store",
+        "Link": "</v2/ledgers/b7a1d5e40c6f438e9a75db27c96f31aa/segments/0/disclosures/e4fe67ef1fbcef4dfa284800324a261b054f9e9e10f9ba6c8136ad5b23535831/segment.verify.json>; rel=\"describedby\"",
+        "Repr-Digest": "sha-256=:Z4ncC8SnmIWUqEXgDDVGYPDWPnnjW2hOg2hR+/w2g3s=:"
+      },
+      "body_file": "class-c/timestamp.tsr"
+    }
+  },
+  {
+    "name": "fetch-C-segment.verify.json",
+    "request": {
+      "method": "GET",
+      "path": "/v2/ledgers/b7a1d5e40c6f438e9a75db27c96f31aa/segments/0/disclosures/e4fe67ef1fbcef4dfa284800324a261b054f9e9e10f9ba6c8136ad5b23535831/segment.verify.json",
+      "headers": {
+        "Authorization": "Bearer FIXTURE_CREDENTIAL"
+      }
+    },
+    "response": {
+      "status": 200,
+      "headers": {
+        "Content-Type": "application/json",
+        "ETag": "\"e4fe67ef1fbcef4dfa284800324a261b054f9e9e10f9ba6c8136ad5b23535831\"",
+        "Content-Digest": "sha-256=:5P5n7x+87036KEgAMkomGwVPnp4Q+bpsgTatWyNTWDE=:",
+        "Cache-Control": "private, no-store",
+        "Link": "</v2/ledgers/b7a1d5e40c6f438e9a75db27c96f31aa/segments/0/disclosures/e4fe67ef1fbcef4dfa284800324a261b054f9e9e10f9ba6c8136ad5b23535831/segment.verify.json>; rel=\"describedby\"",
+        "Repr-Digest": "sha-256=:5P5n7x+87036KEgAMkomGwVPnp4Q+bpsgTatWyNTWDE=:"
+      },
+      "body_file": "class-c/segment.verify.json"
+    }
+  },
+  {
+    "name": "pending",
+    "precondition": "pending",
+    "request": {
+      "method": "GET",
+      "path": "/v2/ledgers/b7a1d5e40c6f438e9a75db27c96f31aa/segments/0/timestamp.tsr",
+      "headers": {
+        "Authorization": "Bearer FIXTURE_CREDENTIAL"
+      }
+    },
+    "response": {
+      "status": 202,
+      "headers": {
+        "Cache-Control": "private, no-store",
+        "Retry-After": "5"
+      },
+      "body": {
+        "code": "pending",
+        "message": "timestamp evidence is pending"
+      }
+    }
+  },
+  {
+    "name": "unavailable",
+    "precondition": "unavailable",
+    "request": {
+      "method": "GET",
+      "path": "/v2/ledgers/b7a1d5e40c6f438e9a75db27c96f31aa/segments/0/timestamp.tsr",
+      "headers": {
+        "Authorization": "Bearer FIXTURE_CREDENTIAL"
+      }
+    },
+    "response": {
+      "status": 503,
+      "headers": {
+        "Cache-Control": "private, no-store",
+        "Content-Type": "application/problem+json"
+      },
+      "body": {
+        "type": "https://github.com/bilalobe/trackone/blob/main/docs/vtl-http-binding.md#unavailable",
+        "title": "Service Unavailable",
+        "status": 503,
+        "detail": "evidence is unavailable",
+        "code": "unavailable",
+        "reason": "timestamp"
+      }
+    }
+  },
+  {
+    "name": "absent",
+    "precondition": "absent",
+    "request": {
+      "method": "GET",
+      "path": "/v2/ledgers/b7a1d5e40c6f438e9a75db27c96f31aa/segments/0/timestamp.tsr",
+      "headers": {
+        "Authorization": "Bearer FIXTURE_CREDENTIAL"
+      }
+    },
+    "response": {
+      "status": 404,
+      "headers": {
+        "Cache-Control": "private, no-store",
+        "Content-Type": "application/problem+json"
+      },
+      "body": {
+        "type": "https://github.com/bilalobe/trackone/blob/main/docs/vtl-http-binding.md#absent",
+        "title": "Not Found",
+        "status": 404,
+        "detail": "requested evidence was not found",
+        "code": "absent"
+      }
+    }
+  },
+  {
+    "name": "unauthorized",
+    "precondition": "unauthorized",
+    "request": {
+      "method": "GET",
+      "path": "/v2/ledgers/b7a1d5e40c6f438e9a75db27c96f31aa/segments/0/timestamp.tsr",
+      "headers": {}
+    },
+    "response": {
+      "status": 401,
+      "headers": {
+        "Cache-Control": "private, no-store",
+        "WWW-Authenticate": "Bearer",
+        "Content-Type": "application/problem+json"
+      },
+      "body": {
+        "type": "https://github.com/bilalobe/trackone/blob/main/docs/vtl-http-binding.md#unauthorized",
+        "title": "Unauthorized",
+        "status": 401,
+        "detail": "bearer authentication required",
+        "code": "unauthorized"
+      }
+    }
+  },
+  {
+    "name": "policy_denied",
+    "precondition": "policy_denied",
+    "request": {
+      "method": "GET",
+      "path": "/v2/ledgers/b7a1d5e40c6f438e9a75db27c96f31aa/segments/0/timestamp.tsr",
+      "headers": {
+        "Authorization": "Bearer FIXTURE_CREDENTIAL"
+      }
+    },
+    "response": {
+      "status": 403,
+      "headers": {
+        "Cache-Control": "private, no-store",
+        "Content-Type": "application/problem+json"
+      },
+      "body": {
+        "type": "https://github.com/bilalobe/trackone/blob/main/docs/vtl-http-binding.md#policy-denied",
+        "title": "Forbidden",
+        "status": 403,
+        "detail": "request is outside the credential grant",
+        "code": "policy_denied"
+      }
+    }
+  }
+]

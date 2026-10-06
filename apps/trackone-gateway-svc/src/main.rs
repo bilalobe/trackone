@@ -177,12 +177,35 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Keep the final synchronous PostgreSQL client owner outside the Tokio
     // runtime: its destructor closes the connection with its own block_on.
+    let disclosure_auth = match env::var("TRACKONE_DISCLOSURE_GRANTS_FILE") {
+        Ok(path) => {
+            trackone_gateway_svc::evidence::DisclosureAuth::from_json(&std::fs::read(path)?)?
+        }
+        Err(env::VarError::NotPresent) => trackone_gateway_svc::evidence::DisclosureAuth::default(),
+        Err(error) => return Err(error.into()),
+    };
+    let evidence_database = database_url.clone();
+    let evidence_ca = postgres_ca_file.clone();
+    let evidence =
+        trackone_gateway_svc::evidence::router(trackone_gateway_svc::evidence::EvidenceState::new(
+            ledger_id.clone(),
+            disclosure_auth,
+            move || {
+                connect_postgres(
+                    &evidence_database,
+                    postgres_tls_mode,
+                    evidence_ca.as_deref(),
+                )
+                .map_err(|error| error.to_string())
+            },
+        ));
     let app = router(GatewayHttpState::new(
         producer,
         admission_auth,
         max_batch_records,
         max_admission_bytes,
-    ));
+    ))
+    .merge(evidence);
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()?;

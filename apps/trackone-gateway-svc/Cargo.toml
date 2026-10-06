@@ -12,6 +12,7 @@ readme = "README.md"
 
 [dependencies]
 axum.workspace = true
+base64.workspace = true
 flate2.workspace = true
 native-tls.workspace = true
 postgres.workspace = true

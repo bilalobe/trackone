@@ -10,3 +10,5 @@ pub mod snapshot;
 pub mod tsa;
 
 pub mod timestamp_worker;
+
+pub mod evidence;

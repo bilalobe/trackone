@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "ledger_id": "b7a1d5e40c6f438e9a75db27c96f31aa",
+  "segment_number": "0",
+  "commitment_profile_id": "c08ade4e-1785-4eb6-9648-b7003d76288d",
+  "disclosure_class": "B",
+  "artifacts": {
+    "segment_cbor": {
+      "path": "segment.cbor",
+      "sha256": "2672cb72d5f06863110af1b30660c7e5ba495c0b2ce7d084b0436e010e99388d"
+    },
+    "record_batches": [
+      {
+        "batch_number": "0",
+        "records": [
+          {
+            "path": "records/batch-00000000000000000000/occurrence-00000000000000000000-ordinal-00000000000000000002.cbor",
+            "sha256": "630765dd51926538bde59353e8a494051d80105cf206ce9529dbe0c8f1fd1e67"
+          },
+          {
+            "path": "records/batch-00000000000000000000/occurrence-00000000000000000001-ordinal-00000000000000000001.cbor",
+            "sha256": "9653fb8f67b01be6ee5c0ec7aad549543aad76da8518cb6088f71fa4e37f15e3"
+          }
+        ]
+      }
+    ],
+    "tsa_tsr": {
+      "path": "timestamp.tsr",
+      "sha256": "6789dc0bc4a7988594a845e00c354660f0d63e79e35b684e836851fbfc36837b"
+    }
+  },
+  "anchoring": {
+    "tsa": {
+      "status": "present"
+    }
+  }
+}
