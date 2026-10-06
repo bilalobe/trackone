@@ -415,6 +415,11 @@ fn publish_directory(output: &Path, export: &PreparedExport) -> Result<(), Expor
         let path = staging.join(relative);
         if let Some(directory) = path.parent() {
             fs::create_dir_all(directory)?;
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                fs::set_permissions(directory, fs::Permissions::from_mode(0o700))?;
+            }
         }
         let mut options = OpenOptions::new();
         options.write(true).create_new(true);
@@ -427,6 +432,10 @@ fn publish_directory(output: &Path, export: &PreparedExport) -> Result<(), Expor
         file.write_all(bytes)?;
         file.sync_all()?;
     }
+    // Keep the staging tree private until all files are complete. The exporter
+    // owns the published tree; read/traverse bits let a separate static host
+    // service account serve it after the atomic rename.
+    set_serving_permissions(staging)?;
     sync_directories(staging)?;
     #[cfg(target_os = "linux")]
     rustix::fs::renameat_with(
@@ -447,6 +456,23 @@ fn publish_directory(output: &Path, export: &PreparedExport) -> Result<(), Expor
         fs::rename(staging, output)?;
     }
     File::open(parent)?.sync_all()?;
+    Ok(())
+}
+
+fn set_serving_permissions(root: &Path) -> Result<(), ExportError> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        for entry in fs::read_dir(root)? {
+            let path = entry?.path();
+            if path.is_dir() {
+                set_serving_permissions(&path)?;
+            } else {
+                fs::set_permissions(&path, fs::Permissions::from_mode(0o644))?;
+            }
+        }
+        fs::set_permissions(root, fs::Permissions::from_mode(0o755))?;
+    }
     Ok(())
 }
 
@@ -527,6 +553,24 @@ mod tests {
             fs::read(output.join("records/example.cbor")).unwrap(),
             b"original"
         );
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            for directory in [&output, &output.join("records")] {
+                assert_eq!(
+                    fs::metadata(directory).unwrap().permissions().mode() & 0o777,
+                    0o755
+                );
+            }
+            assert_eq!(
+                fs::metadata(output.join("records/example.cbor"))
+                    .unwrap()
+                    .permissions()
+                    .mode()
+                    & 0o777,
+                0o644
+            );
+        }
         assert!(validate_destination(&output).is_err());
         assert!(publish_directory(&output, &prepared).is_err());
         assert_eq!(fs::read_dir(root.path()).unwrap().count(), 1);
