@@ -350,11 +350,13 @@ impl TimestampWorkers {
                             }
                             continue;
                         }
+                        if stopped(&stop) {
+                            break;
+                        }
                         match connected.claim_timestamp(config.max_attempts) {
                             Ok(Some(claim)) => {
-                                if stopped(&stop) {
-                                    break;
-                                }
+                                // A committed claim consumes an attempt. Process it even
+                                // when shutdown arrived while the claim was in flight.
                                 let result = submit_claim(submitter.as_ref(), &claim);
                                 if let Err(error) = &result {
                                     eprintln!(
