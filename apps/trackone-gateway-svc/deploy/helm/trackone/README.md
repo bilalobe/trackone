@@ -154,6 +154,9 @@ creating `trackone-gateway-config`. It must define
 `TRACKONE_MAX_ADMISSION_BYTES`, plus the other enabled runtime settings shown
 in `values.yaml`. The chart defaults the admission bounds to 1,000 records and
 4 MiB; the binary rejects values above 10,000 records or 16 MiB. When the
+generated ConfigMap is used, `gateway.env.tsaMaxFutureSkewSeconds` sets
+`TRACKONE_TSA_MAX_FUTURE_SKEW_SECONDS` (default `0`, allowed `0`–`3600`). An
+existing ConfigMap may omit it to retain the zero-skew default. When the
 chart-managed database uses TLS, the ConfigMap must also set
 `TRACKONE_POSTGRES_CA_FILE=/var/run/trackone-postgres/ca.pem`; the chart still
 mounts the managed CA at that path.

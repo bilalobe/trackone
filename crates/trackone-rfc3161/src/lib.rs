@@ -357,6 +357,10 @@ impl VerificationPolicy {
     pub fn expected_policy_oid(&self) -> ObjectIdentifier {
         self.expected_policy_oid
     }
+
+    pub fn max_future_skew(&self) -> Duration {
+        self.max_future_skew
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -511,6 +515,19 @@ pub fn verify_response(
     expected_artifact_sha256: [u8; 32],
     policy: &VerificationPolicy,
 ) -> Result<VerifiedTimestamp, VerificationError> {
+    verify_response_with_clock(response_der, expected_artifact_sha256, policy, || {
+        SystemTime::now().duration_since(UNIX_EPOCH).map_err(|_| {
+            VerificationError::Configuration("local time is before the Unix epoch".into())
+        })
+    })
+}
+
+fn verify_response_with_clock(
+    response_der: &[u8],
+    expected_artifact_sha256: [u8; 32],
+    policy: &VerificationPolicy,
+    clock: impl FnOnce() -> Result<Duration, VerificationError>,
+) -> Result<VerifiedTimestamp, VerificationError> {
     if response_der.len() > policy.max_response_bytes {
         return Err(VerificationError::ResponseTooLarge {
             actual: response_der.len(),
@@ -522,9 +539,7 @@ pub fn verify_response(
     // signature. The claimed time is used only to configure historical path
     // evaluation of the same selected signer certificate.
     let candidate = extract_candidate_fields(response_der)?;
-    let now = SystemTime::now().duration_since(UNIX_EPOCH).map_err(|_| {
-        VerificationError::Configuration("local time is before the Unix epoch".into())
-    })?;
+    let now = clock()?;
     let latest = now.checked_add(policy.max_future_skew).ok_or_else(|| {
         VerificationError::Configuration("future-skew bound overflows time".into())
     })?;
@@ -1832,6 +1847,37 @@ mod tests {
                 .unwrap()
                 .exceeds_unix_duration(bound)
         );
+    }
+
+    #[test]
+    fn signed_future_token_requires_and_respects_configured_skew() {
+        let digest: [u8; 32] = Sha256::digest(FIXTURE_SEGMENT).into();
+        let generation_time = parse_generation_time("20260722230412Z")
+            .unwrap()
+            .unix_seconds();
+        let local_time = Duration::from_secs(generation_time - 2);
+
+        let default_error =
+            verify_response_with_clock(FIXTURE_RESPONSE, digest, &fixture_policy(), || {
+                Ok(local_time)
+            })
+            .unwrap_err();
+        assert!(default_error.to_string().contains("maximum future skew"));
+
+        let allowed = fixture_policy().with_max_future_skew(Duration::from_secs(2));
+        let verified =
+            verify_response_with_clock(FIXTURE_RESPONSE, digest, &allowed, || Ok(local_time))
+                .unwrap();
+        assert_eq!(
+            verified.generation_time.to_rfc3339(),
+            "2026-07-22T23:04:12Z"
+        );
+
+        let too_small = fixture_policy().with_max_future_skew(Duration::from_secs(1));
+        let error =
+            verify_response_with_clock(FIXTURE_RESPONSE, digest, &too_small, || Ok(local_time))
+                .unwrap_err();
+        assert!(error.to_string().contains("maximum future skew"));
     }
 
     #[test]

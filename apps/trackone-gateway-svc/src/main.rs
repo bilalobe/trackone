@@ -1,6 +1,6 @@
 use std::env;
 use std::net::SocketAddr;
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use trackone_gateway_svc::postgres::PostgresLedgerStore;
 use trackone_gateway_svc::postgres_connection::{PostgresTlsMode, connect_postgres};
@@ -53,6 +53,25 @@ fn optional_u64(name: &str) -> Result<Option<u64>, Box<dyn std::error::Error>> {
         .transpose()
 }
 
+const MAX_TSA_FUTURE_SKEW_SECONDS: u64 = 3_600;
+
+fn parse_tsa_max_future_skew(value: &str) -> Result<Duration, String> {
+    if value.is_empty() || !value.bytes().all(|byte| byte.is_ascii_digit()) {
+        return Err(
+            "TRACKONE_TSA_MAX_FUTURE_SKEW_SECONDS must be a non-negative integer".to_string(),
+        );
+    }
+    let seconds = value.parse::<u64>().map_err(|_| {
+        "TRACKONE_TSA_MAX_FUTURE_SKEW_SECONDS must be a non-negative integer".to_string()
+    })?;
+    if seconds > MAX_TSA_FUTURE_SKEW_SECONDS {
+        return Err(format!(
+            "TRACKONE_TSA_MAX_FUTURE_SKEW_SECONDS must not exceed {MAX_TSA_FUTURE_SKEW_SECONDS}"
+        ));
+    }
+    Ok(Duration::from_secs(seconds))
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let database_url = required("TRACKONE_DATABASE_URL")?;
     let postgres_tls_mode = PostgresTlsMode::parse(
@@ -78,6 +97,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let tsa_policy_oid = required("TRACKONE_TSA_POLICY_OID")?;
     let tsa_signer_certificate_sha256: SignerCertificateSha256 =
         required("TRACKONE_TSA_SIGNER_CERT_SHA256")?.parse()?;
+    let tsa_max_future_skew = match env::var("TRACKONE_TSA_MAX_FUTURE_SKEW_SECONDS") {
+        Ok(value) => parse_tsa_max_future_skew(&value)?,
+        Err(env::VarError::NotPresent) => Duration::ZERO,
+        Err(env::VarError::NotUnicode(_)) => {
+            return Err("TRACKONE_TSA_MAX_FUTURE_SKEW_SECONDS must be UTF-8".into());
+        }
+    };
     let bind: SocketAddr = env::var("TRACKONE_BIND")
         .unwrap_or_else(|_| "0.0.0.0:8080".to_string())
         .parse()?;
@@ -127,6 +153,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         tsa_crls_file,
         tsa_policy_oid,
         tsa_signer_certificate_sha256,
+        tsa_max_future_skew,
     )?;
     let clock = SystemElapsedClock::new()?;
     let continuity_id = clock.continuity_id();
@@ -154,4 +181,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await?;
         Ok::<(), Box<dyn std::error::Error>>(())
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tsa_future_skew_configuration_has_bounded_integer_seconds() {
+        assert_eq!(parse_tsa_max_future_skew("0").unwrap(), Duration::ZERO);
+        assert_eq!(
+            parse_tsa_max_future_skew("3600").unwrap(),
+            Duration::from_secs(3600)
+        );
+        for invalid in ["", "-1", "+1", "1.5", "NaN", "3601", "18446744073709551616"] {
+            assert!(parse_tsa_max_future_skew(invalid).is_err(), "{invalid}");
+        }
+    }
 }

@@ -24,5 +24,6 @@ data:
   TRACKONE_EMPTY_MODE: {{ .Values.gateway.env.emptyMode | quote }}
   TRACKONE_TSA_URL: {{ .Values.gateway.env.tsaUrl | quote }}
   TRACKONE_TSA_POLICY_OID: {{ .Values.gateway.env.tsaPolicyOid | quote }}
+  TRACKONE_TSA_MAX_FUTURE_SKEW_SECONDS: {{ .Values.gateway.env.tsaMaxFutureSkewSeconds | quote }}
   TRACKONE_TSA_SIGNER_CERT_SHA256: {{ required "gateway.env.tsaSignerCertSha256 is required when the gateway is enabled" .Values.gateway.env.tsaSignerCertSha256 | quote }}
 {{- end }}

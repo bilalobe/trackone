@@ -33,6 +33,9 @@ Optional settings are `TRACKONE_BIND` (default `0.0.0.0:8080`),
 `TRACKONE_MAX_ADMISSION_BYTES` (default 4,194,304; hard maximum 16,777,216).
 `TRACKONE_TSA_INTERMEDIATES_FILE` supplies a
 deployment-managed intermediate bundle when the TSA path requires one.
+`TRACKONE_TSA_MAX_FUTURE_SKEW_SECONDS` sets the maximum accepted lead of the
+TSA-signed `genTime` over the gateway clock. It defaults to `0` and accepts
+integer seconds from `0` through `3600`; invalid values fail gateway startup.
 `TRACKONE_INGEST_BEARER_TOKEN_PREVIOUS` optionally keeps the prior credential
 valid during a bounded two-token rotation window.
 

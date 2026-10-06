@@ -45,6 +45,7 @@ impl Rfc3161TimestampAuthority {
         crls_file: PathBuf,
         policy_oid: impl Into<String>,
         signer_certificate_sha256: SignerCertificateSha256,
+        max_future_skew: Duration,
     ) -> Result<Self, ProducerError> {
         let policy_oid = policy_oid.into();
         let verification_policy = VerificationPolicy::new(
@@ -56,7 +57,8 @@ impl Rfc3161TimestampAuthority {
             &policy_oid,
             signer_certificate_sha256,
         )
-        .map_err(|error| ProducerError::TimestampConfiguration(error.to_string()))?;
+        .map_err(|error| ProducerError::TimestampConfiguration(error.to_string()))?
+        .with_max_future_skew(max_future_skew);
         let policy_oid = verification_policy.expected_policy_oid().to_string();
         Ok(Self {
             url: url.into(),
@@ -341,9 +343,29 @@ mod tests {
             fixtures.join("tsa-crls.pem"),
             "1.3.6.1.4.1.55555.1",
             FIXTURE_SIGNER.parse().unwrap(),
+            Duration::ZERO,
         )
         .unwrap()
         .with_binaries(PathBuf::from("openssl"), curl)
+    }
+
+    #[test]
+    fn authority_passes_future_skew_to_verification_policy() {
+        let fixtures = fixture_root();
+        let authority = Rfc3161TimestampAuthority::new(
+            "https://tsa.invalid",
+            fixtures.join("tsa-root.pem"),
+            None,
+            fixtures.join("tsa-crls.pem"),
+            "1.3.6.1.4.1.55555.1",
+            FIXTURE_SIGNER.parse().unwrap(),
+            Duration::from_secs(5),
+        )
+        .unwrap();
+        assert_eq!(
+            authority.verification_policy.max_future_skew(),
+            Duration::from_secs(5)
+        );
     }
 
     #[test]
@@ -460,6 +482,7 @@ mod tests {
             "missing-crls.pem".into(),
             "1.3.6.1.4.1.55555.1",
             FIXTURE_SIGNER.parse().unwrap(),
+            Duration::ZERO,
         )
         .unwrap_err();
         assert!(matches!(error, ProducerError::TimestampConfiguration(_)));

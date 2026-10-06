@@ -2,7 +2,9 @@ use postgres::{Client, NoTls};
 use std::time::{SystemTime, UNIX_EPOCH};
 use trackone_gateway_svc::postgres::PostgresLedgerStore;
 use trackone_gateway_svc::producer::{ElapsedClock, LedgerProducer, ProducerError};
+use trackone_ledger::sha256_digest;
 use trackone_ledger::vtl::{ClosurePolicy, EmptyMode};
+use trackone_rfc3161::{HistoricalValidationArchive, VerificationPolicy, verify_response};
 
 #[derive(Clone, Copy)]
 struct FixedClock;
@@ -18,9 +20,16 @@ impl ElapsedClock for FixedClock {
 }
 
 fn record(counter: u8) -> Vec<u8> {
-    vec![
-        0x87, 0x01, 0x48, 0, 0, 0, 0, 0, 0, 0, counter, counter, 0, 0xf6, 0, 0xf6,
-    ]
+    let mut encoded = vec![0x87, 0x01, 0x48, 0, 0, 0, 0, 0, 0, 0, counter];
+    for _ in 0..2 {
+        if counter < 24 {
+            encoded.push(counter);
+        } else {
+            encoded.extend_from_slice(&[0x18, counter]);
+        }
+    }
+    encoded.extend_from_slice(&[0xf6, 0, 0xf6]);
+    encoded
 }
 
 #[test]
@@ -124,6 +133,37 @@ fn postgres_appends_moves_and_replays_batch_state_across_restart() {
     let queued = restarted.store_mut().load_queued_tsa_segments().unwrap();
     assert_eq!(queued.len(), 1);
     assert_eq!(queued[0].0, 0);
+    assert_eq!(
+        restarted.store_mut().tsa_statuses(&[0]).unwrap(),
+        vec!["queued"]
+    );
+    let fixtures = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../crates/trackone-rfc3161/tests/fixtures");
+    let verification_policy = VerificationPolicy::new(
+        HistoricalValidationArchive {
+            trust_anchors_file: fixtures.join("tsa-root.pem"),
+            intermediates_file: None,
+            crls_file: fixtures.join("tsa-crls.pem"),
+        },
+        "1.3.6.1.4.1.55555.1",
+        "14ab98cafe09d9d1d01562af42d69a904b01023d9cd5b03bd07e5779710c8014"
+            .parse()
+            .unwrap(),
+    )
+    .unwrap();
+    assert!(
+        verify_response(
+            &std::fs::read(fixtures.join("response.tsr")).unwrap(),
+            sha256_digest(&queued[0].1),
+            &verification_policy,
+        )
+        .is_err()
+    );
+    // A rejected response leaves the durable obligation available for retry.
+    assert_eq!(
+        restarted.store_mut().load_queued_tsa_segments().unwrap(),
+        queued
+    );
     restarted
         .store_mut()
         .attach_tsa_response(queued[0].0, &queued[0].2, b"test-response")
