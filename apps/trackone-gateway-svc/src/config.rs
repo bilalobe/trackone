@@ -8,6 +8,7 @@ use trackone_rfc3161::SignerCertificateSha256;
 
 use crate::{
     error::{ResultContext, RuntimeError},
+    observability::CapacityLimits,
     postgres_connection::PostgresTlsMode,
     service::{
         AdmissionAuth, DEFAULT_MAX_ADMISSION_BYTES, DEFAULT_MAX_BATCH_RECORDS,
@@ -129,6 +130,14 @@ pub struct GatewayConfig {
     #[arg(long, env = "TRACKONE_MAX_ADMISSION_BYTES", default_value_t = DEFAULT_MAX_ADMISSION_BYTES, value_parser = parse_max_admission_bytes)]
     pub max_admission_bytes: usize,
 
+    /// Maximum pending timestamp segments per ledger; omitted means unlimited
+    #[arg(long, env = "TRACKONE_MAX_PENDING_TIMESTAMPS", value_parser = clap::value_parser!(u64).range(1..))]
+    pub max_pending_timestamps: Option<u64>,
+
+    /// Maximum retained evidence payload bytes per ledger; omitted means unlimited
+    #[arg(long, env = "TRACKONE_MAX_RETAINED_EVIDENCE_BYTES", value_parser = clap::value_parser!(u64).range(1..))]
+    pub max_retained_evidence_bytes: Option<u64>,
+
     /// Concurrent TSA workers (1-16)
     #[arg(long, env = "TRACKONE_TSA_WORKER_CONCURRENCY", default_value = "2", value_parser = parse_worker_concurrency)]
     pub tsa_worker_concurrency: usize,
@@ -151,6 +160,13 @@ pub struct GatewayConfig {
 }
 
 impl GatewayConfig {
+    pub fn capacity_limits(&self) -> CapacityLimits {
+        CapacityLimits {
+            max_pending_timestamps: self.max_pending_timestamps,
+            max_retained_evidence_bytes: self.max_retained_evidence_bytes,
+        }
+    }
+
     pub fn admission_auth(&self) -> Result<AdmissionAuth, RuntimeError> {
         AdmissionAuth::new(
             &self.ingest_bearer_token,
@@ -312,6 +328,13 @@ mod tests {
         assert_eq!(config.max_batch_records, DEFAULT_MAX_BATCH_RECORDS);
         assert_eq!(config.max_admission_bytes, DEFAULT_MAX_ADMISSION_BYTES);
         assert_eq!(config.tsa_max_future_skew_seconds, Duration::ZERO);
+        assert!(config.capacity_limits().max_pending_timestamps.is_none());
+        assert!(
+            config
+                .capacity_limits()
+                .max_retained_evidence_bytes
+                .is_none()
+        );
         assert!(config.record_limit.is_none());
         assert!(config.size_limit_bytes.is_none());
         assert!(config.disclosure_grants_file.is_none());
@@ -336,6 +359,10 @@ mod tests {
             ("--batch-record-limit", "3"),
             ("--record-limit", "0"),
             ("--size-limit-bytes", "0"),
+            ("--max-pending-timestamps", "0"),
+            ("--max-pending-timestamps", "18446744073709551616"),
+            ("--max-retained-evidence-bytes", "0"),
+            ("--max-retained-evidence-bytes", "invalid"),
             ("--max-batch-records", "0"),
             ("--max-batch-records", "10001"),
             ("--max-admission-bytes", "0"),
@@ -365,6 +392,10 @@ mod tests {
     #[test]
     fn accepts_limits_and_preserves_optional_empty_settings() {
         let config = parse(&[
+            "--max-pending-timestamps",
+            "2",
+            "--max-retained-evidence-bytes",
+            "18446744073709551615",
             "--max-batch-records",
             "10000",
             "--max-admission-bytes",
@@ -389,6 +420,8 @@ mod tests {
             "",
         ])
         .unwrap();
+        assert_eq!(config.max_pending_timestamps, Some(2));
+        assert_eq!(config.max_retained_evidence_bytes, Some(u64::MAX));
         assert_eq!(config.closure_policy().record_limit, Some(1));
         assert_eq!(config.closure_policy().empty_mode, EmptyMode::Emit);
         assert_eq!(

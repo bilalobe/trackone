@@ -1,6 +1,8 @@
 //! PostgreSQL durable store for the VTL producer.
 
+use crate::observability::{CapacityLimits, PipelineEvents, PipelineStatistics};
 use postgres::{Client, IsolationLevel};
+use std::sync::Arc;
 use trackone_ledger::vtl::{ClosurePolicy, EmptyMode};
 
 use crate::producer::{
@@ -13,6 +15,8 @@ pub const MIGRATION: &str = include_str!("../migrations/0001_vtl_ledger.sql");
 pub struct PostgresLedgerStore {
     pub(crate) client: Client,
     pub(crate) ledger_id: String,
+    pub(crate) events: Arc<PipelineEvents>,
+    pub(crate) limits: CapacityLimits,
 }
 
 impl PostgresLedgerStore {
@@ -20,7 +24,55 @@ impl PostgresLedgerStore {
         Self {
             client,
             ledger_id: ledger_id.into(),
+            events: Arc::new(PipelineEvents::default()),
+            limits: CapacityLimits::default(),
         }
+    }
+
+    pub fn set_events(&mut self, events: Arc<PipelineEvents>) {
+        self.events = events;
+    }
+
+    pub fn set_capacity_limits(&mut self, limits: CapacityLimits) {
+        self.limits = limits;
+    }
+
+    /// A bounded, read-only observation on the actual admission connection.
+    pub fn pipeline_statistics(
+        &mut self,
+        expected_revision: u64,
+    ) -> Result<PipelineStatistics, ProducerError> {
+        let mut tx = self
+            .client
+            .build_transaction()
+            .isolation_level(IsolationLevel::RepeatableRead)
+            .read_only(true)
+            .start()
+            .map_err(store_error)?;
+        tx.batch_execute("SET LOCAL statement_timeout='2s'; SET LOCAL lock_timeout='1s'")
+            .map_err(store_error)?;
+        let row = tx.query_one(
+            "SELECT u.pending_timestamps::text, u.retained_evidence_bytes::text, s.revision::text, \
+             (SELECT GREATEST(0, EXTRACT(EPOCH FROM CURRENT_TIMESTAMP-min(tsa_enqueued_at)))::double precision FROM trackone_vtl_sealed_segment WHERE ledger_id=$1 AND tsa_status='queued'), \
+             (SELECT to_char(max(tsa_attached_at) AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"') FROM trackone_vtl_sealed_segment WHERE ledger_id=$1 AND tsa_attached_at IS NOT NULL), \
+             (SELECT count(*) FROM trackone_vtl_sealed_segment WHERE ledger_id=$1 AND tsa_status='failed'), \
+             (SELECT count(*) FROM trackone_vtl_sealed_segment WHERE ledger_id=$1 AND tsa_status='queued' AND tsa_last_error IS NOT NULL) \
+             FROM trackone_vtl_pipeline_usage u JOIN trackone_vtl_ledger_state s USING (ledger_id) WHERE ledger_id=$1",
+            &[&self.ledger_id]).map_err(store_error)?;
+        if parse_u64(row.get(2), "revision")? != expected_revision {
+            return Err(ProducerError::ConcurrentWriter);
+        }
+        let count = parse_u64(row.get(0), "pending timestamps")?;
+        let stats = PipelineStatistics {
+            pending_timestamp_count: count,
+            retained_evidence_bytes: parse_u64(row.get(1), "evidence bytes")?,
+            oldest_pending_timestamp_age_seconds: if count == 0 { None } else { row.get(3) },
+            last_successful_timestamp_attachment: row.get(4),
+            terminal_failed_segment_count: row.get::<_, i64>(5) as u64,
+            retrying_timestamp_count: row.get::<_, i64>(6) as u64,
+        };
+        tx.commit().map_err(store_error)?;
+        Ok(stats)
     }
 
     pub fn migrate(&mut self) -> Result<(), ProducerError> {
@@ -29,11 +81,19 @@ impl PostgresLedgerStore {
             .query_one("SELECT pg_advisory_xact_lock(3203161)", &[])
             .map_err(store_error)?;
         transaction.batch_execute(MIGRATION).map_err(store_error)?;
+        // Lock state before artifacts, matching producer write order. Acquire
+        // these before any ALTER TABLE to avoid lock inversion during upgrades.
+        transaction
+            .batch_execute("LOCK TABLE trackone_vtl_ledger_state, trackone_vtl_open_record, trackone_vtl_sealed_segment, trackone_vtl_sealed_record IN SHARE ROW EXCLUSIVE MODE")
+            .map_err(store_error)?;
         transaction
             .batch_execute(include_str!("../migrations/0002_timestamp_queue.sql"))
             .map_err(store_error)?;
         transaction
             .batch_execute(include_str!("../migrations/0003_disclosures.sql"))
+            .map_err(store_error)?;
+        transaction
+            .batch_execute(include_str!("../migrations/0004_pipeline_readiness.sql"))
             .map_err(store_error)?;
         transaction.commit().map_err(store_error)
     }
@@ -91,11 +151,19 @@ impl PostgresLedgerStore {
     }
 }
 
-fn store_error(error: postgres::Error) -> ProducerError {
-    ProducerError::Store(match error.as_db_error() {
+pub(crate) fn store_error(error: postgres::Error) -> ProducerError {
+    let disk_full = error
+        .as_db_error()
+        .is_some_and(|db| db.code().code() == "53100");
+    let message = match error.as_db_error() {
         Some(database) => format!("{}: {}", database.code().code(), database.message()),
         None => error.to_string(),
-    })
+    };
+    if disk_full {
+        ProducerError::StorageUnavailable(message)
+    } else {
+        ProducerError::Store(message)
+    }
 }
 
 fn require_row_count(operation: &str, actual: u64, expected: u64) -> Result<(), ProducerError> {
@@ -264,6 +332,40 @@ impl LedgerStore for PostgresLedgerStore {
                 &[&self.ledger_id],
             )
             .map_err(store_error)?;
+
+        // Replays return before reaching this transaction. Preservation-only
+        // transitions are permitted even when admission thresholds are exceeded.
+        if !transition.admitted_records.is_empty()
+            && (self.limits.max_pending_timestamps.is_some()
+                || self.limits.max_retained_evidence_bytes.is_some())
+        {
+            let row = transaction.query_one(
+                "SELECT pending_timestamps::text, retained_evidence_bytes::text FROM trackone_vtl_pipeline_usage WHERE ledger_id=$1",
+                &[&self.ledger_id]).map_err(store_error)?;
+            let pending = parse_u64(row.get(0), "pending timestamps")?;
+            let bytes = parse_u64(row.get(1), "evidence bytes")?;
+            let extra_bytes = transition
+                .admitted_records
+                .iter()
+                .map(|r| r.record_cbor.len() as u128)
+                .sum::<u128>()
+                + sealed
+                    .iter()
+                    .map(|s| s.artifact_cbor.len() as u128)
+                    .sum::<u128>();
+            if self.limits.max_pending_timestamps.is_some_and(|limit| {
+                pending >= limit || pending as u128 + sealed.len() as u128 > limit as u128
+            }) {
+                return Err(ProducerError::QueueCapacityExhausted);
+            }
+            if self
+                .limits
+                .max_retained_evidence_bytes
+                .is_some_and(|limit| bytes >= limit || bytes as u128 + extra_bytes > limit as u128)
+            {
+                return Err(ProducerError::StorageCapacityExhausted);
+            }
+        }
 
         let revision = numeric(state.revision);
         let next_segment_number = numeric(state.next_segment_number);

@@ -90,6 +90,16 @@ fn malformed_environment_settings_are_rejected_before_io() {
         ("TRACKONE_BATCH_RECORD_LIMIT", "3", "--batch-record-limit"),
         ("TRACKONE_RECORD_LIMIT", "", "--record-limit"),
         (
+            "TRACKONE_MAX_PENDING_TIMESTAMPS",
+            "0",
+            "--max-pending-timestamps",
+        ),
+        (
+            "TRACKONE_MAX_RETAINED_EVIDENCE_BYTES",
+            "invalid",
+            "--max-retained-evidence-bytes",
+        ),
+        (
             "TRACKONE_TSA_WORKER_CONCURRENCY",
             "17",
             "--tsa-worker-concurrency",
@@ -122,7 +132,16 @@ fn malformed_environment_settings_are_rejected_before_io() {
 fn command_line_values_override_environment_values() {
     let output = gateway()
         .env("TRACKONE_BIND", "invalid")
-        .args(["--bind", "127.0.0.1:0"])
+        .env("TRACKONE_MAX_PENDING_TIMESTAMPS", "invalid")
+        .env("TRACKONE_MAX_RETAINED_EVIDENCE_BYTES", "0")
+        .args([
+            "--bind",
+            "127.0.0.1:0",
+            "--max-pending-timestamps",
+            "2",
+            "--max-retained-evidence-bytes",
+            "10000",
+        ])
         .output()
         .unwrap();
     assert_eq!(output.status.code(), Some(1));

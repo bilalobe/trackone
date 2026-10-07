@@ -4,6 +4,7 @@ use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use clap::Parser;
 use trackone_gateway_svc::config::GatewayConfig;
 use trackone_gateway_svc::error::{ResultContext, RuntimeError};
+use trackone_gateway_svc::observability::PipelineEvents;
 use trackone_gateway_svc::postgres::PostgresLedgerStore;
 use trackone_gateway_svc::postgres_connection::connect_postgres;
 use trackone_gateway_svc::producer::{ElapsedClock, LedgerProducer, ProducerError};
@@ -39,6 +40,8 @@ impl ElapsedClock for SystemElapsedClock {
 
 fn main() -> Result<(), RuntimeError> {
     let config = GatewayConfig::parse();
+    let events = Arc::new(PipelineEvents::default());
+    let capacity_limits = config.capacity_limits();
     let admission_auth = config.admission_auth()?;
     let worker_config = config.worker_config()?;
     let policy = config.closure_policy();
@@ -76,12 +79,15 @@ fn main() -> Result<(), RuntimeError> {
     )
     .context("cannot connect gateway to PostgreSQL")?;
     let mut store = PostgresLedgerStore::new(client, &ledger_id);
+    store.set_events(Arc::clone(&events));
+    store.set_capacity_limits(capacity_limits);
     store.migrate().context("cannot migrate gateway database")?;
     let clock = SystemElapsedClock::new().context("cannot initialize gateway clock")?;
     let continuity_id = clock.continuity_id();
     let mut producer =
         LedgerProducer::open_or_create(store, clock, ledger_id.clone(), config.site_id, policy)
             .context("cannot open or create ledger producer")?;
+    producer.set_events(Arc::clone(&events));
     if producer.state().open.clock_continuity_id != continuity_id {
         producer
             .recover()
@@ -105,13 +111,13 @@ fn main() -> Result<(), RuntimeError> {
                 .map_err(|error| error.to_string())
             },
         ));
-    let app = router(GatewayHttpState::new(
+    let state = GatewayHttpState::new(
         producer,
         admission_auth,
         config.max_batch_records,
         config.max_admission_bytes,
-    ))
-    .merge(evidence);
+    );
+    let app = router(state.clone()).merge(evidence);
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
@@ -127,6 +133,7 @@ fn main() -> Result<(), RuntimeError> {
         let listener = tokio::net::TcpListener::bind(config.bind)
             .await
             .context(format!("cannot bind gateway listener to {}", config.bind))?;
+        let readiness_sampler = state.start_readiness_sampler();
         let workers = Arc::new(
             TimestampWorkers::start(worker_config, Arc::new(timestamp_authority), move || {
                 connect_postgres(
@@ -134,7 +141,11 @@ fn main() -> Result<(), RuntimeError> {
                     postgres_tls_mode,
                     postgres_ca_file.as_deref(),
                 )
-                .map(|client| PostgresLedgerStore::new(client, &ledger_id))
+                .map(|client| {
+                    let mut store = PostgresLedgerStore::new(client, &ledger_id);
+                    store.set_events(Arc::clone(&events));
+                    store
+                })
                 .map_err(|error| ProducerError::Store(error.to_string()))
             })
             .context("cannot start timestamp workers")?,
@@ -146,9 +157,11 @@ fn main() -> Result<(), RuntimeError> {
                     _ = interrupt.recv() => (),
                     _ = terminate.recv() => (),
                 }
+                state.readiness.shutdown();
                 shutdown_workers.stop_claiming();
             })
             .await;
+        readiness_sampler.abort();
         drop(workers);
         result.context("gateway HTTP server failed")?;
         Ok(())

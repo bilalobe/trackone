@@ -1,6 +1,9 @@
 //! HTTP handoff surface for exact VTL canonical-record CBOR bytes.
 
-use std::sync::{Arc, Mutex};
+use crate::observability::{
+    CapacityLimits, PipelineEvents, PipelineReadiness, ReadinessSample, SAMPLE_INTERVAL_SECONDS,
+};
+use std::sync::{Arc, Mutex, TryLockError, atomic::Ordering};
 
 use axum::body::Bytes;
 use axum::extract::{Path, Request, State};
@@ -106,6 +109,8 @@ fn bearer_digest(token: &str) -> [u8; 32] {
 
 pub struct GatewayHttpState<C> {
     producer: Arc<Mutex<ServiceProducer<C>>>,
+    pub readiness: Arc<PipelineReadiness>,
+    events: Arc<PipelineEvents>,
     admission_auth: AdmissionAuth,
     max_batch_records: usize,
     max_admission_bytes: usize,
@@ -115,6 +120,8 @@ impl<C> Clone for GatewayHttpState<C> {
     fn clone(&self) -> Self {
         Self {
             producer: Arc::clone(&self.producer),
+            readiness: Arc::clone(&self.readiness),
+            events: Arc::clone(&self.events),
             admission_auth: self.admission_auth.clone(),
             max_batch_records: self.max_batch_records,
             max_admission_bytes: self.max_admission_bytes,
@@ -122,19 +129,101 @@ impl<C> Clone for GatewayHttpState<C> {
     }
 }
 
-impl<C> GatewayHttpState<C> {
+impl<C: ElapsedClock> GatewayHttpState<C> {
     pub fn new(
-        producer: ServiceProducer<C>,
+        mut producer: ServiceProducer<C>,
         admission_auth: AdmissionAuth,
         max_batch_records: usize,
         max_admission_bytes: usize,
     ) -> Self {
+        let events = producer.events();
+        producer.store_mut().set_events(Arc::clone(&events));
+        let limits = producer.store_mut().limits;
         Self {
+            readiness: Arc::new(PipelineReadiness::new(limits)),
+            events,
             producer: Arc::new(Mutex::new(producer)),
             admission_auth,
             max_batch_records,
             max_admission_bytes,
         }
+    }
+    pub fn with_capacity_limits(mut self, limits: CapacityLimits) -> Self {
+        self.producer
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .store_mut()
+            .set_capacity_limits(limits);
+        self.readiness = Arc::new(PipelineReadiness::new(limits));
+        self
+    }
+
+    pub fn sample_readiness(&self) {
+        let mut producer = match self.producer.try_lock() {
+            Ok(producer) => producer,
+            Err(TryLockError::WouldBlock) => return, // Previous observations expire if admission remains stuck.
+            Err(TryLockError::Poisoned(_)) => {
+                self.readiness.observe(ReadinessSample {
+                    database_available: false,
+                    producer_state: "unavailable",
+                    reasons: vec!["producer_lock_poisoned"],
+                    statistics: None,
+                });
+                return;
+            }
+        };
+        let producer_state = producer.readiness_state();
+        let mut reasons = match producer_state {
+            "ready" => Vec::new(),
+            "inactive" => vec!["producer_inactive"],
+            "recovery_required" => vec!["producer_recovery_required"],
+            _ => vec!["producer_clock_unavailable"],
+        };
+        let revision = producer.state().revision;
+        let (database_available, statistics) =
+            match producer.store_mut().pipeline_statistics(revision) {
+                Ok(stats) => (true, Some(stats)),
+                Err(ProducerError::ConcurrentWriter) => {
+                    reasons.push("producer_revision_mismatch");
+                    (true, None)
+                }
+                Err(_) => {
+                    reasons.push("database_unavailable");
+                    (false, None)
+                }
+            };
+        self.readiness.observe(ReadinessSample {
+            database_available,
+            producer_state,
+            reasons,
+            statistics,
+        });
+    }
+}
+
+impl<C: ElapsedClock + Send + 'static> GatewayHttpState<C> {
+    pub fn start_readiness_sampler(&self) -> tokio::task::JoinHandle<()> {
+        let state = self.clone();
+        tokio::spawn(async move {
+            let mut interval =
+                tokio::time::interval(std::time::Duration::from_secs(SAMPLE_INTERVAL_SECONDS));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            loop {
+                interval.tick().await;
+                let sample_state = state.clone();
+                if tokio::task::spawn_blocking(move || sample_state.sample_readiness())
+                    .await
+                    .is_err()
+                {
+                    state.readiness.observe(ReadinessSample {
+                        database_available: false,
+                        producer_state: "unavailable",
+                        reasons: vec!["observation_unavailable"],
+                        statistics: None,
+                    });
+                }
+            }
+        })
     }
 }
 
@@ -142,6 +231,7 @@ pub fn router<C>(state: GatewayHttpState<C>) -> Router
 where
     C: ElapsedClock + Send + 'static,
 {
+    let events = Arc::clone(&state.events);
     let protected = Router::new()
         .route("/v2/records", post(admit::<C>))
         .route("/v2/record-batches", post(admit_batch::<C>))
@@ -155,9 +245,41 @@ where
         ));
     Router::new()
         .route("/healthz", get(health))
+        .route("/readyz", get(readiness::<C>))
         .merge(protected)
         .layer(DefaultBodyLimit::max(HARD_MAX_ADMISSION_BYTES))
+        .layer(middleware::from_fn_with_state(
+            events,
+            count_admission_rejections,
+        ))
         .with_state(state)
+}
+
+async fn count_admission_rejections(
+    State(events): State<Arc<PipelineEvents>>,
+    request: Request,
+    next: Next,
+) -> Response {
+    let admission = request.method() == axum::http::Method::POST
+        && matches!(request.uri().path(), "/v2/records" | "/v2/record-batches");
+    let response = next.run(request).await;
+    if admission && (response.status().is_client_error() || response.status().is_server_error()) {
+        events.admission_rejections.fetch_add(1, Ordering::Relaxed);
+    }
+    response
+}
+
+async fn readiness<C: ElapsedClock>(State(state): State<GatewayHttpState<C>>) -> Response {
+    let (ready, value) = state.readiness.response(&state.events);
+    (
+        if ready {
+            StatusCode::OK
+        } else {
+            StatusCode::SERVICE_UNAVAILABLE
+        },
+        Json(value),
+    )
+        .into_response()
 }
 
 async fn require_bearer(
@@ -451,11 +573,17 @@ where
         Ok(Err(ProducerError::InvalidRecord(message))) => {
             error_response(StatusCode::UNPROCESSABLE_ENTITY, "invalid_record", &message)
         }
-        Ok(Err(error)) => error_response(
-            StatusCode::SERVICE_UNAVAILABLE,
-            "producer_unavailable",
-            &error.to_string(),
-        ),
+        Ok(Err(error)) => {
+            let code = match error {
+                ProducerError::QueueCapacityExhausted => "queue_capacity_exhausted",
+                ProducerError::StorageCapacityExhausted => "storage_capacity_exhausted",
+                ProducerError::StorageUnavailable(_) => "storage_unavailable",
+                _ => "producer_unavailable",
+            };
+            (StatusCode::SERVICE_UNAVAILABLE, Json(json!({
+                "ok": false, "admission_available": false, "error": code, "message": error.to_string()
+            }))).into_response()
+        }
         Err(error) => error_response(
             StatusCode::INTERNAL_SERVER_ERROR,
             "blocking_task",

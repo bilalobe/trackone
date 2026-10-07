@@ -4,6 +4,7 @@
 
 pub mod config;
 pub mod error;
+pub mod observability;
 pub mod postgres;
 pub mod postgres_connection;
 pub mod producer;

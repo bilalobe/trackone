@@ -1,14 +1,14 @@
 //! Durable, leased RFC 3161 jobs. Remote submission is at least once; attachment
 //! retains the first verified response for the exact immutable artifact digest.
 
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::{Arc, Condvar, Mutex, atomic::Ordering};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
 use serde::Serialize;
 use trackone_ledger::sha256_hex;
 
-use crate::postgres::PostgresLedgerStore;
+use crate::postgres::{PostgresLedgerStore, store_error as db_error};
 use crate::producer::ProducerError;
 use crate::tsa::Rfc3161TimestampAuthority;
 
@@ -73,13 +73,6 @@ pub struct TimestampStatus {
     pub last_error: Option<String>,
 }
 
-fn db_error(error: postgres::Error) -> ProducerError {
-    ProducerError::Store(match error.as_db_error() {
-        Some(database) => format!("{}: {}", database.code().code(), database.message()),
-        None => error.to_string(),
-    })
-}
-
 impl PostgresLedgerStore {
     /// Claims one artifact, never an unbounded backlog. Claim generation is the
     /// monotonically increasing attempt count and fences expired workers.
@@ -88,7 +81,13 @@ impl PostgresLedgerStore {
         max_attempts: u32,
     ) -> Result<Option<TimestampClaim>, ProducerError> {
         let mut transaction = self.client.transaction().map_err(db_error)?;
-        transaction.execute(
+        transaction
+            .query_one(
+                "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
+                &[&self.ledger_id],
+            )
+            .map_err(db_error)?;
+        let exhausted = transaction.execute(
             "WITH exhausted AS (SELECT ledger_id, segment_number FROM trackone_vtl_sealed_segment \
              WHERE ledger_id=$1 AND tsa_status='queued' AND tsa_attempt_count >= $2 \
              AND (tsa_lease_until IS NULL OR tsa_lease_until <= CURRENT_TIMESTAMP) \
@@ -125,6 +124,9 @@ impl PostgresLedgerStore {
             })
             .transpose()?;
         transaction.commit().map_err(db_error)?;
+        self.events
+            .terminal_timestamp_failures
+            .fetch_add(exhausted, Ordering::Relaxed);
         Ok(claim)
     }
 
@@ -176,6 +178,12 @@ impl PostgresLedgerStore {
         config: &TimestampWorkerConfig,
     ) -> Result<bool, ProducerError> {
         let mut transaction = self.client.transaction().map_err(db_error)?;
+        transaction
+            .query_one(
+                "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
+                &[&self.ledger_id],
+            )
+            .map_err(db_error)?;
         let number = number.to_string();
         let row = transaction.query_opt(
             "SELECT artifact_sha256, tsa_status, tsa_attempt_count, tsa_lease_until IS NOT NULL \
@@ -208,7 +216,7 @@ impl PostgresLedgerStore {
                 }
                 transaction.execute(
                     "UPDATE trackone_vtl_sealed_segment SET tsa_response=$3, tsa_status='verified', \
-                     tsa_next_attempt=NULL, tsa_lease_until=NULL, tsa_last_error=NULL \
+                     tsa_next_attempt=NULL, tsa_lease_until=NULL, tsa_last_error=NULL, tsa_attached_at=CURRENT_TIMESTAMP \
                      WHERE ledger_id=$1 AND segment_number=$2::text::numeric",
                     &[&self.ledger_id, &number, &response],
                 ).map_err(db_error)?;
@@ -235,6 +243,16 @@ impl PostgresLedgerStore {
             }
         }
         transaction.commit().map_err(db_error)?;
+        if result.is_ok() {
+            self.events
+                .storage_unavailable
+                .store(false, Ordering::Relaxed);
+        }
+        if result.is_err() && attempt >= i64::from(config.max_attempts) {
+            self.events
+                .terminal_timestamp_failures
+                .fetch_add(1, Ordering::Relaxed);
+        }
         Ok(true)
     }
 
@@ -346,6 +364,12 @@ impl TimestampWorkers {
                             match connected.finish_timestamp(claim, result, &config) {
                                 Ok(_) => pending = None,
                                 Err(error) => {
+                                    if matches!(error, ProducerError::StorageUnavailable(_)) {
+                                        connected
+                                            .events
+                                            .storage_unavailable
+                                            .store(true, Ordering::Relaxed);
+                                    }
                                     eprintln!("timestamp worker completion failed: {error}");
                                     store = None;
                                     pause(&stop);
@@ -371,6 +395,12 @@ impl TimestampWorkers {
                                 match connected.finish_timestamp(&claim, &result, &config) {
                                     Ok(_) => (),
                                     Err(error) => {
+                                        if matches!(error, ProducerError::StorageUnavailable(_)) {
+                                            connected
+                                                .events
+                                                .storage_unavailable
+                                                .store(true, Ordering::Relaxed);
+                                        }
                                         eprintln!("timestamp worker completion failed: {error}");
                                         pending = Some((claim, result));
                                         store = None;
@@ -380,6 +410,12 @@ impl TimestampWorkers {
                             }
                             Ok(None) => pause(&stop),
                             Err(error) => {
+                                if matches!(error, ProducerError::StorageUnavailable(_)) {
+                                    connected
+                                        .events
+                                        .storage_unavailable
+                                        .store(true, Ordering::Relaxed);
+                                }
                                 eprintln!("timestamp worker claim failed: {error}");
                                 store = None;
                                 pause(&stop);

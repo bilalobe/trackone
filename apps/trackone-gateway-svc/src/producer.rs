@@ -5,8 +5,10 @@
 //! production deployments can implement that contract with PostgreSQL while
 //! tests use the in-memory implementation below.
 
+use crate::observability::PipelineEvents;
 use std::collections::BTreeMap;
 use std::fmt;
+use std::sync::{Arc, atomic::Ordering};
 use trackone_ledger::sha256_hex;
 use trackone_ledger::vtl::{
     ClosurePolicy, EmptyMode, SegmentRecord, batch_roots_from_leaf_hashes,
@@ -160,6 +162,9 @@ pub enum ProducerError {
     SerialExhausted,
     CounterOverflow(&'static str),
     Store(String),
+    QueueCapacityExhausted,
+    StorageCapacityExhausted,
+    StorageUnavailable(String),
     TimestampConfiguration(String),
     TimestampSubmission(String),
     TimestampVerification(String),
@@ -183,6 +188,15 @@ impl fmt::Display for ProducerError {
             }
             Self::SerialExhausted => formatter.write_str("segment serial is exhausted"),
             Self::CounterOverflow(name) => write!(formatter, "{name} counter overflow"),
+            Self::QueueCapacityExhausted => {
+                formatter.write_str("pending timestamp capacity is exhausted")
+            }
+            Self::StorageCapacityExhausted => {
+                formatter.write_str("retained evidence capacity is exhausted")
+            }
+            Self::StorageUnavailable(message) => {
+                write!(formatter, "storage unavailable: {message}")
+            }
             Self::Store(message) => write!(formatter, "ledger store failed: {message}"),
             Self::TimestampConfiguration(message) => {
                 write!(formatter, "timestamp configuration failed: {message}")
@@ -222,6 +236,7 @@ pub struct LedgerProducer<S, C> {
     store: S,
     clock: C,
     state: ProducerState,
+    events: Arc<PipelineEvents>,
 }
 
 impl<S: LedgerStore, C: ElapsedClock> LedgerProducer<S, C> {
@@ -252,6 +267,7 @@ impl<S: LedgerStore, C: ElapsedClock> LedgerProducer<S, C> {
                 store,
                 clock,
                 state,
+                events: Arc::new(PipelineEvents::default()),
             };
             if !producer.state.active {
                 producer.reactivate()?;
@@ -289,7 +305,26 @@ impl<S: LedgerStore, C: ElapsedClock> LedgerProducer<S, C> {
             store,
             clock,
             state,
+            events: Arc::new(PipelineEvents::default()),
         })
+    }
+
+    pub fn set_events(&mut self, events: Arc<PipelineEvents>) {
+        self.events = events;
+    }
+
+    pub fn events(&self) -> Arc<PipelineEvents> {
+        Arc::clone(&self.events)
+    }
+
+    /// Checks clock continuity without changing producer state.
+    pub fn readiness_state(&self) -> &'static str {
+        match self.safe_now() {
+            Ok(_) => "ready",
+            Err(ProducerError::Inactive) => "inactive",
+            Err(ProducerError::ClockDiscontinuity) => "recovery_required",
+            Err(_) => "clock_unavailable",
+        }
     }
 
     pub fn state(&self) -> &ProducerState {
@@ -312,7 +347,9 @@ impl<S: LedgerStore, C: ElapsedClock> LedgerProducer<S, C> {
             return Err(ProducerError::Inactive);
         }
         let now = self.clock.now_ms()?;
-        self.transition(now, Some(CloseReason::Recovery), None)
+        let sealed = self.transition(now, Some(CloseReason::Recovery), None)?;
+        self.events.recovery_events.fetch_add(1, Ordering::Relaxed);
+        Ok(sealed)
     }
 
     /// Resume a ledger after a committed shutdown closure.
@@ -432,7 +469,7 @@ impl<S: LedgerStore, C: ElapsedClock> LedgerProducer<S, C> {
         }
         let now = self.safe_now()?;
         let mut next = self.state.clone();
-        let mut sealed = Self::close_expired(&mut next, now)?;
+        let mut sealed = self.close_expired(&mut next, now)?;
         let admitted_records = records.clone();
         let mut admitted_segment_numbers = Vec::with_capacity(records.len());
         for record in records {
@@ -464,7 +501,7 @@ impl<S: LedgerStore, C: ElapsedClock> LedgerProducer<S, C> {
                 ]
                 .into_iter()
                 .flatten(),
-            ) && let Some(segment) = Self::seal_open(&mut next, now, reason)?
+            ) && let Some(segment) = self.seal_open(&mut next, now, reason)?
             {
                 sealed.push(segment);
             }
@@ -537,7 +574,7 @@ impl<S: LedgerStore, C: ElapsedClock> LedgerProducer<S, C> {
         let mut next = self.state.clone();
         let mut sealed = Vec::new();
         if let Some(reason) = requested
-            && let Some(segment) = Self::seal_open(&mut next, now, reason)?
+            && let Some(segment) = self.seal_open(&mut next, now, reason)?
         {
             sealed.push(segment);
         }
@@ -555,6 +592,7 @@ impl<S: LedgerStore, C: ElapsedClock> LedgerProducer<S, C> {
     }
 
     fn close_expired(
+        &self,
         state: &mut ProducerState,
         now: u64,
     ) -> Result<Vec<SealedSegment>, ProducerError> {
@@ -571,7 +609,7 @@ impl<S: LedgerStore, C: ElapsedClock> LedgerProducer<S, C> {
                 .opened_at_ms
                 .checked_add(state.open.policy.interval_ms)
                 .ok_or(ProducerError::ClockDiscontinuity)?;
-            if let Some(segment) = Self::seal_open(state, boundary, CloseReason::Interval)? {
+            if let Some(segment) = self.seal_open(state, boundary, CloseReason::Interval)? {
                 sealed.push(segment);
             }
         }
@@ -579,6 +617,19 @@ impl<S: LedgerStore, C: ElapsedClock> LedgerProducer<S, C> {
     }
 
     fn seal_open(
+        &self,
+        state: &mut ProducerState,
+        next_opened_at_ms: u64,
+        reason: CloseReason,
+    ) -> Result<Option<SealedSegment>, ProducerError> {
+        let result = Self::construct_segment(state, next_opened_at_ms, reason);
+        if result.is_err() {
+            self.events.sealing_failures.fetch_add(1, Ordering::Relaxed);
+        }
+        result
+    }
+
+    fn construct_segment(
         state: &mut ProducerState,
         next_opened_at_ms: u64,
         reason: CloseReason,
@@ -668,7 +719,25 @@ impl<S: LedgerStore, C: ElapsedClock> LedgerProducer<S, C> {
             sealed,
             idempotency: admission.cloned(),
         };
-        self.store.compare_and_swap(Some(expected), &transition)?;
+        if let Err(error) = self.store.compare_and_swap(Some(expected), &transition) {
+            if matches!(error, ProducerError::StorageUnavailable(_)) {
+                self.events
+                    .storage_unavailable
+                    .store(true, Ordering::Relaxed);
+            }
+            if !transition.sealed.is_empty()
+                && !matches!(
+                    error,
+                    ProducerError::QueueCapacityExhausted | ProducerError::StorageCapacityExhausted
+                )
+            {
+                self.events.sealing_failures.fetch_add(1, Ordering::Relaxed);
+            }
+            return Err(error);
+        }
+        self.events
+            .storage_unavailable
+            .store(false, Ordering::Relaxed);
         self.state = next;
         Ok(())
     }
