@@ -18,6 +18,16 @@ sources remain in `software/crates/` for independent rebuilds on other targets.
 The manifest makes only mechanically replayed archive claims: the normative
 VTL vector, the current VTL evidence slate, offline schema resolution, and
 release-asset counts.
+Expanded archives additionally replay 16 evidence cases with the bundled Rust
+verifier: successful Class A/B/C scopes, digest and record failures, scope
+downgrade, wrong TSA policy/pin/imprint, pending/unavailable TSA, missing request,
+wrong nonce, and three TSA structural mutations. The nonce-bearing response is
+paired with the shipped request in temporary bundle copies. Historical certificate
+and CRL validation uses the token's signed generation time; the Rust verifier
+retains its current-clock future-skew check. Python and OpenSSL 3 are required.
+The report includes each case, its expected overall result, actual result, and
+suite totals. Historical archives with the original claim set retain their
+original coverage and report no expanded replay.
 It does not make an unscoped draft-conformance claim or attest telemetry truth,
 deployment behavior, external TSA availability, or fitness for automated
 sanctions or actuation.

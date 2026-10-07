@@ -20,6 +20,19 @@ covers the following bounded surface:
 - deterministic archive packaging, offline schema resolution, and detached
   verifier replay.
 
+Expanded conformance archives execute 16 named evidence cases: the three
+disclosure scopes with historical TSA validation, integrity and scope failures,
+TSA policy/pin/imprint failures, pending/unavailable issuance states, request and
+nonce correlation, and the three documented TSA structural mutations. Reports
+identify every executed case; the two additional manifest claims describe
+disclosure fixture replay and TSA fixture rejection replay. The original claim
+set remains readable with its original coverage.
+
+CI also requires the fresh PostgreSQL-backed HTTPS exchange before archive
+assembly. Its 24 scenarios run against both implementations, including transport
+faults and predecessor continuity. This live gate uses controlled local services;
+it does not claim production service availability or exhaustive HTTPS coverage.
+
 These checks are implementation and archive claims, not a claim of unscoped
 conformance to every aspect of the Internet-Draft. The archive builder does not
 package the externally published profile source; it retains the checked-in

@@ -383,6 +383,10 @@ def manifest_digest(bundle: Path) -> str:
 def query_imprint(query: Path) -> str:
     """Return the message imprint hex carried by an RFC 3161 request."""
     text = run(["openssl", "ts", "-query", "-in", str(query), "-text"]).stdout
+    return dump_imprint(text, query)
+
+
+def dump_imprint(text: str, query: Path) -> str:
     lines = text.splitlines()
     try:
         start = next(
@@ -425,6 +429,32 @@ def verify_request_imprints(tsa_log: Path, expected: set[str]) -> None:
         raise AcceptanceError(
             f"timestamp request imprint coverage mismatch: {observed} != {expected}"
         )
+
+
+def predecessor_response(
+    tsa_log: Path, predecessor_digest: str, target_digest: str
+) -> bytes:
+    if predecessor_digest == target_digest:
+        raise AcceptanceError("wrong-imprint fixture requires distinct segment digests")
+    matches = [
+        query
+        for query in sorted(tsa_log.glob("request-*.tsq"))
+        if query_imprint(query) == predecessor_digest
+    ]
+    if len(matches) != 1:
+        raise AcceptanceError("missing or ambiguous predecessor TSA request")
+    response = (
+        matches[0]
+        .with_name(matches[0].name.replace("request-", "response-"))
+        .with_suffix(".tsr")
+    )
+    if not response.is_file():
+        raise AcceptanceError("predecessor TSA response is missing")
+    text = run(["openssl", "ts", "-reply", "-in", str(response), "-text"]).stdout
+    # Confirm the response's imprint using the same OpenSSL dump parser as requests.
+    if dump_imprint(text, response) != predecessor_digest:
+        raise AcceptanceError("predecessor TSA response imprint mismatch")
+    return response.read_bytes()
 
 
 def main() -> int:
@@ -901,7 +931,8 @@ def main() -> int:
             [str(ROOT / "target/debug/trackone-evidence"), "verify", *rust_common],
             [sys.executable, str(detached), *common],
             reports / "wire-coverage.json",
-            (tsa_log / "response-0000.tsr").read_bytes(),
+            predecessor_response(tsa_log, predecessor_digest, digest),
+            {"target_imprint": digest, "replacement_imprint": predecessor_digest},
         )
         if source_hashes(ROOT) != initial_sources:
             raise AcceptanceError(

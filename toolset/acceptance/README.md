@@ -31,7 +31,7 @@ Successful output ends with `acceptance exchange succeeded`. Inspect:
 | --- | --- |
 | `published/class-{a,b,c}/` | Exact immutable bundle objects for one segment, under three disclosure scopes. |
 | `reports/*-independent.json`, `reports/*-trackone.json` | Matched artifact, scope, chain, overall and TSA conclusions. |
-| `reports/wire-coverage.json` | 17 rejection scenarios and three positive controls, each run against both implementations; 40 checks total. |
+| `reports/wire-coverage.json` | 24 required scenarios run against both implementations; 48 checks total, with explicit pending and undisclosed-predecessor conclusions. |
 | `verification-inputs.json` | Explicit segment digest, scope selections, TSA policy/pin and evaluation time for replay. |
 | `tsa-exchange/` | Exact DER requests and responses plus controlled service request log. |
 | `https-evidence/` | Original evidence-host request log. |
@@ -48,6 +48,13 @@ unexpected content encoding, HTTP/1.0, unsafe path, wrong expected digest,
 altered record bytes, scope downgrade, and wrong TSA imprint/policy/pin. Positive
 controls exercise special filename encoding and anchor/batch-only retrieval.
 Each failure must have a matching diagnostic, not merely a nonzero exit status.
+The wrong-imprint response is selected by the predecessor request's imprint,
+independently of issuance order, and its response imprint is checked before use.
+Additional cases cover pending/unavailable TSA and missing/bad predecessor
+evidence. Rust permits a missing predecessor and reports
+`predecessor_not_disclosed`; the independent HTTPS checker requires the immediate
+predecessor. Pending TSA is explicitly `incomplete`, never successful verification.
+The corpus builder requires the exact named case inventory for both implementations.
 The report lists requirements by draft anchor and names untested areas. It does
 not establish complete Appendix E or full RFC 3161 rejection coverage.
 

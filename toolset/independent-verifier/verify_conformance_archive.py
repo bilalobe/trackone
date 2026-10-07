@@ -13,16 +13,42 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 from urllib.parse import urldefrag
 
+from conformance_cases import (
+    EXPANDED_CLAIMS,
+    EvidenceReplayError,
+    verify_evidence_cases,
+)
 
 ARCHIVE_SCHEMA = "trackone-conformance-archive"
 ARTIFACT_TYPE = "application/vnd.trackone.conformance.archive+tar"
+BASE_CLAIMS = {
+    "vtl_normative_known_answer_vector": True,
+    "vtl_version_one_evidence_slate": True,
+    "offline_schema_resolution": True,
+    "publishable_rust_crates": True,
+    "helm_release_asset": True,
+}
+
+
+def has_expanded_claims(claims: Any) -> bool:
+    if not isinstance(claims, dict) or not all(
+        value is True for value in claims.values()
+    ):
+        raise VerifyError("conformance claim set mismatch")
+    if claims == BASE_CLAIMS:
+        return False
+    if claims == {**BASE_CLAIMS, **EXPANDED_CLAIMS}:
+        return True
+    raise VerifyError("conformance claim set mismatch")
+
+
 PROVIDER = (
-    "https://raw.githubusercontent.com/bilalobe/trackone/"
-    "main/toolset/unified/schemas/"
+    "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/"
 )
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 VTL_KNOWN_ANSWER_VECTORS = "vtl-known-answer"
@@ -99,7 +125,10 @@ class CborDecoder:
             encoded = self.data[start : self.offset]
             if not isinstance(key, str):
                 raise VerifyError("CBOR map key is not text")
-            if previous is not None and (len(previous), previous) >= (len(encoded), encoded):
+            if previous is not None and (len(previous), previous) >= (
+                len(encoded),
+                encoded,
+            ):
                 raise VerifyError("CBOR map keys are not in deterministic order")
             if key in result:
                 raise VerifyError(f"duplicate CBOR map key: {key}")
@@ -181,7 +210,9 @@ def extract_archive(archive: Path, destination: Path) -> Path:
         bundle.extractall(destination, filter="data")
     roots = sorted(item for item in destination.iterdir() if item.is_dir())
     if len(roots) != 1:
-        raise VerifyError(f"archive must contain exactly one root directory, found {len(roots)}")
+        raise VerifyError(
+            f"archive must contain exactly one root directory, found {len(roots)}"
+        )
     return roots[0]
 
 
@@ -214,7 +245,9 @@ def verify_checksums(root: Path) -> int:
     if set(declared) != actual_files:
         missing = sorted(actual_files - set(declared))
         stale = sorted(set(declared) - actual_files)
-        raise VerifyError(f"SHA256SUMS coverage mismatch; missing={missing}, stale={stale}")
+        raise VerifyError(
+            f"SHA256SUMS coverage mismatch; missing={missing}, stale={stale}"
+        )
     return len(declared)
 
 
@@ -230,7 +263,9 @@ def walk_refs(value: Any) -> Iterator[str]:
 
 
 def verify_schema_catalog(root: Path, manifest: dict[str, Any]) -> int:
-    catalog_path = portable(root, manifest["contents"]["schema_catalog"], "schema catalog")
+    catalog_path = portable(
+        root, manifest["contents"]["schema_catalog"], "schema catalog"
+    )
     catalog = read_json(catalog_path)
     if catalog.get("schema") != "trackone-schema-catalog-v1":
         raise VerifyError("schema catalog token mismatch")
@@ -249,7 +284,11 @@ def verify_schema_catalog(root: Path, manifest: dict[str, Any]) -> int:
     for schema_id, schema in schemas.items():
         for ref in walk_refs(schema):
             target, _fragment = urldefrag(ref)
-            if target and not target.startswith("https://json-schema.org/") and target not in schemas:
+            if (
+                target
+                and not target.startswith("https://json-schema.org/")
+                and target not in schemas
+            ):
                 raise VerifyError(f"schema {schema_id} has dangling offline $ref {ref}")
     return len(schemas)
 
@@ -274,7 +313,9 @@ def verify_vtl_known_answer(vector_root: Path) -> dict[str, Any]:
         records = [bytes.fromhex(item) for item in vector["records_cbor_hex"]]
         segment_bytes = bytes.fromhex(vector["segment_cbor_hex"])
     except (KeyError, TypeError, ValueError) as exc:
-        raise VerifyError("VTL known-answer vector contains invalid hexadecimal") from exc
+        raise VerifyError(
+            "VTL known-answer vector contains invalid hexadecimal"
+        ) from exc
     leaves = sorted(hashlib.sha256(b"\x00" + record).digest() for record in records)
     segment_root = vtl_tree(leaves)
     if segment_root.hex() != vector.get("segment_root"):
@@ -310,7 +351,10 @@ def verify_vtl_known_answer(vector_root: Path) -> dict[str, Any]:
     verify_vtl_distinct_encodings(vector)
     verify_vtl_duplicate_roots(vector)
     verify_vtl_empty_successor(vector, segment_bytes, profile)
-    return {"records": len(records), "segment_sha256": hashlib.sha256(segment_bytes).hexdigest()}
+    return {
+        "records": len(records),
+        "segment_sha256": hashlib.sha256(segment_bytes).hexdigest(),
+    }
 
 
 def verify_vtl_distinct_encodings(vector: dict[str, Any]) -> None:
@@ -323,10 +367,14 @@ def verify_vtl_distinct_encodings(vector: dict[str, Any]) -> None:
         try:
             record = bytes.fromhex(case["record_cbor_hex"])
         except (KeyError, TypeError, ValueError) as exc:
-            raise VerifyError("VTL distinct-encoding case has invalid hexadecimal") from exc
+            raise VerifyError(
+                "VTL distinct-encoding case has invalid hexadecimal"
+            ) from exc
         digest = hashlib.sha256(b"\x00" + record).hexdigest()
         if digest != case.get("leaf_hash"):
-            raise VerifyError(f"VTL distinct-encoding leaf mismatch for {case.get('name')}")
+            raise VerifyError(
+                f"VTL distinct-encoding leaf mismatch for {case.get('name')}"
+            )
         if digest in seen:
             raise VerifyError(
                 f"VTL distinct-encoding collision between {seen[digest]} and {case.get('name')}"
@@ -342,9 +390,14 @@ def verify_vtl_duplicate_roots(vector: dict[str, Any]) -> None:
     try:
         record = bytes.fromhex(duplicates["record_cbor_hex"])
     except (KeyError, TypeError, ValueError) as exc:
-        raise VerifyError("VTL duplicate-occurrence record is invalid hexadecimal") from exc
+        raise VerifyError(
+            "VTL duplicate-occurrence record is invalid hexadecimal"
+        ) from exc
     leaf = hashlib.sha256(b"\x00" + record).digest()
-    for count, key in ((3, "three_identical_record_1_root"), (4, "four_identical_record_1_root")):
+    for count, key in (
+        (3, "three_identical_record_1_root"),
+        (4, "four_identical_record_1_root"),
+    ):
         if vtl_tree(sorted([leaf] * count)).hex() != duplicates.get(key):
             raise VerifyError(f"VTL duplicate-occurrence root mismatch for {key}")
 
@@ -437,25 +490,25 @@ def verify_root(root: Path) -> dict[str, Any]:
     manifest = read_json(root / "conformance-manifest.json")
     if manifest.get("schema") != ARCHIVE_SCHEMA or manifest.get("version") != 1:
         raise VerifyError("conformance archive manifest version mismatch")
-    if manifest.get("schema_uri") != f"{PROVIDER}conformance_archive_manifest.schema.json":
+    if (
+        manifest.get("schema_uri")
+        != f"{PROVIDER}conformance_archive_manifest.schema.json"
+    ):
         raise VerifyError("conformance archive schema URI mismatch")
     if manifest.get("carrier", {}).get("artifact_type") != ARTIFACT_TYPE:
         raise VerifyError("conformance archive media type mismatch")
     claims = manifest.get("claims", {})
-    expected_claims = {
-        "vtl_normative_known_answer_vector": True,
-        "vtl_version_one_evidence_slate": True,
-        "offline_schema_resolution": True,
-        "publishable_rust_crates": True,
-        "helm_release_asset": True,
-    }
-    if claims != expected_claims:
-        raise VerifyError("conformance claim set mismatch")
+    expanded = has_expanded_claims(claims)
     schemas = verify_schema_catalog(root, manifest)
     vectors = portable(root, manifest["contents"]["vectors"], "vectors", directory=True)
-    binary = portable(root, manifest["contents"]["detached_verifier"], "detached verifier")
+    binary = portable(
+        root, manifest["contents"]["detached_verifier"], "detached verifier"
+    )
     vtl_vector = verify_vtl_known_answer(vectors / VTL_KNOWN_ANSWER_VECTORS)
-    vtl_slate_cases = verify_vtl_evidence_slate(vectors / VTL_KNOWN_ANSWER_VECTORS, binary)
+    vtl_slate_cases = verify_vtl_evidence_slate(
+        vectors / VTL_KNOWN_ANSWER_VECTORS, binary
+    )
+    evidence_replay = verify_evidence_cases(vectors, binary) if expanded else None
     crates = portable(root, manifest["contents"]["crates"], "crates", directory=True)
     helm = portable(root, manifest["contents"]["helm"], "Helm", directory=True)
     crate_count = len(list(crates.glob("*.crate")))
@@ -470,6 +523,7 @@ def verify_root(root: Path) -> dict[str, Any]:
         "schemas": schemas,
         "vtl_vector": vtl_vector,
         "vtl_slate_cases": vtl_slate_cases,
+        "evidence_replay": evidence_replay,
         "crates": crate_count,
         "helm_charts": helm_count,
     }
@@ -484,13 +538,17 @@ def main() -> int:
     args = parser.parse_args()
     try:
         if args.archive:
-            with tempfile.TemporaryDirectory(prefix="trackone-conformance-verify-") as temp:
+            with tempfile.TemporaryDirectory(
+                prefix="trackone-conformance-verify-"
+            ) as temp:
                 root = extract_archive(args.archive.resolve(), Path(temp))
                 result = verify_root(root)
         else:
             result = verify_root(args.root.resolve())
     except Exception as exc:
         result = {"ok": False, "error": str(exc)}
+        if isinstance(exc, EvidenceReplayError):
+            result["evidence_replay"] = exc.report
         payload = json.dumps(result, indent=2, sort_keys=True) + "\n"
         if args.output:
             args.output.write_text(payload, encoding="utf-8")

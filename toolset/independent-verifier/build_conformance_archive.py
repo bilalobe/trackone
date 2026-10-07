@@ -17,6 +17,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from conformance_cases import EXPANDED_CLAIMS
 
 ARTIFACT_TYPE = "application/vnd.trackone.conformance.archive+tar"
 SCHEMA_URI = (
@@ -39,7 +40,9 @@ def sha256(path: Path) -> str:
 
 
 def write_json(path: Path, value: Any) -> None:
-    path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    path.write_text(
+        json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
 
 
 def reject_symlinks(root: Path) -> None:
@@ -71,9 +74,7 @@ def copy_artifacts(source: Path, pattern: str, destination: Path, label: str) ->
 
 def write_checksums(root: Path) -> int:
     paths = sorted(
-        path
-        for path in root.rglob("*")
-        if path.is_file() and path.name != "SHA256SUMS"
+        path for path in root.rglob("*") if path.is_file() and path.name != "SHA256SUMS"
     )
     lines = [f"{sha256(path)}  {path.relative_to(root).as_posix()}" for path in paths]
     (root / "SHA256SUMS").write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -105,7 +106,9 @@ def create_tarball(root: Path, output: Path) -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
     with output.open("wb") as raw:
         with gzip.GzipFile(filename="", mode="wb", fileobj=raw, mtime=0) as zipped:
-            with tarfile.open(fileobj=zipped, mode="w", format=tarfile.PAX_FORMAT) as archive:
+            with tarfile.open(
+                fileobj=zipped, mode="w", format=tarfile.PAX_FORMAT
+            ) as archive:
                 members = [root, *sorted(root.rglob("*"))]
                 for path in members:
                     arcname = path.relative_to(root.parent).as_posix()
@@ -166,6 +169,10 @@ def assemble(args: argparse.Namespace) -> dict[str, Any]:
             root / "verifier/verify_conformance_archive.py",
         )
         shutil.copy2(
+            repo / "toolset/independent-verifier/conformance_cases.py",
+            root / "verifier/conformance_cases.py",
+        )
+        shutil.copy2(
             repo / "toolset/independent-verifier/README.md",
             root / "verifier/README.md",
         )
@@ -195,6 +202,7 @@ def assemble(args: argparse.Namespace) -> dict[str, Any]:
                 "detached_verifier": "verifier/bin/trackone-evidence",
             },
             "claims": {
+                **EXPANDED_CLAIMS,
                 "vtl_normative_known_answer_vector": True,
                 "vtl_version_one_evidence_slate": True,
                 "offline_schema_resolution": True,
@@ -227,7 +235,9 @@ def assemble(args: argparse.Namespace) -> dict[str, Any]:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--repo", type=Path, default=Path(__file__).resolve().parents[2])
+    parser.add_argument(
+        "--repo", type=Path, default=Path(__file__).resolve().parents[2]
+    )
     parser.add_argument("--subject-kind", choices=("commit", "release"), required=True)
     parser.add_argument("--subject", required=True)
     parser.add_argument("--commit", required=True)

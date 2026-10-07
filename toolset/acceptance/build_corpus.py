@@ -14,6 +14,7 @@ from pathlib import Path
 
 from replay_corpus import verify_inventory
 from source_snapshot import source_files
+from wire_cases import validate_matrix
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -34,12 +35,10 @@ def main() -> None:
         parser.error("immutable archive or checksum already exists")
     verify_inventory(args.result)
     coverage = json.loads((args.result / "reports/wire-coverage.json").read_text())
-    if (
-        not coverage["passed"]
-        or len(coverage["cases"]) != 40
-        or not all(case["passed"] for case in coverage["cases"])
-    ):
-        parser.error("a complete passing focused matrix is required")
+    try:
+        validate_matrix(coverage)
+    except ValueError as exc:
+        parser.error(str(exc))
     for name in ("class-a", "class-b", "class-c"):
         for verifier in ("independent", "trackone"):
             report = json.loads(

@@ -169,6 +169,7 @@ jobs:
           toolset/ci/check_workspace_boundaries.py
           toolset/independent-verifier/build_conformance_archive.py
           toolset/independent-verifier/verify_conformance_archive.py
+          toolset/independent-verifier/conformance_cases.py
 
       - name: Test anchor-evidence state and sanity primitives
         env:
@@ -180,9 +181,14 @@ jobs:
           PYTHONPATH: toolset/independent-verifier
         run: python -m unittest discover -s toolset/independent-verifier -p 'test_*.py'
 
+      - name: Test acceptance fixture selection and matrix inventory
+        env:
+          PYTHONPATH: toolset/acceptance
+        run: python -m unittest discover -s toolset/acceptance -p 'test_*.py'
+
   conformance-archive:
     runs-on: ubuntu-latest
-    needs: [rust, contracts]
+    needs: [rust, contracts, vtl-http-binding]
     permissions:
       attestations: write
       contents: read

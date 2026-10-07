@@ -25,6 +25,62 @@ GAPS = [
     "Producer-side malformed TSA responses (matrix exercises the verifiers)",
 ]
 
+REQUIRED_CASES = (
+    "untrusted_https",
+    "redirect",
+    "partial",
+    "missing",
+    "unavailable",
+    "truncated",
+    "duplicate_length",
+    "transfer_and_length",
+    "encoding",
+    "http10",
+    "unsafe_path",
+    "wrong_digest",
+    "altered_record",
+    "scope_downgrade",
+    "tsa_imprint",
+    "tsa_policy",
+    "tsa_pin",
+    "special_paths",
+    "anchor_scope",
+    "batch_scope",
+    "tsa_pending",
+    "tsa_unavailable",
+    "missing_predecessor",
+    "bad_predecessor",
+)
+
+
+def validate_matrix(report: dict) -> None:
+    expected = {
+        (case, impl) for case in REQUIRED_CASES for impl in ("trackone", "independent")
+    }
+    cases = report.get("cases", [])
+    observed = [(case.get("case"), case.get("implementation")) for case in cases]
+    if (
+        report.get("required_cases") != list(REQUIRED_CASES)
+        or len(observed) != len(expected)
+        or set(observed) != expected
+        or report.get("passed") is not True
+        or not all(case.get("passed") is True for case in cases)
+    ):
+        raise ValueError("a complete passing required wire matrix is required")
+
+
+def command_verdict(completed: subprocess.CompletedProcess) -> dict:
+    # The independent checker sends failure reports to stderr; Rust keeps its
+    # structured verdict on stdout even when the command fails.
+    for payload in (completed.stdout, completed.stderr):
+        try:
+            value = json.loads(payload)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(value, dict):
+            return value
+    return {}
+
 
 class FaultHandler(http.server.BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
@@ -91,6 +147,7 @@ def run_matrix(
     independent_command: list[str],
     output: Path,
     predecessor_response: bytes,
+    imprint_fixture: dict[str, str],
 ) -> None:
     """Commands contain policy flags, but no bundle URL, scope, or output."""
     original = {
@@ -136,6 +193,14 @@ def run_matrix(
         ("special_paths", "https-binding-url-construction", ""),
         ("anchor_scope", "https-binding-retrieval", ""),
         ("batch_scope", "https-binding-retrieval", ""),
+        ("tsa_pending", "rfc3161-profile", "pending_claim"),
+        ("tsa_unavailable", "rfc3161-profile", "missing|unavailable"),
+        ("missing_predecessor", "https-binding-retrieval", "predecessor"),
+        (
+            "bad_predecessor",
+            "https-binding-retrieval",
+            "predecessor|segment_chain_mismatch",
+        ),
     ]
     results = []
     try:
@@ -156,6 +221,17 @@ def run_matrix(
                 ref = manifest["artifacts"]["tsa_tsr"]
                 objects[ref["path"]] = predecessor_response
                 ref["sha256"] = hashlib.sha256(predecessor_response).hexdigest()
+            elif name in ("tsa_pending", "tsa_unavailable"):
+                del manifest["artifacts"]["tsa_tsr"]
+                manifest["anchoring"]["tsa"]["status"] = name.removeprefix("tsa_")
+            elif name == "missing_predecessor":
+                del manifest["artifacts"]["predecessor_segment_cbor"]
+            elif name == "bad_predecessor":
+                ref = manifest["artifacts"]["predecessor_segment_cbor"]
+                objects[ref["path"]] = objects[
+                    manifest["artifacts"]["segment_cbor"]["path"]
+                ]
+                ref["sha256"] = hashlib.sha256(objects[ref["path"]]).hexdigest()
             elif name == "tsa_policy":
                 replacements["--tsa-policy"] = "1.3.6.1.4.1.57264.999"
             elif name == "tsa_pin":
@@ -195,14 +271,25 @@ def run_matrix(
                     check=False,
                 )
                 diagnostic_text = completed.stdout + completed.stderr
-                try:
-                    verdict = json.loads(completed.stdout)
-                except json.JSONDecodeError:
-                    verdict = {}
+                verdict = command_verdict(completed)
                 success = (
                     completed.returncode == 0 and verdict.get("overall") == "success"
                 )
                 expected_success = not diagnostic
+                expected_overall = None
+                expected_tsa = None
+                expected_chain = None
+                expected_returncode = None
+                if name == "tsa_pending":
+                    expected_overall, expected_tsa = "incomplete", "pending_claim"
+                    expected_returncode = 0 if implementation == "independent" else 1
+                elif name == "tsa_unavailable":
+                    expected_overall, expected_tsa = "failure", "missing"
+                elif name == "missing_predecessor" and implementation == "trackone":
+                    # Rust permits verification of a segment without a disclosed
+                    # predecessor and explicitly reports the unverified continuity.
+                    expected_success = True
+                    expected_chain = "predecessor_not_disclosed"
                 requests = list(server.state["requests"])
                 confined = all(
                     p.startswith("/bundle/") and "?" not in p for p in requests
@@ -223,10 +310,28 @@ def run_matrix(
                     and encoded_ok
                     and not server.state["bad_encoding_request"]
                     and (
-                        expected_success
+                        expected_overall == "incomplete"
+                        or expected_success
                         or completed.returncode != 0
                         and re.search(diagnostic, diagnostic_text, re.IGNORECASE)
                         is not None
+                    )
+                    and (
+                        expected_overall is None
+                        or verdict.get("overall") == expected_overall
+                    )
+                    and (
+                        expected_tsa is None
+                        or verdict.get("channels", {}).get("tsa", {}).get("status")
+                        == expected_tsa
+                    )
+                    and (
+                        expected_chain is None
+                        or verdict.get("chain_status") == expected_chain
+                    )
+                    and (
+                        expected_returncode is None
+                        or completed.returncode == expected_returncode
                     )
                 )
                 results.append(
@@ -234,7 +339,10 @@ def run_matrix(
                         "case": name,
                         "implementation": implementation,
                         "requirement_anchor": requirement,
-                        "expected": "success" if expected_success else "rejection",
+                        "expected": expected_overall
+                        or ("success" if expected_success else "rejection"),
+                        "expected_tsa_status": expected_tsa,
+                        "expected_chain_status": expected_chain,
                         "passed": bool(passed),
                         "returncode": completed.returncode,
                         "requests": requests,
@@ -247,6 +355,8 @@ def run_matrix(
         server.server_close()
         thread.join()
     report = {
+        "required_cases": list(REQUIRED_CASES),
+        "imprint_fixture": imprint_fixture,
         "complete_appendix_e_coverage": False,
         "remaining_gaps": GAPS,
         "passed": all(r["passed"] for r in results),
