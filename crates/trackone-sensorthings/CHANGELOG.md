@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Expose fact-validation and projection-validation errors through
+  `AdapterError::source()` without changing displayed messages or typed
+  adapter inputs.
+
 - Compute projection identifiers with a private SHA-256 helper so SensorThings
   no longer depends on the VTL ledger crate; existing identifiers are unchanged.
 

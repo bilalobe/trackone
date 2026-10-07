@@ -345,6 +345,8 @@ impl fmt::Display for FactValidationError {
     }
 }
 
+impl core::error::Error for FactValidationError {}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Error {
     CryptoError,
@@ -371,6 +373,15 @@ impl fmt::Display for Error {
     }
 }
 
+impl core::error::Error for Error {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        match self {
+            Self::InvalidFact(error) => Some(error),
+            _ => None,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -385,6 +396,22 @@ mod tests {
         unit_symbol: "°C",
         label: "Ambient temperature",
     };
+
+    #[test]
+    fn validation_error_chain_works_without_std() {
+        use core::error::Error as _;
+        let reason = FactValidationError::KindPayloadMismatch;
+        assert!(reason.source().is_none());
+        let error = Error::InvalidFact(reason);
+        assert_eq!(
+            error
+                .source()
+                .unwrap()
+                .downcast_ref::<FactValidationError>(),
+            Some(&reason)
+        );
+        assert!(Error::CryptoError.source().is_none());
+    }
 
     #[test]
     fn pod_id_from_u32_is_stable() {

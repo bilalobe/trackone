@@ -20,6 +20,31 @@ pub enum PodError {
     FactFrameCounterMismatch,
 }
 
+impl core::fmt::Display for PodError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Core(error) => write!(f, "core error: {error}"),
+            Self::Nonce(error) => write!(f, "nonce error: {error}"),
+            Self::FrameCounterRegression => f.write_str("frame counter must not regress"),
+            Self::FrameCounterExhausted => f.write_str("frame counter is exhausted"),
+            Self::FactPodIdMismatch => f.write_str("fact pod identity does not match this pod"),
+            Self::FactFrameCounterMismatch => {
+                f.write_str("fact frame counter does not match the next pod counter")
+            }
+        }
+    }
+}
+
+impl core::error::Error for PodError {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        match self {
+            Self::Core(error) => Some(error),
+            Self::Nonce(error) => Some(error),
+            _ => None,
+        }
+    }
+}
+
 impl From<Error> for PodError {
     fn from(error: Error) -> Self {
         Self::Core(error)
@@ -116,6 +141,28 @@ mod tests {
     use crate::nonce::CounterNonce24;
     use trackone_core::crypto::dummy::DummyAead;
     use trackone_core::{EnvFact, SampleType};
+
+    #[test]
+    fn pod_errors_expose_core_and_nonce_sources_without_std() {
+        use core::error::Error as _;
+        use trackone_core::FactValidationError;
+
+        let error = PodError::Core(Error::InvalidFact(FactValidationError::KindPayloadMismatch));
+        let source = error.source().unwrap();
+        assert!(source.is::<Error>());
+        assert!(source.source().unwrap().is::<FactValidationError>());
+
+        let error = PodError::Nonce(NonceError::FrameCounterOutOfRange);
+        assert!(error.source().unwrap().is::<NonceError>());
+        for error in [
+            PodError::FrameCounterRegression,
+            PodError::FrameCounterExhausted,
+            PodError::FactPodIdMismatch,
+            PodError::FactFrameCounterMismatch,
+        ] {
+            assert!(error.source().is_none());
+        }
+    }
 
     #[test]
     fn pod_emits_decryptable_frames() {

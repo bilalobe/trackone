@@ -49,7 +49,15 @@ observed_property={observed_property_key} sensor_channel={sensor_channel:?}"
     }
 }
 
-impl std::error::Error for AdapterError {}
+impl std::error::Error for AdapterError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::InvalidFact(error) => Some(error),
+            Self::Validation(error) => Some(error),
+            Self::NotEnvFact | Self::MissingSensorIdentity { .. } => None,
+        }
+    }
+}
 
 impl From<ValidationError> for AdapterError {
     fn from(value: ValidationError) -> Self {
@@ -202,6 +210,35 @@ mod tests {
         EnvObservationAdapterContext, adapt_env_fact_input, derive_provisioned_sensor_key,
         observed_property_key, project_fact_env_observation,
     };
+
+    #[test]
+    fn adapter_errors_expose_typed_sources_and_preserve_display() {
+        use super::{AdapterError, FactValidationError, ValidationError};
+        use std::error::Error as _;
+        let error = AdapterError::InvalidFact(FactValidationError::KindPayloadMismatch);
+        assert_eq!(
+            error.to_string(),
+            "invalid canonical fact: fact kind does not match its payload"
+        );
+        assert!(error.source().unwrap().is::<FactValidationError>());
+
+        let error = AdapterError::Validation(ValidationError::InvalidTimeRange);
+        assert_eq!(
+            error.to_string(),
+            "phenomenon time end must not be before start"
+        );
+        assert!(error.source().unwrap().is::<ValidationError>());
+        assert!(AdapterError::NotEnvFact.source().is_none());
+        assert!(
+            AdapterError::MissingSensorIdentity {
+                pod_id: "pod-1".into(),
+                observed_property_key: "temperature_air",
+                sensor_channel: None,
+            }
+            .source()
+            .is_none()
+        );
+    }
 
     #[test]
     fn adapts_instant_fact() {

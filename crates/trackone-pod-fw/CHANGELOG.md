@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Implement `Display` and `core::error::Error` for `PodError` and `NonceError`,
+  exposing core and nonce causes without requiring `std`.
+
 ## [0.1.0-beta.5] - 2026-08-08
 
 ### Changed

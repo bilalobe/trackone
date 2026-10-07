@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Implement `core::error::Error` for `FactValidationError` and `Error`, exposing
+  the underlying fact-validation source while preserving `no_std` support
+  and displayed messages.
+
 ### Removed
 
 - Remove the obsolete `COMMITMENT_PROFILE_ID_CANONICAL_CBOR_V1` re-export and

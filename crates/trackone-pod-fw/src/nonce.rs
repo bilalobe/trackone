@@ -16,6 +16,18 @@ pub enum NonceError {
     FrameCounterOutOfRange,
 }
 
+impl core::fmt::Display for NonceError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::FrameCounterOutOfRange => {
+                f.write_str("frame counter is out of range for the v1 framed transport")
+            }
+        }
+    }
+}
+
+impl core::error::Error for NonceError {}
+
 /// A 24-byte nonce source for an already-selected frame counter.
 pub trait Nonce24 {
     fn nonce_for_frame(&self, fc: FrameCounter) -> Result<[u8; AEAD_NONCE_LEN], NonceError>;
