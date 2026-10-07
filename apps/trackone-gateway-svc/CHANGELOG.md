@@ -4,8 +4,28 @@ All notable changes to trackone-gateway-svc will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- Add public `/readyz` reporting admission availability, producer recovery state,
+  durable timestamp backlog and attachment times, configured capacity pressure,
+  and process counters for admission rejection, recovery, sealing failure, and
+  terminal timestamp failure. Sample the admission connection every five seconds
+  and expire observations after fifteen seconds; TSA failures report degradation
+  while local admission capacity remains.
+- Add optional Clap `--max-pending-timestamps` and
+  `--max-retained-evidence-bytes` settings with corresponding `TRACKONE_MAX_*`
+  environment bindings. Limits default to unlimited and reject exhausted or
+  oversized admissions atomically with explicit 503 errors, preserving accepted
+  idempotency replays and evidence preservation operations at capacity.
+- Backfill transactional evidence-byte accounting and add timestamp enqueue and
+  attachment metadata without changing commitment artifacts. Legacy enqueue
+  ages use migration time; historical attachment times remain unknown.
+
 ### Changed
 
+- Default Helm readiness probes to `/readyz` and retain `/healthz` for cheap
+  process liveness. Expose optional admission capacity settings in chart values
+  and ConfigMap rendering.
 - Centralize gateway and exporter runtime options with Clap, preserving existing
   environment bindings and defaults, with generated help and validation before
   database connection.
@@ -27,6 +47,14 @@ All notable changes to trackone-gateway-svc will be documented in this file.
   commitment-profile UUID from health responses.
 - Report locally queued timestamp work as `queued`, reserving producer
   `pending` claims for submission attempts that have left the local queue.
+
+### Fixed
+
+- Keep readiness unavailable after PostgreSQL disk-full write errors even when
+  read probes succeed; clear the storage failure signal after a successful
+  durable producer write, timestamp attachment, or process restart.
+- Acquire migration locks in producer write order before altering schema to
+  avoid lock inversion during concurrent writes.
 
 ## [0.2.0-beta.1] - 2026-09-08
 

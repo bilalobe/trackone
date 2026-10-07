@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add gateway `/readyz` reporting durable admission availability, database and
+  producer recovery state, timestamp backlog and attachment times, capacity
+  pressure, and process event counters. TSA outages and terminal timestamp
+  failures report degradation while local admission capacity remains.
+- Add optional Clap queue and retained-evidence byte limits with atomic
+  admission rejection, accepted idempotency replay at capacity, and continued
+  preservation of previously admitted evidence.
 - Expand detached conformance archives with 16 named disclosure and TSA
   evidence replays, explicit case reports, and schema-governed claims while
   retaining support for archives with the original claim set.
@@ -27,6 +34,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Use `/readyz` for Helm readiness probes and retain cheap `/healthz` liveness.
+  Backfill evidence accounting and timestamp operational metadata through an
+  additive migration; legacy enqueue ages use migration time and historical
+  attachment times remain unknown.
 - Centralize closure-policy rules across ledger validation, decoding, Merkle
   helpers, and gateway configuration. Validate RFC 3161 response-size and
   timeout limits before parsing or verifier execution.
@@ -63,6 +74,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Keep gateway readiness unavailable after PostgreSQL disk-full write errors
+  even when read probes succeed, and acquire migration locks in producer write
+  order before schema changes.
 - Remove the external OTS verifier deadline overflow panic by polling with
   elapsed-time comparisons.
 
