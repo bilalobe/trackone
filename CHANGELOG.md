@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Expand detached conformance archives with 16 named disclosure and TSA
+  evidence replays, explicit case reports, and schema-governed claims while
+  retaining support for archives with the original claim set.
+- Require the fresh PostgreSQL-backed HTTPS exchange before archive assembly,
+  enforce the 24-case matrix for both verifiers, select wrong-imprint fixtures
+  by predecessor digest, and cover fixture selection and inventory in CI.
 - Add shared ledger closure-policy validation and fallible RFC 3161 limit
   configuration through `VerificationPolicy::try_with_limits`, preserving
   the existing `with_limits` API.
@@ -31,6 +37,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   digest parsing, file access, or verifier execution for every proof kind,
   returning `ots-timeout-zero` or `ots-timeout-out-of-range`.
 
+- Replace manual gateway, exporter, and evidence CLI parsing with typed Clap
+  configuration, generated help, environment bindings, and validation before
+  database access or verification. Propagate startup, response-construction,
+  stdout, and shutdown-lock errors through the existing application boundaries.
+- Return fallible canonical JSON bytes and sort JSON/CBOR map entries directly;
+  update downstream consumers to propagate serialization failures.
+
 - Submit RFC 3161 timestamps through bounded background workers after listener
   binding and acknowledge admissions at durable commit. Persist retry metadata,
   fenced claim leases, and terminal failures through an additive database
@@ -52,6 +65,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Remove the external OTS verifier deadline overflow panic by polling with
   elapsed-time comparisons.
+
+- Replace remaining assumed-infallible conversions and result lookups in
+  ingest, RFC 3161 verification, and evidence projections with typed failures.
 
 ### Removed
 
