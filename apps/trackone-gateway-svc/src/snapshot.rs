@@ -195,6 +195,7 @@ fn read_material(
             ExportError::Unavailable
         });
     }
+    let response = response.ok_or(ExportError::Unavailable)?;
     let records = transaction
         .query(
             "SELECT record_cbor FROM trackone_vtl_sealed_record \
@@ -227,7 +228,7 @@ fn read_material(
         artifact_sha256: row.get(1),
         predecessor,
         records,
-        tsa_response: response.expect("checked above"),
+        tsa_response: response,
     })
 }
 

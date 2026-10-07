@@ -1,198 +1,138 @@
 //! Command-line entry point for VTL evidence verification and compaction.
 
-use std::path::PathBuf;
-use std::time::Duration;
-use trackone_evidence::vtl::{
-    RemoteOptions, VerificationScope, VerifyPolicy, compact_bundle, verify_archive,
-    verify_bundle_with_policy, verify_remote_bundle,
+mod cli;
+
+use std::{
+    io::{self, Write},
+    process::ExitCode,
 };
 
-fn usage() -> ! {
-    eprintln!(
-        "usage:\n  trackone-evidence verify (--root DIR | --archive FILE | --bundle-url URL --expected-segment-sha256 HEX --https-ca-file FILE) [--scope public_recompute|disclosed_batch_recompute|anchor_only] [--batch N ...] [--require-claimed-scope] [--json] [--pretty] [--tsa-ca-file FILE] [--tsa-intermediates-file FILE] [--tsa-crls-file FILE] [--tsa-policy OID] [--tsa-signer-cert-sha256 HEX] [--tsa-max-future-skew-seconds N] [--verifier-policy-id ID] [--verifier-policy-file FILE]\n  trackone-evidence compact --root DIR --output FILE [--include-extensions] [--tsa-ca-file FILE] [--tsa-intermediates-file FILE] [--tsa-crls-file FILE] [--tsa-policy OID] [--tsa-signer-cert-sha256 HEX] [--tsa-max-future-skew-seconds N] [--verifier-policy-id ID] [--verifier-policy-file FILE]"
-    );
-    std::process::exit(2);
-}
+use clap::Parser;
+use cli::{Cli, CompactArgs, EvidenceCommand, VerifyArgs, VerifyInput};
+use serde_json::Value;
+use trackone_evidence::vtl::{
+    compact_bundle, verify_archive, verify_bundle_with_policy, verify_remote_bundle,
+};
+use trackone_evidence::{EvidenceError, Result};
 
-fn take_value(args: &[String], idx: &mut usize, name: &str) -> String {
-    *idx += 1;
-    args.get(*idx).cloned().unwrap_or_else(|| {
-        eprintln!("missing value for {name}");
-        usage();
-    })
-}
-
-fn parse_policy_arg(args: &[String], idx: &mut usize, policy: &mut VerifyPolicy) -> bool {
-    match args[*idx].as_str() {
-        "--tsa-ca-file" => {
-            policy.tsa_ca_file = Some(PathBuf::from(take_value(args, idx, "--tsa-ca-file")));
-        }
-        "--tsa-intermediates-file" => {
-            policy.tsa_intermediates_file = Some(PathBuf::from(take_value(
-                args,
-                idx,
-                "--tsa-intermediates-file",
-            )));
-        }
-        "--tsa-crls-file" => {
-            policy.tsa_crls_file = Some(PathBuf::from(take_value(args, idx, "--tsa-crls-file")));
-        }
-        "--tsa-policy" => policy.tsa_policy_oid = Some(take_value(args, idx, "--tsa-policy")),
-        "--tsa-signer-cert-sha256" => {
-            let raw = take_value(args, idx, "--tsa-signer-cert-sha256");
-            policy.tsa_signer_cert_sha256 = Some(raw.parse().unwrap_or_else(|error| {
-                eprintln!("invalid --tsa-signer-cert-sha256: {error}");
-                usage();
-            }));
-        }
-        "--tsa-max-future-skew-seconds" => {
-            let raw = take_value(args, idx, "--tsa-max-future-skew-seconds");
-            let seconds = raw.parse::<u64>().unwrap_or_else(|_| {
-                eprintln!("invalid --tsa-max-future-skew-seconds");
-                usage();
-            });
-            policy.max_future_skew = Duration::from_secs(seconds);
-        }
-        "--verifier-policy-id" => {
-            policy.verifier_policy_id = Some(take_value(args, idx, "--verifier-policy-id"));
-        }
-        "--verifier-policy-file" => {
-            policy.verifier_policy_artifact = Some(PathBuf::from(take_value(
-                args,
-                idx,
-                "--verifier-policy-file",
-            )));
-        }
-        "--scope" => {
-            policy.selected_scope = Some(match take_value(args, idx, "--scope").as_str() {
-                "public_recompute" => VerificationScope::PublicRecompute,
-                "disclosed_batch_recompute" => VerificationScope::DisclosedBatchRecompute,
-                "anchor_only" => VerificationScope::AnchorOnly,
-                _ => {
-                    eprintln!("invalid --scope");
-                    usage();
-                }
-            });
-        }
-        "--batch" => {
-            let raw = take_value(args, idx, "--batch");
-            let number = raw.parse::<u64>().unwrap_or_else(|_| {
-                eprintln!("invalid --batch");
-                usage();
-            });
-            policy.selected_batches.insert(number);
-        }
-        "--require-claimed-scope" => policy.require_claimed_scope = true,
-        _ => return false,
-    }
-    true
-}
-
-fn run_verify(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
-    let mut root: Option<PathBuf> = None;
-    let mut archive: Option<PathBuf> = None;
-    let mut bundle_url: Option<String> = None;
-    let mut expected_segment_sha256: Option<String> = None;
-    let mut https_ca_file: Option<PathBuf> = None;
-    let mut json_mode = false;
-    let mut pretty = false;
-    let mut policy = VerifyPolicy::baseline();
-    let mut idx = 0;
-    while idx < args.len() {
-        match args[idx].as_str() {
-            "--root" => root = Some(PathBuf::from(take_value(args, &mut idx, "--root"))),
-            "--archive" => archive = Some(PathBuf::from(take_value(args, &mut idx, "--archive"))),
-            "--bundle-url" => bundle_url = Some(take_value(args, &mut idx, "--bundle-url")),
-            "--expected-segment-sha256" => {
-                expected_segment_sha256 =
-                    Some(take_value(args, &mut idx, "--expected-segment-sha256"));
-            }
-            "--https-ca-file" => {
-                https_ca_file = Some(PathBuf::from(take_value(args, &mut idx, "--https-ca-file")));
-            }
-            "--json" => json_mode = true,
-            "--pretty" => pretty = true,
-            _ if parse_policy_arg(args, &mut idx, &mut policy) => {}
-            _ => usage(),
-        }
-        idx += 1;
-    }
-    let summary = match (root, archive, bundle_url) {
-        (Some(root), None, None)
-            if expected_segment_sha256.is_none() && https_ca_file.is_none() =>
-        {
-            verify_bundle_with_policy(&root, &policy)?
-        }
-        (None, Some(archive), None)
-            if expected_segment_sha256.is_none() && https_ca_file.is_none() =>
-        {
-            verify_archive(&archive, &policy)?
-        }
-        (None, None, Some(url)) => verify_remote_bundle(
-            &RemoteOptions::new(
-                url,
-                expected_segment_sha256.unwrap_or_else(|| usage()),
-                https_ca_file.unwrap_or_else(|| usage()),
-            ),
-            &policy,
-        )?,
-        _ => usage(),
+fn run_verify(args: VerifyArgs) -> Result<()> {
+    let input = args.input()?;
+    let policy = args.policy.into_policy();
+    let summary = match input {
+        VerifyInput::Directory(root) => verify_bundle_with_policy(&root, &policy)?,
+        VerifyInput::Archive(archive) => verify_archive(&archive, &policy)?,
+        VerifyInput::Remote(options) => verify_remote_bundle(&options, &policy)?,
     };
-    if json_mode {
-        if pretty {
-            println!("{}", serde_json::to_string_pretty(&summary)?);
-        } else {
-            println!("{}", serde_json::to_string(&summary)?);
-        }
-    } else {
-        println!(
-            "Disclosure={} Overall={}",
-            summary["claimed_disclosure_class"], summary["overall"]
-        );
-    }
+    write_summary(&summary, args.json, args.pretty, &mut io::stdout().lock())?;
     if summary["overall"].as_str() != Some("success") {
-        return Err("verification did not succeed".into());
+        return Err(EvidenceError::VerificationFailed(
+            "verification did not succeed".into(),
+        ));
     }
     Ok(())
 }
 
-fn run_compact(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
-    let mut root: Option<PathBuf> = None;
-    let mut output: Option<PathBuf> = None;
-    let mut include_extensions = false;
-    let mut policy = VerifyPolicy::baseline();
-    let mut idx = 0;
-    while idx < args.len() {
-        match args[idx].as_str() {
-            "--root" => root = Some(PathBuf::from(take_value(args, &mut idx, "--root"))),
-            "--output" => output = Some(PathBuf::from(take_value(args, &mut idx, "--output"))),
-            "--include-extensions" => include_extensions = true,
-            _ if parse_policy_arg(args, &mut idx, &mut policy) => {}
-            _ => usage(),
+fn write_summary(summary: &Value, json: bool, pretty: bool, output: &mut impl Write) -> Result<()> {
+    if json {
+        if pretty {
+            serde_json::to_writer_pretty(&mut *output, summary)?;
+        } else {
+            serde_json::to_writer(&mut *output, summary)?;
         }
-        idx += 1;
+        writeln!(output)?;
+    } else {
+        writeln!(
+            output,
+            "Disclosure={} Overall={}",
+            summary["claimed_disclosure_class"], summary["overall"]
+        )?;
     }
+    output.flush()?;
+    Ok(())
+}
+
+fn run_compact(args: CompactArgs) -> Result<()> {
     compact_bundle(
-        &root.unwrap_or_else(|| usage()),
-        &output.unwrap_or_else(|| usage()),
-        &policy,
-        include_extensions,
+        &args.root,
+        &args.output,
+        &args.policy.into_policy(),
+        args.include_extensions,
     )?;
     Ok(())
 }
 
-fn main() {
-    let args = std::env::args().collect::<Vec<_>>();
-    let Some(command) = args.get(1).map(String::as_str) else {
-        usage();
+fn main() -> ExitCode {
+    let result = match Cli::parse().command {
+        EvidenceCommand::Verify(args) => run_verify(args),
+        EvidenceCommand::Compact(args) => run_compact(args),
     };
-    let result = match command {
-        "verify" => run_verify(&args[2..]),
-        "compact" => run_compact(&args[2..]),
-        _ => usage(),
-    };
-    if let Err(error) = result {
-        eprintln!("ERROR: {error}");
-        std::process::exit(1);
+    match result {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => {
+            let _ = writeln!(io::stderr().lock(), "ERROR: {error}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn summary_formatting_preserves_json_and_text_output() {
+        let summary = json!({"claimed_disclosure_class": "C", "overall": "success"});
+        let mut bytes = Vec::new();
+        write_summary(&summary, true, false, &mut bytes).unwrap();
+        assert_eq!(
+            bytes,
+            format!("{}\n", serde_json::to_string(&summary).unwrap()).as_bytes()
+        );
+        bytes.clear();
+        write_summary(&summary, true, true, &mut bytes).unwrap();
+        assert_eq!(
+            bytes,
+            format!("{}\n", serde_json::to_string_pretty(&summary).unwrap()).as_bytes()
+        );
+        bytes.clear();
+        write_summary(&summary, false, true, &mut bytes).unwrap();
+        assert_eq!(bytes, b"Disclosure=\"C\" Overall=\"success\"\n");
+    }
+
+    struct FailedOutput {
+        fail_flush: bool,
+    }
+
+    impl Write for FailedOutput {
+        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+            if self.fail_flush {
+                Ok(bytes.len())
+            } else {
+                Err(io::Error::new(
+                    io::ErrorKind::BrokenPipe,
+                    "output was closed",
+                ))
+            }
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Err(io::Error::new(
+                io::ErrorKind::BrokenPipe,
+                "output was closed",
+            ))
+        }
+    }
+
+    #[test]
+    fn output_write_and_flush_failures_return_errors() {
+        for json in [false, true] {
+            for fail_flush in [false, true] {
+                let error =
+                    write_summary(&json!({}), json, false, &mut FailedOutput { fail_flush })
+                        .unwrap_err();
+                assert!(error.to_string().contains("output was closed"));
+            }
+        }
     }
 }

@@ -103,7 +103,7 @@ pub(super) fn result_value(
             .and_then(Value::as_object_mut)
             .and_then(|channels| channels.get_mut("tsa"))
             .and_then(Value::as_object_mut)
-            .expect("TSA result object is constructed above")
+            .ok_or_else(|| super::bad("verification result is missing the TSA channel object"))?
             .remove("reason");
     }
     Ok(Value::Object(result))

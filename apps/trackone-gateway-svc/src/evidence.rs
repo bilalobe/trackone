@@ -5,7 +5,7 @@ use axum::{
     Router,
     body::Bytes,
     extract::{Path, State},
-    http::{HeaderMap, StatusCode},
+    http::{HeaderMap, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
     routing::{get, post},
 };
@@ -67,7 +67,7 @@ fn valid_token(value: &str) -> bool {
 impl DisclosureAuth {
     pub fn from_json(bytes: &[u8]) -> Result<Self, String> {
         let entries: Vec<Credential> = serde_json::from_slice(bytes)
-            .map_err(|_| "invalid disclosure grants JSON".to_string())?;
+            .map_err(|error| format!("invalid disclosure grants JSON: {error}"))?;
         let mut credentials = Vec::new();
         let mut hashes = BTreeSet::new();
         for entry in entries {
@@ -194,16 +194,23 @@ async fn authenticate_request(
         let parts: Vec<_> = path.split('/').collect();
         if parts.len() >= 6 && hex(parts[3], 32) && number(parts[5]).is_some() {
             let monitor = format!("/v2/ledgers/{}/segments/{}/{MANIFEST}", parts[3], parts[5]);
-            response
-                .headers_mut()
-                .insert("location", monitor.parse().unwrap());
+            let Ok(location) = monitor.parse() else {
+                return Failure::Unavailable("service").into_response();
+            };
+            response.headers_mut().insert("location", location);
         }
     }
     if matches!(method, axum::http::Method::GET | axum::http::Method::HEAD)
         && response.status() == StatusCode::OK
         && response.headers().contains_key("etag")
     {
-        let etag = response.headers()["etag"].to_str().unwrap();
+        let Some(etag) = response
+            .headers()
+            .get("etag")
+            .and_then(|value| value.to_str().ok())
+        else {
+            return Failure::Unavailable("service").into_response();
+        };
         let matches = |name: &str, weak: bool| {
             headers
                 .get_all(name)
@@ -331,22 +338,24 @@ impl IntoResponse for Failure {
         }
         let mut response = (status, axum::Json(body)).into_response();
         if status != StatusCode::ACCEPTED {
-            response
-                .headers_mut()
-                .insert("content-type", "application/problem+json".parse().unwrap());
+            response.headers_mut().insert(
+                "content-type",
+                HeaderValue::from_static("application/problem+json"),
+            );
         }
-        response
-            .headers_mut()
-            .insert("cache-control", "private, no-store".parse().unwrap());
+        response.headers_mut().insert(
+            "cache-control",
+            HeaderValue::from_static("private, no-store"),
+        );
         if status == StatusCode::UNAUTHORIZED {
             response
                 .headers_mut()
-                .insert("www-authenticate", "Bearer".parse().unwrap());
+                .insert("www-authenticate", HeaderValue::from_static("Bearer"));
         }
         if status == StatusCode::ACCEPTED {
             response
                 .headers_mut()
-                .insert("retry-after", "5".parse().unwrap());
+                .insert("retry-after", HeaderValue::from_static("5"));
         }
         response
     }
@@ -374,7 +383,7 @@ fn authorize(
     }
     Ok((grant, segment))
 }
-fn object_response(bytes: Vec<u8>, path: &str, manifest: &str) -> Response {
+fn object_response(bytes: Vec<u8>, path: &str, manifest: &str) -> Result<Response, Failure> {
     let digest = sha256_hex(&bytes);
     let media = if path.ends_with(".json") {
         "application/json"
@@ -395,10 +404,10 @@ fn object_response(bytes: Vec<u8>, path: &str, manifest: &str) -> Response {
     ] {
         response.headers_mut().insert(
             axum::http::HeaderName::from_static(name),
-            value.parse().unwrap(),
+            value.parse().map_err(|_| Failure::Unavailable("service"))?,
         );
     }
-    response
+    Ok(response)
 }
 async fn database_job<F>(state: EvidenceState, job: F) -> Result<Response, Failure>
 where
@@ -489,11 +498,12 @@ async fn current_object(
         let (manifest, files) = anchor_view(client, &ledger, segment)?;
         let link = format!("{}/{MANIFEST}", base(&ledger, segment));
         if object == MANIFEST {
-            return Ok(object_response(
-                serde_json::to_vec_pretty(&manifest).unwrap(),
+            return object_response(
+                serde_json::to_vec_pretty(&manifest)
+                    .map_err(|_| Failure::Unavailable("integrity"))?,
                 MANIFEST,
                 &link,
-            ));
+            );
         }
         if object == "timestamp.tsr" {
             match manifest["anchoring"]["tsa"]["status"].as_str() {
@@ -506,7 +516,7 @@ async fn current_object(
             .into_iter()
             .find(|(path, _)| path == &object)
             .ok_or(Failure::Absent)?;
-        Ok(object_response(bytes, &object, &link))
+        object_response(bytes, &object, &link)
     })
     .await
 }
@@ -556,7 +566,7 @@ async fn generate(
             .map(|s| {
                 s.split(';')
                     .next()
-                    .unwrap()
+                    .unwrap_or(s)
                     .trim()
                     .eq_ignore_ascii_case("application/json")
             })
@@ -571,7 +581,7 @@ async fn generate(
     }
     database_job(state, move |client| {
         let (_, anchor_files) = anchor_view(client, &ledger, segment)?;
-        let artifact = &anchor_files[0].1;
+        let artifact = &anchor_files.first().ok_or(Failure::Unavailable("integrity"))?.1;
         let decoded = decode_segment_record(artifact).map_err(|_| Failure::Unavailable("integrity"))?;
         if class == DisclosureClass::B && (batches.len() >= decoded.batch_roots.len() || batches.iter().any(|b| *b >= decoded.batch_roots.len() as u64)) { return Err(Failure::Invalid); }
         let prepared = prepare_snapshot(client, &ledger, segment, class, &batches)?;
@@ -591,8 +601,8 @@ async fn generate(
         tx.commit()?;
         let url = format!("{}/disclosures/{digest}/", base(&ledger, segment));
         let mut response = (if created { StatusCode::CREATED } else { StatusCode::OK }, axum::Json(json!({"ledger_id":ledger,"segment_number":segment.to_string(),"class":selection.class,"manifest_sha256":digest,"artifact_sha256":sha256_hex(artifact),"bundle_url":url}))).into_response();
-        response.headers_mut().insert("location", format!("{url}{MANIFEST}").parse().unwrap());
-        response.headers_mut().insert("cache-control", "private, no-store".parse().unwrap());
+        response.headers_mut().insert("location", format!("{url}{MANIFEST}").parse().map_err(|_| Failure::Unavailable("service"))?);
+        response.headers_mut().insert("cache-control", HeaderValue::from_static("private, no-store"));
         Ok(response)
     }).await
 }
@@ -652,18 +662,27 @@ async fn bundle_object(
         let (_, batches) = selection.parse().map_err(|_| Failure::Unavailable("integrity"))?;
         if !grant.permits(&selection.class, &batches) { return Err(Failure::Denied); }
         let link = format!("{}/disclosures/{digest}/{MANIFEST}", base(&ledger, segment));
-        if path == MANIFEST { return Ok(object_response(bytes, &path, &link)); }
+        if path == MANIFEST { return object_response(bytes, &path, &link); }
         let expected = reference_digest(&manifest["artifacts"], &path).ok_or(Failure::Absent)?;
         let row = client.query_opt("SELECT bytes FROM trackone_vtl_disclosure_object WHERE ledger_id=$1 AND segment_number=$2::text::numeric AND manifest_sha256=$3 AND path=$4", &[&ledger, &segment.to_string(), &digest, &path])?.ok_or(Failure::Unavailable("integrity"))?;
         let bytes: Vec<u8> = row.get(0);
         if sha256_hex(&bytes) != expected { return Err(Failure::Unavailable("integrity")); }
-        Ok(object_response(bytes, &path, &link))
+        object_response(bytes, &path, &link)
     }).await
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn invalid_generated_header_returns_service_failure() {
+        let error = object_response(vec![], "segment.cbor", "invalid\nmanifest").unwrap_err();
+        assert_eq!(
+            error.into_response().status(),
+            StatusCode::SERVICE_UNAVAILABLE
+        );
+    }
 
     fn credential() -> Value {
         json!([{"principal_id":"auditor","token":"test-disclosure-credential-0000000000","grants":[{"ledger_id":"b7a1d5e40c6f438e9a75db27c96f31aa","read_segments":true,"classes":["B"],"batches":["0"]}]}])

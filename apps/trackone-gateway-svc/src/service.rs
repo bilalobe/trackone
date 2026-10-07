@@ -366,7 +366,10 @@ where
             if let Some(envelope) = envelope {
                 producer.admit_batch_idempotent(key, records, &envelope)?
             } else {
-                producer.admit_idempotent(key, records.into_iter().next().expect("one record"))?
+                let record = records.into_iter().next().ok_or_else(|| {
+                    ProducerError::Store("single-record admission contains no record".into())
+                })?;
+                producer.admit_idempotent(key, record)?
             }
         };
 
@@ -536,12 +539,12 @@ fn expand_gzip(input: &[u8], limit: usize) -> Result<Vec<u8>, BatchEnvelopeError
     let expected_crc = u32::from_le_bytes(
         input[trailer..trailer + 4]
             .try_into()
-            .expect("checked gzip trailer"),
+            .map_err(|_| BatchEnvelopeError::Malformed("invalid gzip CRC trailer"))?,
     );
     let expected_size = u32::from_le_bytes(
         input[trailer + 4..end]
             .try_into()
-            .expect("checked gzip trailer"),
+            .map_err(|_| BatchEnvelopeError::Malformed("invalid gzip size trailer"))?,
     );
     if crc.sum() != expected_crc || crc.amount() != expected_size {
         return Err(BatchEnvelopeError::Malformed(

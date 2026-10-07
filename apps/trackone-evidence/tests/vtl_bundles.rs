@@ -803,5 +803,8 @@ fn cli_rejects_the_removed_partial_verification_scope_token() {
         .unwrap();
     assert_eq!(output.status.code(), Some(2));
     assert!(output.stdout.is_empty());
-    assert!(String::from_utf8_lossy(&output.stderr).contains("invalid --scope"));
+    let error = String::from_utf8_lossy(&output.stderr);
+    assert!(error.contains("--scope"));
+    assert!(error.contains("partial_verification"));
+    assert!(error.contains("possible values"));
 }

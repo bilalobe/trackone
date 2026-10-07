@@ -338,7 +338,10 @@ impl TimestampWorkers {
                                 continue;
                             }
                         }
-                        let connected = store.as_mut().expect("connected worker");
+                        let Some(connected) = store.as_mut() else {
+                            pause(&stop);
+                            continue;
+                        };
                         if let Some((claim, result)) = pending.as_ref() {
                             match connected.finish_timestamp(claim, result, &config) {
                                 Ok(_) => pending = None,
@@ -391,7 +394,11 @@ impl TimestampWorkers {
     }
 
     pub fn stop_claiming(&self) {
-        *self.stop.0.lock().expect("worker stop mutex") = true;
+        *self
+            .stop
+            .0
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = true;
         self.stop.1.notify_all();
     }
 }
@@ -408,19 +415,43 @@ impl Drop for TimestampWorkers {
 }
 
 fn stopped(stop: &Stop) -> bool {
-    *stop.0.lock().expect("worker stop mutex")
+    // A poisoned shutdown mutex stops further claims rather than panicking.
+    stop.0.lock().map_or(true, |guard| *guard)
 }
 fn pause(stop: &Stop) {
-    let _ = stop.1.wait_timeout_while(
-        stop.0.lock().expect("worker stop mutex"),
-        Duration::from_secs(1),
-        |value| !*value,
-    );
+    let Ok(guard) = stop.0.lock() else {
+        return;
+    };
+    let _ = stop
+        .1
+        .wait_timeout_while(guard, Duration::from_secs(1), |value| !*value);
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn poisoned_shutdown_mutex_stops_claims_and_allows_cleanup() {
+        let stop = Arc::new((Mutex::new(false), Condvar::new()));
+        let poison = Arc::clone(&stop);
+        assert!(
+            thread::spawn(move || {
+                let _guard = poison.0.lock().unwrap();
+                panic!("simulate a panic while holding the shutdown mutex");
+            })
+            .join()
+            .is_err()
+        );
+        assert!(stopped(&stop));
+        pause(&stop);
+        let workers = TimestampWorkers {
+            stop,
+            handles: Vec::new(),
+        };
+        workers.stop_claiming();
+        drop(workers);
+    }
 
     #[test]
     fn backoff_is_capped_and_overflow_safe() {

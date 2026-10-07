@@ -127,7 +127,7 @@ pub fn verify_remote_bundle(options: &RemoteOptions, policy: &VerifyPolicy) -> R
 
     let mut result = verify_bundle_with_policy(temporary.path(), policy)?;
     if expected_mismatch {
-        add_integrity_failure(&mut result);
+        add_integrity_failure(&mut result)?;
     }
     Ok(result)
 }
@@ -152,20 +152,21 @@ fn consumed_batches(
         .collect()
 }
 
-fn add_integrity_failure(result: &mut Value) {
+fn add_integrity_failure(result: &mut Value) -> Result<()> {
     let object = result
         .as_object_mut()
-        .expect("local verification always returns an object");
+        .ok_or_else(|| bad("local verification result must be an object"))?;
     let failures = object
         .entry("failure_reasons")
         .or_insert_with(|| json!([]))
         .as_array_mut()
-        .expect("failure_reasons is an array");
+        .ok_or_else(|| bad("verification failure_reasons must be an array"))?;
     if !failures.iter().any(|value| value == "commitment_mismatch") {
         failures.push(json!("commitment_mismatch"));
         failures.sort_by(|left, right| left.as_str().cmp(&right.as_str()));
     }
     object.insert("overall".into(), json!("failure"));
+    Ok(())
 }
 
 impl Retriever<'_> {
@@ -347,8 +348,10 @@ fn encode_path(path: &str) -> String {
         if byte.is_ascii_alphanumeric() || matches!(byte, b'/' | b'-' | b'.' | b'_' | b'~') {
             encoded.push(char::from(byte));
         } else {
-            use std::fmt::Write as _;
-            write!(encoded, "%{byte:02X}").expect("writing to String cannot fail");
+            const HEX: &[u8; 16] = b"0123456789ABCDEF";
+            encoded.push('%');
+            encoded.push(char::from(HEX[usize::from(byte >> 4)]));
+            encoded.push(char::from(HEX[usize::from(byte & 0x0f)]));
         }
     }
     encoded
@@ -408,6 +411,17 @@ fn write_staged(root: &Path, relative: &str, bytes: &[u8]) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn malformed_result_projection_returns_an_error() {
+        assert!(add_integrity_failure(&mut json!([])).is_err());
+        assert!(add_integrity_failure(&mut json!({"failure_reasons": "wrong type"})).is_err());
+        let mut result = json!({"overall": "success"});
+        add_integrity_failure(&mut result).unwrap();
+        add_integrity_failure(&mut result).unwrap();
+        assert_eq!(result["overall"], "failure");
+        assert_eq!(result["failure_reasons"], json!(["commitment_mismatch"]));
+    }
 
     #[test]
     fn url_encoding_preserves_special_filename_octets_as_data() {

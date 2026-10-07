@@ -12,6 +12,20 @@ no binding-layer dependency.
 
 ## Runtime configuration
 
+Both `trackone-vtl-gateway` and `trackone-vtl-export` use Clap for typed options,
+environment variables, and generated `--help` / `--version` output. Existing
+`TRACKONE_*` names and runtime defaults are preserved. Command-line options
+override environment values; omitted options use their defaults. Invalid
+values fail startup instead of silently selecting a default.
+
+Run `cargo run --locked -p trackone-gateway-svc --bin trackone-vtl-gateway -- --help`
+to see every setting, its environment variable, and its default. Most option
+names correspond to their environment suffix, for example
+`--bind` / `TRACKONE_BIND` and `--tsa-max-attempts` /
+`TRACKONE_TSA_MAX_ATTEMPTS`. The database connection is `--db-url`
+(`--database-url` is an alias), backed by `TRACKONE_DATABASE_URL`.
+Credential and database URL environment values are hidden in help output.
+
 The binary requires:
 
 - `TRACKONE_DATABASE_URL`
@@ -38,6 +52,17 @@ TSA-signed `genTime` over the gateway clock. It defaults to `0` and accepts
 integer seconds from `0` through `3600`; invalid values fail gateway startup.
 `TRACKONE_INGEST_BEARER_TOKEN_PREVIOUS` optionally keeps the prior credential
 valid during a bounded two-token rotation window.
+
+`TRACKONE_INTERVAL_MS` defaults to `60000` and must be positive.
+`TRACKONE_BATCH_RECORD_LIMIT` defaults to `1024` and must be a power of two
+through `2^63`. Optional record and size limits must be positive when supplied.
+TSA workers use `TRACKONE_TSA_WORKER_CONCURRENCY` (default `2`, range `1–16`),
+`TRACKONE_TSA_MAX_ATTEMPTS` (default `20`, range `1–1000`),
+`TRACKONE_TSA_RETRY_INITIAL_MS` (default `5000`), and
+`TRACKONE_TSA_RETRY_MAX_MS` (default `300000`). Retry delays must be positive,
+ordered from initial to maximum, and no greater than `86400000` milliseconds.
+These settings, ingest credentials, grants JSON, and TSA validation material
+are checked before connecting to PostgreSQL.
 
 PostgreSQL uses hostname-verified TLS by default
 (`TRACKONE_POSTGRES_TLS_MODE=verify-full`). Set
@@ -160,3 +185,8 @@ availability responses, grant configuration, fixtures, and independent retrieval
 Helm mounts an existing `grants.json` Secret through
 `gateway.disclosure.existingSecret`. The additive snapshot migration runs at
 startup; existing sealed segments are unchanged.
+
+The exporter shares the gateway's `--db-url`, `--postgres-tls-mode`, and
+`--postgres-ca-file` options and their environment bindings. Its existing
+`--ledger-id`, `--segment-number`, `--class`, repeatable `--batch`, and
+`--output` arguments are listed by `trackone-vtl-export --help`.

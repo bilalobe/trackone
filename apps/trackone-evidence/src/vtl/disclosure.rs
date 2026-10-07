@@ -133,7 +133,10 @@ pub(super) fn validate_disclosure(
         if !consume.contains(&number_u64) {
             continue;
         }
-        let number = usize::try_from(number_u64).expect("validated above");
+        let Ok(number) = usize::try_from(number_u64) else {
+            conclusions.fail("insufficient_disclosure");
+            return false;
+        };
         let expected = expected_opening_count(segment, batch_count, number_u64);
         let mut pending = BTreeSet::new();
         let mut leaves = match opening_leaves(root, opening, &mut pending) {

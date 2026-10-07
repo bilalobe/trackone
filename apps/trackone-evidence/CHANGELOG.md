@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Propagate malformed remote/result projections and invalid disclosure
+  index conversions through verification failures instead of panicking;
+  preserve deterministic URL percent encoding without formatting assumptions.
+
+- Replace manual CLI parsing with typed Clap `verify` and `compact` subcommands,
+  shared policy arguments, generated help/version output, and validation of
+  mutually exclusive inputs and required remote-retrieval options.
+- Preserve verifier results and exit statuses while returning stdout write and
+  flush failures through the evidence error type instead of panicking.
+
 - Keep producer manifests on the current version-one slate and expose the
   implementation through `trackone_evidence::vtl`.
 - Advance verifier results to the current contract, drop the result `version`

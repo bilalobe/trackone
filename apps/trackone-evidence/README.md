@@ -24,6 +24,18 @@ bounded reads, digest-bound artifact access, and Linux race-resistant opening.
 Verification and deterministic carriage consume those boundaries rather than
 performing direct filesystem access.
 
+The CLI uses Clap for typed `verify` and `compact` subcommands and shared
+verifier-policy options. Existing flag names, baseline policy defaults,
+repeatable `--batch` selections, and JSON/text output formats are preserved.
+Use `trackone-evidence --help`, `trackone-evidence verify --help`, or
+`trackone-evidence compact --help` for generated option documentation.
+`--version` is available at the top level and on both subcommands.
+
+Malformed command lines exit with status `2` before file or network access.
+Operational errors and unsuccessful verification exit with status `1`;
+evaluable verification failures still emit their result when `--json` is
+selected. `--pretty` indents JSON only when combined with `--json`.
+
 ## Verify
 
 Verify a directory bundle:
@@ -37,6 +49,23 @@ cargo run --locked -p trackone-evidence -- verify \
   --tsa-signer-cert-sha256 HEX \
   --json --pretty
 ```
+
+Verification requires exactly one input source: `--root`, `--archive`, or
+`--bundle-url`. Remote verification also requires an independently provisioned
+segment digest and the HTTPS trust anchors:
+
+```bash
+trackone-evidence verify --bundle-url https://example.test/bundle/ \
+  --expected-segment-sha256 HEX --https-ca-file https-root.pem \
+  --tsa-ca-file tsa-root.pem --tsa-crls-file tsa-crls.pem \
+  --tsa-policy 1.3.6.1.4.1.55555.1 --tsa-signer-cert-sha256 HEX \
+  --json
+```
+
+`--expected-segment-sha256` and `--https-ca-file` apply only to `--bundle-url`.
+Expected segment digests and TSA signer fingerprints must contain 64 lowercase
+hexadecimal characters. Batch numbers and future-skew seconds accept uint64
+values. Policy validation remains part of the reusable verifier.
 
 Use `--tsa-intermediates-file` when the deployment validation archive has an
 intermediate CA. The baseline TSA channel is mandatory; a pending producer

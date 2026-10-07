@@ -6,6 +6,12 @@ All notable changes to trackone-gateway-svc will be documented in this file.
 
 ### Changed
 
+- Centralize gateway and exporter runtime options with Clap, preserving existing
+  environment bindings and defaults, with generated help and validation before
+  database connection.
+- Return contextual startup errors, propagate fallible response construction,
+  and stop timestamp claims safely when the shutdown mutex is poisoned.
+
 - Use shared ledger closure-policy validation for producer configuration
   while preserving existing configuration error messages.
 
