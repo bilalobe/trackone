@@ -341,10 +341,46 @@ impl VerificationPolicy {
         self
     }
 
+    /// Set verification limits, which are validated when verification begins.
+    /// Use [`Self::try_with_limits`] to reject invalid limits during configuration.
     pub fn with_limits(mut self, max_response_bytes: usize, command_timeout: Duration) -> Self {
         self.max_response_bytes = max_response_bytes;
         self.command_timeout = command_timeout;
         self
+    }
+
+    /// Set limits and reject zero sizes, zero timeouts, or platform-unrepresentable
+    /// timeouts before verification starts. No additional maximum is imposed.
+    pub fn try_with_limits(
+        self,
+        max_response_bytes: usize,
+        command_timeout: Duration,
+    ) -> Result<Self, VerificationError> {
+        let policy = self.with_limits(max_response_bytes, command_timeout);
+        policy.validate()?;
+        Ok(policy)
+    }
+
+    /// Validate response-size and command-timeout limits without parsing a
+    /// response or launching OpenSSL. Verification repeats this platform-dependent
+    /// check even if the caller has already validated the policy.
+    pub fn validate(&self) -> Result<(), VerificationError> {
+        if self.max_response_bytes == 0 {
+            return Err(VerificationError::Configuration(
+                "max_response_bytes must be positive".into(),
+            ));
+        }
+        if self.command_timeout.is_zero() {
+            return Err(VerificationError::Configuration(
+                "command_timeout must be positive".into(),
+            ));
+        }
+        if Instant::now().checked_add(self.command_timeout).is_none() {
+            return Err(VerificationError::Configuration(
+                "command_timeout is out of range for this platform".into(),
+            ));
+        }
+        Ok(())
     }
 
     /// Set the maximum amount by which `TSTInfo.genTime` may lead the local
@@ -528,6 +564,7 @@ fn verify_response_with_clock(
     policy: &VerificationPolicy,
     clock: impl FnOnce() -> Result<Duration, VerificationError>,
 ) -> Result<VerifiedTimestamp, VerificationError> {
+    policy.validate()?;
     if response_der.len() > policy.max_response_bytes {
         return Err(VerificationError::ResponseTooLarge {
             actual: response_der.len(),
@@ -2329,9 +2366,54 @@ mod tests {
 
     #[test]
     fn oversized_response_is_rejected_before_parsing() {
-        let policy = fixture_policy().with_limits(16, Duration::from_secs(1));
+        let policy = fixture_policy()
+            .try_with_limits(16, Duration::from_secs(1))
+            .unwrap();
         let error = verify_response(FIXTURE_RESPONSE, [0; 32], &policy).unwrap_err();
         assert!(matches!(error, VerificationError::ResponseTooLarge { .. }));
+    }
+
+    #[test]
+    fn verification_limits_reject_invalid_configuration_before_verification() {
+        let base = fixture_policy();
+        assert!(base.validate().is_ok());
+        for (size, timeout, message) in [
+            (
+                0,
+                Duration::from_secs(1),
+                "max_response_bytes must be positive",
+            ),
+            (1, Duration::ZERO, "command_timeout must be positive"),
+            (
+                1,
+                Duration::MAX,
+                "command_timeout is out of range for this platform",
+            ),
+        ] {
+            let error = base.clone().try_with_limits(size, timeout).unwrap_err();
+            assert!(
+                matches!(&error, VerificationError::Configuration(reason) if reason == message)
+            );
+
+            let policy = base.clone().with_limits(size, timeout);
+            for response in [&[][..], FIXTURE_RESPONSE] {
+                let error = verify_response_with_clock(response, [0; 32], &policy, || {
+                    panic!("invalid limits must be rejected before reading the clock")
+                })
+                .unwrap_err();
+                assert!(
+                    matches!(error, VerificationError::Configuration(reason) if reason == message)
+                );
+            }
+        }
+        for (size, timeout) in [
+            (1, Duration::from_nanos(1)),
+            (usize::MAX, Duration::from_secs(1)),
+        ] {
+            let policy = base.clone().try_with_limits(size, timeout).unwrap();
+            assert_eq!(policy.max_response_bytes, size);
+            assert_eq!(policy.command_timeout, timeout);
+        }
     }
 
     fn timestamp_request(digest: [u8; 32], cert_req: bool) -> Vec<u8> {

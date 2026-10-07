@@ -127,21 +127,21 @@ fn wait_for_exit(
     mut child: std::process::Child,
     timeout: Duration,
 ) -> core::result::Result<Option<std::process::ExitStatus>, std::io::Error> {
-    let deadline = Instant::now() + timeout;
+    let started = Instant::now();
 
     loop {
         if let Some(status) = child.try_wait()? {
             return Ok(Some(status));
         }
 
-        let now = Instant::now();
-        if now >= deadline {
+        let elapsed = started.elapsed();
+        if elapsed >= timeout {
             let _ = child.kill();
             let _ = child.wait();
             return Ok(None);
         }
 
-        let remaining = deadline.saturating_duration_since(now);
+        let remaining = timeout.saturating_sub(elapsed);
         thread::sleep(OTS_VERIFY_POLL_INTERVAL.min(remaining));
     }
 }
@@ -517,6 +517,75 @@ fn describe_detached_ots_proof_impl(
     Ok(description)
 }
 
+/// Configuration for proof verification, including the external verifier fallback.
+#[derive(Clone, Debug)]
+pub struct OtsVerifyOptions<'a> {
+    /// Permit placeholder and stationary proofs to report a pending state.
+    pub allow_placeholder: bool,
+    /// Expected SHA-256 hex digest of the sibling artifact, when supplied.
+    pub expected_artifact_sha: Option<&'a str>,
+    /// External verifier executable; `None` searches for `ots` on `PATH`.
+    pub ots_binary: Option<&'a Path>,
+    /// External verifier timeout, which must be positive and representable
+    /// as an instant on the current platform.
+    pub timeout: Duration,
+}
+
+impl Default for OtsVerifyOptions<'_> {
+    fn default() -> Self {
+        Self {
+            allow_placeholder: false,
+            expected_artifact_sha: None,
+            ots_binary: None,
+            timeout: default_verify_timeout(),
+        }
+    }
+}
+
+impl OtsVerifyOptions<'_> {
+    /// Validate the timeout without reading proofs or launching a verifier.
+    ///
+    /// Representability depends on the current platform and instant. Verification
+    /// repeats this check even if the caller previously validated these options.
+    /// Expected artifact digests are checked separately during verification.
+    pub fn validate(&self) -> Result<(), OtsConfigError> {
+        if self.timeout.is_zero() {
+            return Err(OtsConfigError::ZeroTimeout);
+        }
+        if Instant::now().checked_add(self.timeout).is_none() {
+            return Err(OtsConfigError::TimeoutOutOfRange);
+        }
+        Ok(())
+    }
+}
+
+/// Invalid OTS verification configuration.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OtsConfigError {
+    /// The timeout is zero.
+    ZeroTimeout,
+    /// The timeout cannot be added to the current instant on this platform.
+    TimeoutOutOfRange,
+}
+
+impl OtsConfigError {
+    /// Stable reason code also returned in [`OtsVerifyResult::reason`].
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::ZeroTimeout => "ots-timeout-zero",
+            Self::TimeoutOutOfRange => "ots-timeout-out-of-range",
+        }
+    }
+}
+
+impl std::fmt::Display for OtsConfigError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl std::error::Error for OtsConfigError {}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OtsStatus {
     Verified,
@@ -572,6 +641,15 @@ fn verify_ots_proof_impl(
     ots_binary: Option<&Path>,
     timeout: Duration,
 ) -> OtsVerifyResult {
+    let options = OtsVerifyOptions {
+        allow_placeholder,
+        expected_artifact_sha,
+        ots_binary,
+        timeout,
+    };
+    if let Err(error) = options.validate() {
+        return OtsVerifyResult::failure(OtsStatus::Failed, error.as_str());
+    }
     let expected_digest = match parse_expected_digest(expected_artifact_sha) {
         Ok(digest) => digest,
         Err(reason) => return OtsVerifyResult::failure(OtsStatus::Failed, reason),
@@ -714,6 +792,29 @@ fn verify_external_ots(
     }
 }
 
+/// Verify a proof using grouped options.
+///
+/// Timeout validation precedes digest parsing and file access for every proof
+/// kind, including native pending proofs and placeholders. Invalid options
+/// return a failed result with the corresponding [`OtsConfigError`] reason code.
+pub fn verify_ots_proof_with_options(
+    ots_path: &Path,
+    options: &OtsVerifyOptions<'_>,
+) -> OtsVerifyResult {
+    verify_ots_proof_impl(
+        ots_path,
+        options.allow_placeholder,
+        options.expected_artifact_sha,
+        options.ots_binary,
+        options.timeout,
+    )
+}
+
+/// Verify a proof with individual arguments.
+///
+/// This compatibility wrapper delegates to [`verify_ots_proof_with_options`].
+/// `None` selects the shared default timeout. Explicit timeouts must be positive
+/// and representable on this platform, even for native-only verification.
 pub fn verify_ots_proof_native(
     ots_path: &Path,
     allow_placeholder: bool,
@@ -721,13 +822,13 @@ pub fn verify_ots_proof_native(
     ots_binary: Option<&Path>,
     timeout: Option<Duration>,
 ) -> OtsVerifyResult {
-    verify_ots_proof_impl(
-        ots_path,
+    let options = OtsVerifyOptions {
         allow_placeholder,
         expected_artifact_sha,
         ots_binary,
-        timeout.unwrap_or_else(default_verify_timeout),
-    )
+        timeout: timeout.unwrap_or_else(default_verify_timeout),
+    };
+    verify_ots_proof_with_options(ots_path, &options)
 }
 
 fn validate_meta_sidecar_impl(
@@ -983,6 +1084,184 @@ mod tests {
             &pending_attestation_payload(uri),
         );
         detached_ots(file_digest, &timestamp)
+    }
+
+    #[test]
+    fn verification_options_validate_defaults_and_timeout_bounds() {
+        let defaults = OtsVerifyOptions::default();
+        assert!(!defaults.allow_placeholder);
+        assert!(defaults.expected_artifact_sha.is_none());
+        assert!(defaults.ots_binary.is_none());
+        assert_eq!(
+            defaults.timeout,
+            Duration::from_secs(OTS_VERIFY_TIMEOUT_SECS)
+        );
+        assert_eq!(defaults.validate(), Ok(()));
+
+        for (timeout, expected) in [
+            (Duration::from_nanos(1), Ok(())),
+            (Duration::ZERO, Err(OtsConfigError::ZeroTimeout)),
+            (Duration::MAX, Err(OtsConfigError::TimeoutOutOfRange)),
+        ] {
+            let options = OtsVerifyOptions {
+                timeout,
+                ..Default::default()
+            };
+            assert_eq!(options.validate(), expected);
+        }
+    }
+
+    #[test]
+    fn configuration_errors_expose_stable_reason_codes() {
+        for (error, reason) in [
+            (OtsConfigError::ZeroTimeout, "ots-timeout-zero"),
+            (
+                OtsConfigError::TimeoutOutOfRange,
+                "ots-timeout-out-of-range",
+            ),
+        ] {
+            assert_eq!(error.as_str(), reason);
+            assert_eq!(error.to_string(), reason);
+            let error_trait: &dyn std::error::Error = &error;
+            assert!(error_trait.source().is_none());
+        }
+    }
+
+    #[test]
+    fn invalid_timeouts_precede_proof_and_digest_handling_in_both_apis() {
+        let tmp = test_dir("invalid-timeouts");
+        let ots_path = tmp.path().join("2025-10-07.cbor.ots");
+        let digest = sha256_digest(b"day-bytes");
+        let proof_kinds = [
+            None,
+            Some(PLACEHOLDER_BYTES.to_vec()),
+            Some(pending_proof(&digest, "https://calendar.example")),
+            Some(format!("STATIONARY-OTS:{}\n", hex_lower(&digest)).into_bytes()),
+        ];
+
+        for proof in proof_kinds {
+            if let Some(proof) = proof {
+                fs::write(&ots_path, proof).unwrap();
+            }
+            for expected_artifact_sha in [None, Some("invalid-digest")] {
+                for (timeout, reason) in [
+                    (Duration::ZERO, "ots-timeout-zero"),
+                    (Duration::MAX, "ots-timeout-out-of-range"),
+                ] {
+                    let options = OtsVerifyOptions {
+                        allow_placeholder: true,
+                        expected_artifact_sha,
+                        timeout,
+                        ..Default::default()
+                    };
+                    for result in [
+                        verify_ots_proof_with_options(&ots_path, &options),
+                        verify_ots_proof_native(
+                            &ots_path,
+                            true,
+                            expected_artifact_sha,
+                            None,
+                            Some(timeout),
+                        ),
+                    ] {
+                        assert!(!result.ok);
+                        assert_eq!(result.status, OtsStatus::Failed);
+                        assert_eq!(result.reason, reason);
+                        assert!(result.bitcoin_attestation_heights.is_empty());
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn valid_options_and_compatibility_wrapper_return_equivalent_results() {
+        let tmp = test_dir("options-equivalence");
+        let artifact_path = tmp.path().join("2025-10-07.cbor");
+        let ots_path = artifact_path.with_extension("cbor.ots");
+        fs::write(&artifact_path, b"day-bytes").unwrap();
+        let digest = sha256_digest(b"day-bytes");
+        let expected_sha = hex_lower(&digest);
+
+        for proof in [
+            PLACEHOLDER_BYTES.to_vec(),
+            pending_proof(&digest, "https://calendar.example"),
+        ] {
+            fs::write(&ots_path, proof).unwrap();
+            let options = OtsVerifyOptions {
+                allow_placeholder: true,
+                expected_artifact_sha: Some(&expected_sha),
+                ..Default::default()
+            };
+            let grouped = verify_ots_proof_with_options(&ots_path, &options);
+            assert!(grouped.ok);
+            assert_eq!(grouped.status, OtsStatus::Pending);
+            for timeout in [None, Some(options.timeout)] {
+                let individual =
+                    verify_ots_proof_native(&ots_path, true, Some(&expected_sha), None, timeout);
+                assert_eq!(grouped.ok, individual.ok);
+                assert_eq!(grouped.status, individual.status);
+                assert_eq!(grouped.reason, individual.reason);
+                assert_eq!(
+                    grouped.bitcoin_attestation_heights,
+                    individual.bitcoin_attestation_heights
+                );
+            }
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn invalid_timeouts_never_start_external_verifier() {
+        let tmp = test_dir("invalid-timeouts-no-spawn");
+        let artifact_path = tmp.path().join("2025-10-07.cbor");
+        let ots_path = artifact_path.with_extension("cbor.ots");
+        fs::write(&artifact_path, b"day-bytes").unwrap();
+        fs::write(&ots_path, b"UNSUPPORTED_EXTERNAL_PROOF\n").unwrap();
+        let ots_binary = write_fake_ots_binary(tmp.path(), 0);
+        fs::write(&ots_binary, "#!/bin/sh\n: > \"$0.started\"\nexit 0\n").unwrap();
+        let marker = tmp.path().join("ots.started");
+
+        for timeout in [Duration::ZERO, Duration::MAX] {
+            let options = OtsVerifyOptions {
+                ots_binary: Some(&ots_binary),
+                timeout,
+                ..Default::default()
+            };
+            for result in [
+                verify_ots_proof_with_options(&ots_path, &options),
+                verify_ots_proof_native(&ots_path, false, None, Some(&ots_binary), Some(timeout)),
+            ] {
+                assert!(!result.ok);
+                assert_eq!(result.status, OtsStatus::Failed);
+                assert_eq!(result.reason, options.validate().unwrap_err().as_str());
+                assert!(!marker.exists());
+            }
+        }
+
+        let options = OtsVerifyOptions {
+            ots_binary: Some(&ots_binary),
+            ..Default::default()
+        };
+        let grouped = verify_ots_proof_with_options(&ots_path, &options);
+        let individual = verify_ots_proof_native(&ots_path, false, None, Some(&ots_binary), None);
+        assert!(grouped.ok);
+        assert_eq!(grouped.status, OtsStatus::Verified);
+        assert_eq!(grouped.reason, "ots-verified");
+        assert_eq!(grouped.ok, individual.ok);
+        assert_eq!(grouped.status, individual.status);
+        assert_eq!(grouped.reason, individual.reason);
+        assert!(marker.exists(), "fixture must mark a valid invocation");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn wait_for_exit_handles_maximum_duration_without_overflow() {
+        let tmp = test_dir("wait-maximum-duration");
+        let binary = write_fake_ots_binary(tmp.path(), 0);
+        let child = Command::new(binary).spawn().unwrap();
+        let status = wait_for_exit(child, Duration::MAX).unwrap().unwrap();
+        assert!(status.success());
     }
 
     #[test]

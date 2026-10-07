@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add `VerificationPolicy::try_with_limits` and `validate` to reject zero
+  response-size limits and zero or platform-unrepresentable timeouts during
+  configuration. Preserve `with_limits` and validate its limits before
+  response parsing or OpenSSL execution.
+
 - Validate disclosed RFC 3161 requests, including SHA-256 message imprint,
   `certReq`, and request/response nonce equality.
 - Reject `genTime` values beyond a deployment-configured maximum future skew.

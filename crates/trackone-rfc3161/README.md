@@ -19,6 +19,15 @@ Each retained diagnostic stream is capped at 64 KiB while excess bytes are
 discarded, and timeout cleanup kills/reaps the isolated verifier process group
 before joining both readers.
 
+`VerificationPolicy::try_with_limits(max_response_bytes, command_timeout)`
+returns a `Result` and rejects zero response-size limits, zero timeouts, and
+timeouts that cannot be added to the current instant on this platform.
+`VerificationPolicy::validate()` checks these limits without parsing a response
+or launching OpenSSL. The existing `with_limits(...) -> Self` API remains
+available; verification always validates limits at entry, before response-size
+checks, parsing, clock access, or subprocess execution. Defaults are unchanged,
+and no additional maximum is imposed on positive sizes or representable timeouts.
+
 Historical path evaluation uses the signed TSA-asserted `genTime`. It does not
 prove first observation, prevent every post-compromise backdating attack, or
 constitute comprehensive long-term validation. Only complete base CRLs are
