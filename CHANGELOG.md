@@ -7,7 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add shared ledger closure-policy validation and fallible RFC 3161 limit
+  configuration through `VerificationPolicy::try_with_limits`, preserving
+  the existing `with_limits` API.
+- Add firmware error formatting and `no_std` error-trait implementations for
+  core validation and pod emission errors.
+
+- Add `OtsVerifyOptions`, `OtsConfigError`, and `verify_ots_proof_with_options`
+  to `trackone-ots` for grouped library configuration and timeout validation,
+  preserving `verify_ots_proof_native` as a compatibility wrapper.
+
 ### Changed
+
+- Centralize closure-policy rules across ledger validation, decoding, Merkle
+  helpers, and gateway configuration. Validate RFC 3161 response-size and
+  timeout limits before parsing or verifier execution.
+- Expose wrapped ledger, SensorThings, core, and firmware errors through
+  `source()` without changing existing displayed messages.
+
+- Reject zero and platform-unrepresentable OTS verification timeouts before
+  digest parsing, file access, or verifier execution for every proof kind,
+  returning `ots-timeout-zero` or `ots-timeout-out-of-range`.
 
 - Submit RFC 3161 timestamps through bounded background workers after listener
   binding and acknowledge admissions at durable commit. Persist retry metadata,
@@ -25,6 +47,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bound verifier memory for disclosed record openings to a single record so a
   manifest that repeats references to one maximally sized artifact cannot
   drive aggregate allocation past the archive limits.
+
+### Fixed
+
+- Remove the external OTS verifier deadline overflow panic by polling with
+  elapsed-time comparisons.
 
 ### Removed
 
