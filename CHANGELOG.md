@@ -75,6 +75,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   compatibility path, alternative baseline anchor channels, and unscoped
   current-draft conformance wording.
 
+## [0.2.0-beta.1] - 2026-09-08
+
+### Added
+
+- Add a standalone gateway export command that builds immutable VTL disclosure
+  snapshots in private staging and publishes them atomically without replacing
+  an existing snapshot.
+- Add authenticated HTTPS retrieval of immutable VTL evidence bundles, with
+  bounded fetch deadlines and CBOR record scans.
+
+### Changed
+
+- Enforce a deployment-configured maximum future skew for TSA `genTime` during
+  timestamp verification, with gateway and Helm configuration.
+
+### Security
+
+- Bind external OTS verification to stable private snapshots of the expected
+  artifact and proof so path replacement or mutation cannot change the bytes
+  being verified.
+
 ## [0.1.0-beta.5] - 2026-08-08
 
 ### Added

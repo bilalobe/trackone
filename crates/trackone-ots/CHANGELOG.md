@@ -21,6 +21,14 @@ All notable changes to trackone-ots will be documented in this file.
 - Use elapsed-time comparisons for external verifier polling to remove the
   deadline overflow panic from oversized durations.
 
+## [0.2.0-beta.1] - 2026-09-08
+
+### Security
+
+- Stage stable private copies of the expected artifact and proof for external
+  verifier processes, preventing path replacement or mutation from changing
+  the verified bytes.
+
 ## [0.1.0-beta.5] - 2026-08-08
 
 ### Changed

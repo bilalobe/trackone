@@ -28,6 +28,19 @@ All notable changes to trackone-gateway-svc will be documented in this file.
 - Report locally queued timestamp work as `queued`, reserving producer
   `pending` claims for submission attempts that have left the local queue.
 
+## [0.2.0-beta.1] - 2026-09-08
+
+### Added
+
+- Export immutable VTL disclosure snapshots through a standalone command,
+  staging output privately and publishing it atomically without replacing an
+  existing snapshot.
+
+### Changed
+
+- Allow deployments to bound how far TSA `genTime` may be ahead of the gateway
+  clock, and expose the setting through environment and Helm configuration.
+
 ## [0.1.0-beta.5] - 2026-08-08
 
 ### Added
