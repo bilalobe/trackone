@@ -120,6 +120,9 @@ gateway:
     batchRecordLimit: "1024"
     maxBatchRecords: "1000"
     maxAdmissionBytes: "4194304"
+    # Empty means unlimited; otherwise a positive integer per ledger.
+    maxPendingTimestamps: ""
+    maxRetainedEvidenceBytes: ""
     emptyMode: suppress
     tsaUrl: https://tsa.example.invalid/tsr
     tsaPolicyOid: 1.3.6.1.4.1.55555.1
@@ -138,7 +141,7 @@ gateway:
     # Complete base CRLs covering every non-root certificate at TSA genTime.
     tsaCrlsPem: ""
   probes:
-    readinessPath: /healthz
+    readinessPath: /readyz
     livenessPath: /healthz
     readinessInitialDelay: 2
     readinessPeriod: 5

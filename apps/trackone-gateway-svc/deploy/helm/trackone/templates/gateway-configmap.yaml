@@ -21,6 +21,12 @@ data:
   TRACKONE_BATCH_RECORD_LIMIT: {{ .Values.gateway.env.batchRecordLimit | quote }}
   TRACKONE_MAX_BATCH_RECORDS: {{ .Values.gateway.env.maxBatchRecords | quote }}
   TRACKONE_MAX_ADMISSION_BYTES: {{ .Values.gateway.env.maxAdmissionBytes | quote }}
+  {{- if .Values.gateway.env.maxPendingTimestamps }}
+  TRACKONE_MAX_PENDING_TIMESTAMPS: {{ .Values.gateway.env.maxPendingTimestamps | quote }}
+  {{- end }}
+  {{- if .Values.gateway.env.maxRetainedEvidenceBytes }}
+  TRACKONE_MAX_RETAINED_EVIDENCE_BYTES: {{ .Values.gateway.env.maxRetainedEvidenceBytes | quote }}
+  {{- end }}
   TRACKONE_EMPTY_MODE: {{ .Values.gateway.env.emptyMode | quote }}
   TRACKONE_TSA_WORKER_CONCURRENCY: {{ .Values.gateway.env.tsaWorkerConcurrency | quote }}
   TRACKONE_TSA_MAX_ATTEMPTS: {{ .Values.gateway.env.tsaMaxAttempts | quote }}

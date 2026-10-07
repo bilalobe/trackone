@@ -227,3 +227,23 @@ TSA availability is not a health check requirement. Inspect queued, failed, and
 attached jobs through authenticated `GET /v2/segments/{number}/timestamp`.
 The gateway applies the additive queue metadata migration at startup. Failed
 jobs stop automatic submission and are not requeued by configuration changes.
+
+### Gateway readiness and admission capacity
+
+The default readiness probe uses `/readyz`; liveness uses `/healthz`. `/readyz`
+returns 503 when the admission database or producer is unavailable, observations
+are stale, shutdown is underway, or a configured admission capacity is exhausted.
+TSA retry errors and terminal failures report degradation without independently
+failing readiness. Operators can inspect its JSON for backlog age, last timestamp
+attachment, capacity pressure, and process event counters.
+
+`gateway.env.maxPendingTimestamps` and `gateway.env.maxRetainedEvidenceBytes`
+default to empty strings (unlimited). Set positive integer strings to configure
+per-ledger admission thresholds; the chart maps them to
+`TRACKONE_MAX_PENDING_TIMESTAMPS` and `TRACKONE_MAX_RETAINED_EVIDENCE_BYTES`.
+When using `gateway.existingConfigMap`, add those variables there if desired.
+Evidence bytes measure retained record, artifact, and timestamp payloads. Budget
+additional PostgreSQL storage for indexes, WAL, row overhead, and backups.
+Preservation operations may exceed admission thresholds; accepted idempotency
+keys still replay when capacity is exhausted. See the gateway README for complete
+failure conditions, migration considerations, and operator actions.
