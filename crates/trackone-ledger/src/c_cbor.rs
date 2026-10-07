@@ -166,12 +166,12 @@ fn encode_value(buf: &mut Vec<u8>, value: &Value) -> Result<()> {
             Ok(())
         }
         Value::Object(map) => {
-            let mut keys: Vec<&String> = map.keys().collect();
+            let mut entries: Vec<_> = map.iter().collect();
             // JSON objects restrict map keys to text strings.
             // For deterministic ordering (RFC 8949 Section 4.2.1), sort by:
             // 1) encoded key length, 2) lexicographic encoded key bytes.
             // For text-only keys this is equivalent to utf-8 length then bytes.
-            keys.sort_by(|a, b| {
+            entries.sort_by(|(a, _), (b, _)| {
                 let a_bytes = a.as_bytes();
                 let b_bytes = b.as_bytes();
                 a_bytes
@@ -179,10 +179,9 @@ fn encode_value(buf: &mut Vec<u8>, value: &Value) -> Result<()> {
                     .cmp(&b_bytes.len())
                     .then_with(|| a_bytes.cmp(b_bytes))
             });
-            cbor_map_len(buf, keys.len());
-            for key in keys {
+            cbor_map_len(buf, entries.len());
+            for (key, item) in entries {
                 cbor_text(buf, key);
-                let item = map.get(key).expect("key exists");
                 encode_value(buf, item)?;
             }
             Ok(())

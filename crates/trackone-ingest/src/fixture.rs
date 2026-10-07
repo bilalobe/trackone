@@ -82,13 +82,18 @@ pub fn emit_fixture(
         .map_err(|_| FixtureError::EncodeFailed)?
         .len();
 
-    let salt8: [u8; 8] = device.salt8().try_into().expect("checked salt8 length");
+    let salt8: [u8; 8] = device
+        .salt8()
+        .try_into()
+        .map_err(|_| FixtureError::Reject(RejectReason::Salt8Length))?;
     let tail = ((u64::from(dev_id) << 48) | u64::from(fc)).to_be_bytes();
     let nonce = framed_nonce(salt8, fc, tail);
     let aad = framed_aad(dev_id, msg_type, flags);
     let cipher = XChaCha20Poly1305::new_from_slice(device.ck_up())
         .map_err(|_| FixtureError::Reject(RejectReason::CkUpLength))?;
-    let nonce_ref = (&nonce[..]).try_into().expect("checked nonce length");
+    let nonce_ref = (&nonce[..])
+        .try_into()
+        .map_err(|_| FixtureError::EncryptFailed)?;
     let combined = cipher
         .encrypt(
             nonce_ref,

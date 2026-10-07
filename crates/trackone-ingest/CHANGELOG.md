@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Return typed fixture and nonce errors for salt, nonce, and counter-slice
+  conversion failures instead of panicking on assumed lengths.
+
 - Compute rejection-audit hashes directly with SHA-256 so framed admission no
   longer depends on the ledger crate for hashing or transitive Serde feature
   activation; the `std` feature now enables Serde's standard-library support

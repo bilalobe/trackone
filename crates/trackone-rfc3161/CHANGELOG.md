@@ -7,6 +7,10 @@
   configuration. Preserve `with_limits` and validate its limits before
   response parsing or OpenSSL execution.
 
+- Propagate generation-time bound and UTF-8 conversion failures instead of
+  panicking, match archived intermediate paths with their PEM material, and
+  encode PEM lines without fallible ASCII assumptions.
+
 - Validate disclosed RFC 3161 requests, including SHA-256 message imprint,
   `certReq`, and request/response nonce equality.
 - Reject `genTime` values beyond a deployment-configured maximum future skew.

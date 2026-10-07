@@ -181,14 +181,16 @@ impl TimestampGenerationTime {
         false
     }
 
-    fn openssl_attime_bounds(&self) -> (u64, u64) {
+    fn openssl_attime_bounds(&self) -> Result<(u64, u64), VerificationError> {
         let whole_second = self.unix_seconds();
-        let upper_bound = self.fractional_seconds.as_ref().map_or(whole_second, |_| {
+        let upper_bound = if self.fractional_seconds.is_some() {
+            whole_second.checked_add(1).ok_or_else(|| {
+                VerificationError::Malformed("TSTInfo genTime upper bound exceeds uint64".into())
+            })?
+        } else {
             whole_second
-                .checked_add(1)
-                .expect("DER DateTime range fits in u64 with one-second headroom")
-        });
-        (whole_second, upper_bound)
+        };
+        Ok((whole_second, upper_bound))
     }
 
     pub fn to_rfc3339(&self) -> String {
@@ -256,7 +258,11 @@ impl TimestampGenerationTime {
             {
                 Some(
                     std::str::from_utf8(&fraction[1..])
-                        .expect("ASCII digits are UTF-8")
+                        .map_err(|error| {
+                            VerificationError::Malformed(format!(
+                                "invalid TSTInfo genTime fraction: {error}"
+                            ))
+                        })?
                         .to_string(),
                 )
             }
@@ -805,7 +811,7 @@ fn verify_timestamp_with_openssl(
     // prevents either a just-expired or not-yet-valid certificate from being
     // accepted through truncation. CRL applicability is checked separately
     // below using exact RFC 5280 whole-second boundary comparisons.
-    let (lower_bound, upper_bound) = claimed_generation_time.openssl_attime_bounds();
+    let (lower_bound, upper_bound) = claimed_generation_time.openssl_attime_bounds()?;
     for at_time in [lower_bound, upper_bound] {
         let at_time = at_time.to_string();
         let mut command = Command::new(&policy.openssl_binary);
@@ -1193,17 +1199,9 @@ fn load_archive_configuration(
         &archive.trust_anchors_file.display().to_string(),
     )
     .map_err(archive_configuration_error)?;
-    if let Some(pem) = &intermediates_pem {
-        load_certificates_from_pem(
-            pem,
-            &archive
-                .intermediates_file
-                .as_ref()
-                .expect("PEM and path are present together")
-                .display()
-                .to_string(),
-        )
-        .map_err(archive_configuration_error)?;
+    if let (Some(pem), Some(path)) = (&intermediates_pem, &archive.intermediates_file) {
+        load_certificates_from_pem(pem, &path.display().to_string())
+            .map_err(archive_configuration_error)?;
     }
     let crls = load_crls_from_pem(&crls_pem, &archive.crls_file.display().to_string())
         .map_err(archive_configuration_error)?;
@@ -1358,7 +1356,7 @@ fn pem_encode(label: &str, der: &[u8]) -> String {
     let encoded = BASE64.encode(der);
     let mut output = format!("-----BEGIN {label}-----\n");
     for line in encoded.as_bytes().chunks(64) {
-        output.push_str(std::str::from_utf8(line).expect("base64 is ASCII"));
+        output.extend(line.iter().copied().map(char::from));
         output.push('\n');
     }
     output.push_str(&format!("-----END {label}-----\n"));
@@ -1950,19 +1948,22 @@ mod tests {
         assert_eq!(
             parse_generation_time("19700101000000Z")
                 .unwrap()
-                .openssl_attime_bounds(),
+                .openssl_attime_bounds()
+                .unwrap(),
             (0, 0)
         );
         assert_eq!(
             parse_generation_time("20260722230412.05Z")
                 .unwrap()
-                .openssl_attime_bounds(),
+                .openssl_attime_bounds()
+                .unwrap(),
             (1_784_761_452, 1_784_761_453)
         );
         assert_eq!(
             parse_generation_time("99991231235959.9Z")
                 .unwrap()
-                .openssl_attime_bounds(),
+                .openssl_attime_bounds()
+                .unwrap(),
             (253_402_300_799, 253_402_300_800)
         );
     }

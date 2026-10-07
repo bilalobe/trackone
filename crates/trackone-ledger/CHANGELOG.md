@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Return `Result<Vec<u8>>` from `canonical_json::canonical_json_bytes` so callers
+  can propagate JSON serialization errors with `?`. Sort map entries directly
+  during JSON and CBOR canonicalization to avoid fallible key lookups.
+
 - Expose underlying JSON and segment-construction errors through `source()`
   while preserving their displayed messages.
 

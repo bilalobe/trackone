@@ -34,7 +34,11 @@ pub fn validate_nonce_prefix(nonce: &[u8], salt8: &[u8], fc: u32) -> Result<(), 
     if nonce[..8] != salt8[..] {
         return Err(FramedNonceError::SaltMismatch);
     }
-    let counter = u64::from_be_bytes(nonce[8..16].try_into().expect("nonce slice length"));
+    let counter = u64::from_be_bytes(
+        nonce[8..16]
+            .try_into()
+            .map_err(|_| FramedNonceError::NonceLength)?,
+    );
     if counter != u64::from(fc) {
         return Err(FramedNonceError::FrameCounterMismatch);
     }
