@@ -211,30 +211,9 @@ impl fmt::Display for ProducerError {
 impl std::error::Error for ProducerError {}
 
 fn validate_policy(policy: &ClosurePolicy) -> Result<(), ProducerError> {
-    if policy.interval_ms == 0 {
-        return Err(ProducerError::InvalidConfiguration(
-            "interval_ms must be positive",
-        ));
-    }
-    if policy.batch_record_limit == 0
-        || policy.batch_record_limit > trackone_ledger::vtl::MAX_BATCH_RECORD_LIMIT
-        || !policy.batch_record_limit.is_power_of_two()
-    {
-        return Err(ProducerError::InvalidConfiguration(
-            "batch_record_limit must be a power of two no greater than 2^63",
-        ));
-    }
-    if policy.record_limit == Some(0) {
-        return Err(ProducerError::InvalidConfiguration(
-            "record_limit must be positive",
-        ));
-    }
-    if policy.size_limit_bytes == Some(0) {
-        return Err(ProducerError::InvalidConfiguration(
-            "size_limit_bytes must be positive",
-        ));
-    }
-    Ok(())
+    policy
+        .validate()
+        .map_err(|error| ProducerError::InvalidConfiguration(error.as_str()))
 }
 
 /// Single-writer producer. Every mutating method performs one store CAS; a
@@ -873,6 +852,47 @@ mod tests {
             record_limit: None,
             size_limit_bytes: None,
             empty_mode,
+        }
+    }
+
+    #[test]
+    fn producer_uses_shared_policy_validation_and_preserves_messages() {
+        let base = policy(EmptyMode::Emit);
+        for (policy, message) in [
+            (
+                ClosurePolicy {
+                    interval_ms: 0,
+                    ..base.clone()
+                },
+                "interval_ms must be positive",
+            ),
+            (
+                ClosurePolicy {
+                    batch_record_limit: 3,
+                    ..base.clone()
+                },
+                "batch_record_limit must be a power of two no greater than 2^63",
+            ),
+            (
+                ClosurePolicy {
+                    record_limit: Some(0),
+                    ..base.clone()
+                },
+                "record_limit must be positive",
+            ),
+            (
+                ClosurePolicy {
+                    size_limit_bytes: Some(0),
+                    ..base
+                },
+                "size_limit_bytes must be positive",
+            ),
+        ] {
+            let shared = policy.validate().unwrap_err();
+            let error = validate_policy(&policy).unwrap_err();
+            assert!(matches!(error, ProducerError::InvalidConfiguration(_)));
+            assert_eq!(error.to_string(), message);
+            assert_eq!(shared.to_string(), message);
         }
     }
 

@@ -3,7 +3,7 @@
 //! This module is deliberately independent of artifact encoding and decoding:
 //! callers provide exact canonical-record bytes or already-computed leaf hashes.
 
-use super::{MAX_BATCH_RECORD_LIMIT, MerkleResult};
+use super::{ClosurePolicy, MerkleResult};
 use crate::sha256_digest;
 
 fn prefixed_hash(prefix: u8, data: &[u8]) -> [u8; 32] {
@@ -54,12 +54,7 @@ pub fn batch_roots_from_leaf_hashes(
     leaf_hashes: &[[u8; 32]],
     batch_record_limit: u64,
 ) -> Option<Vec<[u8; 32]>> {
-    if batch_record_limit == 0
-        || batch_record_limit > MAX_BATCH_RECORD_LIMIT
-        || !batch_record_limit.is_power_of_two()
-    {
-        return None;
-    }
+    ClosurePolicy::validate_batch_record_limit(batch_record_limit).ok()?;
     let limit = usize::try_from(batch_record_limit).ok()?;
     Some(leaf_hashes.chunks(limit).map(mth).collect())
 }
@@ -70,13 +65,10 @@ pub fn compose_batch_roots(
     record_count: u64,
     batch_record_limit: u64,
 ) -> Option<[u8; 32]> {
-    if record_count == 0
-        || batch_record_limit == 0
-        || batch_record_limit > MAX_BATCH_RECORD_LIMIT
-        || !batch_record_limit.is_power_of_two()
-    {
+    if record_count == 0 {
         return None;
     }
+    ClosurePolicy::validate_batch_record_limit(batch_record_limit).ok()?;
     let expected = 1 + ((record_count - 1) / batch_record_limit);
     if u64::try_from(batch_roots.len()).ok()? != expected {
         return None;

@@ -55,6 +55,13 @@ decoding. This keeps tree changes independent from the strict CBOR parser and
 creates a stable seam for later extraction when another supported consumer
 needs the profile as a standalone package.
 
+`ClosurePolicy::validate()` checks positive interval and optional limits, plus
+a power-of-two batch limit no greater than `2^63`, returning a typed
+`ClosurePolicyError`. `ClosurePolicy::validate_batch_record_limit()` provides
+the same batch rule for independent CLI parsing and Merkle callers. Segment
+validation and decoding reuse these rules while retaining their existing
+error categories and messages.
+
 ## Boundary watchlist
 
 Keep this crate clear of:

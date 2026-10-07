@@ -6,6 +6,9 @@ All notable changes to trackone-gateway-svc will be documented in this file.
 
 ### Changed
 
+- Use shared ledger closure-policy validation for producer configuration
+  while preserving existing configuration error messages.
+
 - Submit RFC 3161 timestamps through bounded background workers after listener
   binding and acknowledge admissions at durable commit. Persist retry metadata,
   fenced claim leases, and terminal failures through an additive database

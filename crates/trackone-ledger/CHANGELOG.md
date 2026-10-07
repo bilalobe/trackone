@@ -7,7 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add `ClosurePolicy::validate`, independent batch-limit validation, and typed
+  `ClosurePolicyError` diagnostics shared by segment validation, decoding,
+  Merkle helpers, and gateway callers.
+
 ### Changed
+
+- Expose underlying JSON and segment-construction errors through `source()`
+  while preserving their displayed messages.
 
 - Replace the version-named module with `trackone_ledger::vtl` and implement
   the current version-one segment shape, profile UUID, aligned batch roots,

@@ -37,7 +37,14 @@ impl core::fmt::Display for Error {
     }
 }
 
-impl std::error::Error for Error {}
+impl std::error::Error for Error {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Json(error) => Some(error),
+            _ => None,
+        }
+    }
+}
 
 impl From<serde_json::Error> for Error {
     fn from(e: serde_json::Error) -> Self {
@@ -89,6 +96,17 @@ pub fn normalize_hex64(value: &str) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::{Error, normalize_hex64, sha256_hex};
+
+    #[test]
+    fn json_error_exposes_original_source_without_changing_display() {
+        use std::error::Error as _;
+        let json_error = serde_json::from_str::<serde_json::Value>("{").unwrap_err();
+        let message = format!("json error: {json_error}");
+        let error = Error::from(json_error);
+        assert_eq!(error.to_string(), message);
+        assert!(error.source().unwrap().is::<serde_json::Error>());
+        assert!(Error::NonFiniteFloat.source().is_none());
+    }
 
     #[test]
     fn sha256_hex_matches_known_value() {

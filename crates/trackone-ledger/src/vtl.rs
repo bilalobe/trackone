@@ -29,6 +29,61 @@ pub struct ClosurePolicy {
     pub empty_mode: EmptyMode,
 }
 
+/// Invalid closure-policy configuration, shared by producers and verifiers.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ClosurePolicyError {
+    Interval,
+    BatchRecordLimit,
+    RecordLimit,
+    SizeLimitBytes,
+}
+
+impl ClosurePolicyError {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Interval => "interval_ms must be positive",
+            Self::BatchRecordLimit => {
+                "batch_record_limit must be a power of two no greater than 2^63"
+            }
+            Self::RecordLimit => "record_limit must be positive",
+            Self::SizeLimitBytes => "size_limit_bytes must be positive",
+        }
+    }
+}
+
+impl core::fmt::Display for ClosurePolicyError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl std::error::Error for ClosurePolicyError {}
+
+impl ClosurePolicy {
+    /// Validate all limits without constructing or decoding a segment.
+    pub fn validate(&self) -> Result<(), ClosurePolicyError> {
+        if self.interval_ms == 0 {
+            return Err(ClosurePolicyError::Interval);
+        }
+        Self::validate_batch_record_limit(self.batch_record_limit)?;
+        if self.record_limit == Some(0) {
+            return Err(ClosurePolicyError::RecordLimit);
+        }
+        if self.size_limit_bytes == Some(0) {
+            return Err(ClosurePolicyError::SizeLimitBytes);
+        }
+        Ok(())
+    }
+
+    /// Validate a batch limit independently for CLI parsing and Merkle helpers.
+    pub fn validate_batch_record_limit(limit: u64) -> Result<(), ClosurePolicyError> {
+        if limit == 0 || limit > MAX_BATCH_RECORD_LIMIT || !limit.is_power_of_two() {
+            return Err(ClosurePolicyError::BatchRecordLimit);
+        }
+        Ok(())
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EmptyMode {
     Emit,
@@ -190,7 +245,15 @@ impl core::fmt::Display for SegmentConstructionError {
     }
 }
 
-impl std::error::Error for SegmentConstructionError {}
+impl std::error::Error for SegmentConstructionError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::InvalidPredecessor(error) => Some(error),
+            Self::Invariant(error) => Some(error),
+            Self::SegmentNumberExhausted => None,
+        }
+    }
+}
 
 type DecodeResult<T> = core::result::Result<T, SegmentDecodeError>;
 
@@ -388,12 +451,7 @@ impl SegmentRecord {
             return Err(SegmentInvariantError::SegmentHexField);
         }
         if self.commitment_profile_id != COMMITMENT_PROFILE_ID
-            || self.closure_policy.interval_ms == 0
-            || self.closure_policy.batch_record_limit == 0
-            || self.closure_policy.batch_record_limit > MAX_BATCH_RECORD_LIMIT
-            || !self.closure_policy.batch_record_limit.is_power_of_two()
-            || self.closure_policy.record_limit == Some(0)
-            || self.closure_policy.size_limit_bytes == Some(0)
+            || self.closure_policy.validate().is_err()
             || !valid_close_reason(&self.close_reason)
         {
             return Err(SegmentInvariantError::SegmentIdentityOrClosurePolicy);
@@ -1104,13 +1162,13 @@ fn take_sha256_array(
         })
         .collect()
 }
-fn optional_positive(
+fn optional_uint(
     fields: &mut BTreeMap<String, CborValue>,
     name: &'static str,
 ) -> DecodeResult<Option<u64>> {
     match take(fields, name)? {
         CborValue::Null => Ok(None),
-        CborValue::Uint(value) if value > 0 => Ok(Some(value)),
+        CborValue::Uint(value) => Ok(Some(value)),
         _ => Err(SegmentDecodeError::InvalidField(name)),
     }
 }
@@ -1124,17 +1182,8 @@ fn decode_policy(value: CborValue) -> DecodeResult<ClosurePolicy> {
     }
     let interval_ms = take_uint(&mut fields, "interval_ms")?;
     let batch_record_limit = take_uint(&mut fields, "batch_record_limit")?;
-    if interval_ms == 0
-        || batch_record_limit == 0
-        || batch_record_limit > MAX_BATCH_RECORD_LIMIT
-        || !batch_record_limit.is_power_of_two()
-    {
-        return Err(SegmentDecodeError::InvalidField(
-            "closure policy limits must be positive",
-        ));
-    }
-    let record_limit = optional_positive(&mut fields, "record_limit")?;
-    let size_limit_bytes = optional_positive(&mut fields, "size_limit_bytes")?;
+    let record_limit = optional_uint(&mut fields, "record_limit")?;
+    let size_limit_bytes = optional_uint(&mut fields, "size_limit_bytes")?;
     let empty_mode = match take_text(&mut fields, "empty_mode")?.as_str() {
         "emit" => EmptyMode::Emit,
         "suppress" => EmptyMode::Suppress,
@@ -1143,13 +1192,23 @@ fn decode_policy(value: CborValue) -> DecodeResult<ClosurePolicy> {
     if let Some(field) = fields.into_keys().next() {
         return Err(SegmentDecodeError::UnexpectedField(field));
     }
-    Ok(ClosurePolicy {
+    let policy = ClosurePolicy {
         interval_ms,
         batch_record_limit,
         record_limit,
         size_limit_bytes,
         empty_mode,
-    })
+    };
+    policy.validate().map_err(|error| {
+        SegmentDecodeError::InvalidField(match error {
+            ClosurePolicyError::Interval | ClosurePolicyError::BatchRecordLimit => {
+                "closure policy limits must be positive"
+            }
+            ClosurePolicyError::RecordLimit => "record_limit",
+            ClosurePolicyError::SizeLimitBytes => "size_limit_bytes",
+        })
+    })?;
+    Ok(policy)
 }
 
 fn encode_policy(out: &mut Vec<u8>, policy: &ClosurePolicy) {
@@ -1173,4 +1232,149 @@ fn encode_policy(out: &mut Vec<u8>, policy: &ClosurePolicy) {
         key(out, "batch_record_limit");
         cbor_uint(out, policy.batch_record_limit);
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::error::Error;
+
+    fn policy() -> ClosurePolicy {
+        ClosurePolicy {
+            interval_ms: 1,
+            batch_record_limit: 2,
+            record_limit: None,
+            size_limit_bytes: None,
+            empty_mode: EmptyMode::Emit,
+        }
+    }
+
+    fn decode_encoded_policy(policy: &ClosurePolicy) -> DecodeResult<ClosurePolicy> {
+        let mut bytes = Vec::new();
+        encode_policy(&mut bytes, policy);
+        let mut pos = 0;
+        let mut budget = DecodeBudget::for_input(&bytes);
+        let value = parse_cbor_value(&bytes, &mut pos, 0, &mut budget)?;
+        assert_eq!(pos, bytes.len());
+        decode_policy(value)
+    }
+
+    #[test]
+    fn policy_validation_is_shared_with_segments_and_decoding() {
+        let base = policy();
+        let segment = SegmentRecord::new_epoch(
+            "b7a1d5e40c6f438e9a75db27c96f31aa",
+            base.clone(),
+            "interval",
+            0,
+            Vec::new(),
+            sha256_digest(b""),
+        )
+        .unwrap();
+        let invalid = [
+            (
+                ClosurePolicy {
+                    interval_ms: 0,
+                    ..base.clone()
+                },
+                ClosurePolicyError::Interval,
+                "closure policy limits must be positive",
+            ),
+            (
+                ClosurePolicy {
+                    batch_record_limit: 0,
+                    ..base.clone()
+                },
+                ClosurePolicyError::BatchRecordLimit,
+                "closure policy limits must be positive",
+            ),
+            (
+                ClosurePolicy {
+                    batch_record_limit: 3,
+                    ..base.clone()
+                },
+                ClosurePolicyError::BatchRecordLimit,
+                "closure policy limits must be positive",
+            ),
+            (
+                ClosurePolicy {
+                    batch_record_limit: MAX_BATCH_RECORD_LIMIT + 1,
+                    ..base.clone()
+                },
+                ClosurePolicyError::BatchRecordLimit,
+                "closure policy limits must be positive",
+            ),
+            (
+                ClosurePolicy {
+                    record_limit: Some(0),
+                    ..base.clone()
+                },
+                ClosurePolicyError::RecordLimit,
+                "record_limit",
+            ),
+            (
+                ClosurePolicy {
+                    size_limit_bytes: Some(0),
+                    ..base
+                },
+                ClosurePolicyError::SizeLimitBytes,
+                "size_limit_bytes",
+            ),
+        ];
+        for (policy, expected, decode_message) in invalid {
+            assert_eq!(policy.validate(), Err(expected));
+            assert_eq!(
+                decode_encoded_policy(&policy),
+                Err(SegmentDecodeError::InvalidField(decode_message))
+            );
+            let invalid_segment = SegmentRecord {
+                closure_policy: policy,
+                ..segment.clone()
+            };
+            assert_eq!(
+                invalid_segment.validate_detailed(),
+                Err(SegmentInvariantError::SegmentIdentityOrClosurePolicy)
+            );
+            assert!(invalid_segment.canonical_cbor_bytes().is_err());
+        }
+    }
+
+    #[test]
+    fn policy_validation_accepts_boundaries_and_optional_limits() {
+        for batch_record_limit in [1, 2, MAX_BATCH_RECORD_LIMIT] {
+            for empty_mode in [EmptyMode::Emit, EmptyMode::Suppress] {
+                let policy = ClosurePolicy {
+                    interval_ms: u64::MAX,
+                    batch_record_limit,
+                    record_limit: Some(1),
+                    size_limit_bytes: Some(u64::MAX),
+                    empty_mode,
+                };
+                assert_eq!(policy.validate(), Ok(()));
+                assert_eq!(decode_encoded_policy(&policy).unwrap(), policy);
+            }
+        }
+        assert_eq!(policy().validate(), Ok(()));
+    }
+
+    #[test]
+    fn construction_errors_expose_typed_sources_without_changing_display() {
+        let error = SegmentConstructionError::InvalidPredecessor(SegmentDecodeError::Malformed(
+            "invalid CBOR",
+        ));
+        assert_eq!(
+            error.to_string(),
+            "invalid predecessor segment: invalid CBOR"
+        );
+        assert!(error.source().unwrap().is::<SegmentDecodeError>());
+
+        let error = SegmentConstructionError::Invariant(SegmentInvariantError::EmptySegment);
+        assert_eq!(error.to_string(), "empty segment is invalid");
+        assert!(error.source().unwrap().is::<SegmentInvariantError>());
+        assert!(
+            SegmentConstructionError::SegmentNumberExhausted
+                .source()
+                .is_none()
+        );
+    }
 }
