@@ -165,6 +165,7 @@ pub enum ProducerError {
     QueueCapacityExhausted,
     StorageCapacityExhausted,
     StorageUnavailable(String),
+    DatabaseReadOnly,
     TimestampConfiguration(String),
     TimestampSubmission(String),
     TimestampVerification(String),
@@ -197,6 +198,7 @@ impl fmt::Display for ProducerError {
             Self::StorageUnavailable(message) => {
                 write!(formatter, "storage unavailable: {message}")
             }
+            Self::DatabaseReadOnly => formatter.write_str("admission database is read-only"),
             Self::Store(message) => write!(formatter, "ledger store failed: {message}"),
             Self::TimestampConfiguration(message) => {
                 write!(formatter, "timestamp configuration failed: {message}")
@@ -385,6 +387,21 @@ impl<S: LedgerStore, C: ElapsedClock> LedgerProducer<S, C> {
     pub fn close(&mut self, reason: CloseReason) -> Result<Vec<SealedSegment>, ProducerError> {
         let now = self.safe_now()?;
         self.transition(now, Some(reason), None)
+    }
+
+    /// Preserve elapsed intervals independently of new admissions and their
+    /// capacity checks. An idle tick does not change the durable revision.
+    pub fn seal_expired_intervals(&mut self) -> Result<Vec<SealedSegment>, ProducerError> {
+        let now = self.safe_now()?;
+        if now - self.state.open.opened_at_ms < self.state.open.policy.interval_ms {
+            return Ok(Vec::new());
+        }
+        let mut next = self.state.clone();
+        let sealed = self.close_expired(&mut next, now)?;
+        if next.open.opened_at_ms != self.state.open.opened_at_ms {
+            self.commit(next, sealed.clone(), None, Vec::new())?;
+        }
+        Ok(sealed)
     }
 
     pub fn admit(&mut self, record: Vec<u8>) -> Result<AdmissionOutcome, ProducerError> {
@@ -1019,6 +1036,34 @@ mod tests {
         assert_eq!(outcome.sealed[0].segment_number, 0);
         assert_eq!(outcome.sealed[1].segment_number, 1);
         assert_eq!(outcome.admitted_segment_number, 2);
+    }
+
+    #[test]
+    fn interval_maintenance_preserves_records_and_skips_repeated_idle_ticks() {
+        let clock = FakeClock::new(0);
+        let mut producer = producer(&clock, EmptyMode::Suppress);
+        producer.admit_idempotent("before-idle", record(1)).unwrap();
+        clock.set(250);
+        let sealed = producer.seal_expired_intervals().unwrap();
+        assert_eq!(sealed.len(), 1);
+        assert_eq!(sealed[0].records, vec![record(1)]);
+        assert_eq!(sealed[0].close_reason, CloseReason::Interval);
+        assert_eq!(producer.state().open.opened_at_ms, 200);
+        assert_eq!(producer.state().revision, 2);
+        assert!(producer.state().open.records.is_empty());
+        let transitions = producer.store.transitions.len();
+        assert!(producer.seal_expired_intervals().unwrap().is_empty());
+        assert_eq!(producer.store.transitions.len(), transitions);
+        assert!(
+            producer
+                .admit_idempotent("before-idle", record(1))
+                .unwrap()
+                .replayed
+        );
+        clock.set(350);
+        assert!(producer.seal_expired_intervals().unwrap().is_empty());
+        assert_eq!(producer.state().open.opened_at_ms, 300);
+        assert_eq!(producer.state().revision, 3);
     }
 
     #[test]
