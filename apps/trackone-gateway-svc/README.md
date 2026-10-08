@@ -198,16 +198,24 @@ The exporter shares the gateway's `--db-url`, `--postgres-tls-mode`, and
 Its JSON contains `ready`, `admission_available`, `reasons`,
 `database_available`, `producer_state`, `pipeline_degraded`,
 `observed_at_unix_seconds`, `statistics`, `capacity`, and `counters`.
-A single sampler checks the actual admission connection and producer every five
-seconds. Requests read the cached result without querying PostgreSQL. Observations
+A single maintenance task checks the actual admission connection and producer every
+five seconds. It seals overdue intervals in a preservation transaction before
+publishing the observation, even when admission capacity is exhausted. Empty
+intervals follow the configured `emit` or `suppress` policy. Idle ticks without
+expired intervals do not change the ledger revision.
+
+Readiness requests read the cached result without querying PostgreSQL. Observations
 expire after fifteen seconds; statistics and database availability become `null`
 when unknown. Availability can lag changes by a sampling interval. Each database
 sample has a two-second statement timeout and a one-second database lock timeout.
-A busy producer retains its previous sample until that sample expires.
+If the producer is busy, its active operation services the pending maintenance and
+sampling request before releasing the producer mutex. This gives the sampler an
+opportunity under sustained admission traffic. A stuck operation still lets the
+previous observation expire.
 
-Readiness reasons are `database_unavailable`, `producer_inactive`,
+Readiness reasons are `database_unavailable`, `database_read_only`, `producer_inactive`,
 `producer_recovery_required`, `producer_clock_unavailable`,
-`producer_lock_poisoned`, `producer_revision_mismatch`,
+`producer_lock_poisoned`, `producer_revision_mismatch`, `producer_sealing_failed`,
 `queue_capacity_exhausted`, `storage_capacity_exhausted`, `storage_unavailable`,
 `observation_unavailable`, `observation_stale`, and `shutdown`.
 Startup remains unready until the first sample. Clock continuity must be recovered
@@ -215,6 +223,10 @@ before admission; an unexpected concurrent writer requires reloading the produce
 A closed admission connection requires restarting the gateway; this change does
 not introduce automatic reconnection. Shutdown makes readiness unavailable.
 Liveness remains independent of all these conditions.
+The database probe inherits the admission session's transaction settings and checks
+`transaction_read_only`, so a session write freeze or a standby reports
+`database_read_only` even when queries succeed. The next successful writable
+observation clears that reason after the write freeze is lifted.
 
 Statistics include `pending_timestamp_count`,
 `oldest_pending_timestamp_age_seconds`, `last_successful_timestamp_attachment`,
@@ -246,11 +258,13 @@ Admission checks current and projected usage within the ledger transaction. A
 request reaching a limit exactly succeeds; a request exceeding it or arriving
 while usage is already exhausted returns 503 with `ok=false`,
 `admission_available=false`, and `error=queue_capacity_exhausted` or
-`storage_capacity_exhausted`. Rejected batches commit no records, artifacts,
-revision change, or idempotency entry. Accepted idempotency keys still replay at
+`storage_capacity_exhausted`. A rejected admission transaction commits no records,
+artifacts, revision change, or idempotency entry. Independent interval maintenance
+can still advance the ledger and enqueue overdue segments, allowing timestamp
+workers to drain them before admission is retried. Accepted idempotency keys still replay at
 capacity, and conflicting bytes still return 409. Other producer/database failures
 return 503 with `admission_available=false` and `error=producer_unavailable`.
-Recovery sealing and verified timestamp attachment can exceed configured
+Interval maintenance, recovery sealing, and verified timestamp attachment can exceed configured
 thresholds to preserve previously accepted evidence. Readiness reports that
 pressure and blocks new admission. Queue pressure clears as jobs attach or reach
 terminal status; storage pressure requires increasing the configured allowance or

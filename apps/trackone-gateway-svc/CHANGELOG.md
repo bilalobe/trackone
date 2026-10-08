@@ -50,6 +50,14 @@ All notable changes to trackone-gateway-svc will be documented in this file.
 
 ### Fixed
 
+- Seal overdue intervals independently of admission capacity so idle emit-mode
+  ledgers and previously accepted records continue making timestamp progress.
+- Service pending readiness samples between producer operations under sustained
+  traffic, while retaining stale-observation failures for stuck operations.
+- Detect read-only admission transactions in readiness, including session write
+  freezes, and recover readiness when writes are enabled again.
+- Acquire the ledger lock before starting serializable admissions so timestamp
+  accounting commits cannot leave admission with a stale snapshot.
 - Keep readiness unavailable after PostgreSQL disk-full write errors even when
   read probes succeed; clear the storage failure signal after a successful
   durable producer write, timestamp attachment, or process restart.
