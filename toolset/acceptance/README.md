@@ -1,5 +1,8 @@
 # VTL HTTPS acceptance exchange
 
+For gateway crash, storage, clock, network, and restore qualification, use the
+[recovery qualification suite](../../docs/vtl-recovery-qualification.md).
+
 This controlled run joins the real PostgreSQL-backed gateway producer, RFC 3161
 issuance, immutable export, HTTPS retrieval and two verification implementations.
 Read the [acceptance walkthrough](../../docs/vtl-https-acceptance.md) for the
