@@ -19,6 +19,35 @@ pub struct PostgresLedgerStore {
     pub(crate) limits: CapacityLimits,
 }
 
+/// Held across the transaction so its snapshot is taken after preceding ledger
+/// writers commit. Borrowing the client makes the transaction roll back before
+/// this guard releases the session lock on any early return.
+struct LedgerSessionLock<'a> {
+    client: &'a mut Client,
+    ledger_id: &'a str,
+}
+
+impl<'a> LedgerSessionLock<'a> {
+    fn acquire(client: &'a mut Client, ledger_id: &'a str) -> Result<Self, ProducerError> {
+        client
+            .query_one(
+                "SELECT pg_advisory_lock(hashtextextended($1, 0))",
+                &[&ledger_id],
+            )
+            .map_err(store_error)?;
+        Ok(Self { client, ledger_id })
+    }
+}
+
+impl Drop for LedgerSessionLock<'_> {
+    fn drop(&mut self) {
+        let _ = self.client.query_one(
+            "SELECT pg_advisory_unlock(hashtextextended($1, 0))",
+            &[&self.ledger_id],
+        );
+    }
+}
+
 impl PostgresLedgerStore {
     pub fn new(client: Client, ledger_id: impl Into<String>) -> Self {
         Self {
@@ -37,7 +66,8 @@ impl PostgresLedgerStore {
         self.limits = limits;
     }
 
-    /// A bounded, read-only observation on the actual admission connection.
+    /// A bounded observation on the actual admission connection. Queries do not
+    /// write, but the transaction inherits admission's read-only setting.
     pub fn pipeline_statistics(
         &mut self,
         expected_revision: u64,
@@ -46,7 +76,6 @@ impl PostgresLedgerStore {
             .client
             .build_transaction()
             .isolation_level(IsolationLevel::RepeatableRead)
-            .read_only(true)
             .start()
             .map_err(store_error)?;
         tx.batch_execute("SET LOCAL statement_timeout='2s'; SET LOCAL lock_timeout='1s'")
@@ -56,9 +85,13 @@ impl PostgresLedgerStore {
              (SELECT GREATEST(0, EXTRACT(EPOCH FROM CURRENT_TIMESTAMP-min(tsa_enqueued_at)))::double precision FROM trackone_vtl_sealed_segment WHERE ledger_id=$1 AND tsa_status='queued'), \
              (SELECT to_char(max(tsa_attached_at) AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"') FROM trackone_vtl_sealed_segment WHERE ledger_id=$1 AND tsa_attached_at IS NOT NULL), \
              (SELECT count(*) FROM trackone_vtl_sealed_segment WHERE ledger_id=$1 AND tsa_status='failed'), \
-             (SELECT count(*) FROM trackone_vtl_sealed_segment WHERE ledger_id=$1 AND tsa_status='queued' AND tsa_last_error IS NOT NULL) \
+             (SELECT count(*) FROM trackone_vtl_sealed_segment WHERE ledger_id=$1 AND tsa_status='queued' AND tsa_last_error IS NOT NULL), \
+             current_setting('transaction_read_only')::boolean \
              FROM trackone_vtl_pipeline_usage u JOIN trackone_vtl_ledger_state s USING (ledger_id) WHERE ledger_id=$1",
             &[&self.ledger_id]).map_err(store_error)?;
+        if row.get::<_, bool>(7) {
+            return Err(ProducerError::DatabaseReadOnly);
+        }
         if parse_u64(row.get(2), "revision")? != expected_revision {
             return Err(ProducerError::ConcurrentWriter);
         }
@@ -320,17 +353,15 @@ impl LedgerStore for PostgresLedgerStore {
                 "store ledger_id does not match producer state".to_string(),
             ));
         }
-        let mut transaction = self
+        // An advisory-lock SELECT inside SERIALIZABLE fixes the snapshot before
+        // waiting, making timestamp usage updates committed during the wait
+        // cause serialization failures. Wait before starting the transaction.
+        let lock = LedgerSessionLock::acquire(&mut self.client, &self.ledger_id)?;
+        let mut transaction = lock
             .client
             .build_transaction()
             .isolation_level(IsolationLevel::Serializable)
             .start()
-            .map_err(store_error)?;
-        transaction
-            .query_one(
-                "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
-                &[&self.ledger_id],
-            )
             .map_err(store_error)?;
 
         // Replays return before reaching this transaction. Preservation-only
