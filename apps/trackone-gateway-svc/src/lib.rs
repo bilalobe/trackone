@@ -8,6 +8,8 @@ pub mod observability;
 pub mod postgres;
 pub mod postgres_connection;
 pub mod producer;
+#[cfg(feature = "recovery-qualification")]
+pub mod qualification;
 pub mod service;
 pub mod snapshot;
 pub mod tsa;

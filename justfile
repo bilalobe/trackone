@@ -48,6 +48,10 @@ build-production:
 bench-rust:
     cargo test --package trackone-core --features std,postcard,dummy-aead summary_report -- --nocapture
 
+# Qualify gateway recovery in disposable Docker services.
+recovery-qualification output:
+    python3 toolset/acceptance/run_vtl_recovery_qualification.py --output {{output}}
+
 # Check formatting
 fmt-check:
     cargo fmt --all -- --check

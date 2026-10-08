@@ -10,6 +10,10 @@ authors.workspace = true
 repository.workspace = true
 readme = "README.md"
 
+[features]
+# Local qualification control is deliberately absent from normal builds.
+recovery-qualification = []
+
 [dependencies]
 axum.workspace = true
 base64.workspace = true

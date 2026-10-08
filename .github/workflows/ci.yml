@@ -188,7 +188,7 @@ jobs:
 
   conformance-archive:
     runs-on: ubuntu-latest
-    needs: [rust, contracts, vtl-http-binding]
+    needs: [rust, contracts, vtl-http-binding, vtl-recovery-qualification]
     permissions:
       attestations: write
       contents: read
@@ -313,6 +313,40 @@ jobs:
             dist/trackone-conformance-*.tar.gz.sha256
             dist/trackone-conformance-*.tar.gz.manifest.json
             dist/conformance-verification.json
+          if-no-files-found: error
+          retention-days: 30
+
+  vtl-recovery-qualification:
+    runs-on: ubuntu-latest
+    needs: [rust, contracts]
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          lfs: true
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@1.99.0
+      - name: Cache qualification build
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target/recovery-qualification
+          key: ${{ runner.os }}-recovery-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-recovery-
+      - name: Lint qualification feature
+        run: cargo clippy --locked -p trackone-gateway-svc --all-targets --features recovery-qualification -- -D warnings
+      - name: Qualify gateway recovery
+        run: python3 toolset/acceptance/run_vtl_recovery_qualification.py --output /tmp/vtl-recovery-qualification
+      - name: Publish qualification report and evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: vtl-recovery-qualification-${{ github.sha }}
+          path: /tmp/vtl-recovery-qualification/
           if-no-files-found: error
           retention-days: 30
 

@@ -242,7 +242,25 @@ impl PostgresLedgerStore {
                 ).map_err(db_error)?;
             }
         }
+        #[cfg(feature = "recovery-qualification")]
+        if result.is_ok() {
+            crate::qualification::hit(
+                "timestamp_before_commit",
+                &self.ledger_id,
+                None,
+                Some(number.parse().expect("segment number")),
+            );
+        }
         transaction.commit().map_err(db_error)?;
+        #[cfg(feature = "recovery-qualification")]
+        if result.is_ok() {
+            crate::qualification::hit(
+                "timestamp_after_commit",
+                &self.ledger_id,
+                None,
+                Some(number.parse().expect("segment number")),
+            );
+        }
         if result.is_ok() {
             self.events
                 .storage_unavailable

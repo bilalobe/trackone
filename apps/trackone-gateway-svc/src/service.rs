@@ -520,6 +520,12 @@ where
                 .split(',')
                 .any(|item| item.trim().eq_ignore_ascii_case("return=minimal"))
         });
+    #[cfg(feature = "recovery-qualification")]
+    let qualification_key = key.clone();
+    #[cfg(feature = "recovery-qualification")]
+    let qualification_ledger = state
+        .with_producer(|producer| Ok(producer.state().ledger_id.clone()))
+        .expect("qualification ledger");
     let result = tokio::task::spawn_blocking(move || {
         let outcome = state.with_producer(|producer| {
             if let Some(envelope) = envelope {
@@ -560,6 +566,13 @@ where
     .await;
     match result {
         Ok(Ok((outcome, tsa_status))) => {
+            #[cfg(feature = "recovery-qualification")]
+            crate::qualification::hit(
+                "admission_response",
+                &qualification_ledger,
+                Some(&qualification_key),
+                None,
+            );
             let status = if outcome.replayed {
                 StatusCode::OK
             } else {

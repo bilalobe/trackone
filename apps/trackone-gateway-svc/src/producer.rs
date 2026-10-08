@@ -667,6 +667,13 @@ impl<S: LedgerStore, C: ElapsedClock> LedgerProducer<S, C> {
             return Err(ProducerError::SerialExhausted);
         }
         let merkle = merkle_root_from_records(&records);
+        #[cfg(feature = "recovery-qualification")]
+        crate::qualification::hit(
+            "seal_construct",
+            &state.ledger_id,
+            None,
+            Some(state.next_segment_number),
+        );
         let batch_roots =
             batch_roots_from_leaf_hashes(&merkle.leaf_hashes, policy.batch_record_limit).ok_or(
                 ProducerError::InvalidConfiguration(
