@@ -29,11 +29,22 @@ impl SystemElapsedClock {
 
 impl ElapsedClock for SystemElapsedClock {
     fn now_ms(&self) -> Result<u64, ProducerError> {
+        #[cfg(feature = "recovery-qualification")]
+        if let Some(clock) = trackone_gateway_svc::qualification::clock_override() {
+            return Ok(clock.now_ms);
+        }
         u64::try_from(self.origin.elapsed().as_millis())
             .map_err(|_| ProducerError::Clock("elapsed milliseconds exceed uint64".to_string()))
     }
 
     fn continuity_id(&self) -> u128 {
+        #[cfg(feature = "recovery-qualification")]
+        if let Some(clock) = trackone_gateway_svc::qualification::clock_override() {
+            return clock
+                .continuity_id
+                .parse()
+                .expect("qualification continuity ID");
+        }
         self.continuity_id
     }
 }

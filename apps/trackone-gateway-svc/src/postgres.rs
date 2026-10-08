@@ -528,6 +528,13 @@ impl LedgerStore for PostgresLedgerStore {
                 .map_err(store_error)?;
         }
         if !sealed.is_empty() {
+            #[cfg(feature = "recovery-qualification")]
+            crate::qualification::hit(
+                "seal_inserted",
+                &self.ledger_id,
+                None,
+                sealed.first().map(|s| s.segment_number),
+            );
             if transition.previous_open_count > 0 {
                 let destination = sealed
                     .iter()
@@ -553,6 +560,13 @@ impl LedgerStore for PostgresLedgerStore {
                     copied,
                     transition.previous_open_count,
                 )?;
+                #[cfg(feature = "recovery-qualification")]
+                crate::qualification::hit(
+                    "records_copied",
+                    &self.ledger_id,
+                    None,
+                    Some(destination.segment_number),
+                );
             }
             let deleted = transaction
                 .execute(
@@ -633,7 +647,22 @@ impl LedgerStore for PostgresLedgerStore {
                 return Err(ProducerError::ConcurrentWriter);
             }
         }
-        transaction.commit().map_err(store_error)
+        #[cfg(feature = "recovery-qualification")]
+        crate::qualification::hit(
+            "ledger_before_commit",
+            &self.ledger_id,
+            admission.map(|a| a.key.as_str()),
+            None,
+        );
+        transaction.commit().map_err(store_error)?;
+        #[cfg(feature = "recovery-qualification")]
+        crate::qualification::hit(
+            "ledger_after_commit",
+            &self.ledger_id,
+            admission.map(|a| a.key.as_str()),
+            None,
+        );
+        Ok(())
     }
 }
 
