@@ -3,7 +3,7 @@ use std::sync::{
     Arc,
     atomic::{AtomicU64, Ordering},
 };
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use axum::{
     Router,
@@ -25,10 +25,10 @@ use trackone_ledger::vtl::{ClosurePolicy, EmptyMode};
 const TOKEN: &str = "readiness-test-token-0123456789abcdef";
 static NEXT: AtomicU64 = AtomicU64::new(0);
 #[derive(Clone)]
-struct Clock(Arc<AtomicU64>);
+struct Clock(Arc<AtomicU64>, Arc<AtomicU64>);
 impl ElapsedClock for Clock {
     fn now_ms(&self) -> Result<u64, ProducerError> {
-        Ok(0)
+        Ok(self.1.load(Ordering::Relaxed))
     }
     fn continuity_id(&self) -> u128 {
         u128::from(self.0.load(Ordering::Relaxed))
@@ -87,11 +87,8 @@ impl Database {
         limit: Option<u64>,
         clock: Clock,
     ) -> LedgerProducer<PostgresLedgerStore, Clock> {
-        LedgerProducer::open_or_create(
-            self.store(),
+        self.producer_with_policy(
             clock,
-            &self.ledger,
-            "readiness",
             ClosurePolicy {
                 interval_ms: u64::MAX,
                 batch_record_limit: 1024,
@@ -100,7 +97,14 @@ impl Database {
                 empty_mode: EmptyMode::Suppress,
             },
         )
-        .unwrap()
+    }
+    fn producer_with_policy(
+        &self,
+        clock: Clock,
+        policy: ClosurePolicy,
+    ) -> LedgerProducer<PostgresLedgerStore, Clock> {
+        LedgerProducer::open_or_create(self.store(), clock, &self.ledger, "readiness", policy)
+            .unwrap()
     }
     fn usage(&self) -> (u64, u64) {
         let row = self.client().query_one("SELECT pending_timestamps::text, retained_evidence_bytes::text FROM trackone_vtl_pipeline_usage WHERE ledger_id=$1", &[&self.ledger]).unwrap();
@@ -112,6 +116,18 @@ impl Database {
     fn force_due(&self) {
         self.client().execute("UPDATE trackone_vtl_sealed_segment SET tsa_next_attempt=CURRENT_TIMESTAMP - INTERVAL '1 second', tsa_lease_until=NULL WHERE ledger_id=$1", &[&self.ledger]).unwrap();
     }
+    fn assert_ledger_unlocked(&self) {
+        assert!(
+            self.client()
+                .query_one(
+                    "SELECT pg_try_advisory_xact_lock(hashtextextended($1, 0))",
+                    &[&self.ledger],
+                )
+                .unwrap()
+                .get::<_, bool>(0),
+            "admission leaked the ledger lock"
+        );
+    }
 }
 impl Drop for Database {
     fn drop(&mut self) {
@@ -122,7 +138,7 @@ impl Drop for Database {
     }
 }
 fn clock() -> Clock {
-    Clock(Arc::new(AtomicU64::new(1)))
+    Clock(Arc::new(AtomicU64::new(1)), Arc::new(AtomicU64::new(0)))
 }
 fn http_state(producer: LedgerProducer<PostgresLedgerStore, Clock>) -> GatewayHttpState<Clock> {
     GatewayHttpState::new(
@@ -596,7 +612,11 @@ fn concurrent_timestamp_attachment_and_admission_keep_usage_consistent() {
         barrier2.wait();
         worker.finish_timestamp(&claim, &Ok(vec![9; 5]), &TimestampWorkerConfig::default())
     });
-    let admitted = a.join().unwrap().is_ok();
+    let admitted = match a.join().unwrap() {
+        Ok(_) => true,
+        Err(ProducerError::QueueCapacityExhausted) => false,
+        Err(error) => panic!("unexpected admission failure: {error}"),
+    };
     assert!(b.join().unwrap().unwrap());
     let mut client = db.client();
     let row = client.query_one("SELECT (SELECT count(*) FROM trackone_vtl_sealed_segment WHERE ledger_id=$1 AND tsa_status='queued'), (SELECT COALESCE(sum(octet_length(record_cbor)),0) FROM trackone_vtl_sealed_record WHERE ledger_id=$1) + (SELECT COALESCE(sum(octet_length(artifact_cbor) + COALESCE(octet_length(tsa_response),0)),0) FROM trackone_vtl_sealed_segment WHERE ledger_id=$1)", &[&db.ledger]).unwrap();
@@ -605,6 +625,305 @@ fn concurrent_timestamp_attachment_and_admission_keep_usage_consistent() {
         (row.get::<_, i64>(0) as u64, row.get::<_, i64>(1) as u64)
     );
     assert_eq!(db.usage().0, u64::from(admitted));
+}
+
+#[test]
+fn admission_observes_timestamp_completion_after_waiting_for_ledger_lock() {
+    // Cover inserts into both open and sealed records without capacity limits,
+    // plus an admission that needs the timestamp completion to free capacity.
+    for (record_limit, queue_limit) in [(1, None), (2, None), (1, Some(1))] {
+        let Some(db) = Database::new() else { return };
+        let mut producer = db.producer(Some(record_limit), clock());
+        for n in 1..=record_limit {
+            producer.admit(record(n as u8)).unwrap();
+        }
+        producer.store_mut().set_capacity_limits(CapacityLimits {
+            max_pending_timestamps: queue_limit,
+            ..Default::default()
+        });
+        assert_eq!(db.usage().0, 1);
+
+        let mut worker = db.client();
+        let worker_pid: i32 = worker
+            .query_one("SELECT pg_backend_pid()", &[])
+            .unwrap()
+            .get(0);
+        let mut completion = worker.transaction().unwrap();
+        completion
+            .query_one(
+                "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
+                &[&db.ledger],
+            )
+            .unwrap();
+        let admission = std::thread::spawn(move || {
+            let result = producer.admit_idempotent("after-completion", record(3));
+            (producer, result)
+        });
+
+        let mut observer = db.client();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            let waiting: bool = observer
+                .query_one(
+                    "SELECT EXISTS (SELECT 1 FROM pg_stat_activity \
+                     WHERE $1 = ANY(pg_blocking_pids(pid)) AND wait_event='advisory')",
+                    &[&worker_pid],
+                )
+                .unwrap()
+                .get(0);
+            if waiting {
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "admission did not wait for the ledger lock"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        // Commit the same segment/usage changes as a timestamp worker while
+        // admission is waiting, so its transaction must use a fresh snapshot.
+        completion
+            .execute(
+                "UPDATE trackone_vtl_sealed_segment SET tsa_status='verified', tsa_response=$2, \
+                 tsa_next_attempt=NULL, tsa_lease_until=NULL, tsa_attached_at=CURRENT_TIMESTAMP \
+                 WHERE ledger_id=$1 AND segment_number=0",
+                &[&db.ledger, &vec![9u8; 5]],
+            )
+            .unwrap();
+        completion.commit().unwrap();
+        let (mut producer, result) = admission.join().unwrap();
+        result.unwrap();
+        assert_eq!(producer.state().revision, record_limit + 1);
+        let usage = db.usage();
+        assert_eq!(usage.0, u64::from(record_limit == 1));
+        assert!(
+            producer
+                .admit_idempotent("after-completion", record(3))
+                .unwrap()
+                .replayed
+        );
+        assert_eq!(db.usage(), usage);
+
+        // Keep the admission connection alive to detect leaked session locks.
+        db.assert_ledger_unlocked();
+    }
+}
+
+#[test]
+fn admission_releases_ledger_lock_after_transaction_errors() {
+    let Some(db) = Database::new() else { return };
+    let mut producer = db.producer(Some(1), clock());
+    producer.store_mut().set_capacity_limits(CapacityLimits {
+        max_pending_timestamps: Some(0),
+        ..Default::default()
+    });
+    assert_eq!(
+        producer.admit(record(1)).unwrap_err(),
+        ProducerError::QueueCapacityExhausted
+    );
+    db.assert_ledger_unlocked();
+
+    producer
+        .store_mut()
+        .set_capacity_limits(CapacityLimits::default());
+    let mut client = db.client();
+    client.batch_execute("CREATE FUNCTION disk_full() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'simulated disk exhaustion' USING ERRCODE='53100'; END $$; CREATE TRIGGER disk_full BEFORE INSERT ON trackone_vtl_sealed_segment FOR EACH ROW EXECUTE FUNCTION disk_full()").unwrap();
+    assert!(matches!(
+        producer.admit(record(1)),
+        Err(ProducerError::StorageUnavailable(_))
+    ));
+    db.assert_ledger_unlocked();
+    assert_eq!(db.usage(), (0, 0));
+    assert_eq!(producer.state().revision, 0);
+
+    client
+        .batch_execute("DROP TRIGGER disk_full ON trackone_vtl_sealed_segment")
+        .unwrap();
+    producer.admit(record(1)).unwrap();
+    db.assert_ledger_unlocked();
+    assert_eq!(db.usage().0, 1);
+}
+
+#[test]
+fn overdue_emit_intervals_progress_after_a_rejected_admission() {
+    let Some(db) = Database::new() else { return };
+    let clock = clock();
+    let producer = db.producer_with_policy(
+        clock.clone(),
+        ClosurePolicy {
+            interval_ms: 60_000,
+            batch_record_limit: 1024,
+            record_limit: None,
+            size_limit_bytes: None,
+            empty_mode: EmptyMode::Emit,
+        },
+    );
+    let state = http_state(producer).with_capacity_limits(CapacityLimits {
+        max_pending_timestamps: Some(1),
+        ..Default::default()
+    });
+    let app = router(state.clone());
+    state.sample_readiness();
+    clock.1.store(120_000, Ordering::Relaxed);
+    assert_eq!(
+        post(&app, "after-idle", 1).1["error"],
+        "queue_capacity_exhausted"
+    );
+    assert_eq!(db.usage(), (0, 0));
+
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let sampler = {
+        let _entered = runtime.enter();
+        state.start_readiness_sampler()
+    };
+    let deadline = Instant::now() + Duration::from_secs(3);
+    while db.usage().0 != 2 {
+        assert!(
+            Instant::now() < deadline,
+            "overdue intervals did not become durable"
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    // Wait for the observation after sealing as well as its committed jobs.
+    state.sample_readiness();
+    let mut client = db.client();
+    let row = client
+        .query_one(
+            "SELECT opened_at_ms::text, revision::text, \
+        (SELECT count(*) FROM trackone_vtl_open_record), \
+        (SELECT count(*) FROM trackone_vtl_idempotency) \
+        FROM trackone_vtl_ledger_state WHERE ledger_id=$1",
+            &[&db.ledger],
+        )
+        .unwrap();
+    assert_eq!(row.get::<_, String>(0), "120000");
+    assert_eq!(row.get::<_, String>(1), "1");
+    assert_eq!(row.get::<_, i64>(2), 0);
+    assert_eq!(row.get::<_, i64>(3), 0);
+
+    let mut worker = db.store();
+    for _ in 0..2 {
+        let claim = worker.claim_timestamp(20).unwrap().unwrap();
+        worker
+            .finish_timestamp(
+                &claim,
+                &Ok(vec![1, 2, 3]),
+                &TimestampWorkerConfig::default(),
+            )
+            .unwrap();
+    }
+    state.sample_readiness();
+    assert_eq!(ready(&app).0, StatusCode::OK);
+    assert_eq!(post(&app, "after-idle", 1).0, StatusCode::CREATED);
+    assert_eq!(post(&app, "after-idle", 1).0, StatusCode::OK);
+    assert_eq!(db.usage().0, 0);
+    sampler.abort();
+}
+
+#[test]
+fn expired_accepted_records_retry_sealing_at_storage_capacity_without_new_admissions() {
+    let Some(db) = Database::new() else { return };
+    let clock = clock();
+    let producer = db.producer_with_policy(
+        clock.clone(),
+        ClosurePolicy {
+            interval_ms: 60_000,
+            batch_record_limit: 1024,
+            record_limit: None,
+            size_limit_bytes: None,
+            empty_mode: EmptyMode::Suppress,
+        },
+    );
+    let state = http_state(producer).with_capacity_limits(CapacityLimits {
+        max_retained_evidence_bytes: Some(record(1).len() as u64),
+        ..Default::default()
+    });
+    let app = router(state.clone());
+    assert_eq!(post(&app, "accepted", 1).0, StatusCode::CREATED);
+    clock.1.store(60_000, Ordering::Relaxed);
+    let mut client = db.client();
+    client.batch_execute("CREATE FUNCTION disk_full() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'simulated disk exhaustion' USING ERRCODE='53100'; END $$; CREATE TRIGGER disk_full BEFORE INSERT ON trackone_vtl_sealed_segment FOR EACH ROW EXECUTE FUNCTION disk_full()").unwrap();
+    state.sample_readiness();
+    assert_eq!(db.usage(), (0, record(1).len() as u64));
+    assert_eq!(ready(&app).1["reasons"][0], "producer_sealing_failed");
+    assert_eq!(
+        client
+            .query_one(
+                "SELECT revision::text FROM trackone_vtl_ledger_state WHERE ledger_id=$1",
+                &[&db.ledger]
+            )
+            .unwrap()
+            .get::<_, String>(0),
+        "1"
+    );
+    client
+        .batch_execute("DROP TRIGGER disk_full ON trackone_vtl_sealed_segment")
+        .unwrap();
+    state.sample_readiness();
+    assert_eq!(db.usage().0, 1);
+    let stored: Vec<u8> = db
+        .client()
+        .query_one(
+            "SELECT record_cbor FROM trackone_vtl_sealed_record WHERE ledger_id=$1",
+            &[&db.ledger],
+        )
+        .unwrap()
+        .get(0);
+    assert_eq!(stored, record(1));
+    assert_eq!(ready(&app).1["reasons"][0], "storage_capacity_exhausted");
+    let usage = db.usage();
+    state.sample_readiness();
+    assert_eq!(db.usage(), usage);
+    assert_eq!(post(&app, "accepted", 1).0, StatusCode::OK);
+}
+
+#[test]
+fn readiness_detects_a_write_freeze_on_the_running_admission_session() {
+    let Some(db) = Database::new() else { return };
+    let state = http_state(db.producer(None, clock()));
+    let app = router(state.clone());
+    state.sample_readiness();
+    assert_eq!(ready(&app).0, StatusCode::OK);
+    // This successful write freezes subsequent transactions on the same session.
+    db.client().batch_execute("CREATE FUNCTION freeze_writes() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN PERFORM set_config('default_transaction_read_only', 'on', false); RETURN NEW; END $$; CREATE TRIGGER freeze_writes BEFORE INSERT ON trackone_vtl_open_record FOR EACH ROW EXECUTE FUNCTION freeze_writes()").unwrap();
+    assert_eq!(post(&app, "before-freeze", 1).0, StatusCode::CREATED);
+    state.sample_readiness();
+    let (status, value) = ready(&app);
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(value["database_available"], true);
+    assert_eq!(value["admission_available"], false);
+    assert_eq!(value["reasons"][0], "database_read_only");
+    assert_eq!(
+        post(&app, "during-freeze", 2).0,
+        StatusCode::SERVICE_UNAVAILABLE
+    );
+    assert_eq!(post(&app, "before-freeze", 1).0, StatusCode::OK);
+    state.sample_readiness();
+    assert_eq!(ready(&app).1["reasons"][0], "database_read_only");
+    assert_eq!(
+        request(&app, "GET", "/healthz", None, vec![], false).0,
+        StatusCode::OK
+    );
+}
+
+#[test]
+fn writability_probe_recovers_when_the_session_write_freeze_is_lifted() {
+    let Some(db) = Database::new() else { return };
+    let mut client = db.producer(None, clock()).into_store().into_client();
+    client
+        .batch_execute("SET default_transaction_read_only=on")
+        .unwrap();
+    let mut store = PostgresLedgerStore::new(client, &db.ledger);
+    assert!(matches!(
+        store.pipeline_statistics(0),
+        Err(ProducerError::DatabaseReadOnly)
+    ));
+    let mut client = store.into_client();
+    client
+        .batch_execute("SET default_transaction_read_only=off")
+        .unwrap();
+    let mut store = PostgresLedgerStore::new(client, &db.ledger);
+    assert!(store.pipeline_statistics(0).is_ok());
 }
 
 #[test]
@@ -730,4 +1049,83 @@ fn cached_probes_and_sampler_do_not_wait_for_a_busy_producer() {
     assert_eq!(readiness, StatusCode::OK);
     assert_eq!(liveness, StatusCode::OK);
     assert_eq!(admitted, StatusCode::CREATED);
+    // The request must perform the deferred observation before returning;
+    // there is no running timer in this test to refresh the cached statistics.
+    assert_eq!(ready(&app).1["statistics"]["pending_timestamp_count"], 1);
+}
+
+#[test]
+fn sustained_successful_admissions_keep_readiness_fresh() {
+    let Some(db) = Database::new() else { return };
+    let state = http_state(db.producer(None, clock()));
+    state.sample_readiness();
+    let app = router(state.clone());
+    assert_eq!(ready(&app).0, StatusCode::OK);
+    db.client().batch_execute("CREATE FUNCTION delayed_record() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN PERFORM pg_sleep(0.05); RETURN NEW; END $$; CREATE TRIGGER delayed_record BEFORE INSERT ON trackone_vtl_open_record FOR EACH ROW EXECUTE FUNCTION delayed_record()").unwrap();
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let sampler = {
+        let _entered = runtime.enter();
+        state.start_readiness_sampler()
+    };
+    let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let successes = Arc::new(AtomicU64::new(0));
+    let next_key = Arc::new(AtomicU64::new(0));
+    let mut clients = Vec::new();
+    for _ in 0..8 {
+        let app = app.clone();
+        let stop = Arc::clone(&stop);
+        let successes = Arc::clone(&successes);
+        let next_key = Arc::clone(&next_key);
+        clients.push(std::thread::spawn(move || {
+            let runtime = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap();
+            while !stop.load(Ordering::Relaxed) {
+                let key = next_key.fetch_add(1, Ordering::Relaxed).to_string();
+                let status = runtime.block_on(async {
+                    app.clone()
+                        .oneshot(
+                            Request::builder()
+                                .method("POST")
+                                .uri("/v2/records")
+                                .header("authorization", format!("Bearer {TOKEN}"))
+                                .header("content-type", "application/cbor")
+                                .header("idempotency-key", key)
+                                .body(Body::from(record(1)))
+                                .unwrap(),
+                        )
+                        .await
+                        .unwrap()
+                        .status()
+                });
+                assert_eq!(status, StatusCode::CREATED);
+                successes.fetch_add(1, Ordering::Relaxed);
+            }
+        }));
+    }
+    std::thread::sleep(Duration::from_secs(14));
+    let earlier_successes = successes.load(Ordering::Relaxed);
+    std::thread::sleep(Duration::from_secs(3));
+    let later_successes = successes.load(Ordering::Relaxed);
+    let observed = ready(&app);
+    stop.store(true, Ordering::Relaxed);
+    for client in clients {
+        client.join().unwrap();
+    }
+    sampler.abort();
+    eprintln!(
+        "successful admissions at 14s={earlier_successes}, 17s={later_successes}; readiness={} reasons={}",
+        observed.0, observed.1["reasons"]
+    );
+    assert!(earlier_successes > 0);
+    assert!(later_successes > earlier_successes);
+    assert_eq!(observed.0, StatusCode::OK);
+    assert_eq!(observed.1["reasons"], serde_json::json!([]));
+    assert!(
+        observed.1["statistics"]["retained_evidence_bytes"]
+            .as_u64()
+            .unwrap()
+            > 0
+    );
 }

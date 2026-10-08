@@ -3,7 +3,10 @@
 use crate::observability::{
     CapacityLimits, PipelineEvents, PipelineReadiness, ReadinessSample, SAMPLE_INTERVAL_SECONDS,
 };
-use std::sync::{Arc, Mutex, TryLockError, atomic::Ordering};
+use std::sync::{
+    Arc, Mutex, TryLockError,
+    atomic::{AtomicBool, Ordering},
+};
 
 use axum::body::Bytes;
 use axum::extract::{Path, Request, State};
@@ -109,6 +112,7 @@ fn bearer_digest(token: &str) -> [u8; 32] {
 
 pub struct GatewayHttpState<C> {
     producer: Arc<Mutex<ServiceProducer<C>>>,
+    sample_requested: Arc<AtomicBool>,
     pub readiness: Arc<PipelineReadiness>,
     events: Arc<PipelineEvents>,
     admission_auth: AdmissionAuth,
@@ -120,6 +124,7 @@ impl<C> Clone for GatewayHttpState<C> {
     fn clone(&self) -> Self {
         Self {
             producer: Arc::clone(&self.producer),
+            sample_requested: Arc::clone(&self.sample_requested),
             readiness: Arc::clone(&self.readiness),
             events: Arc::clone(&self.events),
             admission_auth: self.admission_auth.clone(),
@@ -143,6 +148,7 @@ impl<C: ElapsedClock> GatewayHttpState<C> {
             readiness: Arc::new(PipelineReadiness::new(limits)),
             events,
             producer: Arc::new(Mutex::new(producer)),
+            sample_requested: Arc::new(AtomicBool::new(false)),
             admission_auth,
             max_batch_records,
             max_admission_bytes,
@@ -159,9 +165,12 @@ impl<C: ElapsedClock> GatewayHttpState<C> {
     }
 
     pub fn sample_readiness(&self) {
+        self.sample_requested.store(true, Ordering::Release);
         let mut producer = match self.producer.try_lock() {
             Ok(producer) => producer,
-            Err(TryLockError::WouldBlock) => return, // Previous observations expire if admission remains stuck.
+            // The active operation services the pending tick before releasing
+            // the mutex. A stuck operation still lets cached observations expire.
+            Err(TryLockError::WouldBlock) => return,
             Err(TryLockError::Poisoned(_)) => {
                 self.readiness.observe(ReadinessSample {
                     database_available: false,
@@ -172,6 +181,26 @@ impl<C: ElapsedClock> GatewayHttpState<C> {
                 return;
             }
         };
+        self.sample_if_requested(&mut producer);
+    }
+
+    fn with_producer<T>(
+        &self,
+        operation: impl FnOnce(&mut ServiceProducer<C>) -> Result<T, ProducerError>,
+    ) -> Result<T, ProducerError> {
+        let mut producer = self
+            .producer
+            .lock()
+            .map_err(|_| ProducerError::Store("producer mutex is poisoned".into()))?;
+        let result = operation(&mut producer);
+        self.sample_if_requested(&mut producer);
+        result
+    }
+
+    fn sample_if_requested(&self, producer: &mut ServiceProducer<C>) {
+        if !self.sample_requested.swap(false, Ordering::AcqRel) {
+            return;
+        }
         let producer_state = producer.readiness_state();
         let mut reasons = match producer_state {
             "ready" => Vec::new(),
@@ -180,18 +209,35 @@ impl<C: ElapsedClock> GatewayHttpState<C> {
             _ => vec!["producer_clock_unavailable"],
         };
         let revision = producer.state().revision;
-        let (database_available, statistics) =
-            match producer.store_mut().pipeline_statistics(revision) {
-                Ok(stats) => (true, Some(stats)),
-                Err(ProducerError::ConcurrentWriter) => {
-                    reasons.push("producer_revision_mismatch");
-                    (true, None)
+        let mut observed = producer.store_mut().pipeline_statistics(revision);
+        // Seal elapsed intervals even when admission capacity is exhausted.
+        // First check writability and revision, so a stale producer or a write
+        // freeze cannot drive background mutations.
+        if producer_state == "ready" && observed.is_ok() {
+            match producer.seal_expired_intervals() {
+                Ok(_) if producer.state().revision != revision => {
+                    let revision = producer.state().revision;
+                    observed = producer.store_mut().pipeline_statistics(revision);
                 }
-                Err(_) => {
-                    reasons.push("database_unavailable");
-                    (false, None)
-                }
-            };
+                Ok(_) => (),
+                Err(_) => reasons.push("producer_sealing_failed"),
+            }
+        }
+        let (database_available, statistics) = match observed {
+            Ok(stats) => (true, Some(stats)),
+            Err(ProducerError::DatabaseReadOnly) => {
+                reasons.push("database_read_only");
+                (true, None)
+            }
+            Err(ProducerError::ConcurrentWriter) => {
+                reasons.push("producer_revision_mismatch");
+                (true, None)
+            }
+            Err(_) => {
+                reasons.push("database_unavailable");
+                (false, None)
+            }
+        };
         self.readiness.observe(ReadinessSample {
             database_available,
             producer_state,
@@ -312,12 +358,7 @@ where
         }
     };
     match tokio::task::spawn_blocking(move || {
-        state
-            .producer
-            .lock()
-            .map_err(|_| ProducerError::Store("producer mutex is poisoned".into()))?
-            .store_mut()
-            .timestamp_status(number)
+        state.with_producer(|producer| producer.store_mut().timestamp_status(number))
     })
     .await
     {
@@ -471,7 +512,6 @@ where
             "Idempotency-Key is required",
         );
     };
-    let producer = Arc::clone(&state.producer);
     let minimal = headers
         .get("prefer")
         .and_then(|value| value.to_str().ok())
@@ -481,32 +521,26 @@ where
                 .any(|item| item.trim().eq_ignore_ascii_case("return=minimal"))
         });
     let result = tokio::task::spawn_blocking(move || {
-        let outcome = {
-            let mut producer = producer
-                .lock()
-                .map_err(|_| ProducerError::Store("producer mutex is poisoned".to_string()))?;
+        let outcome = state.with_producer(|producer| {
             if let Some(envelope) = envelope {
-                producer.admit_batch_idempotent(key, records, &envelope)?
+                producer.admit_batch_idempotent(key, records, &envelope)
             } else {
                 let record = records.into_iter().next().ok_or_else(|| {
                     ProducerError::Store("single-record admission contains no record".into())
                 })?;
-                producer.admit_idempotent(key, record)?
+                producer.admit_idempotent(key, record)
             }
-        };
+        })?;
 
         let tsa_status = if outcome.sealed_segment_numbers.is_empty() {
             "not_applicable"
         } else if outcome.replayed {
             // Status is a projection: a failed lookup cannot revoke durable admission.
-            let statuses = producer
-                .lock()
-                .ok()
-                .and_then(|mut producer| {
+            let statuses = state
+                .with_producer(|producer| {
                     producer
                         .store_mut()
                         .tsa_statuses(&outcome.sealed_segment_numbers)
-                        .ok()
                 })
                 .unwrap_or_default();
             if statuses.iter().any(|status| status == "failed") {
