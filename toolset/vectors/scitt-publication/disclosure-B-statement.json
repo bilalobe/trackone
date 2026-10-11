@@ -1,0 +1,14 @@
+{
+  "statement_kind": "trackone.disclosure-bundle.v1",
+  "issuer": "did:x509:0:sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA::subject:CN:TrackOne-Publisher",
+  "subject": "urn:trackone:disclosure-bundle:sha256:0be2e1357bce702da5cdbe0a1f92f4d25d01995f4e9cda0afe3347484d3b618a",
+  "bundle": {
+    "media_type": "application/x-tar",
+    "digest_algorithm": "sha-256",
+    "digest": "0be2e1357bce702da5cdbe0a1f92f4d25d01995f4e9cda0afe3347484d3b618a"
+  },
+  "disclosure_class": "B",
+  "ledger_id": "b7a1d5e40c6f438e9a75db27c96f31aa",
+  "segment_number": "0",
+  "commitment_profile_id": "c08ade4e-1785-4eb6-9648-b7003d76288d"
+}

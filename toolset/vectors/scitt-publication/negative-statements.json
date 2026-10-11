@@ -1,0 +1,139 @@
+[
+  {
+    "id": "ledger_id-00000000000000000000000000000000",
+    "statement": {
+      "statement_kind": "trackone.segment-artifact.v1",
+      "issuer": "did:x509:0:sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA::subject:CN:TrackOne-Publisher",
+      "subject": "urn:trackone:segment-artifact:sha256:2672cb72d5f06863110af1b30660c7e5ba495c0b2ce7d084b0436e010e99388d",
+      "artifact": {
+        "digest_algorithm": "sha-256",
+        "digest": "2672cb72d5f06863110af1b30660c7e5ba495c0b2ce7d084b0436e010e99388d"
+      },
+      "ledger_id": "00000000000000000000000000000000",
+      "segment_number": "0",
+      "commitment_profile_id": "c08ade4e-1785-4eb6-9648-b7003d76288d"
+    },
+    "schema_valid": true,
+    "reason": "copied artifact identity mismatch"
+  },
+  {
+    "id": "segment_number-1",
+    "statement": {
+      "statement_kind": "trackone.segment-artifact.v1",
+      "issuer": "did:x509:0:sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA::subject:CN:TrackOne-Publisher",
+      "subject": "urn:trackone:segment-artifact:sha256:2672cb72d5f06863110af1b30660c7e5ba495c0b2ce7d084b0436e010e99388d",
+      "artifact": {
+        "digest_algorithm": "sha-256",
+        "digest": "2672cb72d5f06863110af1b30660c7e5ba495c0b2ce7d084b0436e010e99388d"
+      },
+      "ledger_id": "b7a1d5e40c6f438e9a75db27c96f31aa",
+      "segment_number": "1",
+      "commitment_profile_id": "c08ade4e-1785-4eb6-9648-b7003d76288d"
+    },
+    "schema_valid": true,
+    "reason": "copied artifact identity mismatch"
+  },
+  {
+    "id": "commitment_profile_id-00000000-0000-0000-0000-000000000000",
+    "statement": {
+      "statement_kind": "trackone.segment-artifact.v1",
+      "issuer": "did:x509:0:sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA::subject:CN:TrackOne-Publisher",
+      "subject": "urn:trackone:segment-artifact:sha256:2672cb72d5f06863110af1b30660c7e5ba495c0b2ce7d084b0436e010e99388d",
+      "artifact": {
+        "digest_algorithm": "sha-256",
+        "digest": "2672cb72d5f06863110af1b30660c7e5ba495c0b2ce7d084b0436e010e99388d"
+      },
+      "ledger_id": "b7a1d5e40c6f438e9a75db27c96f31aa",
+      "segment_number": "0",
+      "commitment_profile_id": "00000000-0000-0000-0000-000000000000"
+    },
+    "schema_valid": true,
+    "reason": "copied artifact identity mismatch"
+  },
+  {
+    "id": "ledger_id-ABC",
+    "statement": {
+      "statement_kind": "trackone.segment-artifact.v1",
+      "issuer": "did:x509:0:sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA::subject:CN:TrackOne-Publisher",
+      "subject": "urn:trackone:segment-artifact:sha256:2672cb72d5f06863110af1b30660c7e5ba495c0b2ce7d084b0436e010e99388d",
+      "artifact": {
+        "digest_algorithm": "sha-256",
+        "digest": "2672cb72d5f06863110af1b30660c7e5ba495c0b2ce7d084b0436e010e99388d"
+      },
+      "ledger_id": "ABC",
+      "segment_number": "0",
+      "commitment_profile_id": "c08ade4e-1785-4eb6-9648-b7003d76288d"
+    },
+    "schema_valid": false,
+    "reason": "statement schema"
+  },
+  {
+    "id": "segment_number-18446744073709551616",
+    "statement": {
+      "statement_kind": "trackone.segment-artifact.v1",
+      "issuer": "did:x509:0:sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA::subject:CN:TrackOne-Publisher",
+      "subject": "urn:trackone:segment-artifact:sha256:2672cb72d5f06863110af1b30660c7e5ba495c0b2ce7d084b0436e010e99388d",
+      "artifact": {
+        "digest_algorithm": "sha-256",
+        "digest": "2672cb72d5f06863110af1b30660c7e5ba495c0b2ce7d084b0436e010e99388d"
+      },
+      "ledger_id": "b7a1d5e40c6f438e9a75db27c96f31aa",
+      "segment_number": "18446744073709551616",
+      "commitment_profile_id": "c08ade4e-1785-4eb6-9648-b7003d76288d"
+    },
+    "schema_valid": false,
+    "reason": "statement schema"
+  },
+  {
+    "id": "commitment_profile_id-legacy-name",
+    "statement": {
+      "statement_kind": "trackone.segment-artifact.v1",
+      "issuer": "did:x509:0:sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA::subject:CN:TrackOne-Publisher",
+      "subject": "urn:trackone:segment-artifact:sha256:2672cb72d5f06863110af1b30660c7e5ba495c0b2ce7d084b0436e010e99388d",
+      "artifact": {
+        "digest_algorithm": "sha-256",
+        "digest": "2672cb72d5f06863110af1b30660c7e5ba495c0b2ce7d084b0436e010e99388d"
+      },
+      "ledger_id": "b7a1d5e40c6f438e9a75db27c96f31aa",
+      "segment_number": "0",
+      "commitment_profile_id": "legacy-name"
+    },
+    "schema_valid": false,
+    "reason": "statement schema"
+  },
+  {
+    "id": "disclosure_class-A",
+    "statement": {
+      "statement_kind": "trackone.segment-artifact.v1",
+      "issuer": "did:x509:0:sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA::subject:CN:TrackOne-Publisher",
+      "subject": "urn:trackone:segment-artifact:sha256:2672cb72d5f06863110af1b30660c7e5ba495c0b2ce7d084b0436e010e99388d",
+      "artifact": {
+        "digest_algorithm": "sha-256",
+        "digest": "2672cb72d5f06863110af1b30660c7e5ba495c0b2ce7d084b0436e010e99388d"
+      },
+      "ledger_id": "b7a1d5e40c6f438e9a75db27c96f31aa",
+      "segment_number": "0",
+      "commitment_profile_id": "c08ade4e-1785-4eb6-9648-b7003d76288d",
+      "disclosure_class": "A"
+    },
+    "schema_valid": false,
+    "reason": "statement schema"
+  },
+  {
+    "id": "unsupported-digest",
+    "statement": {
+      "statement_kind": "trackone.segment-artifact.v1",
+      "issuer": "did:x509:0:sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA::subject:CN:TrackOne-Publisher",
+      "subject": "urn:trackone:segment-artifact:sha256:2672cb72d5f06863110af1b30660c7e5ba495c0b2ce7d084b0436e010e99388d",
+      "artifact": {
+        "digest_algorithm": "sha-512",
+        "digest": "2672cb72d5f06863110af1b30660c7e5ba495c0b2ce7d084b0436e010e99388d"
+      },
+      "ledger_id": "b7a1d5e40c6f438e9a75db27c96f31aa",
+      "segment_number": "0",
+      "commitment_profile_id": "c08ade4e-1785-4eb6-9648-b7003d76288d"
+    },
+    "schema_valid": false,
+    "reason": "statement schema"
+  }
+]

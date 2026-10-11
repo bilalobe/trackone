@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/scitt_segment_artifact_statement_v1.schema.json",
+  "title": "TrackOne SCITT segment-artifact statement v1",
+  "type": "object",
+  "properties": {
+    "statement_kind": {
+      "const": "trackone.segment-artifact.v1"
+    },
+    "subject": {
+      "type": "string",
+      "pattern": "^urn:trackone:segment-artifact:sha256:[0-9a-f]{64}$"
+    },
+    "issuer": {
+      "type": "string",
+      "pattern": "^did:x509:0:sha256:[A-Za-z0-9_-]{43}::subject:CN:[A-Za-z0-9._-]+$"
+    },
+    "ledger_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "segment_number": {
+      "$ref": "https://raw.githubusercontent.com/bilalobe/trackone/main/toolset/unified/schemas/vtl_producer_manifest.schema.json#/$defs/uint64_decimal"
+    },
+    "commitment_profile_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "artifact": {
+      "type": "object",
+      "properties": {
+        "digest_algorithm": {
+          "const": "sha-256"
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "digest_algorithm",
+        "digest"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "statement_kind",
+    "subject",
+    "issuer",
+    "ledger_id",
+    "segment_number",
+    "commitment_profile_id",
+    "artifact"
+  ],
+  "additionalProperties": false
+}

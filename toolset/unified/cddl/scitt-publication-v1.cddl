@@ -1,0 +1,45 @@
+; Companion publication payloads: UTF-8 JSON carried in COSE_Sign1.
+; Segment integers are decimal strings to preserve the complete uint64 range.
+; Cross-field agreement and uint64 upper bounds are enforced by semantic checks.
+
+segment-artifact-statement = {
+  "statement_kind" => "trackone.segment-artifact.v1",
+  "issuer" => publisher-identity,
+  "subject" => tstr .regexp "urn:trackone:segment-artifact:sha256:[0-9a-f]{64}",
+  "artifact" => digest-ref,
+  identity-fields
+}
+
+disclosure-bundle-statement = {
+  "statement_kind" => "trackone.disclosure-bundle.v1",
+  "issuer" => publisher-identity,
+  "subject" => tstr .regexp "urn:trackone:disclosure-bundle:sha256:[0-9a-f]{64}",
+  "bundle" => { digest-fields, "media_type" => "application/x-tar" },
+  "disclosure_class" => "A" / "B" / "C",
+  identity-fields
+}
+
+identity-fields = (
+  "ledger_id" => tstr .regexp "[0-9a-f]{32}",
+  "segment_number" => tstr .regexp "0|[1-9][0-9]{0,19}",
+  "commitment_profile_id" => tstr .regexp "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+)
+digest-fields = ("digest_algorithm" => "sha-256", "digest" => tstr .regexp "[0-9a-f]{64}")
+digest-ref = { digest-fields }
+publisher-identity = tstr .regexp "did:x509:0:sha256:[A-Za-z0-9_-]{43}::subject:CN:[A-Za-z0-9._-]+"
+
+publication-signed-statement = #6.18([
+  protected: bstr .cbor publication-protected,
+  unprotected: {},
+  payload: bstr, ; JSON segment-artifact-statement or disclosure-bundle-statement
+  signature: bstr .size 64
+])
+publication-protected = {
+  1 => -7, ; ES256
+  3 => "application/vnd.trackone.scitt-publication.v1+json",
+  15 => { 1 => publisher-identity, 2 => tstr }, ; CWT iss/sub agree with payload
+  33 => [2*8 bstr], ; DER certificates, leaf to trusted root
+  ? 2 => [+ (1 / 3 / 15 / 33)] ; understood critical headers
+}
+; Transparent Statement keeps protected/payload/signature unchanged and adds
+; unprotected header 394 => [+ bstr], holding RFC 9942 COSE receipts.

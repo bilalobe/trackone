@@ -146,6 +146,14 @@ def check(repo: Path) -> dict[str, int]:
             f"{PROVIDER}scitt_verify_manifest_statement.schema.json",
         ),
         (
+            repo / "toolset/unified/examples/scitt_segment_artifact_statement_v1.json",
+            f"{PROVIDER}scitt_segment_artifact_statement_v1.schema.json",
+        ),
+        (
+            repo / "toolset/unified/examples/scitt_disclosure_bundle_statement_v1.json",
+            f"{PROVIDER}scitt_disclosure_bundle_statement_v1.schema.json",
+        ),
+        (
             repo / "toolset/unified/examples/vtl_producer_manifest.json",
             f"{PROVIDER}vtl_producer_manifest.schema.json",
         ),
@@ -159,6 +167,27 @@ def check(repo: Path) -> dict[str, int]:
         ),
     ]
     instance_count = 0
+    scitt_fixtures = repo / "toolset/vectors/scitt-publication"
+    instances.append(
+        (
+            scitt_fixtures / "segment-statement.json",
+            f"{PROVIDER}scitt_segment_artifact_statement_v1.schema.json",
+        )
+    )
+    for disclosure in ("A", "B", "C"):
+        instances.append(
+            (
+                scitt_fixtures / f"disclosure-{disclosure}-statement.json",
+                f"{PROVIDER}scitt_disclosure_bundle_statement_v1.schema.json",
+            )
+        )
+    scitt_schema = schemas[f"{PROVIDER}scitt_segment_artifact_statement_v1.schema.json"]
+    scitt_validator = validators.validator_for(scitt_schema)(scitt_schema, registry=registry)
+    for case in load_json(scitt_fixtures / "negative-statements.json"):
+        valid = not list(scitt_validator.iter_errors(case["statement"]))
+        if valid != case["schema_valid"]:
+            raise ContractError(f"SCITT fixture {case['id']} has unexpected schema validity")
+        instance_count += 1
     for fixture in (repo / "toolset/vectors/vtl-http-binding").rglob("*.verify.json"):
         instances.append((fixture, f"{PROVIDER}vtl_producer_manifest.schema.json"))
 

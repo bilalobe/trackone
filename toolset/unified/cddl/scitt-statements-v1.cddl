@@ -1,3 +1,5 @@
+; LEGACY TrackOne SCITT proposal, preserved for compatibility.
+; Superseded by scitt-publication-v1.cddl; not accepted by its verifier.
 ; TrackOne SCITT statement payloads and header profile notes.
 ; This file models the JSON payload carried inside a SCITT Signed Statement.
 ; The SCITT envelope itself is COSE_Sign1. Protected headers are expected to

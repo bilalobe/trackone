@@ -151,5 +151,7 @@
     "artifacts",
     "trackone"
   ],
-  "additionalProperties": false
+  "additionalProperties": false,
+  "deprecated": true,
+  "description": "Legacy TrackOne day-based publication proposal, superseded by the companion segment-artifact and disclosure-bundle v1 contracts. Preserved for compatibility; not accepted by the companion verifier."
 }
