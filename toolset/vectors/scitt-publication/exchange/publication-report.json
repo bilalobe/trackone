@@ -1,0 +1,11 @@
+{
+  "artifact_binding_valid": true,
+  "issuer_authorized": true,
+  "organizational_signature_valid": true,
+  "publication_valid": true,
+  "receipt_count": 1,
+  "receipt_valid": true,
+  "statement_kind": "trackone.segment-artifact.v1",
+  "subject": "urn:trackone:segment-artifact:sha256:2672cb72d5f06863110af1b30660c7e5ba495c0b2ce7d084b0436e010e99388d",
+  "vtl_verification": "separate-required"
+}

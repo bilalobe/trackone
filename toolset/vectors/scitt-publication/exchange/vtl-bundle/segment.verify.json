@@ -1,0 +1,50 @@
+{
+  "anchoring": {
+    "tsa": {
+      "status": "present"
+    }
+  },
+  "artifacts": {
+    "record_batches": [
+      {
+        "batch_number": "0",
+        "records": [
+          {
+            "path": "records/batch-00000000000000000000/occurrence-00000000000000000000-ordinal-00000000000000000002.cbor",
+            "sha256": "630765dd51926538bde59353e8a494051d80105cf206ce9529dbe0c8f1fd1e67"
+          },
+          {
+            "path": "records/batch-00000000000000000000/occurrence-00000000000000000001-ordinal-00000000000000000001.cbor",
+            "sha256": "9653fb8f67b01be6ee5c0ec7aad549543aad76da8518cb6088f71fa4e37f15e3"
+          }
+        ]
+      },
+      {
+        "batch_number": "1",
+        "records": [
+          {
+            "path": "records/batch-00000000000000000001/occurrence-00000000000000000000-ordinal-00000000000000000000.cbor",
+            "sha256": "8ab3fda697af089e1aa5ed8c3f4ff12be2842a0fef6a4ac45cb764b463016c3c"
+          }
+        ]
+      }
+    ],
+    "segment_cbor": {
+      "path": "segment.cbor",
+      "sha256": "2672cb72d5f06863110af1b30660c7e5ba495c0b2ce7d084b0436e010e99388d"
+    },
+    "tsa_req": {
+      "path": "timestamp.tsq",
+      "sha256": "8bcce0a221691243307951ca5101d3b2b083d2977e2c75e29637805e2ff9bb27"
+    },
+    "tsa_tsr": {
+      "path": "timestamp.tsr",
+      "sha256": "148397db2810cfbda15a741ab0a311525f4045425ed1536af3311cb4b2e4bec3"
+    }
+  },
+  "commitment_profile_id": "c08ade4e-1785-4eb6-9648-b7003d76288d",
+  "disclosure_class": "A",
+  "ledger_id": "b7a1d5e40c6f438e9a75db27c96f31aa",
+  "segment_number": "0",
+  "version": 1
+}

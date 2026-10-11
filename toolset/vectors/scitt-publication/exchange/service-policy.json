@@ -1,0 +1,11 @@
+{
+  "acceptedAlgorithms": [
+    "ES256"
+  ],
+  "authentication": {
+    "allowUnauthenticated": true
+  },
+  "policy": {
+    "policyScript": "export function apply(phdr, uhdr, payload) {\nif (phdr.cwt.iss !== \"did:x509:0:sha256:gtOnrl0_lXgfaiPyIWeV1LL6pgPO0HHGMMCi7JYXakg::subject:CN:TrackOne-Publisher\") return 'Unauthorized issuer';\nif (phdr.cty !== \"application/vnd.trackone.scitt-publication.v1+json\") return 'Wrong content type';\nconst s = JSON.parse(ccf.bufToStr(payload));\nif (s.statement_kind !== \"trackone.segment-artifact.v1\" || s.ledger_id !== \"b7a1d5e40c6f438e9a75db27c96f31aa\") return 'Unauthorized ledger/kind';\nif (s.issuer !== phdr.cwt.iss || s.subject !== phdr.cwt.sub) return 'Header/payload mismatch';\nreturn true;\n}"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "issuers": {
+    "did:x509:0:sha256:gtOnrl0_lXgfaiPyIWeV1LL6pgPO0HHGMMCi7JYXakg::subject:CN:TrackOne-Publisher": {
+      "ledger_ids": [
+        "b7a1d5e40c6f438e9a75db27c96f31aa"
+      ],
+      "statement_kinds": [
+        "trackone.segment-artifact.v1",
+        "trackone.disclosure-bundle.v1"
+      ]
+    }
+  }
+}

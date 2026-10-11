@@ -1,0 +1,179 @@
+[
+  {
+    "method": "GET",
+    "request_body": "wire/000-request.body",
+    "request_headers": {
+      "accept": "*/*",
+      "accept-encoding": "gzip, deflate",
+      "connection": "keep-alive",
+      "host": "127.0.0.1:39387",
+      "user-agent": "python-httpx/0.28.1"
+    },
+    "response_body": "wire/000-response.body",
+    "response_headers": {
+      "content-length": "70",
+      "content-type": "application/json"
+    },
+    "status": 404,
+    "url": "https://127.0.0.1:39387/.well-known/scitt-keys?api-version=2026-03-26"
+  },
+  {
+    "method": "GET",
+    "request_body": "wire/001-request.body",
+    "request_headers": {
+      "accept": "*/*",
+      "accept-encoding": "gzip, deflate",
+      "connection": "keep-alive",
+      "host": "127.0.0.1:39387",
+      "user-agent": "python-httpx/0.28.1"
+    },
+    "response_body": "wire/001-response.body",
+    "response_headers": {
+      "content-length": "175",
+      "content-type": "application/cbor",
+      "x-ms-request-id": "ae20cac1ddd884cc"
+    },
+    "status": 200,
+    "url": "https://127.0.0.1:39387/.well-known/scitt-keys?api-version=2026-03-26"
+  },
+  {
+    "method": "GET",
+    "request_body": "wire/002-request.body",
+    "request_headers": {
+      "accept": "*/*",
+      "accept-encoding": "gzip, deflate",
+      "connection": "keep-alive",
+      "host": "127.0.0.1:39387",
+      "user-agent": "python-httpx/0.28.1"
+    },
+    "response_body": "wire/002-response.body",
+    "response_headers": {
+      "content-length": "30",
+      "content-type": "application/json",
+      "x-ms-request-id": "7a4e05f821645053"
+    },
+    "status": 200,
+    "url": "https://127.0.0.1:39387/version?api-version=2026-03-26"
+  },
+  {
+    "method": "POST",
+    "request_body": "wire/003-request.body",
+    "request_headers": {
+      "accept": "*/*",
+      "accept-encoding": "gzip, deflate",
+      "connection": "keep-alive",
+      "content-length": "1718",
+      "content-type": "application/cose",
+      "host": "127.0.0.1:39387",
+      "user-agent": "python-httpx/0.28.1"
+    },
+    "response_body": "wire/003-response.body",
+    "response_headers": {
+      "content-length": "0",
+      "location": "https://127.0.0.1:39387/entries/2.15",
+      "x-ms-ccf-transaction-id": "2.15",
+      "x-ms-request-id": "cfb82c421e030f41"
+    },
+    "status": 303,
+    "url": "https://127.0.0.1:39387/entries?api-version=2026-03-26"
+  },
+  {
+    "method": "GET",
+    "request_body": "wire/004-request.body",
+    "request_headers": {
+      "accept": "*/*",
+      "accept-encoding": "gzip, deflate",
+      "connection": "keep-alive",
+      "host": "127.0.0.1:39387",
+      "user-agent": "python-httpx/0.28.1"
+    },
+    "response_body": "wire/004-response.body",
+    "response_headers": {
+      "content-length": "0",
+      "location": "https://127.0.0.1:39387/entries/2.15",
+      "x-ms-request-id": "8b5b54a8c926b8a8"
+    },
+    "status": 302,
+    "url": "https://127.0.0.1:39387/entries/2.15?api-version=2026-03-26"
+  },
+  {
+    "method": "GET",
+    "request_body": "wire/005-request.body",
+    "request_headers": {
+      "accept": "*/*",
+      "accept-encoding": "gzip, deflate",
+      "connection": "keep-alive",
+      "host": "127.0.0.1:39387",
+      "user-agent": "python-httpx/0.28.1"
+    },
+    "response_body": "wire/005-response.body",
+    "response_headers": {
+      "content-length": "0",
+      "location": "https://127.0.0.1:39387/entries/2.15",
+      "x-ms-request-id": "1a653b08ec47cbc3"
+    },
+    "status": 302,
+    "url": "https://127.0.0.1:39387/entries/2.15?api-version=2026-03-26"
+  },
+  {
+    "method": "GET",
+    "request_body": "wire/006-request.body",
+    "request_headers": {
+      "accept": "*/*",
+      "accept-encoding": "gzip, deflate",
+      "connection": "keep-alive",
+      "host": "127.0.0.1:39387",
+      "user-agent": "python-httpx/0.28.1"
+    },
+    "response_body": "wire/006-response.body",
+    "response_headers": {
+      "content-length": "546",
+      "content-type": "application/scitt-receipt+cose",
+      "x-ms-ccf-transaction-id": "2.16",
+      "x-ms-request-id": "a1465c21ef88682a"
+    },
+    "status": 200,
+    "url": "https://127.0.0.1:39387/entries/2.15?api-version=2026-03-26"
+  },
+  {
+    "method": "GET",
+    "request_body": "wire/007-request.body",
+    "request_headers": {
+      "accept": "*/*",
+      "accept-encoding": "gzip, deflate",
+      "connection": "keep-alive",
+      "host": "127.0.0.1:39387",
+      "user-agent": "python-httpx/0.28.1"
+    },
+    "response_body": "wire/007-response.body",
+    "response_headers": {
+      "content-length": "2271",
+      "content-type": "application/scitt-statement+cose",
+      "x-ms-ccf-transaction-id": "2.16",
+      "x-ms-request-id": "9cdd05c0c36ddfbf"
+    },
+    "status": 200,
+    "url": "https://127.0.0.1:39387/entries/2.15/statement?api-version=2026-03-26"
+  },
+  {
+    "method": "POST",
+    "request_body": "wire/008-request.body",
+    "request_headers": {
+      "accept": "*/*",
+      "accept-encoding": "gzip, deflate",
+      "connection": "keep-alive",
+      "content-length": "1718",
+      "content-type": "application/cose",
+      "host": "127.0.0.1:39387",
+      "user-agent": "python-httpx/0.28.1"
+    },
+    "response_body": "wire/008-response.body",
+    "response_headers": {
+      "content-length": "62",
+      "content-type": "application/concise-problem-details+cbor",
+      "x-ms-request-id": "4c9f03561435f9d5"
+    },
+    "status": 400,
+    "url": "https://127.0.0.1:39387/entries?api-version=2026-03-26"
+  }
+]

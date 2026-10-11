@@ -1,0 +1,12 @@
+{
+  "artifact": {
+    "digest": "2672cb72d5f06863110af1b30660c7e5ba495c0b2ce7d084b0436e010e99388d",
+    "digest_algorithm": "sha-256"
+  },
+  "commitment_profile_id": "c08ade4e-1785-4eb6-9648-b7003d76288d",
+  "issuer": "did:x509:0:sha256:gtOnrl0_lXgfaiPyIWeV1LL6pgPO0HHGMMCi7JYXakg::subject:CN:TrackOne-Publisher",
+  "ledger_id": "b7a1d5e40c6f438e9a75db27c96f31aa",
+  "segment_number": "0",
+  "statement_kind": "trackone.segment-artifact.v1",
+  "subject": "urn:trackone:segment-artifact:sha256:2672cb72d5f06863110af1b30660c7e5ba495c0b2ce7d084b0436e010e99388d"
+}

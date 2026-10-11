@@ -381,3 +381,45 @@ jobs:
           name: vtl-http-binding-reports
           path: /tmp/vtl-http-binding/reports/
           if-no-files-found: ignore
+
+  scitt-publication:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          lfs: true
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@1.99.0
+      - name: Install pinned SCITT client and dependencies
+        run: python -m pip install --disable-pip-version-check -r toolset/scitt/requirements.txt
+      - name: Check publication contracts and cryptographic negative fixtures
+        env:
+          PYTHONPATH: toolset/scitt
+        run: |
+          python toolset/ci/check_contracts.py
+          python -m unittest discover -s toolset/scitt -p 'test_*.py'
+          python toolset/scitt/replay.py
+      - name: Check out the independent service at its pinned revision
+        run: |
+          git clone https://github.com/microsoft/scitt-ccf-ledger.git /tmp/trackone-scitt-service
+          git -C /tmp/trackone-scitt-service checkout c276f12328fde2907512ffb8c4fbe9adacd19788
+      - name: Exchange with independent SCITT service and verify VTL separately
+        run: >-
+          python toolset/scitt/run_exchange.py
+          --service-source /tmp/trackone-scitt-service
+          --output /tmp/trackone-scitt-exchange
+      - name: Replay the fresh exchange offline
+        run: python toolset/scitt/replay.py --capture /tmp/trackone-scitt-exchange
+      - name: Retain public exchange and failure reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: scitt-publication-exchange
+          path: /tmp/trackone-scitt-exchange/
+          if-no-files-found: ignore

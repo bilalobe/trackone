@@ -1,0 +1,15 @@
+{
+  "artifact_sha256": "2672cb72d5f06863110af1b30660c7e5ba495c0b2ce7d084b0436e010e99388d",
+  "chain_status": "epoch",
+  "channels": {
+    "tsa": {
+      "status": "verified"
+    }
+  },
+  "claimed_disclosure_class": "A",
+  "commitment_profile_id": "c08ade4e-1785-4eb6-9648-b7003d76288d",
+  "manifest_sha256": "cfa29570a6ba924526153119738e22e779f8508c5a6c569aa51adecb4a956478",
+  "overall": "success",
+  "verification_scope": "public_recompute",
+  "verifier_policy_id": "vtl-policy-sha256-6769d5bc20be473e685810ab1fb492deeb8f8e6cdd71e02a060c52356f042ceb"
+}
