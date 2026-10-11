@@ -173,6 +173,43 @@ class PublicationTests(unittest.TestCase):
                 )
             )
 
+    def test_claimed_root_cannot_borrow_another_trusted_roots_path(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            other = create_identity(root / "other")
+            ca_file = root / "trusted-roots.pem"
+            crls_file = root / "trusted-crls.pem"
+            ca_file.write_bytes(
+                self.identity["ca_file"].read_bytes() + other["ca_file"].read_bytes()
+            )
+            crls_file.write_bytes(
+                self.identity["crls_file"].read_bytes()
+                + other["crls_file"].read_bytes()
+            )
+            statement = make_statement(self.artifact, other["issuer"])
+
+            def verify(signed):
+                return verify_organization(
+                    signed,
+                    other["policy"],
+                    ca_file,
+                    crls_file,
+                    other["verification_time"],
+                )
+
+            self.assertEqual(
+                verify(sign(statement, other["key"], other["chain"])), statement
+            )
+            for chain in (
+                [self.identity["chain"][0], other["chain"][-1]],
+                [*self.identity["chain"], other["chain"][-1]],
+            ):
+                with (
+                    self.subTest(chain_length=len(chain)),
+                    self.assertRaisesRegex(PublicationError, "validity/revocation"),
+                ):
+                    verify(sign(statement, self.identity["key"], chain))
+
     def test_certificate_time_and_revocation(self):
         with self.assertRaisesRegex(PublicationError, "validity/revocation"):
             self.organization(

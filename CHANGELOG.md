@@ -78,6 +78,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Bind SCITT organizational certificate validation to the trusted root named
+  by the publisher's DID, preventing a signer under another trusted root from
+  claiming that organization's ledger permissions by substituting or appending
+  its root certificate to the presented chain.
 - Keep gateway readiness unavailable after PostgreSQL disk-full write errors
   even when read probes succeed, and acquire migration locks in producer write
   order before schema changes.

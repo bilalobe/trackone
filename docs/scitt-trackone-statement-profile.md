@@ -118,10 +118,13 @@ Deployments MUST provision organizational trust anchors independently of the
 statement. The leaf MUST be an end-entity certificate permitting digital
 signatures. The complete chain MUST pass certificate validity, chain, and
 complete base-CRL checks at the relying party's evaluation time. The verifier
-uses explicit CA/CRL files and does not fall back to system trust. Deployments
-MUST maintain those inputs as signing keys expire or are revoked; a captured
-historical replay does not establish present-day authorization or revocation
-status.
+uses explicit CA/CRL files and does not fall back to system trust.
+The DID root MUST be present in the supplied trust anchors, and path validation
+MUST use only that root as its trust anchor. A leaf chaining to another trusted
+organizational root cannot obtain the claimed root's authorization grants.
+Deployments MUST maintain those inputs as signing keys expire or are revoked;
+a captured historical replay does not establish present-day authorization or
+revocation status.
 
 Authorization is distinct from signature validity. The deployment-owned
 `authorization.json` maps each accepted issuer to permitted `ledger_ids` and

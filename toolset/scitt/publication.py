@@ -361,6 +361,9 @@ def verify_organization(
     with tempfile.TemporaryDirectory(prefix="trackone-scitt-cert-") as directory:
         temp = Path(directory)
         leaf, intermediates = temp / "leaf.pem", temp / "intermediates.pem"
+        claimed_root = temp / "claimed-root.pem"
+        # The trust bundle admits the DID root; only that root may validate its leaf.
+        claimed_root.write_bytes(certs[-1].public_bytes(serialization.Encoding.PEM))
         leaf.write_bytes(certs[0].public_bytes(serialization.Encoding.PEM))
         intermediates.write_bytes(
             b"".join(c.public_bytes(serialization.Encoding.PEM) for c in certs[1:-1])
@@ -371,7 +374,7 @@ def verify_organization(
             "-no-CApath",
             "-no-CAstore",
             "-CAfile",
-            str(ca_file),
+            str(claimed_root),
             "-CRLfile",
             str(crls_file),
             "-crl_check_all",
