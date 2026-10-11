@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -28,6 +30,67 @@ if SPEC is None or SPEC.loader is None:  # pragma: no cover - import machinery g
     raise RuntimeError(f"cannot load verifier from {VERIFIER_PATH}")
 VERIFIER = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(VERIFIER)
+
+
+class DetachedInventoryTests(unittest.TestCase):
+    def test_bundled_checksum_verification_leaves_archive_unchanged(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            detached = Path(temporary)
+            root = detached / "archive"
+            bundled = root / "verifier"
+            bundled.mkdir(parents=True)
+            for name in ("verify_conformance_archive.py", "conformance_cases.py"):
+                shutil.copy2(VERIFIER_PATH.with_name(name), bundled / name)
+            (root / "SHA256SUMS").write_text(
+                "".join(
+                    f"{VERIFIER.sha256(path)}  {path.relative_to(root).as_posix()}\n"
+                    for path in sorted(bundled.iterdir())
+                ),
+                encoding="utf-8",
+            )
+
+            def snapshot():
+                return {
+                    path.relative_to(root).as_posix(): (
+                        path.read_bytes() if path.is_file() else None
+                    )
+                    for path in root.rglob("*")
+                }
+
+            before = snapshot()
+            # Use a fresh interpreter outside the checkout, without -B or any
+            # PYTHON* environment settings that could mask bytecode writes.
+            command = [
+                sys.executable,
+                "-I",
+                "-c",
+                "import runpy, sys; from pathlib import Path; "
+                "sys.dont_write_bytecode = False; "
+                "sys.path.insert(0, sys.argv[1]); "
+                "verifier = runpy.run_path(str(Path(sys.argv[1]) / "
+                "'verify_conformance_archive.py')); "
+                "print(verifier['verify_checksums'](Path(sys.argv[2])))",
+                str(bundled),
+                str(root),
+            ]
+            for _ in range(2):
+                completed = subprocess.run(
+                    command, cwd=detached, capture_output=True, text=True,
+                    check=False, timeout=30,
+                )
+                self.assertEqual(completed.returncode, 0, completed.stderr)
+                self.assertEqual(completed.stdout.strip(), "2")
+                self.assertEqual(snapshot(), before)
+
+            # An undeclared file must still fail the strict inventory check.
+            (bundled / "unexpected.pyc").write_bytes(b"undeclared")
+            completed = subprocess.run(
+                command, cwd=detached, capture_output=True, text=True,
+                check=False, timeout=30,
+            )
+            self.assertNotEqual(completed.returncode, 0)
+            self.assertIn("SHA256SUMS coverage mismatch", completed.stderr)
+            self.assertIn("verifier/unexpected.pyc", completed.stderr)
 
 
 class VtlVectorTests(unittest.TestCase):

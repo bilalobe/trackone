@@ -18,6 +18,9 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urldefrag
 
+# Verification must leave the checksummed archive inventory unchanged.
+sys.dont_write_bytecode = True
+
 from conformance_cases import (
     EXPANDED_CLAIMS,
     EvidenceReplayError,

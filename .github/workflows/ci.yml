@@ -327,6 +327,8 @@ jobs:
           lfs: true
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@1.99.0
+        with:
+          components: clippy
       - name: Cache qualification build
         uses: actions/cache@v6
         with:
@@ -340,9 +342,10 @@ jobs:
       - name: Lint qualification feature
         run: cargo clippy --locked -p trackone-gateway-svc --all-targets --features recovery-qualification -- -D warnings
       - name: Qualify gateway recovery
+        id: qualification
         run: python3 toolset/acceptance/run_vtl_recovery_qualification.py --output /tmp/vtl-recovery-qualification
       - name: Publish qualification report and evidence
-        if: always()
+        if: always() && steps.qualification.outcome != 'skipped' && steps.qualification.outcome != ''
         uses: actions/upload-artifact@v7
         with:
           name: vtl-recovery-qualification-${{ github.sha }}

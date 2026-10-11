@@ -299,7 +299,7 @@ jobs:
           verifier="$(realpath "${archive_root}/verifier/verify_conformance_archive.py")"
           root="$(realpath "${archive_root}")"
           cd "${RUNNER_TEMP}"
-          env -u PYTHONPATH python3 "${verifier}" \
+          env -u PYTHONPATH python3 -B "${verifier}" \
             --root "${root}" \
             --output "${GITHUB_WORKSPACE}/release-conformance-verification.json"
 

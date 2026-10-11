@@ -155,7 +155,7 @@ jobs:
           root="$(realpath "${archive_root}")"
           workspace="${GITHUB_WORKSPACE}"
           cd "${RUNNER_TEMP}"
-          env -u PYTHONPATH python3 "${verifier}" \
+          env -u PYTHONPATH python3 -B "${verifier}" \
             --root "${root}" \
             --output "${workspace}/run/independent-verification.json"
           cd "${workspace}"
