@@ -2,7 +2,7 @@
 
 **Status**: Accepted
 **Date**: 2026-04-10
-**Updated**: 2026-04-25
+**Updated**: 2026-10-08
 
 ## Related ADRs
 
@@ -97,9 +97,14 @@ at minimum:
 
 - the published object's digest and digest algorithm;
 - the applicable `commitment_profile_id`;
-- the applicable disclosure class; and
+- for disclosure-bundle statements, the applicable disclosure class; and
 - enough bundle or artifact identity to let a relying party relate the SCITT
   statement to the disclosed TrackOne evidence set.
+
+Disclosure class belongs to the particular disclosed bundle, not to an
+immutable segment identity. Segment-artifact statements do not carry it.
+The companion contract and tested exchange are now defined in
+[the SCITT publication profile](../docs/scitt-trackone-statement-profile.md).
 
 Per ADR-052, including `commitment_profile_id` in the signed SCITT statement
 payload is how SCITT publication binds the profile claim. SCITT publication

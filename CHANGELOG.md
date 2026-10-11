@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Define a companion SCITT publication profile for exact VTL segment artifacts,
+  with organizational authorization, receipt verification, a distinct future
+  disclosure-bundle contract, positive/negative fixtures, and a pinned independent
+  SCITT CCF service exchange followed by separate VTL verification (#325).
 - Add gateway `/readyz` reporting durable admission availability, database and
   producer recovery state, timestamp backlog and attachment times, capacity
   pressure, and process event counters. TSA outages and terminal timestamp

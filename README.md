@@ -51,6 +51,11 @@ document is not carried in this repository; its CDDL, schemas, and
 known-answer vectors live under [`toolset/`](toolset/). Older commitment
 contracts and vectors are outside the current conformance surface.
 
+The [companion SCITT publication profile](docs/scitt-trackone-statement-profile.md)
+defines organizational statements over exact VTL artifact digests and a tested
+transparency-service exchange. Publication verification remains separate from
+base VTL evidence verification.
+
 ## Requirements
 
 - Rust `1.99` with the workspace's locked dependency set
