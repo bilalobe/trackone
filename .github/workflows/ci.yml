@@ -102,7 +102,7 @@ jobs:
           PY
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@1.99.0
+        uses: dtolnay/rust-toolchain@1.99.1
         with:
           components: rustfmt, clippy
 
@@ -200,7 +200,7 @@ jobs:
           lfs: true
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@1.99.0
+        uses: dtolnay/rust-toolchain@1.99.1
 
       - name: Cache cargo
         uses: actions/cache@v6
@@ -326,7 +326,7 @@ jobs:
         with:
           lfs: true
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@1.99.0
+        uses: dtolnay/rust-toolchain@1.99.1
         with:
           components: clippy
       - name: Cache qualification build
@@ -363,7 +363,7 @@ jobs:
         with:
           lfs: true
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@1.99.0
+        uses: dtolnay/rust-toolchain@1.99.1
       - name: Cache cargo
         uses: actions/cache@v6
         with:
@@ -395,7 +395,7 @@ jobs:
         with:
           python-version: '3.13'
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@1.99.0
+        uses: dtolnay/rust-toolchain@1.99.1
       - name: Install pinned SCITT client and dependencies
         run: python -m pip install --disable-pip-version-check -r toolset/scitt/requirements.txt
       - name: Check publication contracts and cryptographic negative fixtures

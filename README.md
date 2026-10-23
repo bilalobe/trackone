@@ -58,7 +58,7 @@ base VTL evidence verification.
 
 ## Requirements
 
-- Rust `1.99` with the workspace's locked dependency set
+- Rust `1.99.1` with the workspace's locked dependency set
 - `just` for the supported local matrix
 - Python 3 for contract and detached-verifier tooling
 - Helm and `kubectl` for deployment-template checks
