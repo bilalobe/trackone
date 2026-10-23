@@ -2128,11 +2128,11 @@ dependencies = [
 
 [[package]]
 name = "trackone-constants"
-version = "0.2.0-beta.1"
+version = "0.2.0-beta.2"
 
 [[package]]
 name = "trackone-core"
-version = "0.2.0-beta.1"
+version = "0.2.0-beta.2"
 dependencies = [
  "heapless",
  "postcard",
@@ -2146,7 +2146,7 @@ dependencies = [
 
 [[package]]
 name = "trackone-evidence"
-version = "0.2.0-beta.1"
+version = "0.2.0-beta.2"
 dependencies = [
  "base64 0.23.1",
  "clap",
@@ -2162,7 +2162,7 @@ dependencies = [
 
 [[package]]
 name = "trackone-gateway-svc"
-version = "0.2.0-beta.1"
+version = "0.2.0-beta.2"
 dependencies = [
  "axum",
  "base64 0.23.1",
@@ -2186,7 +2186,7 @@ dependencies = [
 
 [[package]]
 name = "trackone-ingest"
-version = "0.2.0-beta.1"
+version = "0.2.0-beta.2"
 dependencies = [
  "chacha20poly1305",
  "heapless",
@@ -2199,7 +2199,7 @@ dependencies = [
 
 [[package]]
 name = "trackone-ledger"
-version = "0.2.0-beta.1"
+version = "0.2.0-beta.2"
 dependencies = [
  "cddl",
  "hex",
@@ -2210,7 +2210,7 @@ dependencies = [
 
 [[package]]
 name = "trackone-ots"
-version = "0.2.0-beta.1"
+version = "0.2.0-beta.2"
 dependencies = [
  "serde_json",
  "tempfile",
@@ -2220,7 +2220,7 @@ dependencies = [
 
 [[package]]
 name = "trackone-pod-fw"
-version = "0.2.0-beta.1"
+version = "0.2.0-beta.2"
 dependencies = [
  "portable-atomic",
  "trackone-core",
@@ -2229,7 +2229,7 @@ dependencies = [
 
 [[package]]
 name = "trackone-rfc3161"
-version = "0.2.0-beta.1"
+version = "0.2.0-beta.2"
 dependencies = [
  "base64 0.23.1",
  "cms",
@@ -2241,7 +2241,7 @@ dependencies = [
 
 [[package]]
 name = "trackone-sensorthings"
-version = "0.2.0-beta.1"
+version = "0.2.0-beta.2"
 dependencies = [
  "serde_json",
  "sha2",

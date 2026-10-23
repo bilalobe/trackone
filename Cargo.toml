@@ -14,7 +14,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.2.0-beta.1"
+version = "0.2.0-beta.2"
 edition = "2024"
 rust-version = "1.99.1"
 publish = true
@@ -54,13 +54,13 @@ clap = { version = "4.6.7", features = ["derive", "env"] }
 thiserror = "2.0.21"
 
 # Internal crates (workspace path + pinned version for publish compatibility)
-trackone-core = { path = "crates/trackone-core", version = "0.2.0-beta.1", default-features = false }
-trackone-ingest = { path = "crates/trackone-ingest", version = "0.2.0-beta.1", default-features = false }
-trackone-ledger = { path = "crates/trackone-ledger", version = "0.2.0-beta.1" }
-trackone-constants = { path = "crates/trackone-constants", version = "0.2.0-beta.1" }
-trackone-sensorthings = { path = "crates/trackone-sensorthings", version = "0.2.0-beta.1" }
-trackone-ots = { path = "crates/trackone-ots", version = "0.2.0-beta.1" }
-trackone-rfc3161 = { path = "crates/trackone-rfc3161", version = "0.2.0-beta.1" }
+trackone-core = { path = "crates/trackone-core", version = "0.2.0-beta.2", default-features = false }
+trackone-ingest = { path = "crates/trackone-ingest", version = "0.2.0-beta.2", default-features = false }
+trackone-ledger = { path = "crates/trackone-ledger", version = "0.2.0-beta.2" }
+trackone-constants = { path = "crates/trackone-constants", version = "0.2.0-beta.2" }
+trackone-sensorthings = { path = "crates/trackone-sensorthings", version = "0.2.0-beta.2" }
+trackone-ots = { path = "crates/trackone-ots", version = "0.2.0-beta.2" }
+trackone-rfc3161 = { path = "crates/trackone-rfc3161", version = "0.2.0-beta.2" }
 
 [profile.release]
 lto = true

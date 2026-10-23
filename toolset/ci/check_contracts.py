@@ -216,7 +216,7 @@ def check(repo: Path) -> dict[str, int]:
             "name": "sha-0000000000000000000000000000000000000000",
             "git_commit": "0" * 40,
         },
-        "software_version": "0.2.0-beta.1",
+        "software_version": "0.2.0-beta.2",
         "repository": "bilalobe/trackone",
         "carrier": {
             "oci_ref": (

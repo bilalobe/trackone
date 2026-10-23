@@ -2,7 +2,7 @@
 
 All notable changes to trackone-ots will be documented in this file.
 
-## [Unreleased]
+## [0.2.0-beta.2] - 2026-10-23
 
 ### Added
 

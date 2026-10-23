@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## [0.2.0-beta.2] - 2026-10-23
 
 - Add `VerificationPolicy::try_with_limits` and `validate` to reject zero
   response-size limits and zero or platform-unrepresentable timeouts during
