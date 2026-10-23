@@ -687,7 +687,9 @@ mod tests {
             );
             let mut authority = fixture_authority(PathBuf::from("curl"));
             authority.url = url;
-            authority.timeout = Duration::from_millis(200);
+            // Leave room for OpenSSL/curl startup under parallel CI load while
+            // keeping the process deadline below curl's one-second timeout.
+            authority.timeout = Duration::from_millis(900);
             let started = Instant::now();
             let error = authority
                 .stamp_paths(b"artifact", &root.path().join("query.tsq"), &response)
@@ -723,7 +725,9 @@ mod tests {
             let mut authority = fixture_authority(PathBuf::from("curl"))
                 .with_binaries(openssl, PathBuf::from("curl"));
             authority.url = url;
-            authority.timeout = Duration::from_millis(200);
+            // Leave room for OpenSSL/curl startup under parallel CI load while
+            // keeping the process deadline below curl's one-second timeout.
+            authority.timeout = Duration::from_millis(900);
             assert!(matches!(
                 authority.stamp(b"artifact"),
                 Err(ProducerError::TimestampSubmission(_))
