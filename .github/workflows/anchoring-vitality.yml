@@ -84,7 +84,7 @@ jobs:
           echo "head_sha=${head_sha}" >> "${GITHUB_OUTPUT}"
 
       - name: Checkout the exact CI revision
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ steps.source.outputs.head_sha }}
           fetch-depth: 1
